@@ -13,8 +13,13 @@ struct VoiceStageView: View {
     var body: some View {
         VStack(spacing: 14) {
             topBar
-            tiles
-            controlBar
+            if voice.isStage {
+                StageRoomView()
+                stageControlBar
+            } else {
+                tiles
+                controlBar
+            }
         }
         .padding(.horizontal, 14)
         .padding(.bottom, 8)
@@ -63,6 +68,10 @@ struct VoiceStageView: View {
 
     private var statusLine: String {
         if voice.phase == .connecting { return "Connecting…" }
+        if voice.isStage {
+            let base = voice.room?.subtitle ?? ""
+            return base.isEmpty ? "Stage" : "Stage · \(base)"
+        }
         if voice.room?.isGroup == true, !voice.ringingIds.isEmpty, voice.otherMemberCount == 0 {
             return "Ringing \(voice.ringingIds.count)…"
         }
@@ -243,21 +252,64 @@ struct VoiceStageView: View {
             controlButton(voice.deafened ? "headphones.slash" : "headphones",
                           label: voice.deafened ? "Undeafen" : "Deafen",
                           active: !voice.deafened, alert: voice.deafened) { voice.toggleDeafen() }
-            Button {
-                Task { await voice.leave() }
-            } label: {
-                Image(systemName: "phone.down.fill")
-                    .font(.system(size: 21, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 58)
-                    .background(Brand.dnd, in: Capsule())
-            }
-            .accessibilityLabel("Leave")
+            leaveButton
         }
         .padding(8)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
+    }
+
+    /// On a stage, speakers get the mic and the audience gets a hand.
+    private var stageControlBar: some View {
+        let stage = voice.stage ?? StageInfo()
+        let me = app.currentUserId ?? ""
+        return HStack(spacing: 10) {
+            if voice.canSpeak {
+                controlButton(voice.micMuted ? "mic.slash.fill" : "mic.fill",
+                              label: voice.micMuted ? "Unmute" : "Mute",
+                              active: !voice.micMuted, alert: voice.micMuted) { voice.toggleMute() }
+                controlButton("arrow.down.circle", label: "Move to Audience", active: false) {
+                    Task { await voice.moveToAudience(me) }
+                }
+            } else if stage.isModerator {
+                controlButton("mic.badge.plus", label: "Become a Speaker", active: false) {
+                    Task { await voice.inviteToSpeak(me) }
+                }
+            } else {
+                controlButton(voice.handRaised ? "hand.raised.fill" : "hand.raised",
+                              label: voice.handRaised ? "Lower Hand"
+                                  : (stage.requestsEnabled ? "Request to Speak" : "Requests to speak are off"),
+                              active: voice.handRaised) {
+                    if voice.handRaised || stage.requestsEnabled {
+                        Task { await voice.setHandRaised(!voice.handRaised) }
+                    } else {
+                        voice.error = "Requests to speak are off."
+                    }
+                }
+                .opacity(stage.requestsEnabled || voice.handRaised ? 1 : 0.45)
+            }
+            controlButton(voice.deafened ? "headphones.slash" : "headphones",
+                          label: voice.deafened ? "Undeafen" : "Deafen",
+                          active: !voice.deafened, alert: voice.deafened) { voice.toggleDeafen() }
+            leaveButton
+        }
+        .padding(8)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
+    }
+
+    private var leaveButton: some View {
+        Button {
+            Task { await voice.leave() }
+        } label: {
+            Image(systemName: "phone.down.fill")
+                .font(.system(size: 21, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 58)
+                .background(Brand.dnd, in: Capsule())
+        }
+        .accessibilityLabel("Leave")
     }
 
     private func controlButton(_ symbol: String, label: String, active: Bool, alert: Bool = false,

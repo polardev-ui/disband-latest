@@ -24,6 +24,7 @@ import { UserBadges } from "@/components/ui/UserBadges";
 import { USER_NOTE_MAX, useUserNote } from "@/hooks/useUserNote";
 import type { Profile, Server, ServerRole } from "@/lib/supabase/types";
 import type { SubscriptionPlan } from "@/lib/subscription";
+import { useI18n } from "@/contexts/I18nContext";
 
 /*
  The profile card.
@@ -143,6 +144,7 @@ function ProfileBanner({ profile }: { profile: Profile }) {
 }
 
 function OverflowMenu({ items }: { items: { label: string; onClick: () => void; danger?: boolean }[] }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -158,7 +160,7 @@ function OverflowMenu({ items }: { items: { label: string; onClick: () => void; 
     <div ref={ref} className="relative">
       <button
         type="button"
-        aria-label="More actions"
+        aria-label={t("More actions")}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
@@ -229,6 +231,7 @@ export function UserProfileModal({
   selfAssignableRoles,
   onSetSelfRoles,
 }: UserProfileModalProps) {
+  const { t } = useI18n();
   // Keep the last profile around while the card animates out: the parent
   // clears its `profileTarget` the instant it closes, which would otherwise
   // unmount the card mid-fade.
@@ -289,7 +292,8 @@ export function UserProfileModal({
     if (!text || statusReplySending) return;
     setStatusReplySending(true);
     try {
-      await openDmWithFriend(profile.id);
+      // A failed open leaves some other DM active; never send into it.
+      if (await openDmWithFriend(profile.id)) return;
       const content = `> ${statusNote}\n${text}`;
       setTimeout(() => {
         void sendDmMessage(content);
@@ -339,7 +343,7 @@ export function UserProfileModal({
   const selfRolePicker = isSelf && !canManageRoles && onSetSelfRoles && selfAssignable.length > 0 ? (
     <div className="mt-2">
       <p className="mb-1.5 text-[12px] text-text-muted">
-        Roles you can give yourself
+        {t("Roles you can give yourself")}
       </p>
       <RolePicker roles={selfAssignable} selected={selfSelected} onToggle={toggleSelfRole} compact />
     </div>
@@ -348,12 +352,12 @@ export function UserProfileModal({
   const overflow: { label: string; onClick: () => void; danger?: boolean }[] = [];
   if (!isSelf && !isBot) {
     if (!isBlocked) {
-      if (friend && onRemoveFriend) overflow.push({ label: "Remove friend", onClick: onRemoveFriend });
-      if (onBlock) overflow.push({ label: "Block", onClick: onBlock, danger: true });
+      if (friend && onRemoveFriend) overflow.push({ label: t("Remove friend"), onClick: onRemoveFriend });
+      if (onBlock) overflow.push({ label: t("Block"), onClick: onBlock, danger: true });
     }
     // Blocking someone is not a substitute for reporting them. Keep the
     // report action available after a block, when the evidence matters most.
-    if (onReport) overflow.push({ label: "Report profile", onClick: onReport, danger: true });
+    if (onReport) overflow.push({ label: t("Report profile"), onClick: onReport, danger: true });
   }
 
   let actions: ReactNode = null;
@@ -368,46 +372,48 @@ export function UserProfileModal({
         className={`${BTN_BASE} ${theme ? "transition-[filter] hover:brightness-110" : "bg-button-secondary text-white hover:bg-button-secondary-hover"}`}
         style={theme ? { backgroundColor: theme.primary, color: theme.primaryText } : undefined}
       >
-        <IconSettings size={15} /> Edit profile
+        <IconSettings size={15} /> {t("Edit profile")}
       </button>
     );
   } else if (isBlocked) {
     actions = onUnblock && (
       <button type="button" onClick={onUnblock} className={BTN_QUIET}>
-        Unblock
+        {t("Unblock")}
       </button>
     );
   } else if (!isBot) {
     actions = (
       <>
-        {friend && onMessage && (
+        {/* Non-friends can message too when they allow message requests;
+            the server checks for a shared space (migration 0193). */}
+        {(friend || profile.allow_message_requests !== false) && onMessage && (
           <button type="button" onClick={onMessage} className={BTN_SOLID}>
-            <IconMessage size={15} /> Send Message
+            <IconMessage size={15} /> {t("Send Message")}
           </button>
         )}
         {friend && onVoiceCall && (
-          <button type="button" onClick={onVoiceCall} aria-label="Start voice call" title="Voice call" className={BTN_ICON}>
+          <button type="button" onClick={onVoiceCall} aria-label={t("Start voice call")} title={t("Voice call")} className={BTN_ICON}>
             <IconPhone size={16} />
           </button>
         )}
         {!friend && pendingIncoming && onAcceptFriend && onDeclineFriend && (
           <>
             <button type="button" onClick={onAcceptFriend} className={BTN_BRAND}>
-              Accept
+              {t("Accept")}
             </button>
             <button type="button" onClick={onDeclineFriend} className={BTN_QUIET}>
-              Decline
+              {t("Decline")}
             </button>
           </>
         )}
         {!friend && !pendingIncoming && !pendingOutgoing && onAddFriend && (
           <button type="button" onClick={onAddFriend} className={BTN_SOLID}>
-            Add friend
+            {t("Add friend")}
           </button>
         )}
         {!friend && pendingOutgoing && (
           <button type="button" disabled className={BTN_QUIET}>
-            Request sent
+            {t("Request sent")}
           </button>
         )}
         <OverflowMenu items={overflow} />
@@ -416,16 +422,16 @@ export function UserProfileModal({
   }
 
   const tabs = isSelf
-    ? [{ id: "about" as const, label: "User Info" }]
+    ? [{ id: "about" as const, label: t("User Info") }]
     : [
-        { id: "about" as const, label: "User Info" },
-        { id: "spaces" as const, label: "Mutual Servers", count: mutualServers.length },
-        { id: "friends" as const, label: "Mutual Friends", count: mutualFriends.length },
+        { id: "about" as const, label: t("User Info") },
+        { id: "spaces" as const, label: t("Mutual Servers"), count: mutualServers.length },
+        { id: "friends" as const, label: t("Mutual Friends"), count: mutualFriends.length },
       ];
 
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
-      <button type="button" className={`absolute inset-0 bg-overlay-scrim-strong overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} aria-label="Close" />
+      <button type="button" className={`absolute inset-0 bg-overlay-scrim-strong overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} aria-label={t("Close")} />
       <div
         role="dialog"
         aria-modal="true"
@@ -441,7 +447,7 @@ export function UserProfileModal({
           type="button"
           onClick={onClose}
           className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-[3px] bg-black/60 text-white transition-colors hover:bg-black/75"
-          aria-label="Close profile"
+          aria-label={t("Close profile")}
         >
           <IconClose size={16} />
         </button>
@@ -482,12 +488,12 @@ export function UserProfileModal({
             )}
             {isSelf && (
               <span className="ml-1 rounded-md border border-divider px-1.5 py-px text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
-                You
+                {t("You")}
               </span>
             )}
             {isBot && (
               <span className="ml-1 rounded-md bg-brand/15 px-1.5 py-px text-[10.5px] font-semibold uppercase tracking-wide text-brand">
-                Assistant
+                {t("Assistant")}
               </span>
             )}
           </p>
@@ -504,8 +510,8 @@ export function UserProfileModal({
                   <button
                     type="button"
                     onClick={() => setStatusReplyOpen((v) => !v)}
-                    aria-label="Reply to status"
-                    title="Reply to status"
+                    aria-label={t("Reply to status")}
+                    title={t("Reply to status")}
                     className="absolute -top-2 right-1 flex h-6 w-6 items-center justify-center rounded-full border border-divider bg-bg-secondary text-text-muted opacity-0 shadow transition-all hover:text-text-normal focus-visible:opacity-100 group-hover/status:opacity-100 [@media(hover:none)]:opacity-100"
                   >
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -534,7 +540,7 @@ export function UserProfileModal({
                           setStatusReplyText("");
                         }
                       }}
-                      placeholder={`Reply to ${title}…`}
+                      placeholder={t("Reply to {title}…", { title })}
                       maxLength={500}
                       disabled={statusReplySending}
                       className="min-w-0 flex-1 rounded-lg bg-bg-primary px-2.5 py-1.5 text-[13px] text-text-normal placeholder:text-text-muted outline-none focus:ring-1 focus:ring-brand"
@@ -543,7 +549,7 @@ export function UserProfileModal({
                       type="button"
                       onClick={() => void submitStatusReply()}
                       disabled={!statusReplyText.trim() || statusReplySending}
-                      aria-label="Send status reply"
+                      aria-label={t("Send status reply")}
                       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand text-white transition-all hover:bg-brand-hover active:scale-95 disabled:opacity-40"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -567,15 +573,15 @@ export function UserProfileModal({
             {tab === "about" && (
               <>
                 {isBot && (
-                  <Section label="About">
+                  <Section label={t("About")}>
                     <p className="text-[14px] leading-relaxed text-text-muted">
-                      This is Disband&apos;s assistant — it can&apos;t be messaged, friended, called, or blocked.
+                      {t("This is Disband’s assistant — it can’t be messaged, friended, called, or blocked.")}
                     </p>
                   </Section>
                 )}
 
                 {profile.bio && (
-                  <Section label="About me">
+                  <Section label={t("About me")}>
                     <p className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-[14px] leading-relaxed">
                       {profile.bio}
                     </p>
@@ -583,13 +589,13 @@ export function UserProfileModal({
                 )}
 
                 {listening && (
-                  <Section label="Listening">
+                  <Section label={t("Listening")}>
                     <ListeningCard listening={listening} />
                   </Section>
                 )}
 
                 {joined && (
-                  <Section label="Disband member since">
+                  <Section label={t("Disband member since")}>
                     <p className="text-[14px]">
                       {joined.date}
                       <span className="text-text-muted"> · {joined.age}</span>
@@ -598,10 +604,10 @@ export function UserProfileModal({
                 )}
 
                 {isServerMember && (
-                  <Section label="Roles">
+                  <Section label={t("Roles")}>
                     {memberIsOwner ? (
                       <>
-                        <p className="text-[14px] font-medium">Space owner</p>
+                        <p className="text-[14px] font-medium">{t("Space owner")}</p>
                         {selfRolePicker}
                       </>
                     ) : (
@@ -627,8 +633,8 @@ export function UserProfileModal({
                               <button
                                 type="button"
                                 onClick={() => toggleRole(role.id)}
-                                aria-label={`Remove the ${role.name} role`}
-                                title={`Remove ${role.name}`}
+                                aria-label={t("Remove the {name} role", { name: role.name })}
+                                title={t("Remove {name}", { name: role.name })}
                                 className="-mr-0.5 ml-0.5 flex h-5 w-5 items-center justify-center rounded-[2px] text-text-muted transition-colors hover:bg-black/20 hover:text-text-normal"
                               >
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
@@ -639,7 +645,7 @@ export function UserProfileModal({
                           </span>
                         ))}
                         {memberRoles.length === 0 && (
-                          <p className="text-[13px] text-text-muted">No roles assigned.</p>
+                          <p className="text-[13px] text-text-muted">{t("No roles assigned.")}</p>
                         )}
                         {canManageRoles && onSetRoles && (
                           <RolePicker roles={assignableRoles} selected={memberRoleIds} onToggle={toggleRole} compact />
@@ -652,7 +658,7 @@ export function UserProfileModal({
                 )}
 
                 {!isSelf && !isBot && note.state !== "unavailable" && (
-                  <Section label="Note (only you can see it)">
+                  <Section label={t("Note (only you can see it)")}>
                     <textarea
                       value={note.note}
                       onChange={(e) => note.setNote(e.target.value.slice(0, USER_NOTE_MAX))}
@@ -660,8 +666,8 @@ export function UserProfileModal({
                       disabled={note.state === "loading"}
                       rows={2}
                       maxLength={USER_NOTE_MAX}
-                      placeholder="Click to add a note"
-                      aria-label={`Private note about ${title}`}
+                      placeholder={t("Click to add a note")}
+                      aria-label={t("Private note about {title}", { title })}
                       className="block w-full resize-none rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 py-2.5 text-[14px] leading-relaxed text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand disabled:opacity-60"
                     />
                   </Section>
@@ -671,7 +677,7 @@ export function UserProfileModal({
 
             {tab === "spaces" &&
               (mutualServers.length === 0 ? (
-                <EmptyTab>No spaces in common.</EmptyTab>
+                <EmptyTab>{t("No spaces in common.")}</EmptyTab>
               ) : (
                 <ul className="-mx-2 space-y-0.5">
                   {mutualServers.map((s) => {
@@ -695,7 +701,7 @@ export function UserProfileModal({
 
             {tab === "friends" &&
               (mutualFriends.length === 0 ? (
-                <EmptyTab>No friends in common.</EmptyTab>
+                <EmptyTab>{t("No friends in common.")}</EmptyTab>
               ) : (
                 <ul className="-mx-2 space-y-0.5">
                   {mutualFriends.map((f) => (

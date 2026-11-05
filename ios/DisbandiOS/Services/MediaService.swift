@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreTransferable
 import Foundation
+import UIKit
 import UniformTypeIdentifiers
 
 struct MediaUploadResult {
@@ -61,6 +62,7 @@ enum MediaService {
                             onProgress: (@Sendable (Double) -> Void)? = nil)
         async throws -> MediaUploadResult
     {
+        let (data, filename, mimeType) = webSafe(data, filename: filename, mimeType: mimeType)
         let endpoint = cdnBase.appendingPathComponent("images")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -90,6 +92,24 @@ enum MediaService {
             (respData, response) = try await URLSession.shared.upload(for: request, from: body)
         }
         return try decodeUpload(respData, response)
+    }
+
+    /// Photos from the library arrive as HEIC, which only Apple devices can
+    /// show. They went up as they were, named .jpg, so people on Android,
+    /// Windows or Chrome saw a broken image. Anything that isn't already
+    /// JPEG, PNG, GIF or WebP is re-encoded as JPEG first.
+    static func webSafe(_ data: Data, filename: String, mimeType: String) -> (Data, String, String) {
+        let head = [UInt8](data.prefix(12))
+        let isJPEG = head.starts(with: [0xFF, 0xD8, 0xFF])
+        let isPNG = head.starts(with: [0x89, 0x50, 0x4E, 0x47])
+        let isGIF = head.starts(with: [0x47, 0x49, 0x46, 0x38])
+        let isWebP = head.count >= 12 && head[0...3] == [0x52, 0x49, 0x46, 0x46] && head[8...11] == [0x57, 0x45, 0x42, 0x50]
+        guard !(isJPEG || isPNG || isGIF || isWebP),
+              let jpeg = UIImage(data: data)?.jpegData(compressionQuality: 0.9) else {
+            return (data, filename, mimeType)
+        }
+        let base = (filename as NSString).deletingPathExtension
+        return (jpeg, "\(base.isEmpty ? "image" : base).jpg", "image/jpeg")
     }
 
     private static func decodeUpload(_ respData: Data, _ response: URLResponse) throws -> MediaUploadResult {

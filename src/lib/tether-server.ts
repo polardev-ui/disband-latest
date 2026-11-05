@@ -108,6 +108,7 @@ export async function ensureTetherUser(service: ServiceClient): Promise<string |
     email: TETHER_EMAIL,
     password,
     email_confirm: true,
+    app_metadata: { created_by: "server" },
   });
   if (!createError && created?.user?.id) {
     const synced = await syncTetherProfile(service, created.user.id);

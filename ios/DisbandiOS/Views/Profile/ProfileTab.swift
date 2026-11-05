@@ -5,6 +5,7 @@ struct ProfileTab: View {
     @Environment(AppState.self) private var app
     @Environment(SubscriptionService.self) private var subscriptions
     @Environment(PresenceService.self) private var presence
+    @Environment(MusicPresenceService.self) private var music
     @State private var showEdit = false
     @State private var showStatus = false
     @State private var confirmSignOut = false
@@ -14,6 +15,7 @@ struct ProfileTab: View {
     @State private var uploadError: String?
     @State private var showPaywall = false
     @State private var showNotifications = false
+    @State private var staffAccess: StaffAPI.Access?
 
     private var profile: Profile? { app.profile }
 
@@ -62,6 +64,11 @@ struct ProfileTab: View {
                                              title: "Guild tag", detail: nil)
                         }
                         SettingsDivider()
+                        NavigationLink { BadgeSettingsView().hidesDock().solidNavigationBar() } label: {
+                            SettingsRowLabel(symbol: "rosette", tint: Color(hex: 0xF1C40F),
+                                             title: "Badges", detail: "Show or hide")
+                        }
+                        SettingsDivider()
                         NavigationLink { ReferralsView() } label: {
                             SettingsRowLabel(symbol: "gift.fill", tint: Color(hex: 0xEB459E),
                                              title: "Referrals", detail: "Win $100")
@@ -80,6 +87,15 @@ struct ProfileTab: View {
                         NavigationLink { SettingsView().hidesDock() } label: {
                             SettingsRowLabel(symbol: "gearshape.fill", tint: Color(hex: 0x4E5058),
                                              title: "Settings")
+                        }
+                        if let staffAccess, staffAccess.isStaff {
+                            SettingsDivider()
+                            NavigationLink {
+                                StaffToolsView(isManager: staffAccess.isManager).hidesDock().solidNavigationBar()
+                            } label: {
+                                SettingsRowLabel(symbol: "shield.lefthalf.filled", tint: Color(hex: 0x5865F2),
+                                                 title: "Disband Staff", detail: staffAccess.isManager ? "Manager" : nil)
+                            }
                         }
                     }
                     .buttonStyle(.plain)
@@ -116,6 +132,9 @@ struct ProfileTab: View {
             .background(Brand.background)
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showPaywall) { AeroPaywallSheet() }
+            .task(id: app.currentUserId) {
+                if let uid = app.currentUserId { staffAccess = await StaffAPI.access(for: uid) }
+            }
             .sheet(isPresented: $showNotifications) { NotificationsSheet() }
             .sheet(isPresented: $showEdit) { EditProfileSheet() }
             .sheet(isPresented: $showStatus) { StatusSheet() }
@@ -172,7 +191,8 @@ struct ProfileTab: View {
                 HStack(alignment: .bottom) {
                     PhotosPicker(selection: $avatarItem, matching: .images) {
                         AvatarView(url: profile?.avatarUrl, name: profile?.name ?? "?", size: 88,
-                                   status: ownStatus, ringColors: accentColors, ringWidth: 4)
+                                   status: ownStatus, ringColors: accentColors, ringWidth: 4,
+                                   decoration: profile?.equippedRingEffect)
                             .background(Circle().fill(Brand.surface).padding(-5))
                             .overlay(alignment: .bottomTrailing) {
                                 if uploading { ProgressView().controlSize(.small) } else { editPip("camera.fill") }
@@ -185,10 +205,13 @@ struct ProfileTab: View {
                 .padding(.top, -46)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(profile?.name ?? "Loading…")
-                        .font(.title2.bold())
-                        .foregroundStyle(Brand.textPrimary)
-                        .lineLimit(1)
+                    if let profile {
+                        StyledName(profile, size: 22, weight: .bold).lineLimit(1)
+                    } else {
+                        Text("Loading…")
+                            .font(.title2.bold())
+                            .foregroundStyle(Brand.textPrimary)
+                    }
                     HStack(spacing: 6) {
                         Text("@\(profile?.handle ?? "user")")
                         if let pronouns = profile?.pronouns, !pronouns.isEmpty {
@@ -199,15 +222,21 @@ struct ProfileTab: View {
                     .font(.subheadline)
                     .foregroundStyle(Brand.textMuted)
                     if let profile {
-                        HStack(spacing: 6) {
-                            GuildTagView(userId: profile.id, size: .medium)
-                            UserBadgesView(profile: profile, size: 15)
-                        }
-                        .padding(.top, 4)
+                        UserBadgesView(profile: profile, size: 15, showsGuildTag: true)
+                            .padding(.top, 4)
                     }
                 }
 
                 statusBubble
+
+                // What others see you doing. A game comes from your desktop
+                // app; music from Spotify on any of your devices.
+                if let activity = profile?.activity, activity.isLive() {
+                    GameActivityCard(activity: activity)
+                }
+                if let listening = music.current ?? profile?.listening, listening.isCurrent() {
+                    ListeningCard(listening: listening)
+                }
 
                 if let bio = profile?.bio, !bio.isEmpty {
                     Text(bio)
@@ -371,6 +400,7 @@ struct ProfileTab: View {
 struct EditProfileSheet: View {
     @Environment(AppState.self) private var app
     @Environment(PresenceService.self) private var presence
+    @Environment(SubscriptionService.self) private var subscriptions
     @Environment(\.dismiss) private var dismiss
 
     @State private var displayName = ""
@@ -379,6 +409,8 @@ struct EditProfileSheet: View {
     @State private var pronouns = ""
     @State private var accent: String?
     @State private var accent2: String?
+    @State private var nameStyle = NameStyle()
+    @State private var showPaywall = false
     @State private var busy = false
     @State private var usernameProblem: String?
     @State private var saveError: String?
@@ -438,14 +470,45 @@ struct EditProfileSheet: View {
                 Section("About me") {
                     TextField("Tell people about yourself", text: $bio, axis: .vertical).lineLimit(3...6)
                 }
-                Section("Accent color") { swatches(selection: $accent) }
-                Section("Secondary accent") { swatches(selection: $accent2) }
                 Section {
-                    Button("Reset to default") {
+                    fontPicker
+                } header: {
+                    Text("Name font")
+                } footer: {
+                    Text("Shows everywhere your name does, on every device.")
+                }
+                nameColourSection
+                Section {
+                    swatches(selection: $accent)
+                    ColorPicker("Custom colour", selection: colourBinding($accent, fallback: Brand.accent),
+                                supportsOpacity: false)
+                } header: {
+                    Text("Profile colour")
+                }
+                Section {
+                    swatches(selection: $accent2)
+                    ColorPicker("Custom colour", selection: colourBinding($accent2, fallback: Brand.accentSoft),
+                                supportsOpacity: false)
+                } header: {
+                    Text("Second profile colour")
+                } footer: {
+                    Text("Your banner and avatar ring blend between the two.")
+                }
+                Section {
+                    Button("Reset profile colours") {
                         accent = nil
                         accent2 = nil
                     }
                     .foregroundStyle(Brand.dnd)
+                }
+                Section {
+                    NavigationLink {
+                        BadgeSettingsView()
+                    } label: {
+                        Label("Badges", systemImage: "rosette")
+                    }
+                } footer: {
+                    Text("Choose which of your badges show beside your name.")
                 }
             }
             .scrollContentBackground(.hidden)
@@ -464,7 +527,9 @@ struct EditProfileSheet: View {
                 pronouns = app.profile?.pronouns ?? ""
                 accent = app.profile?.accentColor
                 accent2 = app.profile?.accentColor2
+                if let profile = app.profile { nameStyle = NameStyle(profile) }
             }
+            .sheet(isPresented: $showPaywall) { AeroPaywallSheet() }
             // Debounced availability check: re-runs when typing settles rather
             // than firing an RPC per keystroke.
             .task(id: username) {
@@ -498,9 +563,9 @@ struct EditProfileSheet: View {
                     AvatarView(url: profile.avatarUrl, name: displayName.isEmpty ? "?" : displayName,
                                size: 44, status: presence.status(for: profile.id, fallback: profile.status))
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(displayName.isEmpty ? (profile.handle ?? "You") : displayName)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Brand.textPrimary)
+                        StyledName(text: displayName.isEmpty ? profile.handle : displayName,
+                                   style: previewStyle, size: 17)
+                            .lineLimit(1)
                         Text("@\(profile.handle ?? "user")")
                             .font(.caption)
                             .foregroundStyle(Brand.textMuted)
@@ -513,6 +578,91 @@ struct EditProfileSheet: View {
         .background(Brand.surface)
         .clipShape(.rect(cornerRadius: 14))
         .padding(.vertical, 8)
+    }
+
+    private var isAero: Bool { subscriptions.plan == .aero }
+
+    /// What the preview shows: colours only count with Aero, as when saved.
+    private var previewStyle: NameStyle {
+        isAero ? nameStyle : NameStyle(font: nameStyle.font)
+    }
+
+    /// Every font, each label drawn in its own face.
+    private var fontPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(NameFont.allCases.filter { $0.isOffered || $0 == nameStyle.font }) { font in
+                    let selected = nameStyle.font == font
+                    Button { nameStyle.font = font } label: {
+                        Text(font.label)
+                            .font(font.font(size: 17) ?? .system(size: 15, weight: .semibold))
+                            .foregroundStyle(selected ? .white : Brand.textPrimary)
+                            .padding(.horizontal, 14)
+                            .frame(height: 40)
+                            .background(selected ? Brand.accent : Brand.elevated, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+            .padding(.vertical, 6)
+        }
+    }
+
+    @ViewBuilder private var nameColourSection: some View {
+        Section {
+            if isAero {
+                ColorPicker("Colour", selection: colourBinding($nameStyle.color, fallback: .white),
+                            supportsOpacity: false)
+                ColorPicker("Gradient to", selection: colourBinding($nameStyle.color2, fallback: Brand.accent),
+                            supportsOpacity: false)
+                if nameStyle.color2 != nil {
+                    Picker("Direction", selection: Binding(
+                        get: { nameStyle.direction ?? "135deg" },
+                        set: { nameStyle.direction = $0 })) {
+                        Text("→").tag("90deg")
+                        Text("↘").tag("135deg")
+                        Text("↓").tag("180deg")
+                        Text("↗").tag("45deg")
+                    }
+                    .pickerStyle(.segmented)
+                }
+                if nameStyle.color != nil || nameStyle.color2 != nil {
+                    Button("Use the default colour") {
+                        nameStyle.color = nil
+                        nameStyle.color2 = nil
+                        nameStyle.direction = nil
+                    }
+                    .foregroundStyle(Brand.dnd)
+                }
+            } else {
+                Button { showPaywall = true } label: {
+                    HStack {
+                        Label("Colour and gradient names", systemImage: "lock.fill")
+                            .foregroundStyle(Brand.textPrimary)
+                        Spacer()
+                        Text("AERO")
+                            .font(.caption2.weight(.heavy))
+                            .padding(.horizontal, 8).frame(height: 20)
+                            .background(SubscriptionPlan.aeroGold.opacity(0.2), in: Capsule())
+                            .foregroundStyle(SubscriptionPlan.aeroGold)
+                    }
+                }
+            }
+        } header: {
+            Text("Name colour")
+        } footer: {
+            Text(isAero ? "Pick one colour, or two for a gradient." : "Give your name a colour or a gradient with Disband Aero.")
+        }
+    }
+
+    /// A colour well bound to a stored "#rrggbb", which stays nil until a
+    /// colour is actually picked.
+    private func colourBinding(_ hex: Binding<String?>, fallback: Color) -> Binding<Color> {
+        Binding(
+            get: { Color(hexString: hex.wrappedValue) ?? fallback },
+            set: { hex.wrappedValue = $0.hexString }
+        )
     }
 
     private func swatches(selection: Binding<String?>) -> some View {
@@ -547,9 +697,18 @@ struct EditProfileSheet: View {
 
             if let error = await app.saveProfile(.init(
                 displayName: displayName.trimmingCharacters(in: .whitespaces),
-                bio: bio.trimmingCharacters(in: .whitespaces),
-                accentColor: accent, accentColor2: accent2)) {
+                bio: bio.trimmingCharacters(in: .whitespaces))) {
                 saveError = error
+                busy = false
+                return
+            }
+            do {
+                // Saved on their own because both can be cleared, and the
+                // shared patch can't send a null.
+                try await ProfileService.updateAccent(color1: accent, color2: accent2)
+                try await ProfileService.updateNameStyle(nameStyle, aero: isAero)
+            } catch {
+                saveError = "Couldn't save your profile style. Try again."
                 busy = false
                 return
             }

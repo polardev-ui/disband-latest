@@ -59,6 +59,12 @@ struct Profile: Codable, Identifiable, Hashable {
     var statusExpiresAt: String?
     var status: UserStatus
     var preferredStatus: UserStatus?
+    /// The status they picked. `status` reads offline once every app has
+    /// closed, so the choice itself lives in `preferred_status`.
+    var chosenStatus: UserStatus {
+        if let preferredStatus { return preferredStatus }
+        return status == .offline ? .online : status
+    }
     var bannerUrl: String?
     var accentColor: String?
     var accentColor2: String?
@@ -73,6 +79,21 @@ struct Profile: Codable, Identifiable, Hashable {
     var createdAt: String?
     /// Bots and webhooks; shown with an APP tag beside their name.
     var isBot: Bool? = nil
+    /// Privacy: people who share a space may send a message request (migration 0193).
+    var allowMessageRequests: Bool? = nil
+    /// The avatar decoration they wear (a shop item id such as
+    /// "ring-angelic"). Drawn by `AvatarView` from the web's exported art.
+    var equippedRingEffect: String? = nil
+    /// Display-name style, as on the web (`DisplayName.tsx`): a font id from
+    /// `NameFont`, and for Aero a colour or two-colour gradient.
+    var nameFont: String? = nil
+    var nameColor: String? = nil
+    var nameColor2: String? = nil
+    var nameGradientDir: String? = nil
+    /// Live music and game presence. Only loaded where a full profile is
+    /// fetched (the profile sheet), not on every chat author.
+    var listening: Listening? = nil
+    var activity: ProfileActivity? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, username, bio, status, theme, pronouns
@@ -93,6 +114,13 @@ struct Profile: Codable, Identifiable, Hashable {
         case linkPreviewsEnabled = "link_previews_enabled"
         case createdAt = "created_at"
         case isBot = "is_bot"
+        case allowMessageRequests = "allow_message_requests"
+        case equippedRingEffect = "equipped_ring_effect"
+        case nameFont = "name_font"
+        case nameColor = "name_color"
+        case nameColor2 = "name_color_2"
+        case nameGradientDir = "name_gradient_dir"
+        case listening, activity
     }
 
     /// Display name, else username. A name made only of invisible
@@ -201,10 +229,16 @@ struct Channel: Codable, Identifiable, Hashable {
     let createdAt: String?
     /// Announcement channel: only people who can manage channels may post.
     var readOnly: Bool?
+    /// A stage: a voice channel where speakers talk and everyone else listens.
+    var isStage: Bool?
+    /// Set while the stage is live.
+    var stageTopic: String?
 
     enum CodingKeys: String, CodingKey {
         case id, name, type, position
         case readOnly = "read_only"
+        case isStage = "is_stage"
+        case stageTopic = "stage_topic"
         case serverId = "server_id"
         case categoryId = "category_id"
         case createdAt = "created_at"
@@ -274,6 +308,12 @@ struct DmThread: Codable, Identifiable, Hashable {
     let createdAt: String?
     var lastMessageAt: String?
     var lastMessagePreview: String?
+    /// Message requests (migration 0193): who started it without being
+    /// friends (nil for a normal DM), and whether the recipient accepted or
+    /// ignored it.
+    var requestedBy: String?
+    var acceptedAt: String?
+    var requestIgnoredAt: String?
     var friend: Profile?
 
     enum CodingKeys: String, CodingKey {
@@ -283,6 +323,21 @@ struct DmThread: Codable, Identifiable, Hashable {
         case createdAt = "created_at"
         case lastMessageAt = "last_message_at"
         case lastMessagePreview = "last_message_preview"
+        case requestedBy = "requested_by"
+        case acceptedAt = "accepted_at"
+        case requestIgnoredAt = "request_ignored_at"
+    }
+
+    /// A request someone else sent you that you haven't replied to or accepted.
+    func isIncomingRequest(for uid: String?) -> Bool {
+        guard let requestedBy, let uid else { return false }
+        return requestedBy != uid && acceptedAt == nil
+    }
+
+    /// A request you sent that hasn't been answered yet.
+    func isOutgoingRequest(for uid: String?) -> Bool {
+        guard let requestedBy, let uid else { return false }
+        return requestedBy == uid && acceptedAt == nil
     }
 }
 

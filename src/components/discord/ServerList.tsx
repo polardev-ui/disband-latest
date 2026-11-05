@@ -1,5 +1,6 @@
 "use client";
 
+import { useI18n } from "@/contexts/I18nContext";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Tooltip } from "./Tooltip";
@@ -192,6 +193,7 @@ function ServerButton({
   onDrop: (e: React.DragEvent) => void;
   onDragEnd: () => void;
 }) {
+  const { t } = useI18n();
   // Member counts are fetched lazily on first hover (one cheap RPC, cached
   // per server) so the rail never pays for servers you only glance past.
   const [counts, setCounts] = useState<{ total: number; online: number } | null>(() => {
@@ -294,8 +296,8 @@ function ServerButton({
           )}
           {mentionCount > 0 && (
             <span
-              aria-label={`${mentionCount} unread ${mentionCount === 1 ? "mention" : "mentions"}`}
-              title={`${mentionCount} unread ${mentionCount === 1 ? "mention" : "mentions"}`}
+              aria-label={t(mentionCount === 1 ? "{count} unread mention" : "{count} unread mentions", { count: mentionCount })}
+              title={t(mentionCount === 1 ? "{count} unread mention" : "{count} unread mentions", { count: mentionCount })}
               className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-[3px] border-bg-tertiary bg-status-dnd px-1 text-[11px] font-bold leading-none text-white"
             >
               {mentionCount > 99 ? "99+" : mentionCount}
@@ -349,6 +351,7 @@ export function ServerList({
   onReorderServers,
   onReorderFolders,
 }: ServerListProps) {
+  const { t } = useI18n();
   const homeActive =
     viewMode === "home" || viewMode === "dm" || viewMode === "group" || viewMode === "notes";
   const visibleDmUnreads = dmUnreads.filter(
@@ -445,7 +448,7 @@ export function ServerList({
 
   return (
     <nav
-      aria-label="Spaces"
+      aria-label={t("Spaces")}
       // Top-aligned on purpose. Centring the stack leaves a gap above the home
       // button whenever the rail is shorter than the window.
       className="rail-scroll flex w-[72px] shrink-0 flex-col items-center overflow-y-auto bg-bg-tertiary pb-3 pt-3"
@@ -453,10 +456,10 @@ export function ServerList({
       <div className="flex w-full flex-col items-center gap-2">
       <div className="rail-item group relative flex w-full justify-center">
         <RailPill state={homeActive ? "active" : "none"} />
-        <Tooltip label="Direct Messages" side="right">
+        <Tooltip label={t("Direct Messages")} side="right">
           <button
             type="button"
-            aria-label="Direct Messages"
+            aria-label={t("Direct Messages")}
             aria-current={homeActive ? "true" : undefined}
             onClick={onSelectHome}
             className="relative flex h-12 w-12 items-center justify-center"
@@ -477,7 +480,7 @@ export function ServerList({
             <Tooltip label={displayName(entry.friend)} side="right">
               <button
                 type="button"
-                aria-label={`${entry.count} unread messages from ${displayName(entry.friend)}`}
+                aria-label={t("{count} unread messages from {name}", { count: entry.count, name: displayName(entry.friend) })}
                 onClick={() => onSelectDmThread(entry.threadId)}
                 className="relative flex h-12 w-12 items-center justify-center"
               >
@@ -547,7 +550,7 @@ export function ServerList({
                 <Tooltip label={folder.name} side="right">
                   <button
                     type="button"
-                    aria-label={`Folder ${folder.name}`}
+                    aria-label={t("Folder {name}", { name: folder.name })}
                     aria-expanded={isOpen}
                     onClick={toggle}
                     onContextMenu={(e) => {
@@ -587,7 +590,7 @@ export function ServerList({
                 <div className="relative flex w-full flex-col items-center gap-2 pb-2 pt-2">
                   {members.map((server) => renderServerButton(server))}
                   {members.length === 0 && (
-                    <p className="px-2 text-center text-[10px] leading-tight text-text-muted">Drop spaces here</p>
+                    <p className="px-2 text-center text-[10px] leading-tight text-text-muted">{t("Drop spaces here")}</p>
                   )}
                 </div>
               )}
@@ -598,8 +601,8 @@ export function ServerList({
 
       <div className="rail-item group relative flex w-full justify-center">
         <RailPill state="none" />
-        <Tooltip label="Add a Space" side="right">
-          <button type="button" aria-label="Add a Space" onClick={onCreateServer} className="relative flex h-12 w-12 items-center justify-center">
+        <Tooltip label={t("Add a Space")} side="right">
+          <button type="button" aria-label={t("Add a Space")} onClick={onCreateServer} className="relative flex h-12 w-12 items-center justify-center">
             <span className="rail-icon rail-icon-action h-12 w-12">
               <IconPlus size={24} />
             </span>
@@ -609,8 +612,8 @@ export function ServerList({
 
       <div className="rail-item group relative flex w-full justify-center">
         <RailPill state={viewMode === "discover" ? "active" : "none"} />
-        <Tooltip label="Explore Discoverable Spaces" side="right">
-          <button type="button" aria-label="Explore discoverable spaces" onClick={onDiscover} className="relative flex h-12 w-12 items-center justify-center">
+        <Tooltip label={t("Explore Discoverable Spaces")} side="right">
+          <button type="button" aria-label={t("Explore discoverable spaces")} onClick={onDiscover} className="relative flex h-12 w-12 items-center justify-center">
             <span data-active={viewMode === "discover" || undefined} className="rail-icon rail-icon-action h-12 w-12">
               <IconCompass size={24} />
             </span>

@@ -10,8 +10,9 @@ import { useEntitlement } from "@/lib/entitlement-store";
 import { SubscriptionMedallion, tierForMonths, type TierDef } from "@/components/gift/SubscriptionMedallion";
 import { SubscriptionBadgeModal } from "@/components/subscription/SubscriptionBadgeModal";
 import type { SubscriptionPlan } from "@/lib/subscription";
+import { useI18n } from "@/contexts/I18nContext";
 
-const IDENTITY_BADGES = new Set(["owner", "staff", "moderator", "partner", "og"]);
+const IDENTITY_BADGES = new Set(["owner", "staff", "moderator", "manager", "partner", "og"]);
 
 export interface UserBadgesProps {
   userId: string | null | undefined;
@@ -32,6 +33,7 @@ export function UserBadges({
   userId, plan, tenureMonths, subscribedSince,
   size = 13, className = "", interactive = true, variant = "inline",
 }: UserBadgesProps) {
+  const { t } = useI18n();
 
   const all = useBadges(userId, { fresh: variant === "full" });
   const full = variant === "full";
@@ -71,9 +73,9 @@ export function UserBadges({
             disabled={tiersOpen}
             label={
               <span className="block text-center">
-                <span className="block">Disband {effectivePlan === "lite" ? "Lite" : "Aero"}</span>
+                <span className="block">Disband {effectivePlan === "lite" ? t("Lite") : "Aero"}</span>
                 <span className="mt-0.5 block text-[11px] font-normal text-[#b5bac1]">
-                  {tier.label} · {interactive ? "click for details" : `${months} months`}
+                  {tier.label} · {interactive ? "click for details" : t("{months} months", { months })}
                 </span>
               </span>
             }
@@ -166,6 +168,16 @@ function BadgePip({ badge, size }: { badge: AwardedBadge; size: number }) {
 function badgeDetail(badge: AwardedBadge): string | null {
   const m = badge.metadata ?? {};
   const n = (k: string) => (typeof m[k] === "number" ? (m[k] as number) : null);
+  const followers = n("followers");
+  if (followers) {
+    // Creator badge: the biggest connected account, then any others.
+    const platforms = Array.isArray(m.platforms) ? (m.platforms as { platform: string; followers: number }[]) : [];
+    const label = (p: string) => ({ youtube: "YouTube", tiktok: "TikTok", twitch: "Twitch" } as Record<string, string>)[p] ?? p;
+    const noun = (p: string) => (p === "youtube" ? "subscribers" : "followers");
+    const fmt = (v: number) => new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 1 }).format(v);
+    const list = platforms.length ? platforms : [{ platform: String(m.platform ?? ""), followers }];
+    return list.map((p) => `${fmt(p.followers)} ${noun(p.platform)} on ${label(p.platform)}`).join(" · ");
+  }
   const reports = n("reports");
   if (reports) return `${reports} confirmed report${reports === 1 ? "" : "s"}`;
   const members = n("members");

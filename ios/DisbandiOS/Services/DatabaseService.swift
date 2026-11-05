@@ -6,7 +6,14 @@ import Supabase
 enum DatabaseService {
     private static var client: SupabaseClient { SupabaseManager.client }
 
-    private static let authorEmbed = "*, author:profiles(*)"
+    /// Exactly the columns `Profile` decodes. `profiles(*)` sent every column
+    /// of the author's row with every message, about two thirds of a page.
+    static let profileColumns = "id,username,display_name,avatar_url,bio,pronouns,status_note,"
+        + "status_expires_at,status,preferred_status,banner_url,accent_color,accent_color_2,theme,"
+        + "show_owner_badge,show_staff_badge,show_og_badge,show_bounty_badge,sound_enabled,"
+        + "desktop_notifications_enabled,link_previews_enabled,created_at,is_bot,"
+        + "allow_message_requests,equipped_ring_effect,name_font,name_color,name_color_2,name_gradient_dir"
+    private static let authorEmbed = "*, author:profiles(\(profileColumns))"
 
     // MARK: - Servers
 
@@ -284,6 +291,17 @@ enum DatabaseService {
         try await client.from("group_messages").delete().eq("id", value: id).execute()
     }
 
+    /// Rewrite one of my own messages, as the web does: new text and when.
+    /// `table` is messages, dm_messages or group_messages.
+    static func editMessage(table: String, id: String, authorId: String, content: String, editedAt: String) async throws {
+        struct Edit: Encodable { let content: String; let edited_at: String }
+        try await client.from(table)
+            .update(Edit(content: content, edited_at: editedAt))
+            .eq("id", value: id)
+            .eq("author_id", value: authorId)
+            .execute()
+    }
+
     // MARK: - Direct messages
 
     static func myDmThreads(currentUserId: String) async throws -> [DmThread] {
@@ -340,6 +358,14 @@ enum DatabaseService {
     static func getOrCreateDmThread(friendId: String) async throws -> String {
         try await client.rpc("get_or_create_dm_thread", params: ["p_friend_id": friendId])
             .execute().value
+    }
+
+    /// Accept or ignore a message request you received (migration 0193).
+    static func respondMessageRequest(threadId: String, accept: Bool) async throws {
+        try await client.rpc("respond_message_request", params: [
+            "p_thread_id": threadId,
+            "p_action": accept ? "accept" : "ignore",
+        ]).execute()
     }
 
     // MARK: - Unread / read state
@@ -708,6 +734,20 @@ enum DatabaseService {
             .count ?? 0
     }
 
+    /// Live Catalysts per space for a set of spaces, in one request. Expired
+    /// ones are already hidden by the table's read policy.
+    static func catalystCounts(serverIds: [String]) async throws -> [String: Int] {
+        guard !serverIds.isEmpty else { return [:] }
+        struct Row: Decodable { let server_id: String }
+        let rows: [Row] = try await client
+            .from("server_catalysts")
+            .select("server_id")
+            .in("server_id", values: serverIds)
+            .execute()
+            .value
+        return rows.reduce(into: [:]) { counts, row in counts[row.server_id, default: 0] += 1 }
+    }
+
     // MARK: - Profile & settings updates
 
     struct ProfilePatch: Encodable {
@@ -720,6 +760,7 @@ enum DatabaseService {
         var soundEnabled: Bool? = nil
         var desktopNotificationsEnabled: Bool? = nil
         var linkPreviewsEnabled: Bool? = nil
+        var allowMessageRequests: Bool? = nil
 
         enum CodingKeys: String, CodingKey {
             case bio
@@ -731,6 +772,7 @@ enum DatabaseService {
             case soundEnabled = "sound_enabled"
             case desktopNotificationsEnabled = "desktop_notifications_enabled"
             case linkPreviewsEnabled = "link_previews_enabled"
+            case allowMessageRequests = "allow_message_requests"
         }
 
         // Only encode the fields that were actually set. Encoding every nil as
@@ -748,6 +790,7 @@ enum DatabaseService {
             if let soundEnabled { try container.encode(soundEnabled, forKey: .soundEnabled) }
             if let desktopNotificationsEnabled { try container.encode(desktopNotificationsEnabled, forKey: .desktopNotificationsEnabled) }
             if let linkPreviewsEnabled { try container.encode(linkPreviewsEnabled, forKey: .linkPreviewsEnabled) }
+            if let allowMessageRequests { try container.encode(allowMessageRequests, forKey: .allowMessageRequests) }
         }
     }
 
@@ -781,9 +824,24 @@ enum DatabaseService {
             let reason: String?
         }
         do {
-            let result: Result = try await client
-                .rpc("check_username_available", params: Params(p_username: username))
-                .execute().value
+            let result: Result
+            if client.auth.currentSession == nil {
+                // Sign-up has no session yet, and the RPC is members-only: it
+                // was refused every time and read as "available". The web's
+                // rate-limited endpoint answers for signed-out callers.
+                var components = URLComponents(
+                    url: AppConfig.webAppURL.appendingPathComponent("api/profile/check-username"),
+                    resolvingAgainstBaseURL: false
+                )
+                components?.queryItems = [URLQueryItem(name: "username", value: username)]
+                guard let url = components?.url else { return nil }
+                let (data, _) = try await URLSession.shared.data(from: url)
+                result = try JSONDecoder().decode(Result.self, from: data)
+            } else {
+                result = try await client
+                    .rpc("check_username_available", params: Params(p_username: username))
+                    .execute().value
+            }
             return result.available ? nil : (result.reason ?? "That username is taken.")
         } catch {
             // Network/permission trouble: don't block the save here — the RPC

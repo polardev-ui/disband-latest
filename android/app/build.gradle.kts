@@ -22,12 +22,19 @@ android {
     namespace = "com.wsgpolar.disband"
     compileSdk = 36
 
+    // ChatTimeline logs a failed refresh through android.util.Log, which is a
+    // stub in plain JVM unit tests. Without this the negative-path test fails
+    // with "not mocked" instead of exercising the error state.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     defaultConfig {
         applicationId = "com.wsgpolar.disband"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.6.0"
+        versionCode = 23
+        versionName = "1.12.0"
 
         vectorDrawables { useSupportLibrary = true }
 
@@ -84,6 +91,13 @@ android {
 }
 
 dependencies {
+    // A library still pulls in androidx.fragment 1.1.0, which Play flags as
+    // outdated on every release. Lift it to a current version.
+    constraints {
+        implementation("androidx.fragment:fragment:1.8.5") {
+            because("Play Console reports fragment 1.1.0 as outdated")
+        }
+    }
     testImplementation("junit:junit:4.13.2")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

@@ -1,3 +1,4 @@
+import Supabase
 import SwiftUI
 
 /// A read-only view of another user's profile, presented as a sheet from
@@ -14,6 +15,16 @@ struct ProfileDetailView: View {
     @State private var relation: FriendshipStatus?
     @State private var working = false
     @State private var error: String?
+    /// The DM opened from here when no presenter handles it (e.g. a profile
+    /// opened from a space's chat), shown inside this sheet's stack.
+    @State private var openedDm: ChatSource?
+    /// The whole profile row. Whoever opened this sheet usually holds a
+    /// trimmed copy (a chat author has no music or game fields), so the full
+    /// one is fetched, and refreshed while the sheet is open so a track
+    /// change shows up.
+    @State private var full: Profile?
+
+    private var shown: Profile { full ?? profile }
 
     private var isSelf: Bool { profile.id == app.currentUserId }
 
@@ -33,6 +44,12 @@ struct ProfileDetailView: View {
                     banner
                     VStack(alignment: .leading, spacing: 16) {
                         header
+                        if let activity = shown.activity, activity.isLive() {
+                            GameActivityCard(activity: activity)
+                        }
+                        if let listening = shown.listening, listening.isCurrent() {
+                            ListeningCard(listening: listening)
+                        }
                         if let bio = profile.bio, !bio.isEmpty {
                             section("About Me", body: bio)
                         }
@@ -51,9 +68,18 @@ struct ProfileDetailView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(item: $openedDm) { source in
+                ChatView(source: source, callPeer: profile)
+            }
         }
         .presentationDetents([.large])
         .task { await loadRelation() }
+        .task(id: profile.id) {
+            while !Task.isCancelled {
+                if let fresh = try? await DatabaseService.profile(id: profile.id) { full = fresh }
+                try? await Task.sleep(nanoseconds: 20_000_000_000)
+            }
+        }
     }
 
     private var banner: some View {
@@ -61,7 +87,8 @@ struct ProfileDetailView: View {
             BannerImage(url: profile.bannerUrl, height: 140) { accentGradient }
 
             AvatarView(url: profile.avatarUrl, name: profile.name, size: 88,
-                       status: liveStatus, ringColors: accentColors, ringWidth: 5)
+                       status: liveStatus, ringColors: accentColors, ringWidth: 5,
+                       decoration: profile.equippedRingEffect)
                 .background(Circle().fill(Brand.background).padding(-3))
                 .padding(.leading, 18)
                 .offset(y: 44)
@@ -80,7 +107,7 @@ struct ProfileDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(profile.name).font(.title2.bold()).foregroundStyle(Brand.textPrimary)
+            StyledName(shown, size: 22, weight: .bold)
             HStack(spacing: 6) {
                 Text("@\(profile.handle)")
                 if let pronouns = profile.pronouns, !pronouns.isEmpty {
@@ -102,11 +129,8 @@ struct ProfileDetailView: View {
             // On its own line, with the full width to wrap into. Beside the
             // name it had whatever the name left over, which on a long name was
             // room for about two badges.
-            HStack(spacing: 6) {
-                GuildTagView(userId: profile.id, size: .medium)
-                UserBadgesView(profile: profile, size: 15)
-            }
-            .padding(.top, 4)
+            UserBadgesView(profile: profile, size: 15, showsGuildTag: true)
+                .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -124,8 +148,7 @@ struct ProfileDetailView: View {
     @ViewBuilder private var actions: some View {
         VStack(spacing: 10) {
             Button {
-                onStartDM?(profile)
-                dismiss()
+                Task { await startDm() }
             } label: {
                 Label("Message", systemImage: "bubble.left.fill")
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -181,6 +204,23 @@ struct ProfileDetailView: View {
             (f.requesterId == uid && f.addresseeId == profile.id) ||
             (f.requesterId == profile.id && f.addresseeId == uid)
         }?.status
+    }
+
+    /// Opens the DM, or explains why not (not friends and no shared space,
+    /// or they've turned message requests off). Never navigates on failure.
+    private func startDm() async {
+        error = nil
+        do {
+            let threadId = try await DatabaseService.getOrCreateDmThread(friendId: profile.id)
+            if let onStartDM {
+                onStartDM(profile)
+                dismiss()
+            } else {
+                openedDm = .dm(threadId: threadId, title: profile.name)
+            }
+        } catch {
+            self.error = (error as? PostgrestError)?.message ?? error.localizedDescription
+        }
     }
 
     private func run(_ op: @escaping () async throws -> Void) async {

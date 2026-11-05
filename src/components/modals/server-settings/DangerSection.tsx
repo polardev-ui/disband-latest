@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { ConfirmDialog, InlineError, btn } from "./ui";
 import type { SectionProps } from "./types";
+import { useI18n } from "@/contexts/I18nContext";
 
 export function DangerSection({ server, onDeleted }: SectionProps & { onDeleted: () => void }) {
+  const { t } = useI18n();
   const { deleteServer } = useApp();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -15,13 +17,13 @@ export function DangerSection({ server, onDeleted }: SectionProps & { onDeleted:
       <section className="overflow-hidden rounded-lg border border-status-dnd/30 bg-status-dnd/[0.04]">
         <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-5">
           <div className="min-w-0 max-w-md">
-            <p className="text-[14.5px] font-semibold text-text-normal">Delete this space</p>
+            <p className="text-[14.5px] font-semibold text-text-normal">{t("Delete this space")}</p>
             <p className="mt-1 text-[13px] leading-relaxed text-text-muted">
-              Every channel, message, role, emoji and sound goes with it, and every member loses access. There is no undo.
+              {t("Every channel, message, role, emoji and sound goes with it, and every member loses access. There is no undo.")}
             </p>
           </div>
           <button type="button" onClick={() => setConfirming(true)} className={btn.danger}>
-            Delete space
+            {t("Delete space")}
           </button>
         </div>
       </section>
@@ -31,10 +33,10 @@ export function DangerSection({ server, onDeleted }: SectionProps & { onDeleted:
 
       <ConfirmDialog
         open={confirming}
-        title={`Delete ${server.name}?`}
+        title={t("Delete {name}?", { name: server.name })}
         body="This permanently removes the space for everyone."
         requireText={server.name}
-        confirmLabel="Delete forever"
+        confirmLabel={t("Delete forever")}
         onCancel={() => setConfirming(false)}
         onConfirm={async () => {
           setError(null);

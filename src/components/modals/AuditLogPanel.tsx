@@ -6,9 +6,10 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
 import { displayName } from "@/lib/utils";
 import { Avatar } from "@/components/ui/Avatar";
-import { IconLeave, IconLink, IconLock, IconNotes, IconStar, IconTimer, IconTrash, IconVerified } from "@/components/icons";
+import { IconCrown, IconLeave, IconLink, IconLock, IconNotes, IconStar, IconTimer, IconTrash, IconVerified } from "@/components/icons";
 import { EmptyState, enterStyle } from "@/components/modals/server-settings/ui";
 import type { Profile } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface AuditRow {
   id: number;
@@ -35,6 +36,7 @@ const ACTIONS: Record<string, { label: string; icon: ComponentType<{ size?: numb
   "webhook.delete": { label: "deleted", icon: IconLink, tone: "danger" },
   "space.partner_set": { label: "updated the Partner badge on", icon: IconStar, tone: "muted" },
   "space.verified_set": { label: "updated the Verified badge on", icon: IconVerified, tone: "muted" },
+  "space.owner_transfer": { label: "handed ownership of the space to", icon: IconCrown, tone: "muted" },
 };
 
 function timeAgo(iso: string): string {
@@ -58,6 +60,7 @@ function formatDuration(seconds: number): string {
 
 /** The last 100 moderation actions in a space. */
 export function AuditLogPanel({ serverId }: { serverId: string }) {
+  const { t } = useI18n();
   const { members } = useApp();
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,7 +123,7 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg bg-bg-secondary">
-        <EmptyState icon={<IconNotes size={20} />} title="Nothing logged yet" body="Kicks, bans, timeouts and deleted messages will show up here." />
+        <EmptyState icon={<IconNotes size={20} />} title={t("Nothing logged yet")} body="Kicks, bans, timeouts and deleted messages will show up here." />
       </div>
     );
   }
@@ -156,7 +159,7 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[14px] leading-snug text-text-muted">
-                <span className="font-medium text-text-normal">{actor ? displayName(actor) : row.actor_id ? "Someone" : "Disband"}</span>{" "}
+                <span className="font-medium text-text-normal">{actor ? displayName(actor) : row.actor_id ? t("Someone") : "Disband"}</span>{" "}
                 {badgeLabel}
                 {row.target_type === "user" && (
                   <>

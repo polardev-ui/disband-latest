@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { formatTypingLabel, type TypingUser } from "@/hooks/useTypingPresence";
 import type { Profile } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 const MAX_AVATARS = 3;
 const EXIT_MS = 300;
@@ -17,6 +18,7 @@ export function TypingIndicator({
   members: Profile[];
   groupContext: boolean;
 }) {
+  const { t } = useI18n();
   const [leaving, setLeaving] = useState<Map<string, TypingUser>>(new Map());
   const knownRef = useRef<Map<string, TypingUser>>(new Map());
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -87,13 +89,13 @@ export function TypingIndicator({
       <div aria-hidden className="flex min-w-0 items-center gap-1">
         {groupContext && (
           <div className="flex shrink-0 items-center">
-            {shown.map((t, i) => {
-              const profile = byId.get(t.userId);
+            {shown.map((typer, i) => {
+              const profile = byId.get(typer.userId);
               if (!profile) return null;
               return (
                 <span
-                  key={t.userId}
-                  title={t.name}
+                  key={typer.userId}
+                  title={typer.name}
                   className="avatar-pop -ml-1.5 rounded-full ring-2 ring-bg-primary first:ml-0"
                   style={{ zIndex: MAX_AVATARS - i }}
                 >
@@ -101,12 +103,12 @@ export function TypingIndicator({
                 </span>
               );
             })}
-            {leavingShown.map((t) => {
-              const profile = byId.get(t.userId);
+            {leavingShown.map((typer) => {
+              const profile = byId.get(typer.userId);
               if (!profile) return null;
               return (
                 <span
-                  key={`leaving-${t.userId}`}
+                  key={`leaving-${typer.userId}`}
                   className="avatar-leave -ml-1.5 rounded-full opacity-0 ring-2 ring-bg-primary"
                 >
                   <Avatar profile={profile} size="sm" className="h-6 w-6" />
@@ -129,10 +131,10 @@ export function TypingIndicator({
             </span>
             <span className="min-w-0 truncate">
               {typers.length > MAX_AVATARS ? (
-                "Several people are typing"
+                t("Several people are typing")
               ) : (
                 <>
-                  {typers.map((t, i) => {
+                  {typers.map((typer, i) => {
                     const prefix = i === 0
                       ? ""
                       : i === 1 && typers.length === 2
@@ -141,9 +143,9 @@ export function TypingIndicator({
                           ? ", and "
                           : ", ";
                     return (
-                      <span key={t.userId}>
+                      <span key={typer.userId}>
                         {prefix}
-                        <span className="font-bold text-white">{t.name}</span>
+                        <span className="font-bold text-white">{typer.name}</span>
                       </span>
                     );
                   })}

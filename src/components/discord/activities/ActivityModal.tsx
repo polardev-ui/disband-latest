@@ -13,15 +13,18 @@ import {
   joinActivity,
   submitWordleGuess,
   voteWouldYouRather,
+  arcadeMove,
   type ActivitySession,
 } from "@/lib/activities";
+import { ArcadeGame } from "./ArcadeGames";
 import { notifyActivityUpdated } from "@/lib/activity-events";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose } from "@/components/icons";
-import { BoardGame } from "./BoardGame";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { ActivityGlyph } from "./ActivityGlyph";
+import { BoardGame } from "./BoardGame";
 import {
   ActivityLeaderboard,
   EightBallGame,
@@ -43,11 +46,9 @@ function errorMessage(error: unknown): string {
 
 function endLabel(expiresAt: string): string {
   const ms = new Date(expiresAt).getTime() - Date.now();
-  if (ms <= 0) return "Ended";
-  if (ms < 86_400_000) return `Ends in ${Math.ceil(ms / 3_600_000)}h`;
-  const days = Math.ceil(ms / 86_400_000);
-  if (days <= 1) return "Ends within a day";
-  return `Ends in ${days} days`;
+  if (ms <= 0) return "Closed";
+  if (ms < 3_600_000) return `Closes in ${Math.max(1, Math.ceil(ms / 60_000))}m`;
+  return `Closes in ${Math.ceil(ms / 3_600_000)}h`;
 }
 
 export function ActivityModal({
@@ -136,9 +137,39 @@ export function ActivityModal({
 
   useEffect(() => {
     if (!open || !activityId) return;
+    const supabase = getSupabaseClient();
+    const channel = supabase
+      .channel(`activity:${activityId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "activity_sessions", filter: `id=eq.${activityId}` },
+        () => {
+          void (async () => {
+            try {
+              const next = await getActivity(activityId);
+              if (activeId.current !== activityId) return;
+              setActivity((current) =>
+                current?.id === next.id && current.revision > next.revision
+                  ? current
+                  : next,
+              );
+            } catch {
+              /* ignore */
+            }
+          })();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [open, activityId]);
+
+  useEffect(() => {
+    if (!open || !activityId) return;
     const timer = window.setInterval(
       () => void refresh(),
-      activity?.board ? 1500 : 4000,
+      activity?.board ? 2000 : 5000,
     );
     return () => window.clearInterval(timer);
   }, [open, activityId, refresh, !!activity?.board]);
@@ -215,7 +246,8 @@ export function ActivityModal({
           {activity ? (
             <ActivityGlyph
               kind={activity.kind}
-              size={56}
+              size={72}
+              radius={18}
               muted={activity.expired}
             />
           ) : (
@@ -231,8 +263,14 @@ export function ActivityModal({
             <h2 className="truncate text-[24px] font-semibold leading-7 text-header-primary">
               {def?.name ?? "Loading activity…"}
             </h2>
-            <p className="mt-1 truncate text-[13px] leading-5 text-text-muted">
-              {def?.tagline ?? "One moment"}
+            <p className="mt-1 flex items-center gap-2 truncate text-[13px] leading-5 text-text-muted">
+              {activity && (
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${activity.expired ? "bg-bg-accent text-text-muted" : "bg-status-online/15 text-status-online"}`}>
+                  {!activity.expired && <span className="h-1.5 w-1.5 rounded-full bg-status-online" />}
+                  {activity.expired ? "Closed · results" : `Live · ${endLabel(activity.expiresAt)}`}
+                </span>
+              )}
+              <span className="truncate">{def?.tagline ?? "One moment"}</span>
             </p>
           </div>
           <button
@@ -299,7 +337,7 @@ export function ActivityModal({
 
           {activity?.expired && (
             <div className="border-b border-divider bg-bg-secondary px-4 py-2 text-[12px] text-text-muted">
-              This activity has ended. You can still look through the results.
+              This game is closed: it ran for its 24 hours, or everyone finished. The results stay here.
             </div>
           )}
 
@@ -422,6 +460,13 @@ export function ActivityModal({
                         This room is full. You can watch the results.
                       </p>
                     )}
+                  {activity.arcade && (
+                    <ArcadeGame
+                      activity={activity}
+                      busy={busy}
+                      onMove={(move) => run(() => arcadeMove(activity.id, move))}
+                    />
+                  )}
                   {activity.kind === "wordle" && (
                     <WordleGame
                       activity={activity}

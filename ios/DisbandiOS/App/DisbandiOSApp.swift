@@ -13,11 +13,13 @@ struct DisbandiOSApp: App {
     @State private var directMessages: DirectMessagesViewModel
     @State private var themeManager: ThemeManager
     @State private var voice: VoiceSession
+    @State private var music = MusicPresenceService()
     @State private var showReviewPrompt = false
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
         CallAudioSession.prepare()
+        NameFont.registerAll()
 
         let appState = AppState()
         let presence = PresenceService()
@@ -47,6 +49,7 @@ struct DisbandiOSApp: App {
                 .environment(directMessages)
                 .environment(themeManager)
                 .environment(voice)
+                .environment(music)
                 .preferredColorScheme(themeManager.palette.colorScheme)
                 .tint(themeManager.palette.accent)
                 .task(id: appState.currentUserId) {
@@ -54,11 +57,22 @@ struct DisbandiOSApp: App {
                 }
                 .task(id: appState.currentUserId) {
                     await presence.start(userId: appState.currentUserId,
-                                         status: appState.profile?.status ?? .online)
+                                         status: appState.profile?.chosenStatus ?? .online)
+                    // Spotify "listening to", while the app is in front.
+                    music.start(userId: scenePhase == .active ? appState.currentUserId : nil,
+                                presence: presence)
                 }
                 .onChange(of: appState.profile) { _, profile in
                     PushManager.shared.doNotDisturb =
                         profile?.status == .dnd || profile?.preferredStatus == .dnd
+                    // Presence starts as soon as the account is known, often
+                    // before the profile has loaded, so it went out as Online
+                    // even when the saved status was Do Not Disturb. The app
+                    // then showed Online while every push was muted as DND.
+                    if let chosen = profile?.chosenStatus, presence.ownStatus != nil,
+                       presence.ownStatus != chosen {
+                        Task { await presence.update(chosen) }
+                    }
                 }
                 .task(id: appState.currentUserId) {
                     await call.start(userId: appState.currentUserId)
@@ -95,7 +109,22 @@ struct DisbandiOSApp: App {
                     await refreshMentionBadge(uid)
                 }
                 .onChange(of: scenePhase) { _, phase in
+                    // iOS suspends the app in the background anyway; stopping
+                    // first means no half-finished poll lands after it wakes.
+                    if phase == .background {
+                        music.stop()
+                        // Closing or backgrounding the app takes us offline
+                        // straight away; the chosen status stays saved.
+                        presence.stop()
+                    }
                     guard phase == .active, let uid = appState.currentUserId else { return }
+                    // Coming back: re-read the status chosen on any device
+                    // (Online set on desktop shows here too), then rejoin.
+                    Task {
+                        await appState.loadProfile()
+                        await presence.start(userId: uid, status: appState.profile?.chosenStatus ?? .online)
+                        music.start(userId: uid, presence: presence)
+                    }
                     Task { await refreshMentionBadge(uid) }
                     // Review prompt: recorded on every activation, shown only
                     // when every gate in ReviewPrompter passes (signed in,

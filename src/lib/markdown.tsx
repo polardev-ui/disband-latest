@@ -1,6 +1,6 @@
 "use client";
 
-import { displayName, isValidMentionToken, roleMentionSlug } from "@/lib/utils";
+import { channelLinkName, displayName, isValidMentionToken, roleMentionSlug } from "@/lib/utils";
 import { Suspense, lazy, useState } from "react";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { ReactNode } from "react";
@@ -48,7 +48,17 @@ export interface ChannelLite {
 }
 
 const INLINE_RE =
-  /(@&[a-zA-Z0-9_-]{1,64}|@[a-zA-Z0-9_]{1,32}|#[a-zA-Z0-9_-]+|`[^`]+`|\*\*[^*]+\*\*|\*[^*\n]+\*|__[^_\n]+__|_[^_\n]+_|~~[^~\n]+~~|\|\|[^\n]+?\|\||https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`])/;
+  /(@&[a-zA-Z0-9_-]{1,64}|@[a-zA-Z0-9_]{1,32}|#[\p{L}\p{N}\p{M}_-]+|`[^`]+`|\*\*[^*]+\*\*|\*[^*\n]+\*|__[^_\n]+__|_[^_\n]+_|~~[^~\n]+~~|\|\|[^\n]+?\|\||https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`])/u;
+
+/** Grey is the "no colour" default for new roles; those keep the usual blue chip. */
+const UNCOLOURED_ROLE = new Set(["#949ba4", "#99aab5", "#000000"]);
+
+/** A role's ping colour, or null to use the standard mention style. */
+export function roleMentionColour(role: { color?: string | null }): string | null {
+  const c = role.color?.trim().toLowerCase();
+  if (!c || !/^#[0-9a-f]{6}$/.test(c) || UNCOLOURED_ROLE.has(c)) return null;
+  return c;
+}
 
 const MENTION_CHIP_CLASS =
   "rounded-[3px] bg-[rgb(88_101_242/0.3)] px-0.5 font-medium text-[#c9cdfb] transition-colors hover:bg-brand hover:text-white";
@@ -64,14 +74,16 @@ function linkFor(url: string): string {
  */
 function Spoiler({ children }: { children: ReactNode }) {
   const [revealed, setRevealed] = useState(false);
-  const reveal = () => setRevealed(true);
+  // Click again to hide it, e.g. before someone looks over your shoulder.
+  const reveal = () => setRevealed((r) => !r);
 
   return (
     <span
       role="button"
       tabIndex={0}
-      aria-label={revealed ? "Spoiler revealed" : "Spoiler, click to reveal"}
-      title={revealed ? undefined : "Click to reveal spoiler"}
+      aria-label={revealed ? "Spoiler revealed, click to hide" : "Spoiler, click to reveal"}
+      aria-pressed={revealed}
+      title={revealed ? "Click to hide spoiler" : "Click to reveal spoiler"}
       onClick={(e) => {
         e.stopPropagation();
         reveal();
@@ -127,10 +139,23 @@ function renderInlineTokens(
         out.push(token);
         continue;
       }
+      const colour = roleMentionColour(role);
       out.push(
-        <span key={key} className={MENTION_CHIP_CLASS} title={`Role: ${role.name}`}>
-          @{role.name}
-        </span>,
+        colour ? (
+          // Coloured roles ping in their own colour, as on Discord.
+          <span
+            key={key}
+            className="rounded-[3px] px-0.5 font-medium transition-colors"
+            style={{ color: colour, backgroundColor: `color-mix(in srgb, ${colour} 18%, transparent)` }}
+            title={`Role: ${role.name}`}
+          >
+            @{role.name}
+          </span>
+        ) : (
+          <span key={key} className={MENTION_CHIP_CLASS} title={`Role: ${role.name}`}>
+            @{role.name}
+          </span>
+        ),
       );
       continue;
     }
@@ -174,7 +199,7 @@ function renderInlineTokens(
 
     if (token.startsWith("#")) {
       const name = token.slice(1).toLowerCase();
-      const channel = channels?.find((c) => c.name.toLowerCase() === name);
+      const channel = channels?.find((c) => channelLinkName(c.name) === name);
 
       if (channel && onChannelClick) {
         out.push(

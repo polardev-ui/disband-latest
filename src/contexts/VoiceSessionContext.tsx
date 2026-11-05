@@ -5,7 +5,6 @@ import { useApp } from "@/contexts/AppContext";
 import { applyParticipantAudioControls } from "@/lib/call-participant-settings";
 import { useVoiceChannel } from "@/hooks/useVoiceChannel";
 import type { Profile } from "@/lib/supabase/types";
-import type { SubscriptionPlan } from "@/lib/subscription";
 
 interface VoiceSession {
 
@@ -30,6 +29,10 @@ interface VoiceSession {
   disconnect: () => Promise<void>;
 
   peek: (channelId: string) => void;
+  /** The connected channel is a stage. */
+  isStage: boolean;
+  /** On a stage: whether I'm a speaker (otherwise I'm in the audience, muted). */
+  isStageSpeaker: boolean;
 }
 
 const Ctx = createContext<VoiceSession | null>(null);
@@ -42,19 +45,56 @@ export function useVoiceSession(): VoiceSession {
 
 export function VoiceSessionProvider({ children }: { children: React.ReactNode }) {
   const {
-    profile, user, micMuted, deafened, setVoiceJoinedChannelId, loadVoicePresence,
+    profile, user, micMuted, deafened, setVoiceJoinedChannelId, loadVoicePresence, subscriptionPlan, channels,
   } = useApp();
 
   const [connectedChannelId, setConnectedChannelId] = useState<string | null>(null);
   const [connectedChannelName, setConnectedChannelName] = useState<string | null>(null);
 
+  // Whether the connected channel is a stage. Kept once known: browsing
+  // another space swaps `channels` out from under a call still running.
+  const [isStage, setIsStage] = useState(false);
+  useEffect(() => {
+    if (!connectedChannelId) {
+      setIsStage(false);
+      return;
+    }
+    const ch = channels.find((c) => c.id === connectedChannelId);
+    if (ch) setIsStage(!!ch.is_stage);
+  }, [connectedChannelId, channels]);
+  // Everyone joins a stage in the audience, muted, until they're brought up.
+  const [isStageSpeaker, setIsStageSpeaker] = useState(false);
+
   const voice = useVoiceChannel(
     connectedChannelId,
     user?.id ?? null,
     profile as Profile | null,
-    micMuted,
+    micMuted || (isStage && !isStageSpeaker),
     deafened,
-    (profile?.subscription_plan as SubscriptionPlan) ?? "free",
+    // The real plan (subscription or gift). profile.subscription_plan isn't
+    // a column, so voice channels capped every share at the free 720p/30.
+    subscriptionPlan,
+    isStage,
+  );
+
+  useEffect(() => {
+    const me = voice.participants.find((p) => p.user_id === user?.id);
+    setIsStageSpeaker(!!me?.stage_speaker);
+  }, [voice.participants, user?.id]);
+
+  // Moved back to the audience: camera and screen go off with the mic.
+  const { cameraEnabled, screenEnabled, toggleCamera, toggleScreenShare } = voice;
+  useEffect(() => {
+    if (!isStage || isStageSpeaker) return;
+    if (cameraEnabled) void toggleCamera().catch(() => {});
+    if (screenEnabled) void toggleScreenShare().catch(() => {});
+  }, [isStage, isStageSpeaker, cameraEnabled, screenEnabled, toggleCamera, toggleScreenShare]);
+
+  // On a stage only speakers are played (covers older apps on direct links,
+  // which the voice server's speaker-only rule can't reach).
+  const speakerIds = useMemo(
+    () => new Set(voice.participants.filter((p) => p.stage_speaker).map((p) => p.user_id)),
+    [voice.participants],
   );
 
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -63,9 +103,14 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     audioRefs.current.forEach((el) => { el.muted = deafened; });
   }, [deafened]);
 
+  const deafenedRef = useRef(deafened);
+  deafenedRef.current = deafened;
   useEffect(() => {
     const sync = () => {
-      audioRefs.current.forEach((el, uid) => applyParticipantAudioControls(el, uid));
+      audioRefs.current.forEach((el, uid) => {
+        applyParticipantAudioControls(el, uid);
+        if (deafenedRef.current) el.muted = true;
+      });
     };
     window.addEventListener("disband:participant-controls", sync);
     return () => window.removeEventListener("disband:participant-controls", sync);
@@ -123,7 +168,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     connect: connectAndJoin,
     disconnect,
     peek,
-  }), [connectedChannelId, connectedChannelName, voice.joined, voice.participants,
+    isStage,
+    isStageSpeaker,
+  }), [isStage, isStageSpeaker, connectedChannelId, connectedChannelName, voice.joined, voice.participants,
        voice.connectedPeerIds,
        voice.error, voice.remoteStreams, voice.remoteScreens, voice.remoteScreenAudio,
        voice.localScreen, voice.localStream, voice.cameraEnabled, voice.screenEnabled,
@@ -134,7 +181,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     <Ctx.Provider value={value}>
       {children}
       {}
-      {[...voice.remoteStreams.entries()].map(([uid, stream]) => (
+      {[...voice.remoteStreams.entries()].filter(([uid]) => !isStage || speakerIds.has(uid)).map(([uid, stream]) => (
         <audio
           key={uid}
           data-call-user={uid}

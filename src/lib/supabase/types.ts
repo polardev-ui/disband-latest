@@ -1,4 +1,5 @@
 import type { Embed, MessageWebhookInfo } from "@/lib/embeds";
+import type { ActionRow, MessageInteractionInfo } from "@/lib/bot-commands";
 
 export type ThemePreference = "light" | "dark" | "midnight" | "sunset" | string;
 export type UserStatus = "online" | "idle" | "dnd" | "offline";
@@ -30,6 +31,8 @@ export interface Profile {
   /** Gradient direction for name color (e.g. "90deg", "180deg"). */
   name_gradient_dir?: string | null;
   is_bot?: boolean;
+  /** Privacy: people who share a space may send a message request. Migration 0193. */
+  allow_message_requests?: boolean;
   /** "standard" | "anonymous" — anonymous accounts are throwaway; see migration 0125. */
   account_type?: string | null;
   /** Whether the user has access to the team support dashboard. */
@@ -56,6 +59,9 @@ export interface Profile {
    * SoundCloud integration and cleared when playback stops. Optional so
    * older profile rows (and every mock in tests) keep compiling.
    */
+  /** What they're playing; see src/lib/activity.ts. Expires on its own. */
+  activity?: import("@/lib/activity").Activity | null;
+  activity_updated_at?: string | null;
   listening?: {
     source: "spotify" | "soundcloud" | "lastfm";
     track: string;
@@ -220,6 +226,17 @@ export interface Channel {
   position: number;
 
   read_only?: boolean;
+  /** Voice only: most people allowed in at once; null for no limit. */
+  user_limit?: number | null;
+  /** Voice only: nobody new can join. */
+  locked?: boolean;
+  /** Voice only: a stage, where speakers talk and the audience listens. */
+  is_stage?: boolean;
+  /** Set while the stage is open. */
+  stage_topic?: string | null;
+  stage_started_at?: string | null;
+  /** Whether the audience can raise their hands. */
+  stage_requests_enabled?: boolean;
   created_at: string;
 }
 
@@ -236,11 +253,16 @@ export interface DbMessage {
   /** Up to 10 attachments on one message; the legacy columns mirror the first. */
   attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   reply_to_id: string | null;
+  reply_to_deleted?: boolean;
   mentions: string[];
   /** Discord-shaped rich embeds from a webhook or bot. */
   embeds?: Embed[] | null;
   /** Present when the message was posted by a webhook. */
   webhook?: MessageWebhookInfo | null;
+  /** Rows of buttons on a bot's message. */
+  components?: ActionRow[] | null;
+  /** Set on a bot's answer to a slash command or button press. */
+  interaction?: MessageInteractionInfo | null;
   created_at: string;
   edited_at: string | null;
   display_id: number;
@@ -265,6 +287,7 @@ export interface DbDmMessage {
   /** Up to 10 attachments on one message; the legacy columns mirror the first. */
   attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   reply_to_id: string | null;
+  reply_to_deleted?: boolean;
   mentions: string[];
   created_at: string;
   edited_at: string | null;
@@ -288,6 +311,7 @@ export interface DbNote {
   /** Up to 10 attachments on one message; the legacy columns mirror the first. */
   attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   reply_to_id: string | null;
+  reply_to_deleted?: boolean;
   pinned: boolean;
   created_at: string;
   edited_at: string | null;
@@ -303,6 +327,12 @@ export interface DbDmThread {
   user_a: string;
   user_b: string;
   created_at: string;
+  /** Who started it without being friends; null for a normal DM. Migration 0193. */
+  requested_by?: string | null;
+  /** When the recipient replied to or accepted the request. */
+  accepted_at?: string | null;
+  /** The recipient ignored the request: hidden from them. */
+  request_ignored_at?: string | null;
 }
 
 export interface DmThread extends DbDmThread {
@@ -315,6 +345,7 @@ export interface GroupChat {
   owner_id: string;
   icon_url: string | null;
   created_at: string;
+  last_message_at?: string | null;
 }
 
 export interface GroupChatMember {
@@ -336,6 +367,7 @@ export interface GroupMessage {
   /** Up to 10 attachments on one message; the legacy columns mirror the first. */
   attachments?: import("@/lib/message-attachments").StoredAttachment[] | null;
   reply_to_id: string | null;
+  reply_to_deleted?: boolean;
   mentions: string[];
   created_at: string;
   edited_at: string | null;
@@ -365,6 +397,15 @@ export interface DbVoicePresence {
   joined_at: string;
   muted: boolean;
   deafened: boolean;
+  /** "sfu" for apps that send through Cloudflare Realtime; older apps are "mesh". */
+  transport?: "sfu" | "mesh";
+  sfu_session_id?: string | null;
+  /** What they are sending through the SFU right now. */
+  sfu_tracks?: string[];
+  /** Stages: on stage (heard), invited up, or asking to speak. */
+  stage_speaker?: boolean;
+  stage_invited?: boolean;
+  stage_hand_raised_at?: string | null;
 }
 
 export interface VoicePresence extends DbVoicePresence {
@@ -592,8 +633,8 @@ export interface Database {
       };
       voice_presence: {
         Row: DbVoicePresence;
-        Insert: { channel_id: string; user_id: string; muted?: boolean; deafened?: boolean };
-        Update: { muted?: boolean; deafened?: boolean; last_seen_at?: string };
+        Insert: { channel_id: string; user_id: string; muted?: boolean; deafened?: boolean; transport?: "sfu" | "mesh"; sfu_tracks?: string[] };
+        Update: { muted?: boolean; deafened?: boolean; last_seen_at?: string; transport?: "sfu" | "mesh"; sfu_tracks?: string[] };
         Relationships: [];
       };
 
@@ -675,6 +716,10 @@ export interface Database {
       get_or_create_dm_thread: {
         Args: { p_friend_id: string };
         Returns: string;
+      };
+      respond_message_request: {
+        Args: { p_thread_id: string; p_action: "accept" | "ignore" };
+        Returns: undefined;
       };
       ensure_user_profile: {
         Args: Record<string, never>;

@@ -1,4 +1,8 @@
-import { loadStripe, type Stripe } from "@stripe/stripe-js";
+// The /pure entry only fetches Stripe.js when loadStripe() is called. The main
+// entry injects it as soon as this file is imported, which put Stripe's
+// 1 MB script and its tracking iframe on every app load.
+import { loadStripe } from "@stripe/stripe-js/pure";
+import type { Stripe } from "@stripe/stripe-js";
 
 const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 

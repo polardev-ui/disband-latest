@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
+import { TOS_VERSION } from "@/lib/legal";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { exchangeRefreshToken, getSupabaseClient, isAccessTokenExpired, isSupabaseConfigured, refreshSessionOnce, resetRefreshState, resetSupabaseClient } from "@/lib/supabase/client";
 import { fetchIceServers } from "@/lib/ice-servers";
@@ -85,14 +86,17 @@ import type { SubscriptionPlan } from "@/lib/subscription";
 import { askTether, fetchTetherInfo, mentionsTether, type TetherSurface } from "@/lib/tether-client";
 import { clearAppBadge, setAppBadge } from "@/lib/app-badge";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
+import { flattenPresenceActivity, type Activity, type ActivityMap } from "@/lib/activity";
 import type {
   AppNotification,
   Channel,
   ChannelCategory,
   ChannelEffects,
+  DbFriendship,
   DmMessage,
   DmThread,
   Friendship,
+  GroupChat,
   GroupChatWithMembers,
   GroupMessage,
   Message,
@@ -205,7 +209,15 @@ interface AppContextValue {
   renameGroupChat: (groupId: string, name: string) => Promise<string | null>;
   deleteGroupMessage: (messageId: string) => Promise<void>;
   groupCallCounts: Map<string, number>;
-  openDmWithFriend: (friendId: string) => Promise<void>;
+  /** Opens (or starts) a DM. Returns an error message, or null on success. */
+  openDmWithFriend: (friendId: string) => Promise<string | null>;
+  /** Incoming message requests: DMs from people you share a space with, not yet accepted. */
+  messageRequests: { threadId: string; friend: Profile; unreadCount: number; sortAt: string; preview: string | null }[];
+  /** True when the thread is a message request you received and haven't accepted. */
+  isIncomingRequest: (threadId: string | null | undefined) => boolean;
+  /** True when the thread is a request you sent that hasn't been answered yet. */
+  isOutgoingRequest: (threadId: string | null | undefined) => boolean;
+  respondMessageRequest: (threadId: string, action: "accept" | "ignore") => Promise<string | null>;
   sendInviteToFriend: (friendId: string, inviteUrl: string, serverName: string) => Promise<string | null>;
   sendFriendRequest: (username: string) => Promise<string | null>;
   respondFriendRequest: (id: string, accept: boolean) => Promise<void>;
@@ -222,6 +234,7 @@ interface AppContextValue {
   joinServerByInvite: (code: string) => Promise<string | null>;
   joinServerById: (serverId: string) => Promise<string | null>;
   kickMember: (userId: string) => Promise<string | null>;
+  transferOwnership: (userId: string) => Promise<string | null>;
   banMember: (userId: string, reason?: string) => Promise<string | null>;
   unbanMember: (userId: string) => Promise<string | null>;
   timeoutMember: (userId: string, seconds: number, reason?: string) => Promise<string | null>;
@@ -229,6 +242,8 @@ interface AppContextValue {
   removeGroupMember: (groupId: string, userId: string) => Promise<string | null>;
   loadMutuals: (userId: string) => Promise<{ serverIds: string[]; friendIds: string[] }>;
   serverTimeouts: ServerTimeout[];
+  /** Bumped when the active space's members, roles or channel permissions change. */
+  rosterVersion: number;
   serverBans: ServerBan[];
   serverFolders: ServerFolder[];
   serverListState: ServerListState[];
@@ -251,7 +266,8 @@ interface AppContextValue {
   getMemberColor: (member: ServerMember) => string | null;
   /** The member's highest role that has an icon (Catalyst Level 2 role icons). */
   getMemberIconRole: (member: ServerMember) => ServerRole | null;
-  createChannel: (data: { name: string; type?: ChannelType; categoryId?: string | null }) => Promise<string | null>;
+  /** "stage" makes a voice channel that is a stage. */
+  createChannel: (data: { name: string; type?: ChannelType | "stage"; categoryId?: string | null }) => Promise<string | null>;
   renameChannel: (channelId: string, name: string) => Promise<string | null>;
   setChannelReadOnly: (channelId: string, readOnly: boolean) => Promise<string | null>;
   deleteChannel: (channelId: string) => Promise<string | null>;
@@ -288,8 +304,10 @@ interface AppContextValue {
 
   catalystCounts: Record<string, number>;
 
-  myCatalysts: { server_id: string; created_at: string }[];
+  myCatalysts: MyCatalyst[];
   refreshCatalysts: (serverIds: string[], uid: string) => Promise<void>;
+  /** Move one of your Catalysts to another space; returns an error message or null. */
+  transferCatalyst: (catalystId: string, toServerId: string) => Promise<string | null>;
 
   allocateCatalyst: (serverId: string) => Promise<string | null>;
 
@@ -332,6 +350,10 @@ interface AppContextValue {
   presenceMap: PresenceMap;
   /** Live "now listening" per user, from presence. See `listeningFor`. */
   listeningMap: ListeningMap;
+  /** Live game activity by user id (see src/lib/activity.ts). */
+  activityMap: ActivityMap;
+  /** Publish (or clear) your own game activity. Used by the desktop app. */
+  setGameActivity: (activity: Activity | null) => void;
   channelHasMore: boolean;
   dmHasMore: boolean;
   groupHasMore: boolean;
@@ -360,6 +382,16 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+/** One of your own Catalysts. The later fields arrive with migration 0181. */
+export interface MyCatalyst {
+  id?: string;
+  server_id: string;
+  created_at: string;
+  placed_at?: string;
+  expires_at?: string | null;
+  source?: string;
+}
+
 function uploadErrorMessage(err: unknown): string {
   if (err instanceof Error && err.message) return err.message;
   return "Upload failed. Check your connection and try again.";
@@ -367,6 +399,11 @@ function uploadErrorMessage(err: unknown): string {
 
 const UNREAD_SNAPSHOT_PREFIX = "disband:unread:";
 const CLOSED_DMS_PREFIX = "disband:closed-dms:";
+const BOOT_SNAPSHOT_PREFIX = "disband:boot:";
+const BOOT_SNAPSHOT_VERSION = 1;
+// A week-old shell is still a better first paint than a spinner; anything
+// older is dropped so a long-unused account starts clean.
+const BOOT_SNAPSHOT_MAX_AGE = 7 * 24 * 3600_000;
 
 // Member pages are offset-based (`(page - 1) * size`), so every page of a walk
 // must use the same size. Kept well under PostgREST's 1,000-row cap because
@@ -444,6 +481,97 @@ function readUnreadSnapshot(uid: string): UnreadSnapshot | null {
   }
 }
 
+/**
+ * The last-known shell for an account: spaces, DMs, friends, groups and the
+ * notification list. A reload paints from this at once and refreshes behind
+ * it, instead of holding the loading screen through every round trip to the
+ * database.
+ */
+interface BootSnapshot {
+  v: number;
+  savedAt: number;
+  profile: Profile | null;
+  servers: Server[];
+  serverFolders: ServerFolder[];
+  serverListState: ServerListState[];
+  dmThreads: (DmThread & { friend: Profile })[];
+  dmThreadActivity: Record<string, string>;
+  friendships: Friendship[];
+  groupChats: GroupChatWithMembers[];
+  notifications: AppNotification[];
+}
+
+type BootState = Omit<BootSnapshot, "v" | "savedAt">;
+
+function readBootSnapshot(uid: string): BootState | null {
+  try {
+    const raw = window.localStorage.getItem(BOOT_SNAPSHOT_PREFIX + uid);
+    if (!raw) return null;
+    const snap = JSON.parse(raw) as BootSnapshot;
+    if (snap?.v !== BOOT_SNAPSHOT_VERSION || !(Date.now() - snap.savedAt < BOOT_SNAPSHOT_MAX_AGE)) return null;
+    // Your own profile sits on one side of every friendship, so it is stored
+    // once and put back here.
+    const me = snap.profile ?? undefined;
+    return {
+      ...snap,
+      friendships: snap.friendships.map((f) => ({
+        ...f,
+        requester: f.requester ?? (f.requester_id === uid ? me : undefined),
+        addressee: f.addressee ?? (f.addressee_id === uid ? me : undefined),
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeBootSnapshot(uid: string, state: BootState) {
+  try {
+    const snap: BootSnapshot = {
+      ...state,
+      v: BOOT_SNAPSHOT_VERSION,
+      savedAt: Date.now(),
+      friendships: state.friendships.map((f) => ({
+        ...f,
+        requester: f.requester_id === uid ? undefined : f.requester,
+        addressee: f.addressee_id === uid ? undefined : f.addressee,
+      })),
+    };
+    window.localStorage.setItem(BOOT_SNAPSHOT_PREFIX + uid, JSON.stringify(snap));
+  } catch {
+    // Storage full or blocked: the next load waits for the network instead.
+    try { window.localStorage.removeItem(BOOT_SNAPSHOT_PREFIX + uid); } catch { /* ignore */ }
+  }
+}
+
+/** Per-conversation activity, keeping whichever timestamp is newer. */
+function mergeLatestActivity(prev: Record<string, string>, incoming: Record<string, string>): Record<string, string> {
+  let next: Record<string, string> | null = null;
+  for (const [key, at] of Object.entries(incoming)) {
+    const current = prev[key];
+    if (current && Date.parse(current) >= Date.parse(at)) continue;
+    next ??= { ...prev };
+    next[key] = at;
+  }
+  return next ?? prev;
+}
+
+/** DM and group unread counts. Started early so they run beside the shell load. */
+function fetchUnreadCounts() {
+  const supabase = getSupabaseClient();
+  return Promise.all([supabase.rpc("get_dm_unread"), supabase.rpc("get_group_unread")]);
+}
+
+/** Startup timing in the console: always in development, in production with `localStorage["disband:startup-timing"] = "1"`. */
+function logStartupTiming(line: string) {
+  try {
+    if (process.env.NODE_ENV === "production" && window.localStorage.getItem("disband:startup-timing") !== "1") return;
+  } catch {
+    return;
+  }
+  console.info(`[startup] ${line}`);
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
   const [ready, setReady] = useState(false);
@@ -452,6 +580,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const [dataLoaded, setDataLoaded] = useState(false);
   const imagesWarmedRef = useRef(false);
+  const bootTimingRef = useRef<{ startedAt?: number; shownAt?: number; freshAt?: number; fromSnapshot?: boolean; logged?: boolean }>({});
+  // One line once the app is on screen and its data is fresh. Times are from
+  // when the page started loading, so they include downloading the app.
+  const reportBootTiming = () => {
+    const t = bootTimingRef.current;
+    if (t.logged || t.shownAt === undefined || t.freshAt === undefined || t.startedAt === undefined) return;
+    t.logged = true;
+    logStartupTiming(
+      `app shown at ${Math.round(t.shownAt)}ms (${t.fromSnapshot ? "from the saved shell" : "after loading data"}), ` +
+      `data fresh at ${Math.round(t.freshAt)}ms; the data load took ${Math.round(t.freshAt - t.startedAt)}ms`,
+    );
+  };
   const [session, setSession] = useState<Session | null>(null);
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>(() => getSavedSessions());
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -461,7 +601,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [servers, setServers] = useState<Server[]>([]);
 
   const [catalystCounts, setCatalystCounts] = useState<Record<string, number>>({});
-  const [myCatalysts, setMyCatalysts] = useState<{ server_id: string; created_at: string }[]>([]);
+  const [myCatalysts, setMyCatalysts] = useState<MyCatalyst[]>([]);
   const [categories, setCategories] = useState<ChannelCategory[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [members, setMembers] = useState<(ServerMember & { profile: Profile })[]>([]);
@@ -518,6 +658,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [viewMode, setViewMode] = useState<ViewMode>("home");
   const [activeServerId, setActiveServerId] = useState<string | null>(null);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const [rosterVersion, setRosterVersion] = useState(0);
   const [activeDmThreadId, setActiveDmThreadId] = useState<string | null>(null);
   const [pinnedBySource, setPinnedBySource] = useState<Record<string, PinnedMessage[]>>({});
   const [activeGroupChatId, setActiveGroupChatId] = useState<string | null>(null);
@@ -538,6 +679,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [groupUnreadMap, setGroupUnreadMap] = useState<Map<string, number>>(new Map());
   const [presenceMap, setPresenceMap] = useState<PresenceMap>(new Map());
   const [listeningMap, setListeningMap] = useState<ListeningMap>(new Map());
+  const [activityMap, setActivityMap] = useState<ActivityMap>(new Map());
+  const activityRef = useRef<Activity | null>(null);
 
   const sessionRef = useRef<Session | null>(null);
   const activeDmRef = useRef<string | null>(null);
@@ -742,16 +885,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const isBlocked = useCallback((id: string) => blockedUserIds.has(id), [blockedUserIds]);
   const isBlockedEitherWay = useCallback((id: string) => blockRelatedIds.has(id), [blockRelatedIds]);
 
+  // Message requests (migration 0193): a non-friend's thread stays out of the
+  // DM list until you reply, accept or become friends. Ignored ones are
+  // hidden entirely.
+  const incomingRequestIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!userId) return ids;
+    for (const t of dmThreads) {
+      if (t.requested_by && t.requested_by !== userId && !t.accepted_at) ids.add(t.id);
+    }
+    return ids;
+  }, [dmThreads, userId]);
+
+  // Requests have their own count in the Message Requests row, so they never
+  // light up the DM badges.
   const dmUnreads = useMemo((): { threadId: string; friend: Profile; count: number }[] => {
     return [...dmUnreadMap.entries()]
-      .filter(([, entry]) => entry.count > 0)
+      .filter(([threadId, entry]) => entry.count > 0 && !incomingRequestIds.has(threadId))
       .sort((a, b) => b[1].latestAt.localeCompare(a[1].latestAt))
       .map(([threadId, entry]) => ({
         threadId,
         friend: entry.friend,
         count: entry.count,
       }));
-  }, [dmUnreadMap]);
+  }, [dmUnreadMap, incomingRequestIds]);
 
   const getDmUnreadCount = useCallback(
     (threadId: string) => dmUnreadMap.get(threadId)?.count ?? 0,
@@ -768,6 +925,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
   }, [dmThreads, dmThreadActivity, blockRelatedIds]);
 
+  const messageRequests = useMemo(() => {
+    return sortedDmThreads
+      .filter((t) => incomingRequestIds.has(t.id) && !t.request_ignored_at)
+      .map((t) => ({
+        threadId: t.id,
+        friend: t.friend,
+        unreadCount: dmUnreadMap.get(t.id)?.count ?? 0,
+        sortAt: dmThreadActivity[t.id] ?? t.created_at,
+        preview: (t as DmThread & { last_message_preview?: string | null }).last_message_preview ?? null,
+      }));
+  }, [sortedDmThreads, incomingRequestIds, dmUnreadMap, dmThreadActivity]);
+
+  const isIncomingRequest = useCallback(
+    (threadId: string | null | undefined) => !!threadId && incomingRequestIds.has(threadId),
+    [incomingRequestIds],
+  );
+
+  const isOutgoingRequest = useCallback(
+    (threadId: string | null | undefined) => {
+      if (!threadId || !userId) return false;
+      const t = dmThreads.find((x) => x.id === threadId);
+      return !!t && t.requested_by === userId && !t.accepted_at;
+    },
+    [dmThreads, userId],
+  );
+
   const dmListEntries = useMemo(() => {
     const threadByFriend = new Map(sortedDmThreads.map((t) => [t.friend.id, t]));
     const entries: {
@@ -780,6 +963,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     for (const thread of sortedDmThreads) {
       if (closedDmFriendIds.includes(thread.friend.id)) continue;
+      if (incomingRequestIds.has(thread.id)) continue;
       entries.push({
         key: thread.id,
         friend: thread.friend,
@@ -814,7 +998,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (aThread !== bThread) return bThread - aThread;
       return b.sortAt.localeCompare(a.sortAt);
     });
-  }, [sortedDmThreads, friends, dmUnreadMap, dmThreadActivity, closedDmFriendIds]);
+  }, [sortedDmThreads, friends, dmUnreadMap, dmThreadActivity, closedDmFriendIds, incomingRequestIds]);
 
   const serverUnreadIds = useMemo(() => {
     const ids = new Set(serverIndicators);
@@ -832,6 +1016,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  // Channel unread from the server (0229), so messages sent while this app
+  // was closed show, and a channel read on another device clears here.
+  // Live inserts still light channels up instantly in between.
+  useEffect(() => {
+    if (!user?.id) return;
+    const supabase = getSupabaseClient();
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const load = async () => {
+      const { data, error } = await supabase.rpc("my_channel_unreads");
+      if (cancelled || error || !Array.isArray(data)) return;
+      const rows = data as { channel_id: string; server_id: string }[];
+      const active = viewModeRef.current === "space" ? activeChannelRef.current : null;
+      const unread = rows.filter((r) => r.channel_id !== active);
+      setChannelUnreadMap((prev) => {
+        const next = new Map<string, number>();
+        for (const r of unread) next.set(r.channel_id, Math.max(prev.get(r.channel_id) ?? 0, 1));
+        return next;
+      });
+      setServerIndicators(new Set(unread.map((r) => r.server_id)));
+    };
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void load(), 300);
+    };
+    void load();
+    const sub = supabase
+      .channel(`channel-reads:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "channel_reads", filter: `user_id=eq.${user.id}` },
+        schedule,
+      )
+      .subscribe();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") schedule();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      void supabase.removeChannel(sub);
+    };
+  }, [user?.id]);
 
   const markDmReadNow = useCallback(async (threadId: string) => {
     const { error } = await getSupabaseClient().rpc("mark_dm_read", { p_thread_id: threadId });
@@ -931,18 +1161,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [userId, dmUnreadMap, groupUnreadMap, notifications]);
 
-  const seedUnread = useCallback(async (uid: string, threads?: (DmThread & { friend: Profile })[]) => {
-    const supabase = getSupabaseClient();
+  const seedUnread = useCallback(async (
+    uid: string,
+    threads?: (DmThread & { friend: Profile })[],
+    prefetched?: ReturnType<typeof fetchUnreadCounts>,
+  ) => {
     // Prefer the freshly loaded list when the caller has it: state (and the
     // synced ref) only update on the next render, so reading them here right
     // after a reload sees the pre-reload list and drops every badge.
     const list = threads ?? dmThreadsRef.current;
     const threadByFriend = new Map(list.map((t) => [t.friend.id, t]));
 
-    const [{ data: dm }, { data: grp }] = await Promise.all([
-      supabase.rpc("get_dm_unread"),
-      supabase.rpc("get_group_unread"),
-    ]);
+    const [{ data: dm }, { data: grp }] = await (prefetched ?? fetchUnreadCounts());
 
     if (sessionRef.current?.user.id !== uid) return;
     setDmUnreadMap((prev) => {
@@ -1150,14 +1380,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     setLocalPresence(status);
     await getSupabaseClient().from("profiles").update({ status }).eq("id", userId);
-    const payload: PresencePayload = { userId, status, listening: listeningRef.current };
+    const payload: PresencePayload = { userId, status, listening: listeningRef.current, activity: activityRef.current };
     void presenceChannelRef.current?.track(payload).then();
   }, [userId, patchProfileInState, setLocalPresence]);
 
   const trackPresence = useCallback(async (status: UserStatus) => {
     if (!userId) return;
     setLocalPresence(status);
-    const payload: PresencePayload = { userId, status, listening: listeningRef.current };
+    const payload: PresencePayload = { userId, status, listening: listeningRef.current, activity: activityRef.current };
     void presenceChannelRef.current?.track(payload).then();
   }, [userId, setLocalPresence]);
 
@@ -1205,29 +1435,121 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!userId || !configured || !profile) return;
     const supabase = getSupabaseClient();
-    const channel = supabase.channel(PRESENCE_CHANNEL);
-    channel.on("presence", { event: "sync" }, () => {
-      const state = channel.presenceState() as Record<string, PresencePayload[]>;
-      setPresenceMap(flattenPresenceState(state));
-      setListeningMap(flattenPresenceListening(state));
-    });
-    void channel.subscribe(async (status) => {
-      if (status === "SUBSCRIBED") {
-        presenceChannelRef.current = channel;
-        const preferred = profileRef.current?.preferred_status ?? "online";
-        const live = profileRef.current?.status ?? "online";
-        const effective = live === "offline" && preferred !== "offline" ? preferred : live;
-        // Paint our own row immediately. Waiting for the next presence sync
-        // made the signed-in member look offline in the roster for a moment.
-        setLocalPresence(effective);
-        await channel.track({ userId, status: effective, listening: listeningRef.current } satisfies PresencePayload);
+    /*
+     Self-healing presence (5 Nov 2026). Everyone else sees us through this one
+     channel, but a failed join (CHANNEL_ERROR / TIMED_OUT), a dropped socket
+     or Realtime's presence rate limit used to leave us silently untracked:
+     our own panel said Online (from the profile row) while everybody else saw
+     Offline until a full reload. Now a failed or closed channel is rejoined
+     with backoff, and a watchdog re-tracks us if our entry goes missing.
+    */
+    let disposed = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let retryTimer: number | undefined;
+    let attempt = 0;
+
+    const currentPayload = (): PresencePayload => {
+      const preferred = profileRef.current?.preferred_status ?? "online";
+      const live = profileRef.current?.status ?? "online";
+      const effective = live === "offline" && preferred !== "offline" ? preferred : live;
+      return { userId, status: effective, listening: listeningRef.current, activity: activityRef.current };
+    };
+
+    const scheduleRejoin = () => {
+      if (disposed || retryTimer !== undefined) return;
+      const delay = Math.min(30_000, 2_000 * 2 ** attempt) + Math.random() * 1_000;
+      attempt += 1;
+      retryTimer = window.setTimeout(() => {
+        retryTimer = undefined;
+        join();
+      }, delay);
+    };
+
+    const join = () => {
+      if (disposed) return;
+      if (channel) {
+        if (presenceChannelRef.current === channel) presenceChannelRef.current = null;
+        void supabase.removeChannel(channel);
       }
-    });
+      const ch = supabase.channel(PRESENCE_CHANNEL);
+      channel = ch;
+      ch.on("presence", { event: "sync" }, () => {
+        const state = ch.presenceState() as Record<string, PresencePayload[]>;
+        setPresenceMap(flattenPresenceState(state));
+        setListeningMap(flattenPresenceListening(state));
+        setActivityMap(flattenPresenceActivity(state));
+      });
+      void ch.subscribe(async (status) => {
+        if (disposed || channel !== ch) return;
+        if (status === "SUBSCRIBED") {
+          attempt = 0;
+          presenceChannelRef.current = ch;
+          const payload = currentPayload();
+          // Paint our own row immediately. Waiting for the next presence sync
+          // made the signed-in member look offline in the roster for a moment.
+          setLocalPresence(payload.status);
+          await ch.track(payload);
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          if (presenceChannelRef.current === ch) presenceChannelRef.current = null;
+          scheduleRejoin();
+        }
+      });
+    };
+
+    join();
+
+    // Watchdog: if we're joined but missing from what everyone else sees,
+    // track again (once a minute at most, well under the presence rate limit).
+    const watchdog = window.setInterval(() => {
+      const ch = presenceChannelRef.current;
+      if (!ch || ch !== channel) {
+        if (!channel || retryTimer === undefined) scheduleRejoin();
+        return;
+      }
+      const state = ch.presenceState() as Record<string, PresencePayload[]>;
+      const present = Object.values(state).some((metas) => metas.some((m) => m.userId === userId));
+      if (!present) void ch.track(currentPayload());
+    }, 60_000);
+
     return () => {
-      if (presenceChannelRef.current === channel) presenceChannelRef.current = null;
-      void supabase.removeChannel(channel);
+      disposed = true;
+      window.clearInterval(watchdog);
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      if (channel) {
+        if (presenceChannelRef.current === channel) presenceChannelRef.current = null;
+        void supabase.removeChannel(channel);
+      }
     };
   }, [userId, configured, profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Game activity from the desktop app (detected games and Rich Presence).
+  // Mirrored onto presence, which is what everyone online reads, and onto the
+  // profile row for people who load it later; the row's expiry covers a
+  // crash. Only real changes and the once-a-minute renewal are written.
+  const lastActivityWriteRef = useRef(0);
+  const setGameActivity = useCallback((activity: Activity | null) => {
+    if (!userId) return;
+    const prev = activityRef.current;
+    // Nothing playing, still nothing playing: no presence or database write.
+    if (!prev && !activity) return;
+    activityRef.current = activity;
+    setActivityMap((map) => {
+      const next = new Map(map);
+      next.set(userId, activity);
+      return next;
+    });
+    const status = profileRef.current?.status ?? "online";
+    void presenceChannelRef.current?.track({ userId, status, listening: listeningRef.current, activity } satisfies PresencePayload).then();
+    const changed = (prev?.name ?? null) !== (activity?.name ?? null)
+      || prev?.details !== activity?.details || prev?.state !== activity?.state;
+    if (!changed && Date.now() - lastActivityWriteRef.current < 55_000) return;
+    lastActivityWriteRef.current = Date.now();
+    getSupabaseClient()
+      .from("profiles")
+      .update({ activity, activity_updated_at: new Date().toISOString() })
+      .eq("id", userId)
+      .then(() => {}, () => {});
+  }, [userId]);
 
   // Music presence: while a Spotify connection exists, poll what's playing
   // and mirror it onto presence (live, seen by everyone online) and the
@@ -1241,12 +1563,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let lastKey: string | null = null;
     let lastPublished: Listening | null = null;
     let timer: number | null = null;
+    // Nothing linked: the server said so. Polling every few seconds to hear
+    // "not connected" again was most of this endpoint's traffic, so check
+    // rarely until something is linked (a connection made in another app
+    // still shows up within a few minutes, or on the next reload).
+    let disconnected = false;
+    let lastTickAt = 0;
     const supabase = getSupabaseClient();
 
     const publish = (listening: Listening | null) => {
       listeningRef.current = listening;
       const status = profileRef.current?.status ?? "online";
-      void presenceChannelRef.current?.track({ userId, status, listening } satisfies PresencePayload).then();
+      void presenceChannelRef.current?.track({ userId, status, listening, activity: activityRef.current } satisfies PresencePayload).then();
       setListeningMap((prev) => {
         const next = new Map(prev);
         next.set(userId, listening);
@@ -1273,6 +1601,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const tick = async () => {
       if (!alive || inFlight) return;
       inFlight = true;
+      lastTickAt = Date.now();
       try {
         const lastfmUser = readLastfmUsername(userId);
         let next: Listening | null = null;
@@ -1293,6 +1622,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // Last.fm fallback). A provider error, on the other hand, keeps the
           // last known track until the next tick.
           if (failed) return;
+          disconnected = true;
           if (lastKey !== "disconnected") {
             lastKey = "disconnected";
             lastPublished = null;
@@ -1300,6 +1630,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
           return;
         }
+        disconnected = false;
         if (!next && lastfmUser) {
           try {
             next = await fetchLastfmNowPlaying(lastfmUser);
@@ -1336,11 +1667,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       timer = window.setTimeout(async () => {
         await tick();
         schedule();
-      }, hidden ? 30_000 : 5_000);
+      }, disconnected ? 300_000 : hidden ? 30_000 : 5_000);
     };
 
     const wake = () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      // Focus fires often (every click back into the window); with nothing
+      // linked it shouldn't each cost a request.
+      if (disconnected && Date.now() - lastTickAt < 60_000) return;
       void tick();
     };
 
@@ -1439,16 +1773,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
     const supabase = getSupabaseClient();
-    const [{ data: all }, { data: mine }] = await Promise.all([
+    const [{ data: all }, mineRes] = await Promise.all([
       supabase.from("server_catalysts").select("server_id").in("server_id", serverIds),
-      supabase.from("server_catalysts").select("server_id,created_at").eq("user_id", uid),
+      supabase.from("server_catalysts").select("id,server_id,created_at,placed_at,expires_at,source").eq("user_id", uid),
     ]);
+    // Before migration 0181 there is no placed_at/expires_at to read.
+    const mine = mineRes.error
+      ? (await supabase.from("server_catalysts").select("id,server_id,created_at,source").eq("user_id", uid)).data
+      : mineRes.data;
     const counts: Record<string, number> = {};
     for (const row of (all as { server_id: string }[] | null) ?? []) {
       counts[row.server_id] = (counts[row.server_id] ?? 0) + 1;
     }
     setCatalystCounts(counts);
-    setMyCatalysts((mine as { server_id: string; created_at: string }[] | null) ?? []);
+    setMyCatalysts((mine as MyCatalyst[] | null) ?? []);
   }, []);
 
   const allocateCatalyst = useCallback(async (serverId: string) => {
@@ -1470,6 +1808,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch {
       return "Could not reach Disband.";
     }
+  }, [userId, servers, refreshCatalysts]);
+
+  const transferCatalyst = useCallback(async (catalystId: string, toServerId: string) => {
+    if (!userId) return "Not signed in";
+    const { error } = await getSupabaseClient().rpc("transfer_catalyst", {
+      p_catalyst_id: catalystId,
+      p_to_server: toServerId,
+    });
+    if (error) return error.message;
+    await refreshCatalysts(servers.map((s) => s.id), userId);
+    return null;
   }, [userId, servers, refreshCatalysts]);
 
   const withdrawCatalyst = useCallback(async (serverId: string) => {
@@ -1498,22 +1847,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setServers(cached);
     }
     const supabase = getSupabaseClient();
-    const { data: memberships } = await supabase
+    // The spaces come back with the memberships in one request, instead of
+    // reading the memberships and then the spaces one after the other.
+    const { data } = await supabase
       .from("server_members")
-      .select("server_id")
+      .select("server:servers!server_id(*)")
       .eq("user_id", uid);
-    const ids = ((memberships ?? []) as { server_id: string }[]).map((m) => m.server_id);
-    if (ids.length === 0) {
-      setServers([]);
-      setCache(cacheKey, []);
-      void refreshCatalysts([], uid);
-      return;
-    }
-    const { data } = await supabase.from("servers").select("*").in("id", ids).order("created_at");
-    const servers = (data as Server[]) ?? [];
+    const servers = ((data ?? []) as unknown as { server: Server | null }[])
+      .map((row) => row.server)
+      .filter((server): server is Server => !!server)
+      .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
     setCache(cacheKey, servers);
     setServers(servers);
-    void refreshCatalysts(ids, uid);
+    void refreshCatalysts(servers.map((server) => server.id), uid);
   }, [refreshCatalysts]);
 
   const writeMembersCache = useCallback((serverId: string) => {
@@ -2023,61 +2369,66 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const supabase = getSupabaseClient();
     const { data: raw } = await supabase
       .from("friendships")
-      .select("*")
+      .select("*, requester:profiles!requester_id(*), addressee:profiles!addressee_id(*)")
       .or(`requester_id.eq.${uid},addressee_id.eq.${uid}`);
-    const rows = (raw ?? []) as Friendship[];
-    if (!rows.length) {
-      setFriendships([]);
-      return;
-    }
-    const ids = [...new Set(rows.flatMap((f) => [f.requester_id, f.addressee_id]))];
-    const map = await fetchProfilesByIds(supabase, ids);
+    const rows = (raw ?? []) as unknown as (DbFriendship & { requester: Profile | null; addressee: Profile | null })[];
     setFriendships(
       rows.map((f) => ({
         ...f,
-        requester: map.get(f.requester_id),
-        addressee: map.get(f.addressee_id),
-      })) as Friendship[],
+        requester: f.requester ?? undefined,
+        addressee: f.addressee ?? undefined,
+      })),
     );
+  }, []);
+
+  // When each conversation last had a message, for ordering the DM list.
+  const loadDmThreadActivity = useCallback(async (threadIds: string[]) => {
+    const supabase = getSupabaseClient();
+    const activity: Record<string, string> = {};
+    const { data, error } = await supabase.rpc("get_dm_thread_activity");
+    if (!error) {
+      for (const row of (data ?? []) as { thread_id: string; last_message_at: string | null }[]) {
+        if (row.last_message_at) activity[row.thread_id] = row.last_message_at;
+      }
+    } else {
+      // Older databases without that function: read the message timestamps.
+      const { data: msgRows } = await supabase
+        .from("dm_messages")
+        .select("thread_id, created_at")
+        .in("thread_id", threadIds)
+        .order("created_at", { ascending: false });
+      for (const row of (msgRows ?? []) as { thread_id: string; created_at: string }[]) {
+        if (!activity[row.thread_id]) activity[row.thread_id] = row.created_at;
+      }
+    }
+    if (Object.keys(activity).length) {
+      setDmThreadActivity((prev) => mergeLatestActivity(prev, activity));
+    }
   }, []);
 
   const loadDmThreads = useCallback(async (uid: string) => {
     const supabase = getSupabaseClient();
+    // Both people's profiles come back with each conversation. This used to
+    // be one profile request per conversation, hundreds on a busy account,
+    // all standing between a reload and the app opening.
     const { data } = await supabase
       .from("dm_threads")
-      .select("*")
+      .select("*, a:profiles!user_a(*), b:profiles!user_b(*)")
       .or(`user_a.eq.${uid},user_b.eq.${uid}`);
-    const threads = (data as DmThread[]) ?? [];
-    const enriched = await Promise.all(
-      threads.map(async (t) => {
-        const friendId = t.user_a === uid ? t.user_b : t.user_a;
-        const { data: fp } = await supabase.from("profiles").select("*").eq("id", friendId).maybeSingle();
-        return { ...t, friend: fp as Profile | null };
-      }),
-    );
-    const withFriends = enriched.filter((t): t is DmThread & { friend: Profile } => !!t.friend);
+    const rows = (data ?? []) as unknown as (DmThread & { a: Profile | null; b: Profile | null })[];
+    const withFriends = rows
+      .map(({ a, b, ...thread }) => ({ ...thread, friend: thread.user_a === uid ? b : a }))
+      .filter((t): t is DmThread & { friend: Profile } => !!t.friend);
     setDmThreads(withFriends);
 
-    const ids = threads.map((t) => t.id);
-    if (ids.length) {
-      const { data: msgRows } = await supabase
-        .from("dm_messages")
-        .select("thread_id, created_at")
-        .in("thread_id", ids)
-        .order("created_at", { ascending: false });
-      const activity: Record<string, string> = {};
-      for (const row of (msgRows ?? []) as { thread_id: string; created_at: string }[]) {
-        if (!activity[row.thread_id]) activity[row.thread_id] = row.created_at;
-      }
-      if (Object.keys(activity).length) {
-        setDmThreadActivity((prev) => ({ ...activity, ...prev }));
-      }
-    }
+    // Recency only orders the list, so it follows the shell instead of
+    // holding it open.
+    if (rows.length) void loadDmThreadActivity(rows.map((t) => t.id));
 
     // Returned (not just set) so callers like seedUnread can use the fresh
     // list immediately instead of a stale closure over state.
     return withFriends;
-  }, []);
+  }, [loadDmThreadActivity]);
 
   const bumpFriendActivity = useCallback((friendId: string, at?: string) => {
     const ts = at ?? new Date().toISOString();
@@ -2207,30 +2558,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
   }, [activeDmThreadId, dmHasMore, dmMessages]);
 
-  const loadGroupChats = useCallback(async (uid: string) => {    const supabase = getSupabaseClient();
-    const { data: memberships } = await supabase
+  const loadGroupChats = useCallback(async (uid: string) => {
+    const supabase = getSupabaseClient();
+    // Groups, their members and the members' profiles in one request; this
+    // was three requests in a row.
+    const { data } = await supabase
       .from("group_chat_members")
-      .select("group_id")
+      .select("group:group_chats(*, members:group_chat_members(user_id, profile:profiles!user_id(*)))")
       .eq("user_id", uid);
-    const ids = ((memberships ?? []) as { group_id: string }[]).map((m) => m.group_id);
-    if (!ids.length) {
-      setGroupChats([]);
-      return;
-    }
-    const [{ data: groups }, { data: allMembers }] = await Promise.all([
-      supabase.from("group_chats").select("*").in("id", ids).order("created_at"),
-      supabase.from("group_chat_members").select("group_id, user_id").in("group_id", ids),
-    ]);
-    const memberRows = (allMembers ?? []) as { group_id: string; user_id: string }[];
-    const profileIds = [...new Set(memberRows.map((m) => m.user_id))];
-    const profileMap = await fetchProfilesByIds(supabase, profileIds);
+    type Row = { group: (GroupChat & { members: { user_id: string; profile: Profile | null }[] }) | null };
+    const groups = ((data ?? []) as unknown as Row[])
+      .map((row) => row.group)
+      .filter((g): g is NonNullable<Row["group"]> => !!g)
+      .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
     setGroupChats(
-      ((groups ?? []) as GroupChatWithMembers[]).map((g) => ({
+      groups.map(({ members, ...g }) => ({
         ...g,
-        members: memberRows
-          .filter((m) => m.group_id === g.id)
-          .map((m) => profileMap.get(m.user_id))
-          .filter((p): p is Profile => !!p),
+        members: members.map((m) => m.profile).filter((p): p is Profile => !!p),
       })),
     );
   }, []);
@@ -2493,11 +2837,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadProfile(userId);
   }, [userId, loadProfile]);
 
-  const refreshAll = useCallback(async () => {
+  const refreshAll = useCallback(async (onShellReady?: () => void) => {
     if (!userId) return;
     // Phase 1 — attention state first. Notifications, threads and unread
     // badges resolve before any message history is fetched, so a refresh
     // paints badges immediately instead of after seconds of channel loading.
+    // The unread counts start now and run beside the rest.
+    const unread = fetchUnreadCounts();
     const [, , , threads] = await Promise.all([
       loadProfile(userId),
       loadServers(userId),
@@ -2508,7 +2854,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadServerOrganization(),
     ]);
 
-    await seedUnread(userId, threads);
+    await seedUnread(userId, threads, unread);
+    onShellReady?.();
 
     // Phase 2 — the open conversation and server details stream in after.
     // These are independent lookups, so they run together instead of stacking
@@ -2562,6 +2909,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
           session = refreshed?.session ?? (error?.name === "AuthRetryableFetchError" ? session : null);
         } else {
+          // The token is still in date, so open the app now and confirm it
+          // with Supabase in the background; a rejected session signs out.
+          setSession(session);
+          rememberSession(session);
+          setReady(true);
           const { error: verifyError } = await supabase.auth.getUser();
           if (verifyError) {
             if (verifyError.name === "AuthRetryableFetchError") {
@@ -2808,10 +3160,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDataLoaded(false);
     setHydrated(false);
     imagesWarmedRef.current = false;
+    bootTimingRef.current = { startedAt: performance.now() };
 
     void (async () => {
       try {
-        await ensureProfile(userId, user?.email);
+        // Creating the profile row only matters for a brand-new account; it
+        // runs alongside the load instead of in front of it, and the profile
+        // is read again below if it wasn't there yet.
+        const ensured = ensureProfile(userId, user?.email);
+        // Open straight into the last-known shell when there is one. The load
+        // below refreshes all of it a moment later.
+        const boot = readBootSnapshot(userId);
+        if (boot && !cancelled) {
+          if (boot.profile) setProfile(boot.profile);
+          setServers(boot.servers);
+          setServerFolders(boot.serverFolders);
+          setServerListState(boot.serverListState);
+          setDmThreads(boot.dmThreads);
+          setDmThreadActivity((prev) => mergeLatestActivity(prev, boot.dmThreadActivity));
+          setFriendships(boot.friendships);
+          setGroupChats(boot.groupChats);
+          setNotifications(boot.notifications);
+          imagesWarmedRef.current = true;
+          bootTimingRef.current.fromSnapshot = true;
+          setDataLoaded(true);
+          setHydrated(true);
+        }
         // Paint last-known badges/notifications instantly so a refresh never
         // shows a clean slate while the network catches up. refreshAll
         // overwrites all of this with server truth moments later.
@@ -2843,7 +3217,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setNotifications(snapshot.notifications);
           }
         }
-        await refreshAll();
+        await Promise.all([
+          ensured,
+          // The shell opens once the profile is in too, so forms that seed
+          // from it (Settings → Profiles) never start out blank.
+          refreshAll(() => { void ensured.then(() => { if (!cancelled) setDataLoaded(true); }); }),
+        ]);
+        if (!profileRef.current) await loadProfile(userId);
+        if (!cancelled) {
+          bootTimingRef.current.freshAt = performance.now();
+          reportBootTiming();
+        }
       } catch (err) {
 
         console.error("Initial load failed:", err);
@@ -2870,16 +3254,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!dataLoaded || hydrated || imagesWarmedRef.current) return;
     imagesWarmedRef.current = true;
 
-    const urls: (string | null | undefined)[] = [
-      profile?.avatar_url,
-      ...friends.map((f) => f.avatar_url),
-      ...dmThreads.map((t) => t.friend?.avatar_url),
-      ...servers.map((s) => s.icon_url),
-      ...groupChats.flatMap((g) => [g.icon_url, ...g.members.map((m) => m.avatar_url)]),
-    ];
+    // Your picture and the space icons are what the first screen shows. Give
+    // them a moment to land, but never hold the app for them; every other
+    // avatar loads as it scrolls into view.
+    const urls: (string | null | undefined)[] = [profile?.avatar_url, ...servers.map((s) => s.icon_url)];
+    void Promise.race([preloadImages(urls), new Promise((r) => setTimeout(r, 250))]).finally(() => setHydrated(true));
+  }, [dataLoaded, hydrated, profile, servers]);
 
-    void preloadImages(urls).finally(() => setHydrated(true));
-  }, [dataLoaded, hydrated, profile, friends, dmThreads, servers, groupChats]);
+  useEffect(() => {
+    if (!hydrated || bootTimingRef.current.shownAt !== undefined) return;
+    bootTimingRef.current.shownAt = performance.now();
+    reportBootTiming();
+  }, [hydrated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep the saved shell current for the next load: shortly after this one,
+  // then every minute, and whenever the tab is hidden or closed.
+  const bootStateRef = useRef<{ uid: string; state: BootState } | null>(null);
+  useEffect(() => {
+    if (!dataLoaded || !userId || profile?.id !== userId) return;
+    bootStateRef.current = {
+      uid: userId,
+      state: {
+        profile,
+        servers,
+        serverFolders,
+        serverListState,
+        dmThreads,
+        dmThreadActivity,
+        friendships,
+        groupChats,
+        notifications: notifications.slice(0, 30),
+      },
+    };
+  }, [dataLoaded, userId, profile, servers, serverFolders, serverListState, dmThreads, dmThreadActivity, friendships, groupChats, notifications]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const save = () => {
+      const current = bootStateRef.current;
+      if (signingOutRef.current || !current || current.uid !== userId || sessionRef.current?.user.id !== userId) return;
+      writeBootSnapshot(userId, current.state);
+    };
+    const onVisibility = () => { if (document.visibilityState === "hidden") save(); };
+    const first = window.setTimeout(save, 5_000);
+    const every = window.setInterval(save, 60_000);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", save);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(every);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", save);
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (!userId || !configured) return;
@@ -2964,22 +3391,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ch.subscribe();
     return () => { void ch.unsubscribe(); };
   }, [userId, configured, servers.map((s) => s.id).join(","), refreshCatalysts]);
-
-  const friendIdsKey = friends.map((f) => f.id).sort().slice(0, 200).join(",");
-  useEffect(() => {
-    if (!userId || !configured || friendIdsKey === "") return;
-    const sub = getSupabaseClient()
-      .channel(`profiles:friends:${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=in.(${friendIdsKey})` },
-        () => void loadFriendships(userId),
-      )
-      .subscribe();
-    return () => {
-      void sub.unsubscribe();
-    };
-  }, [userId, configured, friendIdsKey, loadFriendships]);
 
   useEffect(() => {
     if (!activeChannelId || !configured || !userId) return;
@@ -3323,6 +3734,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const row = record as unknown as GroupMessage;
         if (row.group_id !== activeGroupChatId) return;
         setGroupMessages((prev) => appendLiveMessage(prev, row, author));
+        setGroupChats((prev) => prev.map((g) => (g.id === row.group_id ? { ...g, last_message_at: row.created_at } : g)));
       });
       channel.subscribe((status) => {
         if (disposed || sub !== channel) return;
@@ -3372,17 +3784,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!activeServerId || !configured) return;
     const supabase = getSupabaseClient();
+    // Those tables aren't in the Realtime publication (table change feeds on
+    // a 13,000-member space were most of the database timeouts), so a
+    // statement-level trigger sends one "roster" ping per change (0189).
+    // Pings are coalesced: a burst of joins becomes one refresh.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let last = 0;
+    const MIN_GAP_MS = 4000;
+    const refresh = () => {
+      if (timer) return;
+      const wait = Math.max(300, last + MIN_GAP_MS - Date.now());
+      timer = setTimeout(() => {
+        timer = null;
+        last = Date.now();
+        setRosterVersion((v) => v + 1);
+        void loadServerDetails(activeServerId, { refreshMembers: true });
+      }, wait);
+    };
     const sub = supabase
-      .channel(`sm:${activeServerId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "server_members", filter: `server_id=eq.${activeServerId}` },
-        // A join, leave or member update makes the cached roster stale; the
-        // refresh re-reads the first member page (the rest page in lazily).
-        () => void loadServerDetails(activeServerId, { refreshMembers: true }),
-      )
+      .channel(`server-roster:${activeServerId}`, { config: { broadcast: { self: true } } })
+      .on("broadcast", { event: "roster" }, refresh)
       .subscribe();
-    return () => { void sub.unsubscribe(); };
+    return () => {
+      if (timer) clearTimeout(timer);
+      void supabase.removeChannel(sub);
+    };
   }, [activeServerId, configured, loadServerDetails]);
 
   useEffect(() => {
@@ -3431,72 +3857,79 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const updated = payload.new as Profile;
           patchProfileInState(updated);
           setCache(`profile:${userId}`, updated);
+          // Status picked on another device (phone, desktop): show it here too.
+          const chosen = updated.preferred_status;
+          if (chosen && chosen !== preferredStatusRef.current) {
+            preferredStatusRef.current = chosen;
+            autoAwayRef.current = false;
+            void trackPresence(chosen);
+          }
         },
       )
       .subscribe();
     return () => { void sub.unsubscribe(); };
-  }, [userId, configured, patchProfileInState]);
+  }, [userId, configured, patchProfileInState, trackPresence]);
 
-  useEffect(() => {
-    if (!userId || !configured || friends.length === 0) return;
-    const supabase = getSupabaseClient();
-    const channel = supabase.channel(`friend-profiles:${userId}`);
-    for (const friend of friends) {
-      channel.on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${friend.id}` },
-        (payload) => patchProfileInState(payload.new as Profile),
-      );
-    }
-    channel.subscribe();
-    return () => { void channel.unsubscribe(); };
-  }, [userId, configured, friends.map((f) => f.id).sort().join(","), patchProfileInState]);
-
-  useEffect(() => {
-    if (!configured || !activeServerId || members.length === 0) return;
-    const supabase = getSupabaseClient();
-    const ids = [...new Set(members.map((m) => m.user_id))].filter((id) => id !== userId);
-    if (ids.length === 0) return;
-    const channel = supabase.channel(`member-profiles:${activeServerId}`);
-    for (const id of ids) {
-      channel.on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${id}` },
-        (payload) => patchProfileInState(payload.new as Profile),
-      );
-    }
-    channel.subscribe();
-    return () => { void channel.unsubscribe(); };
-  }, [configured, activeServerId, userId, members.map((m) => m.user_id).sort().join(","), patchProfileInState]);
-
-  useEffect(() => {
-    if (!userId || !configured || groupChats.length === 0) return;
+  // Everyone whose profile is on screen: friends, the open space's members and
+  // group-chat members. One `id=eq` binding per person used to cost Realtime a
+  // subscription row each (~75 per user), and checking every profile write
+  // against thousands of them timed its database pool out.
+  const watchedProfileIdsKey = (() => {
     const ids = new Set<string>();
-    for (const group of groupChats) {
-      for (const member of group.members) ids.add(member.id);
-    }
-    ids.delete(userId);
-    if (ids.size === 0) return;
+    for (const f of friends) ids.add(f.id);
+    for (const m of members) ids.add(m.user_id);
+    for (const g of groupChats) for (const m of g.members ?? []) ids.add(m.id);
+    // DM partners who aren't friends, and anyone with a message on screen,
+    // so their name, avatar, banner and bio update live too.
+    for (const t of dmThreads) if (t.friend?.id) ids.add(t.friend.id);
+    for (const m of messages) if (m.author_id) ids.add(m.author_id);
+    for (const m of dmMessages) if (m.author_id) ids.add(m.author_id);
+    for (const m of groupMessages) if (m.author_id) ids.add(m.author_id);
+    if (userId) ids.delete(userId);
+    return [...ids].sort().join(",");
+  })();
+  useEffect(() => {
+    if (!userId || !configured || watchedProfileIdsKey === "") return;
     const supabase = getSupabaseClient();
-    const channel = supabase.channel(`group-profiles:${userId}`);
-    for (const id of ids) {
-      channel.on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${id}` },
-        (payload) => patchProfileInState(payload.new as Profile),
-      );
-    }
-    channel.subscribe();
-    return () => { void channel.unsubscribe(); };
-  }, [
-    userId,
-    configured,
-    groupChats
-      .map((g) => `${g.id}:${g.members.map((m) => m.id).sort().join(",")}`)
-      .sort()
-      .join("|"),
-    patchProfileInState,
-  ]);
+    // Realtime rejects an `in` filter over 100 values.
+    const ids = watchedProfileIdsKey.split(",");
+    let disposed = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let retryTimer: number | undefined;
+    let attempt = 0;
+    const join = () => {
+      if (disposed) return;
+      if (channel) void supabase.removeChannel(channel);
+      const ch = supabase.channel(`watched-profiles:${userId}:${Date.now()}`);
+      channel = ch;
+      for (let i = 0; i < ids.length; i += 100) {
+        ch.on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "profiles", filter: `id=in.(${ids.slice(i, i + 100).join(",")})` },
+          (payload) => patchProfileInState(payload.new as Profile),
+        );
+      }
+      ch.subscribe((status) => {
+        if (disposed || channel !== ch) return;
+        if (status === "SUBSCRIBED") {
+          attempt = 0;
+        } else if ((status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") && retryTimer === undefined) {
+          // Rejoin rather than silently going stale until a reload.
+          const delay = Math.min(30_000, 2_000 * 2 ** attempt) + Math.random() * 1_000;
+          attempt += 1;
+          retryTimer = window.setTimeout(() => { retryTimer = undefined; join(); }, delay);
+        }
+      });
+    };
+    // Debounce: the id set changes as messages load; don't churn the channel.
+    const start = window.setTimeout(join, 500);
+    return () => {
+      disposed = true;
+      window.clearTimeout(start);
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      if (channel) void supabase.removeChannel(channel);
+    };
+  }, [userId, configured, watchedProfileIdsKey, patchProfileInState]);
 
   useEffect(() => {
     if (!profile) return;
@@ -3571,6 +4004,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
           if (msg.author_id === userId) return;
           if (inActiveDmChat) return;
+          // An ignored message request stays silent.
+          if (dmThreadsRef.current.some((t) => t.id === msg.thread_id && t.request_ignored_at && !t.accepted_at)) return;
 
           void (async () => {
             const author = await resolveLiveAuthor(msg.author_id);
@@ -3681,6 +4116,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
 
           if (msg.author_id === userId) return;
+          // Read in place: keep the shared read cursor level so phones and
+          // other tabs don't light this channel up.
+          if (viewingChannel && typeof document !== "undefined" && document.visibilityState === "visible") {
+            void supabase.rpc("mark_channel_read", { p_channel_id: msg.channel_id }).then(() => undefined);
+          }
           if (channel && !viewingChannel) {
             setChannelUnreadMap((prev) => {
               const next = new Map(prev);
@@ -3876,6 +4316,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
           ...(birthdate ? { birthdate } : {}),
           ...(referralCode ? { referral_code: referralCode } : {}),
+          // Sign-up can't complete without agreeing, so the consent popup
+          // has nothing to ask a brand-new account.
+          tos_version: TOS_VERSION,
         },
       },
     });
@@ -4088,7 +4531,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     signingOutRef.current = true;
     if (userId) {
-      await getSupabaseClient().from("profiles").update({ status: "offline", listening: null }).eq("id", userId);
+      try { window.localStorage.removeItem(BOOT_SNAPSHOT_PREFIX + userId); } catch { /* ignore */ }
+      await getSupabaseClient().from("profiles").update({ status: "offline", listening: null, activity: null }).eq("id", userId);
     }
     await getSupabaseClient().auth.signOut({ scope: "local" });
     resetSupabaseClient();
@@ -4390,10 +4834,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setChannelHasMore(false);
     }
     if (viewMode !== "space") setViewMode("space");
-    const channel = channelsRef.current.find((c) => c.id === channelId);
+    const channel = channels.find((c) => c.id === channelId) ?? channelsRef.current.find((c) => c.id === channelId);
+    // Shared read state (0229): clears this channel on every other device.
+    // PostgREST builders are lazy, so the request needs a `then`.
+    void getSupabaseClient()
+      .rpc("mark_channel_read", { p_channel_id: channelId })
+      .then(({ error }) => {
+        if (error) console.error("mark_channel_read failed", error.message);
+      });
     if (channel) {
       clearServerIndicator(channel.server_id);
       setLastChannelId(channel.server_id, channelId);
+      // Optimistically clear this channel's mention contribution so the
+      // server badge doesn't linger until the async refresh lands.
+      const channelMentions = channelMentionMap.get(channelId) ?? 0;
+      if (channelMentions > 0) {
+        setServerMentionCounts((prev) => {
+          const next = new Map(prev);
+          const current = next.get(channel.server_id) ?? 0;
+          const updated = current - channelMentions;
+          if (updated <= 0) next.delete(channel.server_id);
+          else next.set(channel.server_id, updated);
+          return next;
+        });
+      }
     }
     setChannelUnreadMap((prev) => {
       if (!prev.has(channelId)) return prev;
@@ -4411,7 +4875,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Opening the channel is the acknowledgement. Persist it so a restart does
     // not repaint the mention we just read.
     void markChannelMentionsRead(channelId);
-  }, [viewMode, clearServerIndicator, markActivity, markChannelMentionsRead, restoreChannelSnapshot]);
+  }, [viewMode, channels, clearServerIndicator, markActivity, markChannelMentionsRead, restoreChannelSnapshot]);
 
   const selectDmThread = useCallback(async (threadId: string) => {
     markActivity();
@@ -4566,12 +5030,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (error && activeGroupChatId) await loadGroupMessages(activeGroupChatId);
   }, [activeGroupChatId, loadGroupMessages]);
 
-  const openDmWithFriend = useCallback(async (friendId: string) => {
-    if (!userId) return;
+  const openDmWithFriend = useCallback(async (friendId: string): Promise<string | null> => {
+    if (!userId) return "Not signed in";
     // Tether is not a friend and never can be (bots can't accept requests),
     // so it gets its own gate: Aero subscribers may DM Tether directly, which
     // get_or_create_dm_thread permits for flagged bots (migration 0102).
-    if (friendId === tetherProfile?.id && subscriptionPlan !== "aero") return;
+    if (friendId === tetherProfile?.id && subscriptionPlan !== "aero") return "Messaging Tether needs Aero.";
     const token = ++dmOpenTokenRef.current;
     const supabase = getSupabaseClient();
     let { data, error } = await supabase.rpc("get_or_create_dm_thread", { p_friend_id: friendId });
@@ -4585,11 +5049,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error("Could not open DM thread:", error.message);
-      return;
+      return error.message;
     }
     const threadId = data as string;
 
-    if (token !== dmOpenTokenRef.current) return;
+    if (token !== dmOpenTokenRef.current) return "Superseded";
 
     let friendProfile = friends.find((f) => f.id === friendId);
     if (!friendProfile) {
@@ -4620,7 +5084,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     await selectDmThread(threadId);
     void loadDmThreads(userId);
+    return null;
   }, [userId, friends, selectDmThread, loadDmThreads, tetherProfile, subscriptionPlan]);
+
+  const respondMessageRequest = useCallback(async (threadId: string, action: "accept" | "ignore") => {
+    const { error } = await getSupabaseClient().rpc("respond_message_request", { p_thread_id: threadId, p_action: action });
+    if (error) return error.message;
+    const now = new Date().toISOString();
+    setDmThreads((prev) => prev.map((t) => (t.id === threadId
+      ? action === "accept"
+        ? { ...t, accepted_at: now, request_ignored_at: null }
+        : { ...t, request_ignored_at: now }
+      : t)));
+    if (action === "ignore") clearDmUnread(threadId);
+    return null;
+  }, [clearDmUnread]);
 
   const sendInviteToFriend = useCallback(async (friendId: string, inviteUrl: string, serverName: string) => {
     if (!userId || !profile) return "Not signed in";
@@ -4647,6 +5125,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const normalized = username.trim().toLowerCase();
     if (!normalized) return "Enter a username";
 
+    // Answer from the friend list already in memory when we can: no
+    // round trip to Oregon just to say "already friends".
+    const known = friendships.find((f) => {
+      const other = f.requester_id === userId ? f.addressee : f.requester;
+      return other?.username?.toLowerCase() === normalized;
+    });
+    if (known) {
+      if (known.status === "accepted") return "You are already friends";
+      if (known.status === "pending") {
+        return known.requester_id === userId
+          ? "Friend request already sent"
+          : "This user already sent you a friend request — check Pending to accept or decline";
+      }
+    }
+
     const supabase = getSupabaseClient();
     const { data: target, error: lookupError } = await supabase
       .from("profiles")
@@ -4659,36 +5152,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (target.id === userId) return "Cannot friend yourself";
     if (target.is_bot) return "Tether and other bots can't receive friend requests.";
 
-    const { data: existingRows, error: existingError } = await supabase
+    // No separate "does a row exist?" query: friendships_pair_unique makes
+    // the insert itself fail with 23505 for any existing pair, either way
+    // round, and the conflict branch below explains which case it is.
+    const { data: created, error } = await supabase
       .from("friendships")
-      .select("id, status, requester_id, addressee_id")
-      .or(
-        `and(requester_id.eq.${userId},addressee_id.eq.${target.id}),and(requester_id.eq.${target.id},addressee_id.eq.${userId})`,
-      );
-
-    if (existingError) return existingError.message;
-
-    const existing = (existingRows ?? [])[0];
-    if (existing) {
-      if (existing.status === "accepted") return "You are already friends";
-      if (existing.status === "pending") {
-        if (existing.requester_id === target.id) {
-          return "This user already sent you a friend request — check Pending to accept or decline";
-        }
-        return "Friend request already sent";
-      }
-      if (existing.status === "blocked") {
-        if (existing.requester_id === userId) {
-          return "You have blocked this user. Unblock them first to send a friend request.";
-        }
-        return "This user has blocked you. You cannot send a friend request.";
-      }
-    }
-
-    const { error } = await supabase.from("friendships").insert({
-      requester_id: userId,
-      addressee_id: target.id,
-    });
+      .insert({ requester_id: userId, addressee_id: target.id })
+      .select("*, requester:profiles!requester_id(*), addressee:profiles!addressee_id(*)")
+      .single();
     if (error) {
       if (error.code === "23505") {
         const { data: conflict } = await supabase
@@ -4715,34 +5186,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return error.message;
     }
-    await loadFriendships(userId);
+    // Show it straight away from the insert's own result instead of
+    // re-reading every friendship; the realtime feed reconciles later.
+    if (created) {
+      const row = created as unknown as DbFriendship & { requester: Profile | null; addressee: Profile | null };
+      setFriendships((prev) => [
+        ...prev.filter((f) => f.id !== row.id),
+        { ...row, requester: row.requester ?? undefined, addressee: row.addressee ?? undefined },
+      ]);
+    } else {
+      void loadFriendships(userId);
+    }
     return null;
-  }, [userId, loadFriendships, hasRestriction]);
+  }, [userId, friendships, loadFriendships, hasRestriction]);
 
   const respondFriendRequest = useCallback(async (id: string, accept: boolean) => {
     if (!userId) return;
     const supabase = getSupabaseClient();
     const pending = friendships.find((f) => f.id === id);
-    if (accept) {
-      await supabase.from("friendships").update({ status: "accepted" }).eq("id", id);
-      if (pending) {
-        const friendId = pending.requester_id === userId ? pending.addressee_id : pending.requester_id;
-        bumpFriendActivity(friendId);
-      }
-    } else {
-      await supabase.from("friendships").delete().eq("id", id);
+    // Update the list first and write behind it, so Accept and Ignore feel
+    // instant even from the other side of the world. A failed write puts
+    // the real state back.
+    setFriendships((prev) => accept
+      ? prev.map((f) => (f.id === id ? { ...f, status: "accepted" } : f))
+      : prev.filter((f) => f.id !== id));
+    if (accept && pending) {
+      const friendId = pending.requester_id === userId ? pending.addressee_id : pending.requester_id;
+      bumpFriendActivity(friendId);
     }
-    await loadFriendships(userId);
+    const { error } = accept
+      ? await supabase.from("friendships").update({ status: "accepted" }).eq("id", id)
+      : await supabase.from("friendships").delete().eq("id", id);
+    if (error) void loadFriendships(userId);
   }, [userId, friendships, loadFriendships, bumpFriendActivity]);
 
   const removeFriend = useCallback(async (friendId: string) => {
     if (!userId) return;
     const supabase = getSupabaseClient();
-    await supabase
+    setFriendships((prev) => prev.filter((f) =>
+      !(f.status !== "blocked" &&
+        ((f.requester_id === userId && f.addressee_id === friendId) ||
+         (f.requester_id === friendId && f.addressee_id === userId)))));
+    const { error } = await supabase
       .from("friendships")
       .delete()
       .or(`and(requester_id.eq.${userId},addressee_id.eq.${friendId}),and(requester_id.eq.${friendId},addressee_id.eq.${userId})`);
-    await loadFriendships(userId);
+    if (error) void loadFriendships(userId);
   }, [userId, loadFriendships]);
 
   const blockUser = useCallback(async (targetUserId: string) => {
@@ -4918,6 +5407,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await loadServerDetails(activeServerId, { refreshMembers: true });
     return null;
   }, [activeServerId, loadServerDetails]);
+
+  const transferOwnership = useCallback(async (targetUserId: string) => {
+    if (!activeServerId || !userId) return "No space selected";
+    await ensureFreshSession();
+    const { error } = await getSupabaseClient().rpc("transfer_server_ownership", {
+      p_server_id: activeServerId,
+      p_new_owner_id: targetUserId,
+    });
+    if (error) return error.message;
+    await Promise.all([
+      loadServers(userId),
+      loadServerDetails(activeServerId, { refreshMembers: true }),
+    ]);
+    return null;
+  }, [activeServerId, userId, loadServers, loadServerDetails]);
 
   const banMember = useCallback(async (targetUserId: string, reason?: string) => {
     if (!activeServerId) return "No space selected";
@@ -5267,16 +5771,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [serverPermissions],
   );
 
-  const createChannel = useCallback(async (data: { name: string; type?: ChannelType; categoryId?: string | null }) => {
+  const createChannel = useCallback(async (data: { name: string; type?: ChannelType | "stage"; categoryId?: string | null }) => {
     if (!activeServerId) return "No space selected";
     await ensureFreshSession();
+    const stage = data.type === "stage";
     const { data: id, error } = await getSupabaseClient().rpc("create_channel", {
       p_server_id: activeServerId,
       p_name: data.name.trim(),
-      p_type: data.type ?? "text",
+      p_type: stage ? "voice" : data.type ?? "text",
       p_category_id: data.categoryId ?? null,
     });
     if (error) return error.message;
+    // A stage is a voice channel with is_stage set (needs Manage Channels,
+    // which creating it already did).
+    if (stage && typeof id === "string") {
+      const { error: stageError } = await getSupabaseClient().from("channels").update({ is_stage: true }).eq("id", id);
+      if (stageError) return stageError.message;
+    }
     await loadServerDetails(activeServerId);
     if (typeof id === "string") selectChannel(id);
     return null;
@@ -5558,13 +6069,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return "You do not have permission to mention roles.";
     }
     const mentionIds = [...new Set([...resolvedMentionIds, ...roleMemberIds])];
-    if (mentionIds.length > 10) {
-      return roleMemberIds.length > 0
-        ? "That role has too many members to mention (max 10)."
-        : "Too many mentions in one message (max 10).";
+    // Role pings need mention_everyone (checked above) and, like @everyone,
+    // have no size cap; the 10 cap is for hand-typed @user pings (0227).
+    if (roleMemberIds.length === 0 && mentionIds.length > 10) {
+      return "Too many mentions in one message (max 10).";
     }
     if (userId) {
-      const pingErr = checkMentionSend(userId, mentionIds, normalized);
+      const pingErr = checkMentionSend(userId, roleMemberIds.length > 0 ? resolvedMentionIds : mentionIds, normalized);
       if (pingErr) return pingErr;
     }
 
@@ -5717,6 +6228,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const pingErr = checkMentionSend(userId, parseMentions(normalized, other, userId), normalized);
       if (pingErr) return pingErr;
     }
+    // Replying to a request accepts it (the database does the same on insert),
+    // so the conversation moves into the DM list straight away.
+    if (thread && incomingRequestIds.has(thread.id)) {
+      const acceptedAt = new Date().toISOString();
+      setDmThreads((prev) => prev.map((t) => (t.id === thread.id ? { ...t, accepted_at: acceptedAt, request_ignored_at: null } : t)));
+    }
     const tempId = `opt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     // One message carries the whole set; `pendingFile` is the single-file
     // form the GIF and poll callers still use.
@@ -5852,7 +6369,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const isTetherThread = !!tetherProfile?.id && thread?.friend?.id === tetherProfile.id;
     fireTetherAsk(saved.id, "dm", normalized, isTetherThread ? { force: true } : undefined);
     return null;
-  }, [userId, activeDmThreadId, profile, dmThreads, bumpDmThreadActivity, markActivity, fireTetherAsk, tetherProfile, hasRestriction]);
+  }, [userId, activeDmThreadId, profile, dmThreads, bumpDmThreadActivity, markActivity, fireTetherAsk, tetherProfile, hasRestriction, incomingRequestIds]);
 
   const sendGroupMessage = useCallback(async (content: string, options: MessageSendOptions = {}) => {
     if (!userId || !activeGroupChatId || !profile) return "No group selected";
@@ -5931,6 +6448,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (trimmed) setGroupHasMore(true);
       return windowed;
     });
+    setGroupChats((prev) => prev.map((g) => (g.id === activeGroupChatId ? { ...g, last_message_at: optimistic.created_at } : g)));
 
     if (files.length > 0) {
       try {
@@ -6550,6 +7068,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     joinServerByInvite,
     joinServerById,
     kickMember,
+    transferOwnership,
     banMember,
     unbanMember,
     timeoutMember,
@@ -6557,6 +7076,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     removeGroupMember,
     loadMutuals,
     serverTimeouts,
+    rosterVersion,
     serverBans,
     serverFolders,
     serverListState,
@@ -6609,6 +7129,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     catalystCounts,
     myCatalysts,
     refreshCatalysts,
+    transferCatalyst,
     allocateCatalyst,
     withdrawCatalyst,
     customEmojiMap,
@@ -6623,6 +7144,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMaxBioLength,
     dmUnreads,
     dmListEntries,
+    messageRequests,
+    isIncomingRequest,
+    isOutgoingRequest,
+    respondMessageRequest,
     serverUnreadIds,
     getDmUnreadCount,
     clearDmUnread,
@@ -6638,6 +7163,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clearGroupUnread,
     presenceMap,
     listeningMap,
+    activityMap,
+    setGameActivity,
     channelHasMore,
     dmHasMore,
     groupHasMore,

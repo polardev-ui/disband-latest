@@ -24,6 +24,10 @@ const moves = [
   // The status page reads Supabase on the server and has a dynamic incident
   // route; the desktop build links out to the web version instead.
   ["src/app/status", `${stashRoot}/app-status`],
+
+  // The badge guide counts holders on the server with the service key; the
+  // desktop build links out to the web version instead.
+  ["src/app/badges", `${stashRoot}/app-badges`],
 ];
 
 function moveAside(from, to) {

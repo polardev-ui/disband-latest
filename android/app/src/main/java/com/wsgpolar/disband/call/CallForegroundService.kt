@@ -78,6 +78,10 @@ class CallForegroundService : Service() {
             if (manager?.get() === callManager) manager = null
         }
 
+        /** Hangs up voice when the notification belongs to a voice channel. */
+        @Volatile
+        var voiceHangup: (() -> Unit)? = null
+
         /** Show (or update) the call notification. */
         fun start(context: Context, title: String, caller: String, incoming: Boolean) {
             val app = context.applicationContext
@@ -198,7 +202,7 @@ class CallForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_HANGUP -> {
-                manager?.get()?.hangUpFromNotification()
+                manager?.get()?.hangUpFromNotification() ?: voiceHangup?.invoke()
                 finish()
                 return START_NOT_STICKY
             }

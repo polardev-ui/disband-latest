@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useI18n } from "@/contexts/I18nContext";
+import { useMemo, useRef, useState, useEffect } from "react";
 import type { ChatMessageData } from "./ChatMessage";
 import { toReplyAuthor, type ReplyPreview } from "@/lib/messages";
 
@@ -27,6 +28,21 @@ export function MessageActionBar({
   onOpenReactionPicker,
   onMoreActions,
 }: MessageActionBarProps) {
+  const { t } = useI18n();
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const [hovered, setHovered] = useState(false);
+
+  useEffect(() => {
+    if (!hovered || !onMoreActions) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Shift" && !e.repeat) {
+        moreRef.current?.click();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hovered, onMoreActions]);
+
   const replyPreview: ReplyPreview | null = useMemo(() => {
     if (!message.id) return null;
     return {
@@ -63,7 +79,7 @@ export function MessageActionBar({
         type="button"
         onClick={onOpenReactionPicker}
         className="flex h-8 w-8 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 items-center justify-center text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
-        title="Add Reaction"
+        title={t("Add Reaction")}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10" />
@@ -77,7 +93,7 @@ export function MessageActionBar({
         type="button"
         onClick={() => onReply?.(replyPreview!)}
         className="flex h-8 w-8 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 items-center justify-center text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
-        title="Reply"
+        title={t("Reply")}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="9 17 4 12 9 7" />
@@ -90,7 +106,7 @@ export function MessageActionBar({
           type="button"
           onClick={onEdit}
           className="flex h-8 w-8 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 items-center justify-center text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
-          title="Edit"
+          title={t("Edit")}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -102,7 +118,7 @@ export function MessageActionBar({
           type="button"
           onClick={onForward}
           className="flex h-8 w-8 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 items-center justify-center text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
-          title="Forward"
+          title={t("Forward")}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="22" y1="2" x2="11" y2="13" />
@@ -115,7 +131,7 @@ export function MessageActionBar({
         type="button"
         onClick={onMoreActions}
         className="flex h-8 w-8 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 items-center justify-center text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
-        title="More"
+        title={t("More")}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="5" r="1" />

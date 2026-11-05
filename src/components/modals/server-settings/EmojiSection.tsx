@@ -10,6 +10,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { IconEmoji, IconTrash } from "@/components/icons";
 import { ConfirmDialog, DropZone, EmptyState, FieldLabel, InlineError, SettingsSection, SlotMeter, btn, enterStyle } from "./ui";
 import type { SectionProps } from "./types";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface CustomEmoji {
   id: number;
@@ -22,6 +23,7 @@ const EMOJI_TYPES = "image/png,image/gif,image/webp,image/jpeg";
 const NAME_RE = /^[a-zA-Z0-9_]{2,32}$/;
 
 export function EmojiSection({ server, catalystCount }: SectionProps) {
+  const { t } = useI18n();
   const { user } = useApp();
   const { upload } = useMediaUpload();
   const { plan, entitlements } = useSubscription(user?.id);
@@ -71,11 +73,11 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
 
   function pick(f: File) {
     if (!f.type.startsWith("image/")) {
-      setError("Emoji need to be an image: PNG, GIF, WebP or JPEG.");
+      setError(t("Emoji need to be an image: PNG, GIF, WebP or JPEG."));
       return;
     }
     if (f.size > 1024 * 1024) {
-      setError("Emoji can be up to 1 MB.");
+      setError(t("Emoji can be up to 1 MB."));
       return;
     }
     setError(null);
@@ -86,15 +88,15 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
   async function add() {
     if (!file || !user) return;
     if (!NAME_RE.test(cleanName)) {
-      setError("Names are 2 to 32 letters, numbers or underscores.");
+      setError(t("Names are 2 to 32 letters, numbers or underscores."));
       return;
     }
     if (nameTaken) {
-      setError(`:${cleanName}: is already taken here.`);
+      setError(t(":{cleanName}: is already taken here.", { cleanName }));
       return;
     }
     if (full) {
-      setError(`This space is at its ${limit} emoji limit.`);
+      setError(t("This space is at its {limit} emoji limit.", { limit }));
       return;
     }
     setUploading(true);
@@ -102,7 +104,7 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
     try {
       const res = await upload(file);
       if (!res) {
-        setError("The upload didn't go through. Try again.");
+        setError(t("The upload didn't go through. Try again."));
         return;
       }
       const { data, error: dbErr } = await getSupabaseClient()
@@ -124,37 +126,37 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
 
   return (
     <div className="pb-10">
-      <SettingsSection title="Slots">
-        <SlotMeter used={emoji.length} limit={limit} label="Custom emoji" />
+      <SettingsSection title={t("Slots")}>
+        <SlotMeter used={emoji.length} limit={limit} label={t("Custom emoji")} />
         {bonus > 0 && (
           <p className="border-t border-divider px-5 py-3 text-[13px] text-text-muted">
-            Includes <span className="font-medium text-brand">+{EMOJI_SLOTS_BONUS}</span> from this space&apos;s Catalyst level.
+            {t("Includes")}{" "}<span className="font-medium text-brand">+{EMOJI_SLOTS_BONUS}</span> from this space&apos;s Catalyst level.
           </p>
         )}
       </SettingsSection>
 
       {plan === "free" && limit === 0 ? (
-        <SettingsSection title="Add emoji">
-          <p className="px-5 py-4 text-[14px] text-text-muted">Custom emoji come with a paid plan, or with Catalyst Level 1 for this space.</p>
+        <SettingsSection title={t("Add emoji")}>
+          <p className="px-5 py-4 text-[14px] text-text-muted">{t("Custom emoji come with a paid plan, or with Catalyst Level 1 for this space.")}</p>
         </SettingsSection>
       ) : (
         !full && (
-          <SettingsSection title="Add emoji" description="Square images look best. 128 × 128, up to 1 MB. GIFs animate.">
+          <SettingsSection title={t("Add emoji")} description={t("Square images look best. 128 × 128, up to 1 MB. GIFs animate.")}>
             <div className="grid gap-4 px-5 py-4 sm:grid-cols-[160px_1fr]">
               {preview ? (
                 <div className="view-enter flex flex-col items-center justify-center rounded-lg bg-bg-tertiary p-4">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={preview} alt="" className="h-14 w-14 object-contain" />
                   <button type="button" onClick={() => setFile(null)} className="mt-2 text-[12px] text-text-muted hover:text-text-normal">
-                    Choose another
+                    {t("Choose another")}
                   </button>
                 </div>
               ) : (
-                <DropZone accept={EMOJI_TYPES} onPick={pick} title="Drop an image" hint="or click to browse" />
+                <DropZone accept={EMOJI_TYPES} onPick={pick} title={t("Drop an image")} hint="or click to browse" />
               )}
               <div className="flex flex-col justify-end gap-3">
                 <div>
-                  <FieldLabel htmlFor="emoji-name" aside={`${name.length}/32`}>Name</FieldLabel>
+                  <FieldLabel htmlFor="emoji-name" aside={`${name.length}/32`}>{t("Name")}</FieldLabel>
                   <div className="flex h-10 items-center rounded-[3px] border border-transparent bg-bg-tertiary px-3 focus-within:border-brand">
                     <span className="text-text-muted">:</span>
                     <input
@@ -169,10 +171,10 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
                     />
                     <span className="text-text-muted">:</span>
                   </div>
-                  {nameTaken && cleanName && <p className="mt-1.5 text-[12px] text-status-dnd">That name is taken here.</p>}
+                  {nameTaken && cleanName && <p className="mt-1.5 text-[12px] text-status-dnd">{t("That name is taken here.")}</p>}
                 </div>
                 <button type="button" onClick={() => void add()} disabled={!file || !cleanName || uploading || nameTaken} className={`${btn.primary} self-start`}>
-                  {uploading ? "Uploading…" : "Add emoji"}
+                  {uploading ? t("Uploading…") : t("Add emoji")}
                 </button>
               </div>
             </div>
@@ -184,11 +186,11 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
 
       <section className="mt-8">
         <h3 className="mb-3 text-[14.5px] font-semibold text-text-normal">
-          Emoji <span className="font-normal text-text-muted">· {emoji.length}</span>
+          {t("Emoji")}{" "}<span className="font-normal text-text-muted">· {emoji.length}</span>
         </h3>
         {loaded && emoji.length === 0 ? (
           <div className="rounded-lg bg-bg-secondary">
-            <EmptyState icon={<IconEmoji size={20} />} title="No custom emoji yet" body="Add one above and everyone here can use it." />
+            <EmptyState icon={<IconEmoji size={20} />} title={t("No custom emoji yet")} body="Add one above and everyone here can use it." />
           </div>
         ) : (
           <ul className="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-2">
@@ -206,7 +208,7 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
                   <button
                     type="button"
                     onClick={() => setRemoving(e)}
-                    aria-label={`Delete :${e.name}:`}
+                    aria-label={t("Delete :{name}:", { name: e.name })}
                     className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted opacity-0 transition-[opacity,background-color,color] hover:bg-status-dnd/12 hover:text-status-dnd focus-visible:opacity-100 group-hover:opacity-100"
                   >
                     <IconTrash size={14} />
@@ -220,9 +222,9 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
 
       <ConfirmDialog
         open={!!removing}
-        title={removing ? `Delete :${removing.name}:?` : ""}
+        title={removing ? t("Delete :{name}:?", { name: removing.name }) : ""}
         body="It disappears from every message that used it."
-        confirmLabel="Delete emoji"
+        confirmLabel={t("Delete emoji")}
         onCancel={() => setRemoving(null)}
         onConfirm={async () => {
           if (!removing) return;

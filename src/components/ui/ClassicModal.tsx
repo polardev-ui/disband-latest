@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { IconClose } from "@/components/icons";
 import { handleTopmostEscape, pushEscapeHandler } from "@/lib/overlay";
+import { useI18n } from "@/contexts/I18nContext";
 
 /*
  The classic Discord modal: a near-black scrim, a #313338 card that pops in
@@ -21,6 +22,7 @@ export function ClassicModal({
   onClose,
   width = 440,
   centered = true,
+  banner,
 }: {
   open: boolean;
   title: string;
@@ -31,7 +33,10 @@ export function ClassicModal({
   width?: number;
   /** Centre the header, as on Discord's account modals. */
   centered?: boolean;
+  /** Full-bleed artwork above the title. */
+  banner?: ReactNode;
 }) {
+  const { t } = useI18n();
   useEffect(() => {
     if (!open) return;
     const release = pushEscapeHandler(onClose);
@@ -47,7 +52,7 @@ export function ClassicModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
-      <button type="button" aria-label="Close" className="overlay-fade absolute inset-0 bg-black/85" onClick={onClose} />
+      <button type="button" aria-label={t("Close")} className="overlay-fade absolute inset-0 bg-black/85" onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
@@ -58,11 +63,12 @@ export function ClassicModal({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t("Close")}
           className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded text-interactive-normal transition-colors hover:text-interactive-active"
         >
           <IconClose size={22} />
         </button>
+        {banner}
         <div className={`px-4 pt-6 ${centered ? "text-center" : ""}`}>
           <h2 className={`font-bold leading-[30px] text-header-primary ${centered ? "text-[24px]" : "text-[20px]"}`}>{title}</h2>
           {subtitle && <p className="mt-2 text-[16px] leading-5 text-header-secondary">{subtitle}</p>}

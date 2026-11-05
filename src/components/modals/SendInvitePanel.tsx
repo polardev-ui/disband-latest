@@ -5,6 +5,7 @@ import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconCheck, IconSearch, IconSend } from "@/components/icons";
 import { displayName } from "@/lib/utils";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface SendInvitePanelProps {
   inviteUrl: string;
@@ -13,6 +14,7 @@ interface SendInvitePanelProps {
 
 /** Friends you can DM the invite to. Renders as rows inside a settings card. */
 export function SendInvitePanel({ inviteUrl, serverName }: SendInvitePanelProps) {
+  const { t } = useI18n();
   const { friends, sendInviteToFriend } = useApp();
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
@@ -35,7 +37,7 @@ export function SendInvitePanel({ inviteUrl, serverName }: SendInvitePanelProps)
   }
 
   if (friends.length === 0) {
-    return <p className="px-5 py-4 text-[14px] text-text-muted">Add some friends and you can send them invites from here.</p>;
+    return <p className="px-5 py-4 text-[14px] text-text-muted">{t("Add some friends and you can send them invites from here.")}</p>;
   }
 
   return (
@@ -47,8 +49,8 @@ export function SendInvitePanel({ inviteUrl, serverName }: SendInvitePanelProps)
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search friends"
-              aria-label="Search friends"
+              placeholder={t("Search friends")}
+              aria-label={t("Search friends")}
               className="h-9 w-full rounded-[3px] border border-transparent bg-bg-tertiary pl-9 pr-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-[#00a8fc]"
             />
           </label>
@@ -74,12 +76,12 @@ export function SendInvitePanel({ inviteUrl, serverName }: SendInvitePanelProps)
                 }`}
               >
                 {sent ? <IconCheck size={14} /> : <IconSend size={14} />}
-                {sent ? "Sent" : sending ? "Sending…" : "Send"}
+                {sent ? t("Sent") : sending ? t("Sending…") : t("Send")}
               </button>
             </li>
           );
         })}
-        {shown.length === 0 && <li className="px-5 py-4 text-[14px] text-text-muted">No friends match &ldquo;{query.trim()}&rdquo;.</li>}
+        {shown.length === 0 && <li className="px-5 py-4 text-[14px] text-text-muted">{t("No friends match “")}{query.trim()}&rdquo;.</li>}
       </ul>
       {error && <p className="border-t border-divider px-5 py-3 text-[13px] text-status-dnd">{error}</p>}
     </div>

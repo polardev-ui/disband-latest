@@ -7,6 +7,40 @@ enum SpacesRoute: Hashable {
     case members(Server)
 }
 
+/// Opens a Home route. On iPhone it's pushed over everything; on iPad
+/// SpacesView sets this so it opens in the pane beside the channel list.
+private struct OpenSpacesRouteKey: EnvironmentKey {
+    static let defaultValue: ((SpacesRoute) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var openSpacesRoute: ((SpacesRoute) -> Void)? {
+        get { self[OpenSpacesRouteKey.self] }
+        set { self[OpenSpacesRouteKey.self] = newValue }
+    }
+}
+
+/// A `NavigationLink(value:)` that follows `openSpacesRoute` when it's set.
+struct RouteLink<Label: View>: View {
+    let route: SpacesRoute
+    @ViewBuilder var label: () -> Label
+
+    @Environment(\.openSpacesRoute) private var open
+
+    init(value route: SpacesRoute, @ViewBuilder label: @escaping () -> Label) {
+        self.route = route
+        self.label = label
+    }
+
+    var body: some View {
+        if let open {
+            Button { open(route) } label: { label() }
+        } else {
+            NavigationLink(value: route) { label() }
+        }
+    }
+}
+
 /// A server's channels, grouped by category, with who is in each voice
 /// channel shown live underneath it.
 struct ChannelPanel: View {
@@ -20,12 +54,15 @@ struct ChannelPanel: View {
     @State private var channels: [Channel] = []
     @State private var categories: [ChannelCategory] = []
     @State private var occupants: [String: [VoiceMember]] = [:]
+    /// Live stages' topics, by channel id; refreshed with the occupants.
+    @State private var stageTopics: [String: String] = [:]
     @State private var loading = true
     @State private var collapsed: Set<String> = []
     @State private var lobby: Channel?
     @State private var showInvite = false
     @State private var showSettings = false
     @State private var showCatalysts = false
+    @State private var catalystCount = 0
     @State private var confirmLeave = false
     @State private var effects: [String: ChannelEffect] = [:]
     @State private var permissions: [String: Bool] = [:]
@@ -94,7 +131,8 @@ struct ChannelPanel: View {
         .task(id: server.id) { await load() }
         .task(id: server.id) { await pollOccupants() }
         .sheet(item: $lobby) { channel in
-            VoiceLobbySheet(room: room(for: channel), initialMembers: occupants[channel.id] ?? [])
+            VoiceLobbySheet(room: room(for: channel), initialMembers: occupants[channel.id] ?? [],
+                            isStage: channel.isStage == true, stageTopic: stageTopics[channel.id])
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(32)
@@ -123,17 +161,15 @@ struct ChannelPanel: View {
                 )
 
                 HStack(alignment: .center, spacing: 8) {
+                    // Seal first, then the name, as on desktop.
+                    if let kind = ServerBadgeKind.of(verified: server.verified, partner: server.partner,
+                                                     catalysts: catalystCount) {
+                        ServerBadgeView(kind: kind, size: 20)
+                    }
                     Text(server.name)
                         .font(.title3.weight(.bold))
                         .foregroundStyle(Brand.textPrimary)
                         .lineLimit(1)
-                    if server.verified == true {
-                        Image(systemName: "checkmark.seal.fill")
-                            .foregroundStyle(Brand.verified)
-                            .accessibilityLabel("Verified space")
-                    } else if server.partner == true {
-                        PartnerBadge()
-                    }
                     Spacer(minLength: 8)
                     menu
                 }
@@ -143,14 +179,53 @@ struct ChannelPanel: View {
 
             HStack(spacing: 8) {
                 pillButton("Invite", symbol: "person.badge.plus") { showInvite = true }
-                NavigationLink(value: SpacesRoute.members(server)) {
+                RouteLink(value: SpacesRoute.members(server)) {
                     pillLabel("Members", symbol: "person.2.fill")
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.top, 12)
+
+            boostBar
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
         }
+        .task(id: server.id) {
+            catalystCount = (try? await DatabaseService.catalystCount(serverId: server.id)) ?? 0
+        }
+    }
+
+    /// The desktop's "Level 2 · 4 Boosts" row under the space name.
+    private var boostBar: some View {
+        Button { showCatalysts = true } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "diamond.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color(hex: 0xFF73FA))
+                Text(boostLabel)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Brand.textSecondary)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Brand.textMuted)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 34)
+            .background(Brand.elevated, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(boostLabel)
+    }
+
+    private var boostLabel: String {
+        guard catalystCount > 0 else { return "Boost this space" }
+        let level = catalystCount >= 6 ? 3 : catalystCount >= 3 ? 2 : 1
+        return "Level \(level) · \(catalystCount) \(catalystCount == 1 ? "Boost" : "Boosts")"
     }
 
     private var bannerFallback: some View {
@@ -259,17 +334,18 @@ struct ChannelPanel: View {
 
     private func textRow(_ channel: Channel) -> some View {
         let locked = lockedReason(for: channel)
-        return NavigationLink(value: SpacesRoute.chat(.channel(id: channel.id, name: channel.name),
+        let unread = ChannelUnreadStore.shared.isUnread(channelId: channel.id)
+        return RouteLink(value: SpacesRoute.chat(.channel(id: channel.id, name: channel.name),
                                                       callPeer: nil, canModerate: canModerate,
                                                       lockedReason: locked)) {
             HStack(spacing: 10) {
                 Image(systemName: channel.readOnly == true ? "megaphone.fill" : "number")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Brand.textMuted)
+                    .foregroundStyle(unread ? Brand.textPrimary : Brand.textMuted)
                     .frame(width: 22)
                 Text(channel.name)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(Brand.textSecondary)
+                    .font(.body.weight(unread ? .bold : .medium))
+                    .foregroundStyle(unread ? Brand.textPrimary : Brand.textSecondary)
                     .lineLimit(1)
                 Spacer()
                 if locked != nil {
@@ -282,26 +358,46 @@ struct ChannelPanel: View {
             .padding(.horizontal, 10)
             .frame(height: 42)
             .contentShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(alignment: .leading) {
+                if unread {
+                    Capsule().fill(Color.white).frame(width: 4, height: 8).offset(x: -8)
+                        .accessibilityLabel("Unread")
+                }
+            }
         }
         .buttonStyle(ChannelRowStyle())
     }
 
     private func voiceRow(_ channel: Channel) -> some View {
-        let here = occupants[channel.id] ?? []
+        let isStage = channel.isStage == true
+        let everyone = occupants[channel.id] ?? []
+        // A stage lists its speakers; the audience is just a count.
+        let here = isStage ? everyone.filter(\.stageSpeaker) : everyone
+        let listening = everyone.count - here.count
+        let topic = stageTopics[channel.id]
         let connected = voice.isIn(channel.id)
         return VStack(alignment: .leading, spacing: 0) {
             Button {
                 if connected { voice.minimized = false } else { lobby = channel }
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: connected ? "speaker.wave.2.fill" : "speaker.wave.1.fill")
+                    Image(systemName: isStage ? "dot.radiowaves.left.and.right"
+                          : (connected ? "speaker.wave.2.fill" : "speaker.wave.1.fill"))
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(connected ? Brand.online : Brand.textMuted)
+                        .foregroundStyle(connected || topic != nil ? Brand.online : Brand.textMuted)
                         .frame(width: 22)
-                    Text(channel.name)
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(connected ? Brand.textPrimary : Brand.textSecondary)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(channel.name)
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(connected ? Brand.textPrimary : Brand.textSecondary)
+                            .lineLimit(1)
+                        if let topic {
+                            Text(topic)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(Brand.online)
+                                .lineLimit(1)
+                        }
+                    }
                     Spacer()
                     if !here.isEmpty {
                         Text("\(here.count)")
@@ -312,7 +408,7 @@ struct ChannelPanel: View {
                     }
                 }
                 .padding(.horizontal, 10)
-                .frame(height: 42)
+                .frame(minHeight: 42)
                 .contentShape(RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(ChannelRowStyle(highlighted: connected))
@@ -342,7 +438,14 @@ struct ChannelPanel: View {
                 }
                 .padding(.leading, 42)
                 .padding(.trailing, 12)
-                .padding(.bottom, 8)
+                .padding(.bottom, isStage && listening > 0 ? 2 : 8)
+            }
+            if isStage && listening > 0 {
+                Label("\(listening) listening", systemImage: "headphones")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Brand.textMuted)
+                    .padding(.leading, 42)
+                    .padding(.bottom, 8)
             }
         }
     }
@@ -378,6 +481,18 @@ struct ChannelPanel: View {
         let ids = channels.filter { $0.type == .voice }.map(\.id)
         let next = await VoiceSession.occupants(channelIds: ids)
         if next != occupants { occupants = next }
+
+        let stageIds = channels.filter { $0.isStage == true }.map(\.id)
+        guard !stageIds.isEmpty else { return }
+        struct Row: Decodable { let id: String; let stage_topic: String?; let stage_started_at: String? }
+        if let rows: [Row] = try? await SupabaseManager.client.from("channels")
+            .select("id,stage_topic,stage_started_at").in("id", values: stageIds).execute().value {
+            var topics: [String: String] = [:]
+            for row in rows where row.stage_started_at != nil {
+                if let topic = row.stage_topic { topics[row.id] = topic }
+            }
+            if topics != stageTopics { stageTopics = topics }
+        }
     }
 
     /// Voice rows update while the panel is on screen; the task is cancelled

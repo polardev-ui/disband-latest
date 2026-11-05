@@ -7,14 +7,25 @@
 //
 // User reports run on their own hourly schedule (migration 0146). Open
 // `content_flags` are re-checked at the end of the Eastern day (migration
-// 0148): the function settles every flag it can and emails the operator the
-// ones that genuinely need a person, then closes them as `escalated`.
+// 0148). Tether, the AI reviewer, makes the final call on every flag and
+// report; nothing waits for a person. Its reasoning is stored on the row
+// (`content_flags.resolution`, `message_reports.last_error`).
 //
 //   POST /content-sentinel
 //   Authorization: Bearer <SENTINEL_KEY>
-//   { "mode": "sweep" | "text" | "media" | "reports" | "flags",
+//   { "mode": "sweep" | "text" | "media" | "reports" | "flags" | "scan",
 //     "limit": 250, "dryRun": false, "full": false, "offset": 0,
 //     "maxRows": 8000 }
+//
+// `scan` checks just the files in `urls` (at most 10) and acts at once. The
+// database calls it the moment a message, avatar or space image with media
+// is saved (migration 0196), so a file is judged seconds after it is sent
+// rather than at the next 5-hourly sweep.
+//
+// `quarantine` is the operator's manual takedown: every file in `urls` (at
+// most 100) is preserved in quarantine and removed everywhere it is used,
+// with `category` and `reason` recorded as evidence. Nothing is judged; the
+// caller has already decided. It does not hold accounts (ban them first).
 //
 // `full` ignores the incremental cursor and re-reads every row — use it for
 // the first pass over existing content, and after changing the rules.
@@ -26,8 +37,7 @@
 // Optional:
 //   SAFETY_REPORT_TO      default beluga7133@gmail.com
 //   SAFETY_REPORT_FROM    default safety@disband.dev
-//   MODERATION_PROVIDER   "sightengine" | "hive" | "none" (default none)
-//   SIGHTENGINE_USER, SIGHTENGINE_SECRET
+//   MODERATION_PROVIDER   "hive" | "none" (default none)
 //   HIVE_API_KEY
 //   CDN_ADMIN_URL, CDN_ADMIN_SECRET   to move objects into quarantine
 //   SUSPEND_ON_GORE       "false" to remove gore without holding the account
@@ -42,6 +52,7 @@
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scanText, type RuleHit } from "./rules.ts";
+import { describe, judgeText, type Judgement, type JudgeScope } from "./ai-judge.ts";
 
 const REPORT_TO = Deno.env.get("SAFETY_REPORT_TO") ?? "beluga7133@gmail.com";
 const REPORT_FROM = Deno.env.get("SAFETY_REPORT_FROM") ?? "Disband Safety <safety@disband.dev>";
@@ -60,6 +71,8 @@ const MAX_VISION_BYTES = 8 * 1024 * 1024;
 const MAX_REPORT_MEDIA = 4;
 const REPORT_TIME_BUDGET_MS = 80_000;
 const FLAG_TIME_BUDGET_MS = 80_000;
+const SPACES_PER_RUN = Number(Deno.env.get("SENTINEL_SPACES_PER_RUN") ?? "10");
+const SPACE_TIME_BUDGET_MS = 60_000;
 const DEFAULT_MEDIA_BATCH = 250;
 // PostgREST caps a response at its own max-rows (1000 by default). The loop
 // advances by however many rows actually came back rather than by the page
@@ -82,6 +95,9 @@ Deno.serve(async (req) => {
   const mode = (body.mode as string) ?? "sweep";
   const dryRun = body.dryRun === true;
   const mediaLimit = Number(body.limit ?? DEFAULT_MEDIA_BATCH);
+  // The scheduled sweep only hashes the backlog; sending ~20,000 old files to
+  // the paid classifier is opt-in, a batch at a time.
+  const classifyBacklog = body.classifyBacklog === true;
   const full = body.full === true;
   // A backfill over every historical row is more than one invocation's CPU
   // budget, so it is driven in chunks: each call scans `maxRows` starting at
@@ -109,6 +125,9 @@ Deno.serve(async (req) => {
   }
   if (!authorised) return json({ error: "unauthorized" }, 401);
 
+  // Once a day: everything Sentinel and staff did in the last 24 hours.
+  if (mode === "digest") return json(await sendDigest(supabase));
+
   const { data: run } = await supabase
     .from("safety_runs").insert({}).select("id, started_at").single();
   const runId = run?.id as string | undefined;
@@ -130,15 +149,54 @@ Deno.serve(async (req) => {
       nextOffset = t.nextOffset;
     }
     if (mode === "sweep" || mode === "media") {
-      const m = await sweepMedia(supabase, mediaLimit, dryRun, findings);
+      const m = await sweepMedia(supabase, mediaLimit, dryRun, findings, classifyBacklog);
       totals.media += m.scanned; totals.flags += m.flags;
       totals.actions += m.actions; totals.held += m.held;
+    }
+    if (mode === "scan") {
+      const urls = (Array.isArray(body.urls) ? body.urls : []).filter(isTrustedMediaUrl).slice(0, 10);
+      for (const url of [...new Set(urls)]) {
+        const result = await scanMediaUrl(supabase, url, await mediaOwner(supabase, url), dryRun, findings, true);
+        totals.media += 1; totals.flags += result.flags;
+        totals.actions += result.actions; totals.held += result.held;
+      }
+    }
+    if (mode === "quarantine") {
+      const urls = (Array.isArray(body.urls) ? body.urls : []).filter(isTrustedMediaUrl).slice(0, 100);
+      const category = typeof body.category === "string" ? body.category : "illegal_content";
+      const reason = typeof body.reason === "string" ? body.reason.slice(0, 500) : "Manual takedown";
+      for (const url of [...new Set(urls)]) {
+        totals.media += 1;
+        const meta = await mediaOwner(supabase, url);
+        // Preserve first: without a quarantined copy nothing is removed.
+        const preserved = dryRun ? null : await preserve(url, null);
+        if (!preserved) {
+          findings.push({ kind: "media", category, rule: "manual", where: meta.where, owner: meta.owner,
+            action: dryRun ? "would quarantine" : "NOT quarantined (could not preserve)" });
+          continue;
+        }
+        const { error: qError } = await supabase.rpc("sentinel_quarantine_media", {
+          p_url: url, p_category: category, p_reason: reason,
+          p_sha256: preserved.sha256, p_quarantine_key: preserved.key, p_suspend: false,
+        });
+        if (qError) {
+          findings.push({ kind: "media", category, rule: "manual", where: meta.where, owner: meta.owner,
+            action: `preserved but not removed: ${qError.message}`.slice(0, 200) });
+          continue;
+        }
+        totals.actions += 1;
+        findings.push({ kind: "media", category, rule: "manual", where: meta.where, owner: meta.owner,
+          action: "quarantined", detail: preserved.sha256.slice(0, 16) });
+      }
     }
     if (mode === "reports") {
       const r = await sweepReports(supabase, mediaLimit, dryRun, findings);
       totals.reports += r.scanned; totals.reportActions += r.actions;
       totals.flags += r.flags; totals.actions += r.actions;
       totals.held += r.held;
+      // The hourly report run also reads a few spaces end to end.
+      const sp = await sweepSpaces(supabase, SPACES_PER_RUN, dryRun, findings);
+      totals.flags += sp.flagged; totals.actions += sp.suspended;
     }
     if (mode === "flags") {
       const f = await sweepFlags(supabase, mediaLimit, dryRun, findings);
@@ -248,6 +306,23 @@ async function sweepText(
 
       if (top.rule.severity !== "block") continue;
 
+      // A pattern match alone never removes anything: the AI reads the whole
+      // message first. Talking *about* abuse (staff, reporters, news) is not
+      // committing it.
+      const judgement = await judgeText(row.body as string, `matched rule ${top.rule.id}`);
+      if (judgement.decision !== "act") {
+        // A failed call leaves the flag open; the nightly flags pass retries it.
+        if (!dryRun && judgement.decision === "dismiss") {
+          await supabase.from("content_flags").update({
+            state: "dismissed",
+            resolution: describe(judgement).slice(0, 1000),
+            resolved_at: new Date().toISOString(),
+          }).eq("src_table", row.src_table).eq("src_column", row.src_column)
+            .eq("src_id", row.src_id).eq("rule_id", top.rule.id).eq("state", "open");
+        }
+        continue;
+      }
+
       if (dryRun) {
         findings.push({
           kind: "text", category: top.rule.category, rule: top.rule.id,
@@ -262,7 +337,7 @@ async function sweepText(
         p_column: row.src_column,
         p_id: row.src_id,
         p_category: top.rule.category,
-        p_reason: `rule ${top.rule.id}`,
+        p_reason: `rule ${top.rule.id}; ${describe(judgement)}`.slice(0, 500),
         p_suspend: top.rule.suspend,
       });
       if (actionError) { console.error("[sentinel] redact failed", actionError.message); continue; }
@@ -273,6 +348,7 @@ async function sweepText(
         where: `${row.src_table}.${row.src_column}#${row.src_id}`,
         owner: row.owner_id,
         action: top.rule.suspend ? "redacted + account held" : "redacted",
+        detail: describe(judgement),
       });
     }
 
@@ -290,6 +366,7 @@ async function sweepMedia(
   limit: number,
   dryRun: boolean,
   findings: Finding[],
+  classifyBacklog: boolean,
 ) {
   // Everything referenced anywhere that we have not settled yet. `media_assets`
   // remembers verdicts, so each file is fetched once no matter how many
@@ -330,89 +407,134 @@ async function sweepMedia(
 
   for (const [url, meta] of queue) {
     scanned++;
-    try {
-      const fetched = await fetchForHash(url);
-      if (!fetched) {
-        await mark(supabase, url, meta.owner, "skipped", null, null, null);
-        continue;
-      }
-
-      // 1. Known material: settled without any classifier.
-      const { data: banned } = await supabase
-        .from("banned_media_hashes")
-        .select("sha256, category")
-        .eq("sha256", fetched.sha256)
-        .maybeSingle();
-
-      let verdict: Verdict | null = banned
-        ? { category: (banned.category as Verdict["category"]) ?? "csam", score: 1, action: "block" }
-        : null;
-
-      // 2. Otherwise ask the classifier, if one is configured.
-      if (!verdict && PROVIDER !== "none") {
-        verdict = await classify(url);
-      }
-
-      if (!verdict || verdict.action === "none") {
-        await mark(supabase, url, meta.owner, verdict ? "clean" : "pending",
-                   fetched.sha256, fetched.bytes, verdict);
-        continue;
-      }
-
-      if (verdict.action === "review") {
-        await mark(supabase, url, meta.owner, "flagged", fetched.sha256, fetched.bytes, verdict);
-        await supabase.from("content_flags").upsert({
-          src_table: "media", src_column: "url", src_id: url, owner_id: meta.owner,
-          category: verdict.category, severity: "review",
-          rule_id: `${PROVIDER}.${verdict.category}`,
-          excerpt: `score ${verdict.score.toFixed(2)}`,
-        }, { onConflict: "src_table,src_column,src_id,rule_id", ignoreDuplicates: true });
-        flags++;
-        continue;
-      }
-
-      if (dryRun) {
-        findings.push({
-          kind: "media", category: verdict.category, rule: banned ? "hash-denylist" : PROVIDER,
-          where: meta.where, owner: meta.owner, action: "would quarantine",
-          detail: fetched.sha256.slice(0, 16),
-        });
-        continue;
-      }
-
-      // 3. Preserve first, then remove. Losing the bytes before the copy would
-      //    destroy evidence we are legally required to keep.
-      const quarantineKey = await preserve(url, fetched.sha256);
-
-      const suspend = verdict.category === "gore" ? SUSPEND_ON_GORE : true;
-      const { data: result, error: actionError } = await supabase.rpc("sentinel_quarantine_media", {
-        p_url: url,
-        p_category: verdict.category,
-        p_reason: banned ? "known hash" : `${PROVIDER} ${verdict.category} ${verdict.score.toFixed(2)}`,
-        p_sha256: fetched.sha256,
-        p_quarantine_key: quarantineKey,
-        p_suspend: suspend,
-      });
-      if (actionError) { console.error("[sentinel] quarantine failed", actionError.message); continue; }
-
-      actions++;
-      held += Number((result as { accounts_held?: number })?.accounts_held ?? 0);
-      findings.push({
-        kind: "media", category: verdict.category,
-        rule: banned ? "hash-denylist" : `${PROVIDER} ${verdict.score.toFixed(2)}`,
-        where: meta.where, owner: meta.owner,
-        action: suspend ? "quarantined + account held" : "quarantined",
-        detail: fetched.sha256.slice(0, 16),
-      });
-    } catch (error) {
-      console.error("[sentinel] media error", url, error);
-      await supabase.from("media_assets").upsert({
-        url, owner_id: meta.owner, scan_state: "error", scanned_at: new Date().toISOString(),
-      }, { onConflict: "url" });
-    }
+    const result = await scanMediaUrl(supabase, url, meta, dryRun, findings, false, classifyBacklog);
+    flags += result.flags; actions += result.actions; held += result.held;
   }
 
   return { scanned, flags, actions, held };
+}
+
+async function mediaOwner(
+  supabase: SupabaseClient,
+  url: string,
+): Promise<{ owner: string | null; where: string }> {
+  const { data } = await supabase
+    .from("safety_media_refs")
+    .select("owner_id, src_table, src_id")
+    .eq("url", url)
+    .limit(1)
+    .maybeSingle();
+  return data
+    ? { owner: data.owner_id as string | null, where: `${data.src_table}#${data.src_id}` }
+    : { owner: null, where: `media#${url}` };
+}
+
+const VIDEO_PATH = /\.(mp4|webm|mov|m4v)$/i;
+
+/**
+ * Judge one file and act on it. `instant` is the seconds-after-sending
+ * check: there, anything the scanner suspects involves a child is removed
+ * straight away instead of waiting in the review queue.
+ */
+async function scanMediaUrl(
+  supabase: SupabaseClient,
+  url: string,
+  meta: { owner: string | null; where: string },
+  dryRun: boolean,
+  findings: Finding[],
+  instant: boolean,
+  useClassifier = true,
+): Promise<{ flags: number; actions: number; held: number }> {
+  const none = { flags: 0, actions: 0, held: 0 };
+  try {
+    const head = await fetch(url, { method: "HEAD" });
+    if (!head.ok) {
+      await mark(supabase, url, meta.owner, "skipped", null, null, null);
+      return none;
+    }
+    const type = (head.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    const isVideo = type.startsWith("video/") || VIDEO_PATH.test(new URL(url).pathname);
+    const size = Number(head.headers.get("content-length") ?? 0);
+
+    // Files too large to hash here are still judged; the CDN fingerprints
+    // them itself if they have to be quarantined.
+    const fetched = size <= MAX_FULL_HASH_BYTES ? await fetchForHash(url) : null;
+    const sha256 = fetched?.sha256 ?? null;
+
+    // 1. Known material: settled without any classifier.
+    const banned = sha256 ? await bannedHash(supabase, sha256) : null;
+    let verdict: Verdict | null = banned
+      ? { category: (banned.category as Verdict["category"]) ?? "csam", score: 1, action: "block" }
+      : null;
+
+    // 2. Otherwise ask the classifier, if one is configured.
+    if (!verdict && PROVIDER !== "none" && useClassifier) {
+      verdict = await classify(url, isVideo);
+    }
+    if (instant && verdict?.category === "csam" && verdict.action === "review") {
+      verdict = { ...verdict, action: "block" };
+    }
+
+    if (!verdict || verdict.action === "none") {
+      await mark(supabase, url, meta.owner, verdict ? "clean" : "pending",
+                 sha256, fetched?.bytes ?? (size || null), verdict);
+      return none;
+    }
+
+    if (verdict.action === "review") {
+      await mark(supabase, url, meta.owner, "flagged", sha256, fetched?.bytes ?? (size || null), verdict);
+      await supabase.from("content_flags").upsert({
+        src_table: "media", src_column: "url", src_id: url, owner_id: meta.owner,
+        category: verdict.category, severity: "review",
+        rule_id: `${PROVIDER}.${verdict.category}`,
+        excerpt: `score ${verdict.score.toFixed(2)}`,
+      }, { onConflict: "src_table,src_column,src_id,rule_id", ignoreDuplicates: true });
+      return { ...none, flags: 1 };
+    }
+
+    if (dryRun) {
+      findings.push({
+        kind: "media", category: verdict.category, rule: banned ? "hash-denylist" : PROVIDER,
+        where: meta.where, owner: meta.owner, action: "would quarantine",
+        detail: sha256?.slice(0, 16),
+      });
+      return none;
+    }
+
+    // 3. Preserve first, then remove. Losing the bytes before the copy would
+    //    destroy evidence we are legally required to keep.
+    const preserved = await preserve(url, sha256);
+
+    const suspend = verdict.category === "gore" ? SUSPEND_ON_GORE : true;
+    const { data: result, error: actionError } = await supabase.rpc("sentinel_quarantine_media", {
+      p_url: url,
+      p_category: verdict.category,
+      p_reason: banned ? "known hash" : `${PROVIDER} ${verdict.category} ${verdict.score.toFixed(2)}`,
+      p_sha256: preserved?.sha256 ?? sha256,
+      p_quarantine_key: preserved?.key ?? null,
+      p_suspend: suspend,
+    });
+    if (actionError) {
+      console.error("[sentinel] quarantine failed", actionError.message);
+      return none;
+    }
+
+    const held = Number((result as { accounts_held?: number })?.accounts_held ?? 0);
+    findings.push({
+      kind: "media", category: verdict.category,
+      rule: banned ? "hash-denylist" : `${PROVIDER} ${verdict.score.toFixed(2)}`,
+      where: meta.where, owner: meta.owner,
+      action: suspend ? "quarantined + account held" : "quarantined",
+      detail: (preserved?.sha256 ?? sha256 ?? "").slice(0, 16),
+    });
+    return { flags: 0, actions: 1, held };
+  } catch (error) {
+    console.error("[sentinel] media error", url, error);
+    await supabase.from("media_assets").upsert({
+      url, owner_id: meta.owner, scan_state: "error", scanned_at: new Date().toISOString(),
+    }, { onConflict: "url" });
+    return none;
+  }
 }
 
 async function mark(
@@ -441,8 +563,14 @@ async function fetchForHash(url: string): Promise<{ sha256: string; bytes: numbe
   return { sha256, bytes: buffer.byteLength };
 }
 
-/** Copy the object out of public reach, keeping the bytes. */
-async function preserve(url: string, sha256: string): Promise<string | null> {
+/**
+ * Copy the object out of public reach, keeping the bytes. Without a hash the
+ * CDN works it out, so large videos never have to be downloaded here.
+ */
+async function preserve(
+  url: string,
+  sha256?: string | null,
+): Promise<{ key: string; sha256: string } | null> {
   const base = Deno.env.get("CDN_ADMIN_URL");
   const secret = Deno.env.get("CDN_ADMIN_SECRET");
   if (!base || !secret) return null;
@@ -452,13 +580,15 @@ async function preserve(url: string, sha256: string): Promise<string | null> {
   const response = await fetch(`${base}/v1/admin/quarantine`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Admin-Secret": secret },
-    body: JSON.stringify({ key: decodeURIComponent(key), sha256 }),
+    body: JSON.stringify({ key: decodeURIComponent(key), ...(sha256 ? { sha256 } : {}) }),
   });
   if (!response.ok) {
     console.error("[sentinel] preserve failed", response.status, await response.text());
     return null;
   }
-  return (await response.json().catch(() => ({})) as { quarantineKey?: string }).quarantineKey ?? null;
+  const out = await response.json().catch(() => ({})) as { quarantineKey?: string; sha256?: string };
+  if (!out.quarantineKey) return null;
+  return { key: out.quarantineKey, sha256: out.sha256 ?? sha256 ?? "" };
 }
 
 /* --------------------------------------------------------------- reports */
@@ -484,7 +614,7 @@ interface ReportSnapshot {
 
 interface ReportRow {
   id: string;
-  target_type: "message" | "profile";
+  target_type: "message" | "profile" | "server";
   target_surface: string;
   target_table: string;
   target_id: string;
@@ -507,16 +637,38 @@ interface ConfirmedViolation {
   score?: number;
 }
 
+// The official Disband space (vanity /disband) has stricter rules than the
+// rest of the platform: slurs, insults and spam are only enforced there.
+let officialSpace: Promise<string | null> | null = null;
+function officialSpaceId(supabase: SupabaseClient): Promise<string | null> {
+  officialSpace ??= Promise.resolve(
+    supabase.from("servers").select("id").ilike("vanity_code", "disband").limit(1).maybeSingle(),
+  ).then(({ data }) => (data?.id as string | undefined) ?? null, () => null);
+  return officialSpace;
+}
+
+async function scopeFor(supabase: SupabaseClient, table: string | null | undefined, id: string | null | undefined): Promise<JudgeScope> {
+  const official = await officialSpaceId(supabase);
+  if (!official || !id) return "platform";
+  if (table === "servers") return id === official ? "official" : "platform";
+  if (table !== "messages") return "platform";
+  const { data: message } = await supabase.from("messages").select("channel_id").eq("id", id).maybeSingle();
+  if (!message?.channel_id) return "platform";
+  const { data: channel } = await supabase.from("channels").select("server_id").eq("id", message.channel_id).maybeSingle();
+  return channel?.server_id === official ? "official" : "platform";
+}
+
 interface ReportOutcome {
-  status: "actioned" | "needs_review" | "dismissed";
+  // "retry" means a check could not run (an API failure); the report goes
+  // back in the queue rather than being decided on half the evidence.
+  status: "actioned" | "dismissed" | "retry";
   held?: boolean;
   finding?: Finding;
   detail?: string;
+  // Set when the review acted without sentinel_apply_report_decision (which
+  // records its own outcome), so the sweep must close the report itself.
+  record?: string;
 }
-
-const HUMAN_REVIEW_REASONS = new Set([
-  "harassment", "spam", "self_harm", "impersonation", "other",
-]);
 
 function isTrustedMediaUrl(value: unknown): value is string {
   if (typeof value !== "string") return false;
@@ -641,9 +793,12 @@ function mediaVerdictViolation(
       : null;
   }
   if (verdict.category === "illegal") {
-    // A general vision model saying "illegal" is enough to summon a human,
-    // never enough to auto-suspend an account.
-    return null;
+    // A general vision model saying "illegal" removes the content and
+    // restricts the account, but never bans outright: only a hash match or a
+    // dedicated classifier's block does that.
+    return verdict.action === "block" || verdict.score >= 0.85
+      ? { ...shared, category: "illegal_content", restrictionDays: 30, platformBan: false }
+      : null;
   }
   if (verdict.category === "gore") {
     return verdict.action === "block" || verdict.score >= 0.8
@@ -684,6 +839,22 @@ function stronger(
   return violationRank(candidate) > violationRank(current) ? candidate : current;
 }
 
+// A text violation the AI confirmed. Text never bans an account outright;
+// restrictions escalate through the usual violation count instead.
+function aiViolation(j: Judgement, textField: string, rule: string): ConfirmedViolation {
+  const category = j.category ?? "other";
+  const days: Record<string, number | null> = {
+    illegal_content: 30, hate_speech: 3, sexual_content: 3, violence_gore: 3,
+    harassment: 1, spam: 1, other: null,
+  };
+  return {
+    category, textField, platformBan: false,
+    restrictionDays: days[category] ?? null,
+    rule: `${rule} (${describe(j)})`.slice(0, 300),
+    score: j.confidence,
+  };
+}
+
 function reportTextFields(snapshot: ReportSnapshot): ReportSnapshotField[] {
   const fields = Array.isArray(snapshot.text_fields) ? snapshot.text_fields : [];
   return fields.filter(
@@ -716,52 +887,59 @@ async function reviewReport(
   report: ReportRow,
   dryRun: boolean,
 ): Promise<ReportOutcome> {
+  if (report.target_type === "server") return await reviewServerReport(supabase, report, dryRun);
+
   const snapshot = report.snapshot ?? {};
   let best: ConfirmedViolation | null = null;
-  let needsReview: string | null = null;
-  let unscannable = false;
-  let mediaSeen = 0;
-  let mediaClean = 0;
+  // Tether's working notes: what each check found, stored with the decision.
+  const notes: string[] = [];
 
-  for (const field of reportTextFields(snapshot)) {
+  const textFields = reportTextFields(snapshot);
+  const scope = await scopeFor(supabase, report.target_table, report.target_id);
+  let textJudged = false;
+  for (const field of textFields) {
     const hits = scanText(field.value);
-    for (const hit of hits) {
-      const candidate = textRuleViolation(hit);
-      if (candidate) {
-        best = stronger(best, { ...candidate, textField: field.field });
-      } else if (hit.rule.severity === "review" || hit.demoted) {
-        // A demoted hit is quoted or describes abuse rather than committing
-        // it. It must not trigger an automatic penalty, but it should still
-        // reach a person instead of disappearing when the report is reviewed.
-        needsReview = hit.demoted
-          ? `Possible ${hit.rule.id} in ${field.field} (quoted or report context)`
-          : `Possible ${hit.rule.id} match in ${field.field}`;
-      }
+    const hit = hits.find((h) => !h.demoted) ?? hits[0];
+    if (!hit) continue;
+    // The rule only says where to look; the AI decides whether it is an
+    // offence or someone talking about one.
+    textJudged = true;
+    const judgement = await judgeText(field.value ?? "", `reported as ${report.reason}; matched rule ${hit.rule.id}`, scope);
+    if (judgement.decision === "retry") return { status: "retry", detail: describe(judgement) };
+    if (judgement.decision === "act") {
+      best = stronger(best, aiViolation(judgement, field.field ?? "content", hit.rule.id));
     }
+    notes.push(`${field.field} (rule ${hit.rule.id}): ${describe(judgement)}`);
   }
 
   for (const item of reportMedia(snapshot)) {
-    mediaSeen++;
     const isVideo = item.kind === "video" || item.kind === "file";
 
     if (isVideo) {
-      // No video-frame extractor is available in the edge runtime. The hash
-      // denylist still settles known material; anything new needs a person.
+      // No video-frame extractor is available in the edge runtime, so the
+      // hash denylist is the only check; the text decides the rest.
       const fetched = await fetchForHash(item.url);
       const banned = fetched ? await bannedHash(supabase, fetched.sha256) : null;
       const candidate = banned ? hashViolation(banned.category, fetched!.sha256) : null;
+      const scanned = !candidate && PROVIDER !== "none" ? await classify(item.url, true) : null;
+      const scannedViolation = scanned
+        ? mediaVerdictViolation(scanned, item.url, fetched?.sha256 ?? "")
+        : null;
       if (candidate) {
         best = stronger(best, { ...candidate, mediaUrl: item.url });
-        mediaClean++;
+        notes.push(`${item.field}: matched known ${banned!.category} material`);
+      } else if (scanned) {
+        if (scannedViolation) best = stronger(best, scannedViolation);
+        notes.push(`${item.field}: video check ${scanned.category} (${Math.round(scanned.score * 100)}%)`);
       } else {
-        unscannable = true;
+        notes.push(`${item.field}: ${fetched ? "video not on the known-material list" : "video no longer available"}`);
       }
       continue;
     }
 
     const image = await fetchVisionImage(item.url);
     if (!image) {
-      unscannable = true;
+      notes.push(`${item.field}: image no longer available`);
       continue;
     }
 
@@ -771,23 +949,28 @@ async function reviewReport(
       : null;
 
     if (!verdict) verdict = await classifyReportImage(item.url, image.dataUrl);
-    if (!verdict) {
-      unscannable = true;
-      continue;
-    }
+    if (!verdict) return { status: "retry", detail: `Tether: image check for ${item.field} is unavailable` };
 
     const candidate = mediaVerdictViolation(verdict, item.url, image.sha256);
-    if (candidate) {
-      best = stronger(best, candidate);
-      mediaClean++;
-      continue;
-    }
+    if (candidate) best = stronger(best, candidate);
+    notes.push(verdict.category === "clean"
+      ? `${item.field}: image check clean`
+      : `${item.field}: image check ${verdict.category} (${Math.round(verdict.score * 100)}%)${candidate ? "" : ", below the action threshold"}`);
+  }
 
-    if (verdict.category === "clean") {
-      mediaClean++;
-    } else {
-      needsReview = `Possible ${verdict.category} (${verdict.score.toFixed(2)}) in ${item.field}`;
+  // Whatever the reason, Tether reads the reported text as a whole and has
+  // the final say. Nothing waits for a person.
+  if (!best && !textJudged && textFields.length) {
+    const text = textFields.map((f) => `${f.field}: ${f.value}`).join("\n");
+    const context = `reported as ${report.reason}` +
+      (report.details ? `; reporter said: ${String(report.details).slice(0, 300)}` : "") +
+      (notes.length ? `; attachments: ${notes.join("; ")}` : "");
+    const judgement = await judgeText(text, context, scope);
+    if (judgement.decision === "retry") return { status: "retry", detail: describe(judgement) };
+    if (judgement.decision === "act") {
+      best = aiViolation(judgement, textFields[0].field ?? "content", `report:${report.reason}`);
     }
+    notes.unshift(describe(judgement));
   }
 
   if (best) {
@@ -806,20 +989,20 @@ async function reviewReport(
       };
     }
 
-    const quarantineKey = best.mediaUrl
-      ? await preserve(best.mediaUrl, best.sha256 ?? "")
+    const preserved = best.mediaUrl
+      ? await preserve(best.mediaUrl, best.sha256 || null)
       : null;
 
     const { data, error } = await supabase.rpc("sentinel_apply_report_decision", {
       p_report_id: report.id,
       p_category: best.category,
-      p_reason: `Reported ${report.reason}: ${best.rule}`,
+      p_reason: `Reported ${report.reason}: ${best.rule}`.slice(0, 500),
       p_text_field: best.textField ?? null,
       p_restriction_days: best.restrictionDays,
       p_platform_ban: best.platformBan,
       p_media_url: best.mediaUrl ?? null,
-      p_sha256: best.sha256 ?? null,
-      p_quarantine_key: quarantineKey,
+      p_sha256: preserved?.sha256 || best.sha256 || null,
+      p_quarantine_key: preserved?.key ?? null,
     });
     if (error) throw new Error(`report decision: ${error.message}`);
 
@@ -832,6 +1015,7 @@ async function reviewReport(
     return {
       status: "actioned",
       held: result.suspended === true,
+      detail: notes.join(" | ") || undefined,
       finding: {
         kind: "report",
         category: best.category,
@@ -842,44 +1026,14 @@ async function reviewReport(
           result.action ?? "actioned",
           count > 1 ? `${count} violations in 365 days` : null,
         ].filter(Boolean).join("; "),
-        detail: best.score ? `score ${best.score.toFixed(2)}` : undefined,
+        detail: notes.join(" | ") || (best.score ? `score ${best.score.toFixed(2)}` : undefined),
       },
-    };
-  }
-
-  if (unscannable) {
-    return {
-      status: "needs_review",
-      detail: needsReview ?? "Reported media could not be classified automatically.",
-    };
-  }
-
-  if (needsReview) return { status: "needs_review", detail: needsReview };
-
-  if (HUMAN_REVIEW_REASONS.has(report.reason)) {
-    return {
-      status: "needs_review",
-      detail: `Reported as ${report.reason}; this needs a person.`,
-    };
-  }
-
-  if (report.reason === "illegal_content" && mediaSeen === 0) {
-    return {
-      status: "needs_review",
-      detail: "Illegal-content report has no automatically scannable media.",
-    };
-  }
-
-  if (mediaSeen > 0 && mediaClean !== mediaSeen) {
-    return {
-      status: "needs_review",
-      detail: "Some reported media could not be checked automatically.",
     };
   }
 
   return {
     status: "dismissed",
-    detail: "No rule or classifier match.",
+    detail: notes.length ? notes.join(" | ") : "Tether: nothing in the report to check; no violation.",
   };
 }
 
@@ -921,46 +1075,54 @@ async function sweepReports(
         if (!dryRun) {
           actions++;
           if (outcome.held) held++;
+          // Tether's notes sit beside the action the decision RPC recorded.
+          if (outcome.record) {
+            await supabase.from("message_reports").update({
+              status: "actioned",
+              decision: "violation",
+              action: outcome.record,
+              reviewed_at: new Date().toISOString(),
+              last_error: outcome.detail ? outcome.detail.slice(0, 500) : null,
+            }).eq("id", row.id);
+          } else if (outcome.detail) {
+            await supabase.from("message_reports").update({ last_error: outcome.detail.slice(0, 500) }).eq("id", row.id);
+          }
         }
+      } else if (outcome.status === "retry") {
+        flags++;
+        if (!dryRun) await requeueReport(supabase, row.id, attempts, outcome.detail ?? "Tether could not finish the check");
       } else {
         flags++;
         if (!dryRun) {
-          const needsReview = outcome.status === "needs_review";
           await supabase.from("message_reports").update({
-            status: outcome.status,
-            decision: needsReview ? "needs_review" : "no_violation",
-            action: needsReview ? null : "Dismissed — no rule match",
-            reviewed_at: needsReview ? null : new Date().toISOString(),
+            status: "dismissed",
+            decision: "no_violation",
+            action: "Dismissed by Tether",
+            reviewed_at: new Date().toISOString(),
             last_error: outcome.detail ? outcome.detail.slice(0, 500) : null,
           }).eq("id", row.id);
-        }
-        if (outcome.status === "needs_review") {
-          findings.push({
-            kind: "report",
-            category: "review",
-            rule: "report-queue",
-            where: `message_reports#${row.id}`,
-            owner: row.reported_user_id,
-            action: "needs human review",
-            detail: outcome.detail,
-          });
         }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error("[sentinel] report failed", row.id, message);
-      if (!dryRun) {
-        await supabase.from("message_reports").update({
-          status: attempts >= 3 ? "needs_review" : "pending",
-          review_attempts: attempts,
-          last_error: message.slice(0, 500),
-        }).eq("id", row.id);
-      }
+      if (!dryRun) await requeueReport(supabase, row.id, attempts, message);
       flags++;
     }
   }
 
   return { scanned, flags, actions, held };
+}
+
+// A check that couldn't run goes back in the queue. After the third try the
+// report is marked failed (not handed to a person); the digest lists it and
+// resetting it to pending retries it.
+async function requeueReport(supabase: SupabaseClient, id: string, attempts: number, why: string) {
+  await supabase.from("message_reports").update({
+    status: attempts >= 3 ? "failed" : "pending",
+    review_attempts: attempts,
+    last_error: why.slice(0, 500),
+  }).eq("id", id);
 }
 
 /* ------------------------------------------------------------------ flags */
@@ -979,7 +1141,8 @@ interface FlagRow {
 }
 
 interface FlagOutcome {
-  state: "actioned" | "dismissed" | "escalated";
+  // "retry": a check could not run, so the flag stays open for the next pass.
+  state: "actioned" | "dismissed" | "retry";
   action: string;
   detail?: string;
   finding?: Finding;
@@ -1008,16 +1171,14 @@ async function applyMediaFlag(
     };
   }
 
-  const quarantineKey = violation.sha256
-    ? await preserve(url, violation.sha256)
-    : null;
+  const preserved = await preserve(url, violation.sha256 || null);
   const suspend = violation.category === "violence_gore" ? SUSPEND_ON_GORE : true;
   const { data, error } = await supabase.rpc("sentinel_quarantine_media", {
     p_url: url,
     p_category: violation.category,
     p_reason: `Flag review: ${violation.rule}`,
-    p_sha256: violation.sha256 ?? null,
-    p_quarantine_key: quarantineKey,
+    p_sha256: preserved?.sha256 || violation.sha256 || null,
+    p_quarantine_key: preserved?.key ?? null,
     p_suspend: suspend,
   });
   if (error) throw new Error(`flag quarantine: ${error.message}`);
@@ -1046,9 +1207,9 @@ async function reviewMediaFlag(
   const url = flag.src_id;
   if (!isTrustedMediaUrl(url)) {
     return {
-      state: "escalated",
-      action: "source is not a trusted CDN URL",
-      detail: "The flag does not point at a scannable media object.",
+      state: "dismissed",
+      action: "Tether: no violation",
+      detail: "The flag does not point at Disband media, so there is nothing to remove.",
     };
   }
 
@@ -1070,11 +1231,7 @@ async function reviewMediaFlag(
       ? { category: banned.category as Verdict["category"], score: 1, action: "block" }
       : await classifyReportImage(url, image.dataUrl);
     if (!verdict) {
-      return {
-        state: "escalated",
-        action: "image classifier unavailable",
-        detail: "The image could not be classified automatically.",
-      };
+      return { state: "retry", action: "Tether: not reviewed yet", detail: "The image check is unavailable; trying again next pass." };
     }
 
     const violation = banned
@@ -1082,27 +1239,27 @@ async function reviewMediaFlag(
       : mediaVerdictViolation(verdict, url, image.sha256);
     if (violation) return await applyMediaFlag(supabase, flag, url, violation, dryRun);
     if (verdict.category === "clean") {
-      return { state: "dismissed", action: "image reviewed clean" };
+      return { state: "dismissed", action: "Tether: no violation", detail: "Image check came back clean." };
     }
     return {
-      state: "escalated",
-      action: "ambiguous image verdict",
-      detail: `Classifier said ${verdict.category} (${verdict.score.toFixed(2)}).`,
+      state: "dismissed",
+      action: "Tether: no violation",
+      detail: `Image check said ${verdict.category} at ${Math.round(verdict.score * 100)}%, below the action threshold.`,
     };
   }
 
   const fetched = await fetchForHash(url);
   if (!fetched) {
-    return { state: "dismissed", action: "media is no longer available" };
+    return { state: "dismissed", action: "Tether: no violation", detail: "The media is no longer available." };
   }
   const banned = await bannedHash(supabase, fetched.sha256);
   const violation = banned ? hashViolation(banned.category, fetched.sha256) : null;
   if (violation) return await applyMediaFlag(supabase, flag, url, violation, dryRun);
 
   return {
-    state: "escalated",
-    action: "video needs human review",
-    detail: "No frame extractor is available; the video did not match a banned hash.",
+    state: "dismissed",
+    action: "Tether: no violation",
+    detail: "The video does not match any known banned material (frames can't be checked yet).",
   };
 }
 
@@ -1120,68 +1277,70 @@ async function reviewTextFlag(
     .maybeSingle();
 
   if (!source) {
-    return { state: "dismissed", action: "source no longer exists" };
+    return { state: "dismissed", action: "Tether: no violation", detail: "The flagged content no longer exists." };
   }
   const body = typeof source.body === "string" ? source.body : "";
   if (!body.trim()) {
-    return { state: "dismissed", action: "source is empty" };
+    return { state: "dismissed", action: "Tether: no violation", detail: "The flagged content is now empty." };
   }
 
   const hits = scanText(body);
-  const actionable = hits.find((hit) => !hit.demoted && hit.rule.severity === "block");
-  if (actionable) {
-    if (dryRun) {
-      return {
-        state: "actioned",
-        action: "would redact",
-        finding: {
-          kind: "flag",
-          category: actionable.rule.category,
-          rule: actionable.rule.id,
-          where: `content_flags#${flag.id}`,
-          owner: flag.owner_id,
-          action: "would redact",
-        },
-      };
-    }
-    const { data, error } = await supabase.rpc("sentinel_redact_text", {
-      p_table: flag.src_table,
-      p_column: flag.src_column,
-      p_id: flag.src_id,
-      p_category: actionable.rule.category,
-      p_reason: `Flag review: ${actionable.rule.id}`,
-      p_suspend: actionable.rule.suspend,
-    });
-    if (error) throw new Error(`flag redact: ${error.message}`);
-    const result = (data ?? {}) as { account_held?: boolean };
+  const hit = hits.find((h) => !h.demoted) ?? hits[0];
+  if (!hit) return { state: "dismissed", action: "Tether: no violation", detail: "The content no longer matches any rule." };
+
+  const scope = await scopeFor(supabase, flag.src_table, flag.src_id);
+  // Slurs are a rule of the official space only; nothing to ask the AI.
+  if (hit.rule.category === "hate" && scope === "platform") {
+    return {
+      state: "dismissed",
+      action: "Tether: no violation",
+      detail: "Slurs are only enforced in the official Disband space, and this wasn't posted there.",
+    };
+  }
+  const judgement = await judgeText(
+    body,
+    `matched rule ${hit.rule.id}${hit.demoted ? " (wording looks like quoting or reporting)" : ""}`,
+    scope,
+  );
+  if (judgement.decision === "dismiss") {
+    return { state: "dismissed", action: "dismissed", detail: describe(judgement) };
+  }
+  if (judgement.decision === "retry") {
+    return { state: "retry", action: "not reviewed yet", detail: describe(judgement) };
+  }
+
+  const category = hit.rule.category;
+  if (dryRun) {
     return {
       state: "actioned",
-      action: actionable.rule.suspend ? "redacted + account held" : "redacted",
-      held: result.account_held === true,
+      action: "would redact",
       finding: {
-        kind: "flag",
-        category: actionable.rule.category,
-        rule: actionable.rule.id,
-        where: `content_flags#${flag.id}`,
-        owner: flag.owner_id,
-        action: actionable.rule.suspend ? "redacted + account held" : "redacted",
+        kind: "flag", category, rule: hit.rule.id,
+        where: `content_flags#${flag.id}`, owner: flag.owner_id, action: "would redact",
+        detail: describe(judgement),
       },
     };
   }
-
-  const possible = hits.find((hit) => !hit.demoted)
-    ?? hits.find((hit) => hit.demoted);
-  if (possible) {
-    return {
-      state: "escalated",
-      action: "possible rule match needs a person",
-      detail: possible.demoted
-        ? `Quoted or report-context match for ${possible.rule.id}; not auto-actioned.`
-        : `Review-severity match for ${possible.rule.id}.`,
-    };
-  }
-
-  return { state: "dismissed", action: "no current rule match" };
+  // Text alone never holds an account (see rules.ts); it only removes the text.
+  const { error } = await supabase.rpc("sentinel_redact_text", {
+    p_table: flag.src_table,
+    p_column: flag.src_column,
+    p_id: flag.src_id,
+    p_category: category,
+    p_reason: `Flag review: ${hit.rule.id}; ${describe(judgement)}`.slice(0, 500),
+    p_suspend: false,
+  });
+  if (error) throw new Error(`flag redact: ${error.message}`);
+  return {
+    state: "actioned",
+    action: "redacted",
+    detail: describe(judgement),
+    finding: {
+      kind: "flag", category, rule: hit.rule.id,
+      where: `content_flags#${flag.id}`, owner: flag.owner_id, action: "redacted",
+      detail: describe(judgement),
+    },
+  };
 }
 
 async function reviewFlag(
@@ -1210,7 +1369,7 @@ async function sweepFlags(
   if (error) throw new Error(`flag queue: ${error.message}`);
 
   const deadline = Date.now() + FLAG_TIME_BUDGET_MS;
-  let reviewed = 0, actions = 0, held = 0, escalated = 0;
+  let reviewed = 0, actions = 0, held = 0, retried = 0;
 
   for (const flag of (data ?? []) as unknown as FlagRow[]) {
     if (Date.now() > deadline) break;
@@ -1222,50 +1381,36 @@ async function sweepFlags(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error("[sentinel] flag review failed", flag.id, message);
-      outcome = {
-        state: "escalated",
-        action: "automatic review failed",
-        detail: message.slice(0, 500),
-      };
+      outcome = { state: "retry", action: "Tether: not reviewed yet", detail: message.slice(0, 500) };
     }
 
     if (!dryRun) {
-      const resolution = [outcome.action, outcome.detail].filter(Boolean).join(" — ");
-      await supabase.from("content_flags").update({
-        state: outcome.state,
-        resolution: resolution.slice(0, 1000),
-        resolved_at: new Date().toISOString(),
-      }).eq("id", flag.id);
+      const resolution = [outcome.action, outcome.detail].filter(Boolean).join(" — ").slice(0, 1000);
+      // A retry keeps the flag open but still records why, so the row never
+      // looks untouched.
+      await supabase.from("content_flags").update(outcome.state === "retry"
+        ? { resolution }
+        : { state: outcome.state, resolution, resolved_at: new Date().toISOString() },
+      ).eq("id", flag.id);
     }
 
     if (outcome.state === "actioned") actions++;
     if (outcome.held) held++;
-    if (outcome.state === "escalated") {
-      escalated++;
-      findings.push({
-        kind: "flag",
-        category: flag.category,
-        rule: flag.rule_id,
-        where: `content_flags#${flag.id} (${flag.src_table}.${flag.src_column}#${flag.src_id})`,
-        owner: flag.owner_id,
-        action: "escalated for manual review",
-        detail: [outcome.detail, flag.excerpt ? `excerpt: ${flag.excerpt}` : null]
-          .filter(Boolean).join(" — "),
-      });
-    } else if (outcome.finding) {
-      findings.push(outcome.finding);
-    }
+    if (outcome.state === "retry") retried++;
+    else if (outcome.finding) findings.push(outcome.finding);
   }
 
-  return { reviewed, actions, held, escalated };
+  // `escalated` is the safety_runs column name; it now counts flags left open
+  // for a retry.
+  return { reviewed, actions, held, escalated: retried };
 }
 
 /* --------------------------------------------------------------- providers */
 
-async function classify(url: string): Promise<Verdict | null> {
+async function classify(url: string, isVideo = false): Promise<Verdict | null> {
   try {
-    if (PROVIDER === "sightengine") return await classifySightengine(url);
-    if (PROVIDER === "hive") return await classifyHive(url);
+    // Hive's sync task takes images; videos are left to the hash list.
+    if (PROVIDER === "hive" && !isVideo) return await classifyHive(url);
   } catch (error) {
     console.error("[sentinel] classifier error", error);
   }
@@ -1280,8 +1425,8 @@ async function classifyReportImage(url: string, dataUrl: string): Promise<Verdic
 }
 
 // A conservative fallback for installations with no dedicated moderation
-// provider. The model is asked for a category only, never a description, and
-// an "illegal" answer is always routed to a human rather than acted on.
+// provider. The model is asked for a category only, never a description. An
+// "illegal" answer restricts the account but never bans it outright.
 async function classifyDeepSeek(dataUrl: string): Promise<Verdict | null> {
   try {
     const response = await fetch(`${DEEPSEEK_URL}/chat/completions`, {
@@ -1292,7 +1437,8 @@ async function classifyDeepSeek(dataUrl: string): Promise<Verdict | null> {
       },
       body: JSON.stringify({
         model: DEEPSEEK_MODEL,
-        max_tokens: 220,
+        // Room for a reasoning model to think before it answers.
+        max_tokens: 1500,
         temperature: 0,
         messages: [
           {
@@ -1329,7 +1475,8 @@ async function classifyDeepSeek(dataUrl: string): Promise<Verdict | null> {
     }
 
     const payload = await response.json();
-    const raw = payload?.choices?.[0]?.message?.content;
+    const message = payload?.choices?.[0]?.message;
+    const raw = [message?.content, message?.reasoning_content].find((v) => typeof v === "string" && v.includes("{"));
     if (typeof raw !== "string") return null;
     const jsonText = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
     const start = jsonText.indexOf("{");
@@ -1352,44 +1499,6 @@ async function classifyDeepSeek(dataUrl: string): Promise<Verdict | null> {
     console.error("[sentinel] deepseek error", error);
     return null;
   }
-}
-
-// https://sightengine.com/docs — nudity-2.1 carries a minor/child signal and
-// gore-2.0 a graphic-violence one.
-async function classifySightengine(url: string): Promise<Verdict | null> {
-  const user = Deno.env.get("SIGHTENGINE_USER");
-  const secret = Deno.env.get("SIGHTENGINE_SECRET");
-  if (!user || !secret) return null;
-
-  const endpoint = new URL("https://api.sightengine.com/1.0/check.json");
-  endpoint.searchParams.set("models", "nudity-2.1,gore-2.0,offensive");
-  endpoint.searchParams.set("url", url);
-  endpoint.searchParams.set("api_user", user);
-  endpoint.searchParams.set("api_secret", secret);
-
-  const response = await fetch(endpoint);
-  const data = await response.json();
-  if (data.status !== "success") return null;
-
-  const sexual = Math.max(
-    data.nudity?.sexual_activity ?? 0,
-    data.nudity?.sexual_display ?? 0,
-    data.nudity?.erotica ?? 0,
-  );
-  const minor = data.nudity?.context?.minor ?? data.minor?.prob ?? 0;
-  const gore = data.gore?.prob ?? 0;
-
-  // Sexual content plus a minor signal is the combination that matters.
-  if (sexual >= 0.5 && minor >= 0.5) {
-    return { category: "csam", score: Math.min(sexual, minor), action: "block", raw: data };
-  }
-  if (minor >= 0.75 && sexual >= 0.3) {
-    return { category: "csam", score: minor, action: "review", raw: data };
-  }
-  if (gore >= 0.8) return { category: "gore", score: gore, action: "block", raw: data };
-  if (gore >= 0.5) return { category: "gore", score: gore, action: "review", raw: data };
-  if (sexual >= 0.8) return { category: "adult", score: sexual, action: "review", raw: data };
-  return { category: "clean", score: 0, action: "none", raw: data };
 }
 
 // https://docs.thehive.ai — visual moderation returns per-class scores.
@@ -1436,9 +1545,8 @@ async function sendReport(
   const apiKey = Deno.env.get("RESEND_API_KEY");
   if (!apiKey) return null;
 
-  // Quiet runs don't need mail; a failure, an action, or a flag that needs a
-  // person always does.
-  if (!failure && totals.actions === 0 && totals.flags === 0 && totals.flagEscalations === 0) {
+  // Quiet runs don't need mail; a failure or an action always does.
+  if (!failure && totals.actions === 0 && totals.flags === 0) {
     return null;
   }
 
@@ -1450,13 +1558,12 @@ async function sendReport(
       <td style="padding:6px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px">${escape(f.where)}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px">${escape(f.owner ?? "—")}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #eee">${escape(f.action)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:13px">${escape(f.detail ?? "—")}</td>
     </tr>`).join("");
 
   const subject = failure
     ? "Disband Safety — run FAILED"
-    : totals.flagEscalations > 0
-      ? `Disband Safety — ${totals.flagEscalations} flag${totals.flagEscalations === 1 ? "" : "s"} need review`
-      : `Disband Safety — ${totals.actions} action${totals.actions === 1 ? "" : "s"}, ${totals.held} account${totals.held === 1 ? "" : "s"} held`;
+    : `Disband Safety — ${totals.actions} action${totals.actions === 1 ? "" : "s"}, ${totals.held} account${totals.held === 1 ? "" : "s"} held`;
 
   // Ids, hashes and counts only. Never the material itself.
   const html = `
@@ -1470,7 +1577,7 @@ async function sendReport(
         Reports reviewed: <b>${totals.reports}</b> &middot;
         Flags opened: <b>${totals.flags}</b> &middot;
         Flags reviewed: <b>${totals.flagReviews}</b> &middot;
-        Flags escalated: <b>${totals.flagEscalations}</b> &middot;
+        Flags left open to retry: <b>${totals.flagEscalations}</b> &middot;
         Enforcement actions: <b>${totals.actions}</b> &middot;
         Accounts held: <b>${totals.held}</b>
       </p>
@@ -1479,13 +1586,13 @@ async function sendReport(
           <th style="padding:6px 10px">Kind</th><th style="padding:6px 10px">Category</th>
           <th style="padding:6px 10px">Rule</th><th style="padding:6px 10px">Where</th>
           <th style="padding:6px 10px">Owner</th><th style="padding:6px 10px">Action</th>
+          <th style="padding:6px 10px">Tether's reasoning</th>
         </tr>${rows}
       </table>` : "<p>No enforcement actions this run.</p>"}
-      ${totals.flagEscalations > 0 ? `<p style="margin-top:16px;padding:12px;background:#eef2ff;border-radius:8px;font-size:13px">
-        The escalated rows are closed in <code>content_flags</code> with
-        <code>state = 'escalated'</code>. Review them with:<br>
-        <code>select * from public.content_flags where state = 'escalated' order by resolved_at desc;</code>
-      </p>` : ""}
+      <p style="margin-top:16px;padding:12px;background:#eef2ff;border-radius:8px;font-size:13px">
+        Tether's reasoning for every decision is in <code>content_flags.resolution</code>
+        and <code>message_reports.last_error</code>.
+      </p>
       <p style="margin-top:20px;padding:12px;background:#fff8e1;border-radius:8px;font-size:13px">
         <b>CSAM findings require a CyberTipline report to NCMEC within 24 hours</b>
         (18 U.S.C. § 2258A). Quarantined material is preserved for 90 days and
@@ -1516,4 +1623,299 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+/* ------------------------------------------------------------------ spaces */
+
+// A space is judged as a whole: its name, description, channel names and a
+// sample of recent messages. A confirmed violation suspends the space (never
+// deletes it); staff can lift a suspension.
+// Suspending a whole space is heavier than removing one message, so Tether
+// must be surer before it does.
+const SPACE_SUSPEND_CONFIDENCE = 0.8;
+
+// Only serious harm closes a space. Spam, pings, slurs and edgy humour never
+// do. The text is the reason @disband gives the owner and every member
+// (migration 0192), so it is written for them, not for staff.
+const SPACE_SUSPEND_REASONS: Record<string, string> = {
+  illegal_content:
+    "Disband Safety found that the space was being used to share, seek or trade illegal material, " +
+    "including content that exploits or endangers children.",
+  violence_gore:
+    "Disband Safety found that the space was set up to share graphic real-world violence or gore.",
+};
+
+const SPACE_CONTEXT =
+  "This is a whole community space (name, description, channel names and a sample of " +
+  "recent messages), not one message. Decide whether the space itself is organised around " +
+  "or actively offering, seeking or trading illegal material — above all anything sexualising " +
+  "minors — or is otherwise built around severe harm such as sharing real gore. A space where a " +
+  "few people misbehave, or that discusses or moderates these topics, is not a violation of the " +
+  "space. Spam, mass pings, @everyone raids, repeated invite links, advertising, slurs, offensive " +
+  "or edgy humour and trolling are never reasons to close a space.";
+
+async function spaceSnapshot(supabase: SupabaseClient, server: { id: string; name: string | null; description: string | null; icon_url?: string | null; banner_url?: string | null }) {
+  const fields: { field: string; value: string }[] = [];
+  if (server.name?.trim()) fields.push({ field: "name", value: server.name });
+  if (server.description?.trim()) fields.push({ field: "description", value: server.description });
+  const { data: channels } = await supabase.from("channels").select("id, name").eq("server_id", server.id).limit(200);
+  const names = (channels ?? []).map((c: { name: string | null }) => c.name).filter(Boolean);
+  if (names.length) fields.push({ field: "channel_names", value: names.join(", ").slice(0, 2000) });
+  const ids = (channels ?? []).map((c: { id: string }) => c.id);
+  if (ids.length) {
+    const { data: recent } = await supabase.from("messages").select("content")
+      .in("channel_id", ids).not("content", "is", null)
+      .order("created_at", { ascending: false }).limit(80);
+    const sample = (recent ?? []).map((m: { content: string | null }) => (m.content ?? "").trim())
+      .filter(Boolean).reverse().join("\n").slice(-6000);
+    if (sample) fields.push({ field: "recent_messages", value: sample });
+  }
+  const media = [
+    { url: server.icon_url, field: "icon_url", kind: "image" },
+    { url: server.banner_url, field: "banner_url", kind: "image" },
+  ].filter((m): m is { url: string; field: string; kind: string } => isTrustedMediaUrl(m.url));
+  return { text_fields: fields, media };
+}
+
+function spaceText(fields: { field?: string; value?: string }[]): string {
+  return fields.filter((f) => f.value?.trim()).map((f) => `${f.field}: ${f.value}`).join("\n");
+}
+
+/** Images on a space (icon, banner). Returns the worst verdict, if any. */
+async function spaceMediaVerdict(supabase: SupabaseClient, media: { url: string }[]): Promise<Verdict | null> {
+  let worst: Verdict | null = null;
+  for (const item of media) {
+    const image = await fetchVisionImage(item.url);
+    if (!image) continue;
+    const banned = await bannedHash(supabase, image.sha256);
+    const verdict: Verdict | null = banned
+      ? { category: banned.category as Verdict["category"], score: 1, action: "block" }
+      : await classifyReportImage(item.url, image.dataUrl);
+    if (verdict && verdict.category !== "clean" && (!worst || verdict.score > worst.score)) worst = verdict;
+  }
+  return worst;
+}
+
+async function reviewServerReport(
+  supabase: SupabaseClient,
+  report: ReportRow,
+  dryRun: boolean,
+): Promise<ReportOutcome> {
+  if (report.target_id === await officialSpaceId(supabase)) {
+    return { status: "dismissed", detail: "Tether: the official Disband space is never suspended automatically." };
+  }
+  const snapshot = report.snapshot ?? {};
+  const text = spaceText(reportTextFields(snapshot));
+  const context = `${SPACE_CONTEXT} It was reported as ${report.reason}` +
+    (report.details ? `; the reporter said: ${String(report.details).slice(0, 300)}` : "") + ".";
+  const judgement = text ? await judgeText(text, context) : null;
+  if (judgement?.decision === "retry") return { status: "retry", detail: describe(judgement) };
+  const media = await spaceMediaVerdict(supabase, reportMedia(snapshot));
+  const mediaViolation = media ? mediaVerdictViolation(media, "", "") : null;
+
+  const notes = [
+    judgement ? describe(judgement) : null,
+    media ? `Image check: ${media.category} (${Math.round(media.score * 100)}%)` : "Image check: clean or no images",
+  ].filter(Boolean).join(" · ");
+
+  // Tether's call is final. A confirmed problem with a space's name,
+  // description or artwork suspends the space; staff can lift it.
+  const textAct = judgement?.decision === "act" && judgement.confidence >= SPACE_SUSPEND_CONFIDENCE
+    && !!judgement.category && judgement.category in SPACE_SUSPEND_REASONS;
+  const mediaAct = !!mediaViolation && mediaViolation.category in SPACE_SUSPEND_REASONS;
+  const category = textAct ? judgement!.category! : mediaAct ? mediaViolation!.category : null;
+  if (category) {
+    const childSafety = category === "illegal_content";
+    const label = childSafety ? "child safety" : category.replace(/_/g, " ");
+    if (!dryRun) {
+      await supabase.rpc("sentinel_suspend_server", {
+        p_server: report.target_id,
+        p_reason: SPACE_SUSPEND_REASONS[category],
+      });
+    }
+    return {
+      status: "actioned",
+      detail: notes,
+      record: `Space suspended by Tether (${label})`,
+      finding: {
+        kind: "report", category: childSafety ? "illegal_content" : category, rule: "space-ai",
+        where: `servers#${report.target_id}`, owner: report.reported_user_id,
+        action: dryRun ? "would suspend space" : "space suspended", detail: notes,
+      },
+    };
+  }
+  return {
+    status: "dismissed",
+    detail: judgement?.decision === "act" || mediaViolation
+      ? `Not grounds to suspend a space. ${notes}`
+      : notes,
+  };
+}
+
+async function sweepSpaces(
+  supabase: SupabaseClient,
+  limit: number,
+  dryRun: boolean,
+  findings: Finding[],
+) {
+  if (limit <= 0) return { checked: 0, flagged: 0, suspended: 0 };
+  const { data: servers, error } = await supabase.from("servers")
+    .select("id, name, description, icon_url, banner_url, owner_id")
+    .is("suspended_at", null)
+    .order("ai_checked_at", { ascending: true, nullsFirst: true })
+    .limit(Math.min(limit, 50));
+  if (error) throw new Error(`space queue: ${error.message}`);
+
+  const deadline = Date.now() + SPACE_TIME_BUDGET_MS;
+  const official = await officialSpaceId(supabase);
+  let checked = 0, flagged = 0, suspended = 0;
+
+  for (const server of servers ?? []) {
+    if (Date.now() > deadline) break;
+    if (server.id === official) continue;
+    checked++;
+    const snapshot = await spaceSnapshot(supabase, server);
+    const text = spaceText(snapshot.text_fields);
+    const judgement = text ? await judgeText(text, `${SPACE_CONTEXT} This is a routine check; nobody reported it.`) : null;
+
+    if (!dryRun) {
+      await supabase.from("servers").update({ ai_checked_at: new Date().toISOString() }).eq("id", server.id);
+    }
+    // Tether acts on a confident violation and leaves everything else.
+    if (judgement?.decision !== "act" || judgement.confidence < SPACE_SUSPEND_CONFIDENCE) continue;
+    if (!judgement.category || !(judgement.category in SPACE_SUSPEND_REASONS)) continue;
+
+    const childSafety = judgement.category === "illegal_content";
+    const label = childSafety ? "child safety" : (judgement.category ?? "other").replace(/_/g, " ");
+    flagged++;
+    findings.push({
+      kind: "report", category: judgement.category ?? "other", rule: "space-ai-routine",
+      where: `servers#${server.id} (${server.name ?? "unnamed"})`, owner: server.owner_id,
+      action: dryRun ? "would suspend space" : "space suspended",
+      detail: describe(judgement),
+    });
+    if (dryRun) continue;
+
+    const { data: done } = await supabase.rpc("sentinel_suspend_server", {
+      p_server: server.id,
+      p_reason: SPACE_SUSPEND_REASONS[judgement.category],
+    });
+    if (done) suspended++;
+
+    await supabase.from("message_reports").insert({
+      reporter_id: null,
+      target_type: "server",
+      target_surface: "server",
+      target_table: "servers",
+      target_id: server.id,
+      reported_user_id: server.owner_id,
+      reason: childSafety ? "illegal_content" : "other",
+      details: "Filed by Tether's routine space check.",
+      snapshot: { version: 1, target_type: "server", surface: "server", context: { space_name: server.name }, ...snapshot },
+      status: "actioned",
+      decision: "violation",
+      action: `Space suspended by Tether (${label})`,
+      reviewed_at: new Date().toISOString(),
+      review_attempts: 1,
+      last_error: describe(judgement),
+    });
+  }
+
+  return { checked, flagged, suspended };
+}
+
+/* ------------------------------------------------------------------ digest */
+
+// The daily summary. Per-run emails only go out when a run does something;
+// this one always arrives, so a quiet day (or a scheduler that stopped
+// running) is visible too. Identifiers, categories and AI reasoning only —
+// never the reported material.
+async function sendDigest(supabase: SupabaseClient) {
+  const apiKey = Deno.env.get("RESEND_API_KEY");
+  if (!apiKey) return { ok: false, error: "RESEND_API_KEY not set" };
+  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+
+  const [runs, actions, decided, waiting, flags, suspended, violations] = await Promise.all([
+    supabase.from("safety_runs").select("status, error, text_scanned, media_scanned, reports_scanned, flags_reviewed, flags_escalated, actions_taken, accounts_held").gte("started_at", since),
+    supabase.from("moderation_actions").select("action, src_table, src_id, owner_id, category, reason, actor, created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(200),
+    supabase.from("message_reports").select("id, target_type, target_id, reason, status, decision, action, last_error, reported_user_id, reviewed_at, reported:profiles!message_reports_reported_user_id_fkey(username)").gte("reviewed_at", since).in("status", ["actioned", "dismissed"]).order("reviewed_at", { ascending: false }).limit(200),
+    supabase.from("message_reports").select("id, target_type, target_id, reason, last_error, created_at, reported:profiles!message_reports_reported_user_id_fkey(username)").in("status", ["pending", "reviewing", "needs_review", "failed"]).order("created_at", { ascending: true }).limit(200),
+    supabase.from("content_flags").select("state, rule_id, src_table, src_id, resolution").gte("resolved_at", since).limit(500),
+    supabase.from("servers").select("id, name, suspended_reason, suspended_by, suspended_at").gte("suspended_at", since),
+    supabase.from("user_violations").select("user_id, category, severity, reason, created_at").gte("created_at", since).limit(200),
+  ]);
+
+  const runRows = runs.data ?? [];
+  const sum = (k: string) => runRows.reduce((n, r: Record<string, unknown>) => n + Number(r[k] ?? 0), 0);
+  const failedRuns = runRows.filter((r: { status: string }) => r.status !== "ok");
+  const flagRows = flags.data ?? [];
+  const count = (state: string) => flagRows.filter((f: { state: string }) => f.state === state).length;
+  const user = (r: { reported?: { username?: string | null } | { username?: string | null }[] | null; reported_user_id?: string | null }) => {
+    const p = Array.isArray(r.reported) ? r.reported[0] : r.reported;
+    return p?.username ? `@${p.username}` : (r.reported_user_id ?? "—");
+  };
+
+  const table = (head: string[], rows: string[][]) => rows.length
+    ? `<table style="border-collapse:collapse;width:100%;font-size:13px;margin-top:6px">
+        <tr style="text-align:left;background:#f5f5f5">${head.map((h) => `<th style="padding:6px 8px">${h}</th>`).join("")}</tr>
+        ${rows.map((r) => `<tr>${r.map((c) => `<td style="padding:6px 8px;border-bottom:1px solid #eee;vertical-align:top">${escape(c)}</td>`).join("")}</tr>`).join("")}
+      </table>`
+    : `<p style="color:#666;margin:6px 0 0">None.</p>`;
+  const section = (title: string, body: string) => `<h3 style="margin:24px 0 0;font-size:16px">${title}</h3>${body}`;
+
+  const actionRows = (actions.data ?? []).map((a: Record<string, string | null>) => [
+    new Date(a.created_at!).toUTCString().slice(17, 22), a.action ?? "", a.category ?? "", `${a.src_table}#${a.src_id}`, a.owner_id ?? "—", a.reason ?? "",
+  ]);
+  const decidedRows = (decided.data ?? []).map((r: Record<string, unknown>) => [
+    String(r.status), String(r.target_type), String(r.reason), user(r as never), String(r.action ?? r.decision ?? ""), String(r.last_error ?? ""),
+  ]);
+  const waitingRows = (waiting.data ?? []).map((r: Record<string, unknown>) => [
+    String(r.created_at).slice(0, 16).replace("T", " "), String(r.target_type), String(r.reason), user(r as never), String(r.last_error ?? ""),
+  ]);
+  const spaceRows = (suspended.data ?? []).map((s: Record<string, string | null>) => [
+    s.name ?? "", s.id ?? "", s.suspended_by ? "staff" : "Tether", s.suspended_reason ?? "",
+  ]);
+  const violationRows = (violations.data ?? []).map((v: Record<string, string | null>) => [
+    v.user_id ?? "", v.category ?? "", v.severity ?? "", v.reason ?? "",
+  ]);
+
+  const subject = failedRuns.length
+    ? `Disband Safety daily — ${failedRuns.length} run${failedRuns.length === 1 ? "" : "s"} failed`
+    : `Disband Safety daily — ${actionRows.length} action${actionRows.length === 1 ? "" : "s"}, ${waitingRows.length} still queued`;
+
+  const html = `
+    <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#111;max-width:900px">
+      <h2 style="margin:0 0 4px">Disband Safety — daily summary</h2>
+      <p style="color:#666;margin:0 0 16px">The 24 hours to ${new Date().toUTCString()}</p>
+      ${runRows.length === 0 ? `<p style="background:#fee;padding:12px;border-radius:8px"><b>No Sentinel runs in the last 24 hours.</b> The schedule may have stopped.</p>` : ""}
+      ${failedRuns.length ? `<p style="background:#fee;padding:12px;border-radius:8px"><b>${failedRuns.length} of ${runRows.length} runs failed.</b> Latest error: ${escape(String((failedRuns[0] as { error?: string }).error ?? "unknown"))}</p>` : ""}
+      <p style="line-height:1.7">
+        Runs: <b>${runRows.length}</b> &middot; Text rows scanned: <b>${sum("text_scanned")}</b> &middot;
+        Media scanned: <b>${sum("media_scanned")}</b> &middot; Reports reviewed: <b>${sum("reports_scanned")}</b><br>
+        Flags actioned by Tether: <b>${count("actioned")}</b> &middot; dismissed by Tether: <b>${count("dismissed")}</b> &middot;
+        left open to retry: <b>${sum("flags_escalated")}</b> &middot; Accounts held: <b>${sum("accounts_held")}</b>
+      </p>
+      ${section(`Content removed (${actionRows.length})`, table(["Time (UTC)", "Action", "Category", "Where", "Owner", "Reason"], actionRows))}
+      ${section(`Spaces suspended (${spaceRows.length})`, table(["Space", "Id", "By", "Reason"], spaceRows))}
+      ${section(`Strikes given (${violationRows.length})`, table(["User", "Category", "Severity", "Reason"], violationRows))}
+      ${section(`Reports closed by Tether (${decidedRows.length})`, table(["Outcome", "Type", "Reason", "Reported", "Action", "Tether's notes"], decidedRows))}
+      ${section(`Still in Tether's queue (${waitingRows.length})`, table(["Filed (UTC)", "Type", "Reason", "Reported", "Last note"], waitingRows))}
+      <p style="margin-top:16px">Every decision and Tether's reasoning is in <a href="https://www.disband.dev/app/team-support">Team Support → Flags</a>.</p>
+      <p style="margin-top:20px;padding:12px;background:#fff8e1;border-radius:8px;font-size:13px">
+        <b>Confirmed CSAM must be reported to NCMEC's CyberTipline within 24 hours</b>
+        (18 U.S.C. § 2258A). This email contains identifiers only, never the material.
+      </p>
+    </div>`;
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: REPORT_FROM, to: [REPORT_TO], subject, html }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    console.error("[sentinel] digest resend", response.status, text);
+    return { ok: false, error: `resend ${response.status}` };
+  }
+  return { ok: true, actions: actionRows.length, closed: decidedRows.length, waiting: waitingRows.length };
 }

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { getUserFromRequest, requireSupportStaff } from "@/lib/server-auth";
 
+const OPEN_STATUSES = ["pending", "reviewing", "needs_review", "failed"];
+
 export async function GET(request: Request) {
   try {
     const user = await getUserFromRequest(request as import("next/server").NextRequest);
@@ -14,16 +16,19 @@ export async function GET(request: Request) {
     if (!service) return NextResponse.json({ error: "Moderation service unavailable." }, { status: 503 });
 
     const url = new URL(request.url);
-    const status = url.searchParams.get("status") ?? "pending";
+    // "open" covers every report still waiting on a person: new ones, and
+    // ones the automated check escalated (needs_review) or couldn't finish.
+    const status = url.searchParams.get("status") ?? "open";
     const q = url.searchParams.get("q")?.trim() ?? "";
 
     let query = service
       .from("message_reports")
-      .select("id, reporter_id, target_type, target_surface, target_table, target_id, container_id, reported_user_id, reason, details, status, decision, action, snapshot, created_at, reviewed_at, reporter:profiles!message_reports_reporter_id_fkey(username, display_name), reported:profiles!message_reports_reported_user_id_fkey(username, display_name)")
+      .select("id, reporter_id, target_type, target_surface, target_table, target_id, container_id, reported_user_id, reason, details, status, decision, action, last_error, snapshot, created_at, reviewed_at, reporter:profiles!message_reports_reporter_id_fkey(username, display_name), reported:profiles!message_reports_reported_user_id_fkey(username, display_name)")
       .order("created_at", { ascending: false })
       .limit(100);
 
-    if (status !== "all") query = query.eq("status", status);
+    if (status === "open") query = query.in("status", OPEN_STATUSES);
+    else if (status !== "all") query = query.eq("status", status);
 
     const { data, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

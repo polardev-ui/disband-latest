@@ -8,7 +8,7 @@ import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
 const MAX_BOTS_PER_OWNER = 5;
 
 const MAX_BOT_NAME = 25;
-const ALLOWED_SCOPES = ["messages.read", "messages.write", "messages.delete", "messages.react", "members.read", "channels.read", "channels.manage", "webhooks.manage"];
+const ALLOWED_SCOPES = ["messages.read", "messages.write", "messages.delete", "messages.react", "members.read", "channels.read", "channels.manage", "webhooks.manage", "roles.manage"];
 
 export async function POST(request: NextRequest) {
   try {
@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
       email: botEmail,
       password: botPassword,
       email_confirm: true,
+      app_metadata: { created_by: "server" },
     });
     if (createUserError || !botUser?.user) {
       return NextResponse.json({ error: "Could not create the bot account." }, { status: 500 });

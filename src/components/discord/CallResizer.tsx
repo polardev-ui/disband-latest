@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useI18n } from "@/contexts/I18nContext";
 
 const KEY = "disband:call-height";
 const MIN = 180;
@@ -50,6 +51,7 @@ export function CallResizeHandle({
   height: number;
   onResize: (next: number) => void;
 }) {
+  const { t } = useI18n();
   const startRef = useRef<{ y: number; h: number } | null>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -74,7 +76,7 @@ export function CallResizeHandle({
   return (
     <div
       role="separator"
-      aria-label="Resize call"
+      aria-label={t("Resize call")}
       aria-orientation="horizontal"
       tabIndex={0}
       onPointerDown={onPointerDown}

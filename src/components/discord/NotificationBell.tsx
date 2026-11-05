@@ -245,7 +245,7 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
       // revoked, stale link) instead of dropping the user on a blank pane.
       const ok = await routeToNotification(n.link, n.created_at);
       if (!ok) {
-        setNavError("Couldn’t open that conversation. It may have been deleted.");
+        setNavError(t("Couldn’t open that conversation. It may have been deleted."));
         return;
       }
       setOpen(false);

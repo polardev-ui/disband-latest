@@ -35,7 +35,16 @@ enum class ThemeId(val raw: String) {
     Ocean("ocean"),
     RoseGold("rose-gold"),
     Plasma("plasma"),
-    Nord("nord");
+    Nord("nord"),
+    // Added on the web later; an account on one of these got Dark on a phone.
+    Graphite("graphite"),
+    Forest("forest"),
+    Cobalt("cobalt"),
+    Ember("ember"),
+    Parchment("parchment"),
+    Porcelain("porcelain"),
+    Orchid("orchid"),
+    Copper("copper");
 
     companion object {
         fun from(raw: String?): ThemeId? = entries.firstOrNull { it.raw == raw }
@@ -169,6 +178,85 @@ object Themes {
                 accent = color(0x88C0D0), accentSoft = color(0x6E9DAC),
                 textPrimary = color(0xECEFF4), textSecondary = color(0xCBD2DC),
                 textMuted = color(0xA5ABB6), divider = color(0x4C566A), isDark = true,
+            ),
+        ),        ThemeDefinition(
+            ThemeId.Graphite, "Graphite", "A quiet charcoal workspace with warm silver accents",
+            Palette(
+                background = color(0x0D0E0F), surface = color(0x18191B),
+                surfaceRaised = color(0x222426), elevated = color(0x393C3E),
+                accent = color(0xBEC3C9), accentSoft = color(0x9B9FA4),
+                textPrimary = color(0xF3F4F5), textSecondary = color(0xD2D4D8),
+                textMuted = color(0xB1B5BC), divider = color(0x3A3D41), isDark = true,
+            ),
+        ),
+        ThemeDefinition(
+            ThemeId.Forest, "Forest", "Pine surfaces and a fresh fern accent",
+            Palette(
+                background = color(0x0C1713), surface = color(0x13251D),
+                surfaceRaised = color(0x1C3026), elevated = color(0x2C4638),
+                accent = color(0x85C59F), accentSoft = color(0x6DA283),
+                textPrimary = color(0xE5F3E9), textSecondary = color(0xC4D8CC),
+                textMuted = color(0xA3BEAE), divider = color(0x354D40), isDark = true,
+            ),
+        ),
+        ThemeDefinition(
+            ThemeId.Cobalt, "Cobalt", "Deep ink with crisp electric blue details",
+            Palette(
+                background = color(0x0A1125), surface = color(0x111D37),
+                surfaceRaised = color(0x182647), elevated = color(0x293A63),
+                accent = color(0x8CAEFF), accentSoft = color(0x728FD3),
+                textPrimary = color(0xEDF2FF), textSecondary = color(0xCCD6EE),
+                textMuted = color(0xAABADD), divider = color(0x33476B), isDark = true,
+            ),
+        ),
+        ThemeDefinition(
+            ThemeId.Ember, "Ember", "Charred brown, terracotta and warm cream",
+            Palette(
+                background = color(0x1B100D), surface = color(0x2A1A14),
+                surfaceRaised = color(0x35241C), elevated = color(0x50372B),
+                accent = color(0xECA580), accentSoft = color(0xC28769),
+                textPrimary = color(0xFFF0E3), textSecondary = color(0xE7D0C2),
+                textMuted = color(0xCFB1A1), divider = color(0x554034), isDark = true,
+            ),
+        ),
+        ThemeDefinition(
+            ThemeId.Parchment, "Parchment", "Warm paper, sepia ink and library green",
+            Palette(
+                background = color(0xDED6C6), surface = color(0xEEE8DC),
+                surfaceRaised = color(0xFAF5E9), elevated = color(0xDCE0D2),
+                accent = color(0x35664F), accentSoft = color(0x577C67),
+                textPrimary = color(0x342F27), textSecondary = color(0x50483E),
+                textMuted = color(0x6C6254), divider = color(0xC9BEAC), isDark = false,
+            ),
+        ),
+        ThemeDefinition(
+            ThemeId.Porcelain, "Porcelain", "Cool white surfaces with a precise blue accent",
+            Palette(
+                background = color(0xDCE5ED), surface = color(0xECF1F7),
+                surfaceRaised = color(0xFAFCFE), elevated = color(0xDBE4F0),
+                accent = color(0x295E9E), accentSoft = color(0x4D79AE),
+                textPrimary = color(0x22344A), textSecondary = color(0x3A4C62),
+                textMuted = color(0x53657A), divider = color(0xBDCBD9), isDark = false,
+            ),
+        ),
+        ThemeDefinition(
+            ThemeId.Orchid, "Orchid", "Muted plum with lavender highlights",
+            Palette(
+                background = color(0x1C1421), surface = color(0x2A1E32),
+                surfaceRaised = color(0x36263F), elevated = color(0x4E3B58),
+                accent = color(0xD4AFE9), accentSoft = color(0xAF90C1),
+                textPrimary = color(0xF8EDFF), textSecondary = color(0xE0CEEA),
+                textMuted = color(0xC8B0D5), divider = color(0x533D60), isDark = true,
+            ),
+        ),
+        ThemeDefinition(
+            ThemeId.Copper, "Copper", "Slate blue with burnished copper details",
+            Palette(
+                background = color(0x11191D), surface = color(0x1D2A31),
+                surfaceRaised = color(0x26363F), elevated = color(0x43494A),
+                accent = color(0xE6B28B), accentSoft = color(0xBB9375),
+                textPrimary = color(0xEEF4F7), textSecondary = color(0xCFDAE0),
+                textMuted = color(0xB0C1CA), divider = color(0x435762), isDark = true,
             ),
         ),
     )

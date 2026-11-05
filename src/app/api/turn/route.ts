@@ -3,15 +3,16 @@ import { getUserFromRequest } from "@/lib/server-auth";
 
 const CLOUDFLARE_TURN_API = "https://rtc.live.cloudflare.com/v1/turn/keys";
 
-const TTL_SECONDS = 2 * 60 * 60;
+const TTL_SECONDS = 24 * 60 * 60;
 
 let cached: { expiresAt: number; iceServers: unknown } | null = null;
 
-// Only serve cached credentials while more than an hour of life remains.
-// The old 10-minute margin meant the endpoint handed out credentials up to
-// 1h50m old, and clients starting a call on those got a relay that died
-// on arrival. Minting is cheap; stale credentials are not.
-const REFRESH_MARGIN_MS = 60 * 60 * 1000;
+// Only serve cached credentials while more than 12 hours of life remains.
+// A relay dies when its credentials expire, mid-call or not: with 2-hour
+// credentials served while an hour was left, and cached 30 minutes by the
+// client, a call could start on credentials with 30 minutes to live and
+// drop at the half-hour. Minting is cheap; stale credentials are not.
+const REFRESH_MARGIN_MS = 12 * 60 * 60 * 1000;
 
 export async function GET(request: NextRequest) {
   const user = await getUserFromRequest(request);

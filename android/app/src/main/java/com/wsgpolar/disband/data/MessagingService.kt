@@ -49,7 +49,8 @@ class MessagingService : FirebaseMessagingService() {
 
         val title = data["title"] ?: "Disband"
         val body = data["body"] ?: data["message"] ?: data["content"] ?: "New message"
-        showMessageNotification(title, body, source)
+        // Do Not Disturb: still delivered, but silently, so nothing is missed.
+        showMessageNotification(title, body, source, quiet = data["quiet"] == "1")
     }
 
     override fun onNewToken(token: String) {
@@ -77,12 +78,14 @@ class MessagingService : FirebaseMessagingService() {
         notify(2001, notification)
     }
 
-    private fun showMessageNotification(title: String, body: String, source: String?) {
+    private fun showMessageNotification(title: String, body: String, source: String?, quiet: Boolean = false) {
         if (!notificationsAllowed()) return
-        val pending = launchIntent(data = mapOfNotNull("source" to source), channel = MESSAGE_CHANNEL_ID)
-        val notification = baseBuilder(MESSAGE_CHANNEL_ID, title, body, R.mipmap.ic_launcher)
+        val channel = if (quiet) QUIET_CHANNEL_ID else MESSAGE_CHANNEL_ID
+        val pending = launchIntent(data = mapOfNotNull("source" to source), channel = channel)
+        val notification = baseBuilder(channel, title, body, R.mipmap.ic_launcher)
             .setContentIntent(pending)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(if (quiet) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH)
+            .setSilent(quiet)
             .setAutoCancel(true)
             .build()
         // Per-conversation ID so each thread stacks separately; same source
@@ -144,6 +147,13 @@ class MessagingService : FirebaseMessagingService() {
                 setSound(pop, audio)
             },
         )
+        // While you're on Do Not Disturb: listed, never heard.
+        manager.createNotificationChannel(
+            NotificationChannel(QUIET_CHANNEL_ID, "Messages while on Do Not Disturb", NotificationManager.IMPORTANCE_LOW).apply {
+                setSound(null, null)
+                enableVibration(false)
+            },
+        )
     }
 
     private fun notificationsAllowed(): Boolean =
@@ -154,6 +164,7 @@ class MessagingService : FirebaseMessagingService() {
     companion object {
         const val CALL_CHANNEL_ID = "disband_calls"
         const val MESSAGE_CHANNEL_ID = "disband_messages"
+        const val QUIET_CHANNEL_ID = "disband_messages_quiet"
         val callScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
         fun configure(calls: com.wsgpolar.disband.call.CallManager) {

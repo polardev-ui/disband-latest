@@ -15,6 +15,15 @@ export async function POST(
     const service = getServiceSupabase();
     if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
 
+    // A private bot can only be added by its developer.
+    const { data: invite } = await service.from("bot_invites").select("bot_id").eq("code", code).maybeSingle();
+    if (invite) {
+      const { data: bot } = await service.from("bots").select("owner_id, is_public").eq("id", invite.bot_id).maybeSingle();
+      if (bot && !bot.is_public && bot.owner_id !== user.id) {
+        return NextResponse.json({ error: "This bot is private. Only its developer can add it to a space." }, { status: 403 });
+      }
+    }
+
     const { error } = await service.rpc("bot_approve_invite", {
       p_code: code,
       p_actor_id: user.id,

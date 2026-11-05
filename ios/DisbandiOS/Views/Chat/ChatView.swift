@@ -37,11 +37,17 @@ struct ChatView: View {
     @State private var onlineCount: Int?
     @State private var draft = ""
     @State private var stickToBottom = true
+    /// When the reader last had a finger on the list. Only their own
+    /// scrolling may stop "follow the bottom": a picture or embed growing
+    /// the content also moves the bottom away, and that used to switch
+    /// following off, so the chat stopped short of the newest message.
+    @State private var lastUserScroll = Date.distantPast
     /// The first page has painted and the initial scroll-to-bottom has had a
     /// chance to land. Until then the lazy stack can report the history
     /// sentinel at the top of the viewport, which must not trigger paging.
     @State private var initialScrollSettled = false
     @State private var showGifPicker = false
+    @State private var showPollSheet = false
     @State private var showPhotoPicker = false
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var openProfile: Profile?
@@ -50,6 +56,17 @@ struct ChatView: View {
     @State private var mentionLookup: String?
     @State private var reactingMessage: DisplayMessage?
     @State private var replyingTo: DisplayMessage?
+    /// My message being edited: the composer holds its text until saved.
+    @State private var editingMessage: DisplayMessage?
+    /// What was in the composer before editing began, given back afterwards.
+    @State private var draftBeforeEdit = ""
+    /// Photos and videos picked for the next message, as on desktop: they
+    /// wait above the composer (up to ten) until you send.
+    @State private var staged: [StagedAttachment] = []
+    /// Who an "@" being typed could mean.
+    @State private var mentions: MentionSearch
+    /// The last text sent and when, to catch the keyboard re-inserting it.
+    @State private var lastSent: (text: String, at: Date) = ("", .distantPast)
 
     private let quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👀"]
 
@@ -81,6 +98,7 @@ struct ChatView: View {
     init(source: ChatSource, callPeer: Profile? = nil, canModerate: Bool = false,
          composerLockedReason: String? = nil) {
         _model = State(initialValue: ChatViewModel(source: source))
+        _mentions = State(initialValue: MentionSearch(source: source))
         self.canModerate = canModerate
         self.callPeer = callPeer
         self.composerLockedReason = composerLockedReason
@@ -92,7 +110,7 @@ struct ChatView: View {
                 // Floating, not stacked: the pill must not take layout height
                 // or the composer and the last message jump every time
                 // somebody starts and stops typing.
-                .overlay(alignment: .bottomLeading) {
+                .overlay(alignment: .bottomTrailing) {
                     TypingBubble(
                         typers: model.typers,
                         profiles: model.typingProfiles,
@@ -102,15 +120,30 @@ struct ChatView: View {
                                value: model.typers.map(\.userId))
                 }
             if let error = model.sendError { sendErrorBanner(error) }
+            if case .dm(let threadId, _) = model.source {
+                MessageRequestBar(threadId: threadId, peer: callPeer)
+            }
             if let composerLockedReason {
                 lockedComposer(composerLockedReason)
             } else {
-                if let replyingTo { replyBanner(replyingTo) }
+                if let editingMessage { editBanner(editingMessage) }
+                else if let replyingTo { replyBanner(replyingTo) }
+                if mentionQuery != nil, !mentions.results.isEmpty {
+                    MentionSuggestionList(results: mentions.results) { pick in
+                        draft = MentionSearch.applying(pick, to: draft)
+                        mentions.clear()
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+                if !staged.isEmpty { stagedStrip }
                 // Progress shows on the message itself, so the composer stays usable.
                 MessageComposer(text: $draft, uploading: false, onSend: sendDraft,
                                 onGif: { showGifPicker = true },
-                                onPhoto: { showPhotoPicker = true },
-                                placeholder: composerPlaceholder)
+                                onPhoto: { if staged.count < maxAttachments { showPhotoPicker = true } },
+                                onPoll: editingMessage == nil ? { showPollSheet = true } : nil,
+                                placeholder: composerPlaceholder,
+                                hasAttachments: !staged.isEmpty,
+                                onPasteImages: editingMessage == nil ? { stagePasted($0) } : nil)
                                 .onChange(of: draft) {
                                     if let name = app.profile?.name, !draft.isEmpty {
                                         model.notifyTyping(displayName: name)
@@ -166,6 +199,11 @@ struct ChatView: View {
                 Button { Speaker.shared.speak(target.content) } label: {
                     Label("Speak Message", systemImage: "speaker.wave.2.fill")
                 }
+                if target.authorId == app.currentUserId, !target.pending, target.webhook == nil {
+                    Button { startEditing(target) } label: {
+                        Label("Edit Message", systemImage: "pencil")
+                    }
+                }
                 Button { UIPasteboard.general.string = target.content } label: {
                     Label("Copy Text", systemImage: "doc.on.doc")
                 }
@@ -195,8 +233,10 @@ struct ChatView: View {
             case .group(let groupId, _):
                 unreadStore.markGroupActive(groupId: groupId)
                 Task { try? await DatabaseService.markGroupRead(groupId: groupId) }
-            default:
-                break
+            case .channel(let channelId, _):
+                // Clears the channel's dot here and, through channel_reads,
+                // on every other device.
+                ChannelUnreadStore.shared.open(channelId: channelId)
             }
             // Silences push banners for this conversation while it is open.
             ActiveChat.shared.open(model.source.notificationSourceId)
@@ -208,13 +248,14 @@ struct ChatView: View {
                 unreadStore.clearActive()
             case .group:
                 unreadStore.clearGroupActive()
-            default:
-                break
+            case .channel(let channelId, _):
+                ChannelUnreadStore.shared.close(channelId: channelId)
             }
             ActiveChat.shared.close(model.source.notificationSourceId)
             model.stop()
         }
         .sheet(isPresented: $showGifPicker) { GifPickerView { sendGif($0) } }
+        .sheet(isPresented: $showPollSheet) { PollCreateSheet { sendPoll($0) } }
         .sheet(item: $openProfile) {
             ProfileDetailView(profile: $0)
                 // A glance, not a destination: it opens part-height and is
@@ -226,23 +267,58 @@ struct ChatView: View {
         // A video still travels alone: it needs converting and streaming from
         // disk, which does not belong in a batch of photos.
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItems,
-                      maxSelectionCount: maxAttachments,
+                      maxSelectionCount: max(1, maxAttachments - staged.count),
                       matching: .any(of: [.images, .videos]))
         .onChange(of: photoItems) { _, items in
             guard !items.isEmpty else { return }
-            Task { await uploadAndSend(items) }
+            Task { await stage(items) }
+        }
+        .task(id: mentionQuery) {
+            guard let query = mentionQuery else { mentions.clear(); return }
+            await mentions.search(query, local: mentionLocals)
         }
         // Re-counted whenever the set of visible people changes.
         .task(id: onlinePresenceKey) { await refreshOnlineCount() }
-        .onChange(of: model.loading) { _, loading in
-            guard !loading, !initialScrollSettled else { return }
+        // The space's roles, so role pings show in their colour.
+        .task(id: model.source) {
+            guard case .channel(let id, _) = model.source else { return }
+            if channelServerId == nil { channelServerId = await ServerOnlineCount.serverId(forChannel: id) }
+            guard let serverId = channelServerId,
+                  let roles = try? await ServerAdmin.roles(serverId: serverId) else { return }
+            ChatMarkdown.setRoles(roles.map { (name: $0.name, color: $0.color) })
+        }
+        // Runs on appear as well as when loading changes. A conversation
+        // painted from the cache never shows a loading state, so watching
+        // only for the change left it unsettled for good: "follow the
+        // bottom" could never switch off, and every new message dragged a
+        // reader who had scrolled up back down to it.
+        .task(id: model.loading) {
+            guard !model.loading, !initialScrollSettled else { return }
             // Let `.defaultScrollAnchor(.bottom)` and the first layout pass
             // finish before the top sentinel is allowed to page history.
-            Task {
-                try? await Task.sleep(for: .milliseconds(250))
-                initialScrollSettled = true
-            }
+            try? await Task.sleep(for: .milliseconds(250))
+            initialScrollSettled = true
         }
+    }
+
+    private static let bottomId = "chat-bottom-anchor"
+
+    // MARK: - Mentions
+
+    private var mentionQuery: String? { MentionSearch.query(in: draft) }
+
+    /// Who can be mentioned outside a space: the DM's other person, the
+    /// group's members, and anyone who has spoken here.
+    private var mentionLocals: [Profile] {
+        var people: [Profile] = []
+        if let callPeer { people.append(callPeer) }
+        if case .group(let id, _) = model.source,
+           let members = directMessages.groups.first(where: { $0.id == id })?.members {
+            people += members
+        }
+        people += model.messages.compactMap(\.author)
+        var seen = Set<String>()
+        return people.filter { $0.id != app.currentUserId && seen.insert($0.id).inserted }
     }
 
     // MARK: - Header
@@ -420,6 +496,12 @@ struct ChatView: View {
                             }
 
                             ForEach(Array(model.messages.enumerated()), id: \.element.id) { index, message in
+                              // One view per message, divider included. As a
+                              // separate sibling the "Today" divider had no
+                              // identity of its own, and the lazy stack lost
+                              // its place when the first message of a new day
+                              // arrived, so following the bottom stopped there.
+                              VStack(alignment: .leading, spacing: 2) {
                                 if startsNewDay(at: index) {
                                     ChatDayDivider(timestamp: message.createdAt)
                                 }
@@ -442,8 +524,14 @@ struct ChatView: View {
                                     },
                                     onHoldReactStarted: { frame in holdReactStarted(frame, message: message) }
                                 )
-                                .id(message.id)
+                              }
+                              .id(message.id)
                             }
+
+                            // The true end of the list, below the last row's
+                            // reactions and embeds, which scrolling to the
+                            // last row's id could leave just out of view.
+                            Color.clear.frame(height: 1).id(Self.bottomId)
                         }
                         .padding(.top, 8)
                         .padding(.bottom, 12)
@@ -464,15 +552,20 @@ struct ChatView: View {
                     }
                 }
                 .coordinateSpace(name: "chatScroll")
-                .defaultScrollAnchor(.bottom)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 4)
+                        .onChanged { _ in lastUserScroll = Date() }
+                        .onEnded { _ in lastUserScroll = Date() }
+                )
+                .modifier(OpenAtBottom())
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
                 .overlay(alignment: .bottomTrailing) {
-                    if !stickToBottom, let last = model.messages.last {
+                    if !stickToBottom, model.messages.last != nil {
                         Button {
                             stickToBottom = true
                             withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-                                proxy.scrollTo(last.id, anchor: .bottom)
+                                proxy.scrollTo(Self.bottomId, anchor: .bottom)
                             }
                         } label: {
                             Image(systemName: "chevron.down")
@@ -485,7 +578,8 @@ struct ChatView: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.trailing, 16)
-                        .padding(.bottom, 10)
+                        // Above the typing pill, which shares this corner.
+                        .padding(.bottom, model.typers.isEmpty ? 10 : 52)
                         .transition(.scale(scale: 0.8).combined(with: .opacity))
                         .accessibilityLabel("Jump to latest messages")
                     }
@@ -500,13 +594,14 @@ struct ChatView: View {
                     // the "follow the bottom" state on until that happens;
                     // otherwise the top sentinel sees `!stickToBottom` and
                     // starts paging history on open.
-                    if initialScrollSettled {
+                    let userScrolling = Date().timeIntervalSince(lastUserScroll) < 1.2
+                    if initialScrollSettled && userScrolling {
                         if stickToBottom != nearBottom { stickToBottom = nearBottom }
                     } else if nearBottom {
                         stickToBottom = true
                     }
-                    if stickToBottom, let last = model.messages.last {
-                        proxy.scrollTo(last.id, anchor: .bottom)
+                    if stickToBottom, model.messages.last != nil {
+                        proxy.scrollTo(Self.bottomId, anchor: .bottom)
                     }
                 }
                 .onPreferenceChange(ChatContentTopKey.self) { minY in
@@ -527,8 +622,8 @@ struct ChatView: View {
                     Task { await loadOlder(using: proxy) }
                 }
                 .onChange(of: model.messages.count) {
-                    if stickToBottom, let last = model.messages.last {
-                        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(last.id, anchor: .bottom) }
+                    if stickToBottom, model.messages.last != nil {
+                        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomId, anchor: .bottom) }
                     }
                 }
                 /*
@@ -548,11 +643,18 @@ struct ChatView: View {
                  replying to.
                  */
                 .onChange(of: keyboardHeight) { _, height in
-                    guard height > 0, stickToBottom, let last = model.messages.last else { return }
-                    // After the keyboard's own animation has laid things out;
-                    // scrolling into a frame that is still moving lands short.
+                    guard height > 0, stickToBottom, model.messages.last != nil else { return }
                     withAnimation(.easeOut(duration: 0.25)) {
-                        proxy.scrollTo(last.id, anchor: .bottom)
+                        proxy.scrollTo(Self.bottomId, anchor: .bottom)
+                    }
+                    // Again once the keyboard has finished moving: a scroll
+                    // aimed into a frame that is still animating lands short,
+                    // which left the newest message under the composer.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        guard stickToBottom, model.messages.last != nil else { return }
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo(Self.bottomId, anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -758,6 +860,41 @@ struct ChatView: View {
         }
     }
 
+    private func startEditing(_ message: DisplayMessage) {
+        if editingMessage == nil { draftBeforeEdit = draft }
+        staged = []
+        withAnimation {
+            replyingTo = nil
+            editingMessage = message
+        }
+        draft = message.content
+    }
+
+    private func stopEditing() {
+        withAnimation { editingMessage = nil }
+        draft = draftBeforeEdit
+        draftBeforeEdit = ""
+    }
+
+    private func editBanner(_ message: DisplayMessage) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "pencil").foregroundStyle(Brand.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Editing message")
+                    .font(.caption.weight(.semibold)).foregroundStyle(Brand.textSecondary)
+                Text(message.content)
+                    .font(.caption2).foregroundStyle(Brand.textMuted).lineLimit(1)
+            }
+            Spacer()
+            Button { stopEditing() } label: {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(Brand.textMuted)
+            }
+            .accessibilityLabel("Cancel editing")
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(Brand.surface)
+    }
+
     private func replyBanner(_ message: DisplayMessage) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "arrowshape.turn.up.left.fill").foregroundStyle(Brand.accent)
@@ -825,60 +962,236 @@ struct ChatView: View {
 
     private func sendDraft() {
         let content = draft
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let editing = editingMessage {
+            // Saving an edit: an emptied message is left alone (delete is
+            // its own action), as on the web.
+            guard !trimmed.isEmpty else { return }
+            stopEditing()
+            Task { await model.editMessage(editing, to: trimmed) }
+            return
+        }
+        // The same text again within a moment is the keyboard handing the
+        // last message back (see below) and a second tap on send, not a new
+        // message. It used to post twice.
+        if !trimmed.isEmpty, trimmed == lastSent.text, Date().timeIntervalSince(lastSent.at) < 2 {
+            draft = ""
+            return
+        }
+        if !staged.isEmpty {
+            sendStaged(caption: trimmed)
+            return
+        }
+        lastSent = (trimmed, Date())
         let reply = replyingTo?.id
         draft = ""
+        // The keyboard commits a pending autocorrect or prediction after the
+        // box is cleared, which put the whole message straight back in the
+        // composer. Clear it again once the keyboard has done that.
+        for delay in [0.05, 0.3] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                if !draft.isEmpty, draft.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed { draft = "" }
+            }
+        }
+        // Whatever the reader was looking at, their own message is what they
+        // want to see next.
+        stickToBottom = true
         withAnimation { replyingTo = nil }
         guard let uid = app.currentUserId else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if case .dm(let threadId, _) = model.source { directMessages.markRepliedTo(threadId) }
         Task { await model.send(content: content, authorId: uid, replyToId: reply) }
     }
 
     private func sendGif(_ gif: GiphyGif) {
         guard let uid = app.currentUserId, let url = gif.fullUrl else { return }
         let reply = replyingTo?.id
+        stickToBottom = true
         withAnimation { replyingTo = nil }
         Task { await model.sendAttachment(OutgoingAttachment(url: url, type: "gif", key: nil),
                                           replyToId: reply, authorId: uid) }
     }
 
-    private func uploadAndSend(_ items: [PhotosPickerItem]) async {
+    private func sendPoll(_ pollId: String) {
         guard let uid = app.currentUserId else { return }
         let reply = replyingTo?.id
-        defer { photoItems = [] }
+        stickToBottom = true
         withAnimation { replyingTo = nil }
+        Task { await model.sendAttachment(OutgoingAttachment(url: pollId, type: "poll", key: nil),
+                                          replyToId: reply, authorId: uid) }
+    }
 
-        // Videos travel as files, never as one big `Data`: see `PickedMovie`.
-        // Each is its own message — a video and a photo grid are different
-        // things to look at, and the mosaic has no cell shape that keeps a
-        // play control.
-        let videos = items.filter { item in
-            item.supportedContentTypes.contains { $0.conforms(to: .movie) }
-        }
-        for video in videos {
-            guard let movie = try? await video.loadTransferable(type: PickedMovie.self) else {
-                model.loadError = "Couldn't open that video."
-                continue
+    /// Load what was picked into the strip above the composer.
+    private func stage(_ items: [PhotosPickerItem]) async {
+        defer { photoItems = [] }
+        for item in items {
+            guard staged.count < maxAttachments else { break }
+            // Videos travel as files, never as one big `Data`: see `PickedMovie`.
+            if item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) }) {
+                if let movie = try? await item.loadTransferable(type: PickedMovie.self) {
+                    staged.append(StagedAttachment(kind: .video(movie.url)))
+                } else {
+                    model.sendError = "Couldn't open that video."
+                }
+            } else if let data = try? await item.loadTransferable(type: Data.self) {
+                staged.append(StagedAttachment(kind: .photo(data, UIImage(data: data))))
             }
-            await model.uploadAndSendVideo(source: movie.url, replyToId: reply, authorId: uid)
         }
+    }
 
-        let photos = items.filter { !videos.contains($0) }
-        guard !photos.isEmpty else { return }
-
-        var payloads: [(data: Data, filename: String, mimeType: String, type: AttachmentType)] = []
-        for (index, photo) in photos.enumerated() {
-            guard let data = try? await photo.loadTransferable(type: Data.self) else { continue }
-            // Numbered so a set does not arrive as ten files all called
-            // "image.jpg", which is what the file card would show.
-            payloads.append((data, photos.count == 1 ? "image.jpg" : "image-\(index + 1).jpg",
-                             "image/jpeg", .image))
+    /// Images and GIFs pasted into the composer wait with picked photos.
+    private func stagePasted(_ images: [Data]) {
+        for data in images.prefix(max(0, maxAttachments - staged.count)) {
+            staged.append(StagedAttachment(kind: .photo(data, UIImage(data: data))))
         }
-        guard !payloads.isEmpty else { return }
+    }
 
-        // The progress row lives in the conversation, so the composer stays
-        // usable while it uploads.
-        await model.uploadAndSendAttachments(
-            items: payloads, replyToId: reply, authorId: uid)
+    private func removeStaged(_ item: StagedAttachment) {
+        if case .video(let url) = item.kind { try? FileManager.default.removeItem(at: url) }
+        withAnimation(.snappy) { staged.removeAll { $0.id == item.id } }
+    }
+
+    /// The waiting attachments, each with a remove button, and a tile to add more.
+    private var stagedStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(staged) { item in
+                    ZStack(alignment: .topTrailing) {
+                        Group {
+                            switch item.kind {
+                            case .photo(_, let image):
+                                if let image {
+                                    Image(uiImage: image).resizable().scaledToFill()
+                                } else {
+                                    Brand.elevated.overlay(Image(systemName: "photo").foregroundStyle(Brand.textMuted))
+                                }
+                            case .video:
+                                Brand.elevated.overlay(
+                                    Image(systemName: "video.fill").font(.title3).foregroundStyle(Brand.textSecondary))
+                            }
+                        }
+                        .frame(width: 72, height: 72)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                        Button { removeStaged(item) } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 22, height: 22)
+                                .background(Color.black.opacity(0.7), in: Circle())
+                                .frame(width: 34, height: 34)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .offset(x: 8, y: -8)
+                        .accessibilityLabel("Remove attachment")
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                }
+                if staged.count < maxAttachments {
+                    Button { showPhotoPicker = true } label: {
+                        Image(systemName: "plus")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(Brand.textSecondary)
+                            .frame(width: 72, height: 72)
+                            .background(Brand.elevated, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Add more")
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
+            .padding(.bottom, 2)
+        }
+    }
+
+    /// Send what is waiting, with the composer text as its caption.
+    private func sendStaged(caption: String) {
+        guard let uid = app.currentUserId else { return }
+        let items = staged
+        let reply = replyingTo?.id
+        staged = []
+        draft = ""
+        stickToBottom = true
+        withAnimation { replyingTo = nil }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if case .dm(let threadId, _) = model.source { directMessages.markRepliedTo(threadId) }
+
+        let photos: [(data: Data, filename: String, mimeType: String, type: AttachmentType)] =
+            items.enumerated().compactMap { index, item in
+                guard case .photo(let data, _) = item.kind else { return nil }
+                // Numbered so a set does not arrive as ten files all called
+                // "image.jpg", which is what the file card would show.
+                // By its bytes, not assumed JPEG: a GIF sent as image/jpeg
+                // arrived as a still.
+                let format = ImageFormat.sniff(data)
+                return (data, items.count == 1 ? "image.\(format.ext)" : "image-\(index + 1).\(format.ext)",
+                        format.mime, .image)
+            }
+        let videos = items.compactMap { item -> URL? in
+            if case .video(let url) = item.kind { return url }
+            return nil
+        }
+        Task {
+            // Photos share one message with the caption. Each video is its
+            // own message: it needs converting and streaming from disk, and
+            // the mosaic has no cell that keeps a play control.
+            if !photos.isEmpty {
+                await model.uploadAndSendAttachments(items: photos, caption: caption, replyToId: reply, authorId: uid)
+            } else if !caption.isEmpty {
+                await model.send(content: caption, authorId: uid, replyToId: reply)
+            }
+            for video in videos {
+                await model.uploadAndSendVideo(source: video, replyToId: photos.isEmpty && caption.isEmpty ? reply : nil,
+                                               authorId: uid)
+            }
+        }
+    }
+}
+
+/// What kind of image some bytes are, from their first few.
+enum ImageFormat {
+    static func sniff(_ data: Data) -> (ext: String, mime: String) {
+        let head = [UInt8](data.prefix(12))
+        if head.starts(with: [0x47, 0x49, 0x46, 0x38]) { return ("gif", "image/gif") }
+        if head.starts(with: [0x89, 0x50, 0x4E, 0x47]) { return ("png", "image/png") }
+        if head.count >= 12, head[0...3] == [0x52, 0x49, 0x46, 0x46], head[8...11] == [0x57, 0x45, 0x42, 0x50] {
+            return ("webp", "image/webp")
+        }
+        // Anything else (JPEG, and HEIC from the photo library) goes as it
+        // always has.
+        return ("jpg", "image/jpeg")
+    }
+}
+
+/// A photo or video waiting above the composer.
+private struct StagedAttachment: Identifiable {
+    enum Kind {
+        case photo(Data, UIImage?)
+        case video(URL)
+    }
+    let id = UUID()
+    let kind: Kind
+}
+
+/**
+ Open on the newest message without following every later change.
+
+ On iOS 18 `.defaultScrollAnchor(.bottom)` also anchors size changes, so any
+ new row pulled the list to the bottom — a reader scrolled up through older
+ messages was thrown down whenever somebody posted. Following the bottom is
+ `stickToBottom`'s job, which knows whether the reader is there.
+ */
+private struct OpenAtBottom: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content
+                .defaultScrollAnchor(.bottom, for: .initialOffset)
+                .defaultScrollAnchor(.top, for: .sizeChanges)
+        } else {
+            content.defaultScrollAnchor(.bottom)
+        }
     }
 }
 

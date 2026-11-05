@@ -25,6 +25,7 @@ import {
   iconBtn,
   iconBtnDanger,
 } from "@/components/modals/server-settings/ui";
+import { useI18n } from "@/contexts/I18nContext";
 
 export const PERM_GROUPS: { title: string; perms: { key: ServerPermissionKey; label: string; hint: string }[] }[] = [
   {
@@ -68,6 +69,7 @@ const ICON_TYPES = "image/png,image/webp,image/gif,image/jpeg";
 type Tab = "display" | "permissions";
 
 export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
+  const { t } = useI18n();
   const { serverRoles, members, createRole, updateRole, deleteRole, moveRole, catalystCounts, activeServer, loadAllMembers } = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("display");
@@ -127,7 +129,7 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
         {/* Role list */}
         <div className="min-w-0">
           <button type="button" onClick={() => void create()} disabled={creating} className={`${btn.secondary} mb-3 w-full`}>
-            <IconPlus size={15} /> {creating ? "Creating…" : "Create role"}
+            <IconPlus size={15} /> {creating ? t("Creating…") : t("Create role")}
           </button>
           <ul className="overflow-hidden rounded-lg bg-bg-secondary p-1.5">
             {sorted.map((r, i) => {
@@ -173,13 +175,13 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
                   >
                     <span
                       className={`w-3.5 shrink-0 text-text-muted ${r.is_default ? "invisible" : "cursor-grab opacity-0 group-hover:opacity-100 active:cursor-grabbing"}`}
-                      title="Drag to reorder"
+                      title={t("Drag to reorder")}
                     >
                       <IconGripVertical size={14} />
                     </span>
                     <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: r.color }} />
                     <span className={`min-w-0 flex-1 truncate text-[14px] ${active ? "font-medium text-text-normal" : "text-text-normal/90"}`}>
-                      {r.is_default ? "@everyone" : r.name}
+                      {r.is_default ? t("@everyone") : r.name}
                     </span>
                     {r.icon && <RoleIcon icon={r.icon} name={r.name} size={14} />}
                     <span className="shrink-0 text-[11.5px] tabular-nums text-text-muted">{memberCount(r)}</span>
@@ -189,7 +191,7 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
             })}
           </ul>
           <p className="mt-2.5 px-1 text-[12px] leading-relaxed text-text-muted">
-            Drag to reorder. Higher roles win when permissions disagree, and set a member&apos;s name colour.
+            {t("Drag to reorder. Higher roles win when permissions disagree, and set a member’s name colour.")}
           </p>
         </div>
 
@@ -197,7 +199,7 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
         <div className="min-w-0">
           {!selected ? (
             <div className="rounded-lg bg-bg-secondary">
-              <EmptyState icon={<IconShield size={20} />} title="No roles yet" body="Create one to start grouping members." />
+              <EmptyState icon={<IconShield size={20} />} title={t("No roles yet")} body="Create one to start grouping members." />
             </div>
           ) : (
             <div key={selected.id} className="view-enter">
@@ -211,12 +213,12 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
               />
               <div className="mb-5">
                 <Segmented
-                  label="Role editor"
+                  label={t("Role editor")}
                   value={tab}
                   onChange={setTab}
                   options={[
-                    { value: "display", label: "Display" },
-                    { value: "permissions", label: "Permissions" },
+                    { value: "display", label: t("Display") },
+                    { value: "permissions", label: t("Permissions") },
                   ]}
                 />
               </div>
@@ -232,9 +234,9 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
 
       <ConfirmDialog
         open={!!deleting}
-        title={deleting ? `Delete ${deleting.name}?` : ""}
+        title={deleting ? t("Delete {name}?", { name: deleting.name }) : ""}
         body="Members with this role lose it, along with its colour and permissions. Nothing else about them changes."
-        confirmLabel="Delete role"
+        confirmLabel={t("Delete role")}
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
           if (!deleting) return;
@@ -262,12 +264,13 @@ function RoleHeader({
   onMove: (dir: 1 | -1) => void;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="mb-4 flex items-center gap-3">
       <span className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: role.color }} />
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 truncate text-[16px] font-semibold text-header-primary">
-          <span className="truncate">{role.is_default ? "@everyone" : role.name}</span>
+          <span className="truncate">{role.is_default ? t("@everyone") : role.name}</span>
           {role.icon && <RoleIcon icon={role.icon} name={role.name} size={17} />}
         </p>
         <p className="text-[13px] text-text-muted">
@@ -277,13 +280,13 @@ function RoleHeader({
       </div>
       {!role.is_default && (
         <div className="flex items-center gap-0.5">
-          <button type="button" onClick={() => onMove(1)} disabled={!canMoveUp} className={iconBtn} aria-label="Move role up" title="Move up">
+          <button type="button" onClick={() => onMove(1)} disabled={!canMoveUp} className={iconBtn} aria-label={t("Move role up")} title={t("Move up")}>
             <IconChevron size={16} className="rotate-180" />
           </button>
-          <button type="button" onClick={() => onMove(-1)} disabled={!canMoveDown} className={iconBtn} aria-label="Move role down" title="Move down">
+          <button type="button" onClick={() => onMove(-1)} disabled={!canMoveDown} className={iconBtn} aria-label={t("Move role down")} title={t("Move down")}>
             <IconChevron size={16} />
           </button>
-          <button type="button" onClick={onDelete} className={iconBtnDanger} aria-label={`Delete ${role.name}`} title="Delete role">
+          <button type="button" onClick={onDelete} className={iconBtnDanger} aria-label={t("Delete {name}", { name: role.name })} title={t("Delete role")}>
             <IconTrash size={16} />
           </button>
         </div>
@@ -321,6 +324,7 @@ function DisplayTab({
   run: Run;
   update: Update;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState(role.name);
   const [color, setColor] = useState(role.color);
   const [gradient, setGradient] = useState(role.gradient_to ?? role.color);
@@ -348,7 +352,7 @@ function DisplayTab({
   return (
     <div>
       {/* How it looks where it matters: on a message. */}
-      <SettingsSection title="Preview">
+      <SettingsSection title={t("Preview")}>
         <div className="flex items-start gap-3 px-5 py-4">
           <span className="h-10 w-10 shrink-0 rounded-full bg-bg-accent" />
           <div className="min-w-0">
@@ -357,18 +361,18 @@ function DisplayTab({
                 className={gradStyle && roleIsGradientAnimated(previewRole) ? "animate-role-gradient" : ""}
                 style={gradStyle ?? { color }}
               >
-                {role.is_default ? "Someone" : `A ${role.name}`}
+                {role.is_default ? t("Someone") : `A ${role.name}`}
               </span>
               {role.icon && <RoleIcon icon={role.icon} name={role.name} size={16} />}
-              <span className="text-[12px] font-normal text-text-muted">Today at 9:41 PM</span>
+              <span className="text-[12px] font-normal text-text-muted">{t("Today at 9:41 PM")}</span>
             </p>
-            <p className="mt-1 text-[14px] text-text-normal/90">This is how my name looks in chat.</p>
+            <p className="mt-1 text-[14px] text-text-normal/90">{t("This is how my name looks in chat.")}</p>
           </div>
         </div>
       </SettingsSection>
 
       {!role.is_default && (
-        <SettingsSection title="Name">
+        <SettingsSection title={t("Name")}>
           <div className="px-5 py-4">
             <input
               value={name}
@@ -381,14 +385,14 @@ function DisplayTab({
                   setName(role.name);
                 }
               }}
-              aria-label="Role name"
+              aria-label={t("Role name")}
               className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 text-[14px] text-text-normal outline-none focus:border-[#00a8fc]"
             />
           </div>
         </SettingsSection>
       )}
 
-      <SettingsSection title="Colour" description="The highest coloured role sets a member's name colour.">
+      <SettingsSection title={t("Colour")} description={t("The highest coloured role sets a member's name colour.")}>
         <div className="flex flex-wrap items-center gap-2 px-5 py-4">
           {ROLE_COLORS.map((c) => {
             const active = color.toLowerCase() === c;
@@ -396,7 +400,7 @@ function DisplayTab({
               <button
                 key={c}
                 type="button"
-                aria-label={`Colour ${c}`}
+                aria-label={t("Colour {c}", { c })}
                 aria-pressed={active}
                 onClick={() => setColor(c)}
                 style={{ backgroundColor: c }}
@@ -408,26 +412,26 @@ function DisplayTab({
           })}
           <label
             className="relative flex h-8 items-center gap-2 rounded-[3px] border border-divider pl-1 pr-3 text-[13px] text-text-muted transition-colors hover:bg-interactive-hover"
-            title="Custom colour"
+            title={t("Custom colour")}
           >
             <span className="h-6 w-6 rounded-full border border-divider" style={{ backgroundColor: color }} />
             <span className="font-mono">{color.toLowerCase()}</span>
-            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Custom colour" />
+            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label={t("Custom colour")} />
           </label>
         </div>
       </SettingsSection>
 
       <RoleIconCard role={role} unlocked={level >= 2} catalystCount={catalystCount} onBoost={onBoost} run={run} update={update} />
 
-      <SettingsSection title="Gradient" description="Fade the name into a second colour.">
+      <SettingsSection title={t("Gradient")} description={t("Fade the name into a second colour.")}>
         {level < 3 ? (
           <LevelLock level={3} count={catalystCount} perk="Gradient roles" onBoost={onBoost} />
         ) : (
           <>
-            <SettingRow label="Use a gradient" htmlFor={`grad-${role.id}`} description="From the role colour into a second one.">
+            <SettingRow label={t("Use a gradient")} htmlFor={`grad-${role.id}`} description={t("From the role colour into a second one.")}>
               <Toggle
                 id={`grad-${role.id}`}
-                label="Use a gradient"
+                label={t("Use a gradient")}
                 checked={!!role.gradient_to}
                 onChange={(on) =>
                   void run(() => update(role.id, on ? { gradient_to: gradient === color ? "#eb459e" : gradient } : { gradient_to: null, gradient_animated: false }))
@@ -436,17 +440,17 @@ function DisplayTab({
             </SettingRow>
             {role.gradient_to && (
               <>
-                <SettingRow label="Second colour">
+                <SettingRow label={t("Second colour")}>
                   <label className="relative flex h-8 items-center gap-2 rounded-[3px] border border-divider pl-1 pr-3 text-[13px] text-text-muted hover:bg-interactive-hover">
                     <span className="h-6 w-6 rounded-full border border-divider" style={{ backgroundColor: gradient }} />
                     <span className="font-mono">{gradient.toLowerCase()}</span>
-                    <input type="color" value={gradient} onChange={(e) => setGradient(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Gradient end colour" />
+                    <input type="color" value={gradient} onChange={(e) => setGradient(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label={t("Gradient end colour")} />
                   </label>
                 </SettingRow>
-                <SettingRow label="Animate it" htmlFor={`grad-anim-${role.id}`} description="A slow shimmer across the name.">
+                <SettingRow label={t("Animate it")} htmlFor={`grad-anim-${role.id}`} description={t("A slow shimmer across the name.")}>
                   <Toggle
                     id={`grad-anim-${role.id}`}
-                    label="Animate the gradient"
+                    label={t("Animate the gradient")}
                     checked={!!role.gradient_animated}
                     onChange={(on) => void run(() => update(role.id, { gradient_animated: on }))}
                   />
@@ -458,19 +462,19 @@ function DisplayTab({
       </SettingsSection>
 
       {!role.is_default && (
-        <SettingsSection title="Self-assignment" description="Let members choose this role for themselves from their profile.">
+        <SettingsSection title={t("Self-assignment")} description={t("Let members choose this role for themselves from their profile.")}>
           <SettingRow
-            label="Members can assign this role"
+            label={t("Members can assign this role")}
             htmlFor={`self-role-${role.id}`}
             description={
               Object.values(role.permissions ?? {}).some(Boolean)
-                ? "This role grants permissions. Anyone who selects it gets them, so only enable this for roles you trust every member with."
-                : "Members can add or remove it without asking a moderator."
+                ? t("This role grants permissions. Anyone who selects it gets them, so only enable this for roles you trust every member with.")
+                : t("Members can add or remove it without asking a moderator.")
             }
           >
             <Toggle
               id={`self-role-${role.id}`}
-              label="Members can assign this role"
+              label={t("Members can assign this role")}
               checked={!!role.self_assignable}
               onChange={(on) => void run(() => update(role.id, { self_assignable: on }))}
             />
@@ -496,6 +500,7 @@ function RoleIconCard({
   run: Run;
   update: Update;
 }) {
+  const { t } = useI18n();
   const { upload } = useMediaUpload();
   const [emoji, setEmoji] = useState(role.icon && !isImageRoleIcon(role.icon) ? role.icon : "");
   const [uploading, setUploading] = useState(false);
@@ -513,7 +518,7 @@ function RoleIconCard({
     const clean = cleanRoleIconEmoji(emoji);
     if (!clean) return;
     if (!isEmojiRoleIcon(clean)) {
-      setError("Use a single emoji, like 🛡️ or ⭐.");
+      setError(t("Use a single emoji, like 🛡️ or ⭐."));
       return;
     }
     if (clean !== role.icon) void setIcon(clean);
@@ -521,11 +526,11 @@ function RoleIconCard({
 
   async function pickImage(file: File) {
     if (!file.type.startsWith("image/")) {
-      setError("That file isn't an image.");
+      setError(t("That file isn't an image."));
       return;
     }
     if (file.size > 256 * 1024) {
-      setError("Role icons can be up to 256 KB. They show at 16 px, so small is fine.");
+      setError(t("Role icons can be up to 256 KB. They show at 16 px, so small is fine."));
       return;
     }
     setUploading(true);
@@ -533,7 +538,7 @@ function RoleIconCard({
     try {
       const res = await upload(file);
       if (!res) {
-        setError("The upload didn't go through. Try again.");
+        setError(t("The upload didn't go through. Try again."));
         return;
       }
       await setIcon(res.url);
@@ -543,17 +548,17 @@ function RoleIconCard({
   }
 
   return (
-    <SettingsSection title="Role icon" description="An emoji or a small picture shown after members' names in chat and the member list.">
+    <SettingsSection title={t("Role icon")} description={t("An emoji or a small picture shown after members' names in chat and the member list.")}>
       {!unlocked ? (
         <>
           <LevelLock level={2} count={catalystCount} perk="Role icons" onBoost={onBoost} />
           {role.icon && (
             <div className="flex items-center justify-between gap-3 border-t border-divider px-5 py-3">
               <span className="flex items-center gap-2 text-[13px] text-text-muted">
-                Current icon <RoleIcon icon={role.icon} name={role.name} size={16} />
+                {t("Current icon")}{" "}<RoleIcon icon={role.icon} name={role.name} size={16} />
               </span>
               <button type="button" onClick={() => void setIcon(null)} className={btn.ghost}>
-                Remove
+                {t("Remove")}
               </button>
             </div>
           )}
@@ -566,7 +571,7 @@ function RoleIconCard({
           <div className="min-w-0 flex-1 space-y-2.5">
             <div className="flex flex-wrap items-center gap-2">
               <div className="w-[120px]">
-                <FieldLabel htmlFor={`role-emoji-${role.id}`}>Emoji</FieldLabel>
+                <FieldLabel htmlFor={`role-emoji-${role.id}`}>{t("Emoji")}</FieldLabel>
                 <input
                   id={`role-emoji-${role.id}`}
                   value={emoji}
@@ -582,11 +587,11 @@ function RoleIconCard({
               <span className="mt-6 text-[13px] text-text-muted">or</span>
               <div className="mt-6 flex items-center gap-2">
                 <FilePickButton accept={ICON_TYPES} disabled={uploading} onPick={(f) => void pickImage(f)}>
-                  <IconUpload size={15} /> {uploading ? "Uploading…" : "Upload image"}
+                  <IconUpload size={15} /> {uploading ? t("Uploading…") : t("Upload image")}
                 </FilePickButton>
                 {role.icon && (
                   <button type="button" onClick={() => void setIcon(null)} className={btn.ghost}>
-                    Remove
+                    {t("Remove")}
                   </button>
                 )}
               </div>
@@ -601,23 +606,24 @@ function RoleIconCard({
 }
 
 function PermissionsTab({ role, run, update }: { role: ServerRole; run: Run; update: Update }) {
+  const { t } = useI18n();
   return (
     <div>
       {role.is_default && (
         <p className="mb-5 rounded-[4px] border border-divider bg-bg-secondary px-4 py-3 text-[13px] leading-relaxed text-text-muted">
-          @everyone can&apos;t hold moderation powers. Its message permissions are the default for every channel.
+          {t("@everyone can’t hold moderation powers. Its message permissions are the default for every channel.")}
         </p>
       )}
       {PERM_GROUPS.map((group) => (
-        <SettingsSection key={group.title} title={group.title}>
+        <SettingsSection key={t(group.title)} title={t(group.title)}>
           {group.perms.map((p) => {
             const locked = role.is_default && !DEFAULT_ROLE_PERMS.includes(p.key);
             const on = !!role.permissions?.[p.key];
             return (
-              <SettingRow key={p.key} label={p.label} description={locked ? "Not available on @everyone." : p.hint} htmlFor={`perm-${role.id}-${p.key}`}>
+              <SettingRow key={p.key} label={t(p.label)} description={locked ? t("Not available on @everyone.") : t(p.hint)} htmlFor={`perm-${role.id}-${p.key}`}>
                 <Toggle
                   id={`perm-${role.id}-${p.key}`}
-                  label={p.label}
+                  label={t(p.label)}
                   checked={on}
                   disabled={locked}
                   onChange={(next) => void run(() => update(role.id, { permissions: { ...role.permissions, [p.key]: next } }))}

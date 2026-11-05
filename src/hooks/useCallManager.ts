@@ -7,15 +7,15 @@ import { playCallConnected, playCallEnd, playCallLeave } from "@/lib/call-sounds
 import { displayName } from "@/lib/utils";
 import { getDisbandUserMedia, warmUpMediaDevices } from "@/lib/media";
 import { VoiceMixer, setActiveVoiceMixer } from "@/lib/voice-mixer";
-import { isNoiseCancellationEnabled, getNoiseCancellationStrength } from "@/lib/audio-settings";
 import { buildVideoConstraints } from "@/lib/audio-settings";
 import { notifyUser, requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { broadcastOnChannel, subscribeChannel } from "@/lib/realtime";
 import {
   bindRemoteTrack, bindLaneStream, streamWithoutEndedTracks,
-  ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO,
+  ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, tuneOpus, LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO,
 } from "@/lib/webrtc";
-import { buildScreenConstraints } from "@/lib/stream-quality";
+import { receiveSoundboard, setSoundboardSender } from "@/lib/soundboard";
+import { buildScreenConstraints, clearActiveScreenShare, setActiveScreenShare, tuneActiveScreenShare } from "@/lib/stream-quality";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import type { Profile } from "@/lib/supabase/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -23,7 +23,9 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 export type CallPhase = "idle" | "outgoing" | "incoming" | "active";
 
 interface CallSignal {
-  type: "ring" | "accept" | "reject" | "cancel" | "offer" | "answer" | "ice" | "leave" | "handled" | "screen";
+  type: "ring" | "accept" | "reject" | "cancel" | "offer" | "answer" | "ice" | "leave" | "handled" | "screen" | "soundboard";
+  /** A soundboard clip (soundboard.ts). */
+  url?: string;
 
   sharing?: boolean;
   from: string;
@@ -35,7 +37,8 @@ interface CallSignal {
   candidate?: RTCIceCandidateInit;
 }
 
-import { fetchIceServers, getIceServers, hasTurnConfigured, refreshIceServers } from "@/lib/ice-servers";
+import { preloadAiNoiseSuppression } from "@/lib/noise-suppression";
+import { fetchIceServers, fetchIceServersQuick, getIceServers, hasTurnConfigured, refreshIceServers } from "@/lib/ice-servers";
 import { useVoiceMinutes } from "@/hooks/useVoiceMinutes";
 
 export interface IncomingCallInfo {
@@ -117,11 +120,32 @@ export function useCallManager(
   }, []);
 
   useEffect(() => { applyMic(micMuted); }, [micMuted, applyMic]);
-  useEffect(() => { applyDeafen(deafened); }, [deafened, applyDeafen]);
+  const deafenedRef = useRef(deafened);
+  useEffect(() => {
+    deafenedRef.current = deafened;
+    applyDeafen(deafened);
+  }, [deafened, applyDeafen]);
+
+  // My soundboard clips go to the other person as events during a call.
+  useEffect(() => {
+    if (phase !== "active" || !userId) return;
+    const send = (url: string) => {
+      const peerId = activePeerIdRef.current;
+      if (!peerId) return;
+      void signalRef.current?.send({
+        type: "broadcast",
+        event: "call",
+        payload: { type: "soundboard", from: userId, to: peerId, url } satisfies CallSignal,
+      });
+    };
+    setSoundboardSender(send);
+    return () => setSoundboardSender(null);
+  }, [phase, userId]);
 
   const cleanupRtc = useCallback(async () => {
     trackCleanupsRef.current.forEach((cleanup) => cleanup());
     trackCleanupsRef.current = [];
+    clearActiveScreenShare(screenTrackRef.current);
     pcRef.current?.close();
     pcRef.current = null;
     localRef.current?.getTracks().forEach((t) => t.stop());
@@ -235,9 +259,13 @@ export function useCallManager(
         .then(() => null)
         .catch((err: unknown) => err instanceof Error ? err : new Error("Call signaling failed"));
 
-      const iceServersPromise = fetchIceServers();
-      const iceServers = await iceServersPromise;
-      const pc = new RTCPeerConnection({ iceServers, iceCandidatePoolSize: 4 });
+      const iceServers = await fetchIceServersQuick();
+      const pc = new RTCPeerConnection({
+        iceServers,
+        iceCandidatePoolSize: 10,
+        bundlePolicy: "max-bundle",
+        rtcpMuxPolicy: "require",
+      });
       pcRef.current = pc;
       callerRef.current = asCaller;
 
@@ -275,8 +303,6 @@ export function useCallManager(
       const cameraTracks = raw.getVideoTracks();
       const mixer = new VoiceMixer(rawMic, {
         micMuted,
-        noiseCancellation: isNoiseCancellationEnabled(),
-        noiseStrength: getNoiseCancellationStrength(),
       });
       const stream = new MediaStream([mixer.audioTrack, ...cameraTracks]);
       localRef.current = stream;
@@ -302,7 +328,7 @@ export function useCallManager(
         if (!callerRef.current || pc.signalingState !== "stable") return;
         void (async () => {
           try {
-            const offer = await pc.createOffer({ iceRestart: true });
+            const offer = tuneOpus(await pc.createOffer({ iceRestart: true }));
             await pc.setLocalDescription(offer);
             await ch.send({
               type: "broadcast",
@@ -355,7 +381,7 @@ export function useCallManager(
       pc.onconnectionstatechange = () => {
         const state = pc.connectionState;
         if (state === "connected") {
-
+          void tuneActiveScreenShare();
           clearDisconnectTimer();
           iceRetryRef.current = 0;
           setRtcConnected(true);
@@ -442,7 +468,7 @@ export function useCallManager(
             }
 
             if (screenShareRef.current) announceSharing(true);
-            const ans = await pc.createAnswer();
+            const ans = tuneOpus(await pc.createAnswer());
             await pc.setLocalDescription(ans);
             setRemoteStream((prev) => streamWithoutEndedTracks(prev));
             void ch.send({ type: "broadcast", event: "call", payload: { type: "answer", from: userId, to: p.from, sdp: ans } });
@@ -457,6 +483,8 @@ export function useCallManager(
             }
           } else if (p.type === "screen") {
             setPeerSharing(!!p.sharing);
+          } else if (p.type === "soundboard") {
+            receiveSoundboard(p.from, p.url, deafenedRef.current);
           } else if (p.type === "ice" && p.candidate) {
             await addIce(p.candidate);
           } else if (p.type === "leave") {
@@ -471,7 +499,7 @@ export function useCallManager(
       if (subscribeError) throw subscribeError;
 
       if (asCaller) {
-        const offer = await pc.createOffer();
+        const offer = tuneOpus(await pc.createOffer());
         await pc.setLocalDescription(offer);
         await ch.send({ type: "broadcast", event: "call", payload: { type: "offer", from: userId, to: peerId, sdp: offer } });
         // Broadcast doesn't persist: if the callee hasn't joined call:{id}
@@ -593,6 +621,7 @@ export function useCallManager(
     if (!pc || phaseRef.current !== "active") return;
 
     if (!next) {
+      clearActiveScreenShare(screenTrackRef.current);
       screenTrackRef.current?.stop();
       screenTrackRef.current = null;
       screenAudioTrackRef.current?.stop();
@@ -625,6 +654,11 @@ export function useCallManager(
       screenAudioTrackRef.current = display.getAudioTracks()[0] ?? null;
       await setLaneTrack(pc, LANE_SCREEN, track);
       await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);
+      setActiveScreenShare({
+        track,
+        plan: (planRef.current ?? "free") as SubscriptionPlan,
+        connections: () => [pcRef.current],
+      });
       setLocalScreen(new MediaStream([track]));
       setScreenShareEnabled(true);
       screenShareRef.current = true;
@@ -650,6 +684,7 @@ export function useCallManager(
     // either here delayed the callee's phone for no reason.
     void warmUpMediaDevices();
     void fetchIceServers();
+    preloadAiNoiseSuppression();
     const callId = crypto.randomUUID();
     activeCallIdRef.current = callId;
     activePeerIdRef.current = peer.id;
@@ -801,6 +836,7 @@ export function useCallManager(
           // delay the ringtone and the first frame of the incoming call.
           void fetchIceServers();
           void warmUpMediaDevices();
+          preloadAiNoiseSuppression();
           const callerName = p.callerName ?? "Someone";
           setIncoming({ fromId: p.from, callerName, callId: p.callId });
           setPhase("incoming");

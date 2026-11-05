@@ -62,26 +62,37 @@ Right now media is hashed and checked against `banned_media_hashes`, which
 catches *known* material and anything you have seen before. It cannot
 recognise **new** imagery — that needs a classifier.
 
+For now the classifier is off (`MODERATION_PROVIDER=none`). Sightengine was
+tried and removed: its free allowance ran out within minutes and its sync
+video check stops at 60 seconds. Hive is the remaining adapter:
+
 ```bash
-supabase secrets set --project-ref mjqbrcabargylrimlafw \
-  MODERATION_PROVIDER=sightengine \
-  SIGHTENGINE_USER=... SIGHTENGINE_SECRET=...
-# or
 supabase secrets set --project-ref mjqbrcabargylrimlafw \
   MODERATION_PROVIDER=hive HIVE_API_KEY=...
 ```
 
-Adapters for both are in `index.ts` (`classifySightengine`, `classifyHive`).
-Thresholds live there too. Sightengine is cheaper and has a minor/nudity
-combination signal; Hive has an explicit CSAM class and is what most platforms
-of this size use.
+Hive has an explicit CSAM class but its sync task here only takes images.
+Thresholds live in `index.ts` (`classifyHive`).
 
-Also worth doing, and free: Cloudflare's **CSAM Scanning Tool**, enabled in the
-Cloudflare dashboard for the zone serving `cdn.disband.dev`. It hash-matches
-against NCMEC and PhotoDNA lists and files reports for you.
+The stopgap is Cloudflare's free **CSAM Scanning Tool** (dashboard → zone
+`disband.dev` → Caching → Configuration → CSAM Scanning Tool). It fuzzy-hashes
+images that pass through Cloudflare's cache against NCMEC's list, blocks a
+match with a 451 and emails the operator. It catches *known* material only,
+does not look at video, and only sees what Cloudflare caches, so the CDN
+worker must send cacheable responses for it to help.
 
-After adding a key, backfill the existing library (see §5) — otherwise only
-newly-seen files get classified.
+The 5-hourly sweep only *hashes* the existing library. Sending it to the
+classifier is opt-in (`"mode": "media", "classifyBacklog": true`), a batch at
+a time, so a paid provider's allowance is not spent on old files.
+
+### Seconds after sending (migration 0196)
+
+Every row that saves a Disband CDN file (message, DM and group attachments,
+avatars, banners, space and group icons, custom emoji, media posts) fires
+`sentinel_scan_new_media()`, which queues a `mode: "scan"` call through pg_net
+for just the new URLs. Sentinel judges them immediately: anything the scanner
+suspects involves a child is quarantined and the account held at once, even
+when the score would normally only open a review flag.
 
 ## 4. What happens on a hit
 
@@ -186,37 +197,13 @@ values ('<sha256>', 'csam', 'takedown', 'seized space 2026-09');
 Any file matching is refused at upload (once §6 ships) and quarantined on the
 next sweep.
 
-## 7. Pending: upload-time blocking
+## 7. Upload-time blocking
 
-`cloudflare/cdn-worker/src/index.js` has been changed to hash every upload as
-it streams to R2 (`tee()` + `DigestStream`, so a 500 MB video never enters
-memory), refuse anything on the denylist with HTTP 451, register the asset for
-scanning, and expose `POST /v1/admin/quarantine`.
-
-This was verified locally end to end — 6 MB upload hashed and stored intact, a
-banned hash refused with 451, quarantine requiring the admin secret, and the
-quarantined key unreachable afterwards.
-
-**It is not deployed.** `wrangler deploy` refuses:
-
-```
-New version of script does not export class 'MediaQuota' which is depended on
-by existing Durable Objects.
-```
-
-The deployed worker contains a Durable Object class `MediaQuota` that does not
-exist anywhere in this repository — production has drifted from source.
-Deploying from the repo would delete that class and its stored state, which is
-why Cloudflare blocked it. Resolve before deploying:
-
-1. Recover the deployed source (Cloudflare dashboard → Workers & Pages →
-   `disband-cdn` → Deployments → view the active version), commit it here, then
-   re-apply the safety changes on top; **or**
-2. re-add the `MediaQuota` class and its `[[durable_objects]]` binding to
-   `wrangler.toml` if you still want that feature.
-
-The secrets it needs (`SUPABASE_SERVICE_KEY`, `ADMIN_SECRET`) are already set
-on `disband-cdn`.
+`cloudflare/cdn-worker/src/index.js` hashes every upload as it streams to R2,
+refuses anything on the denylist with HTTP 451, registers the asset for
+scanning, and exposes `POST /v1/admin/quarantine`. The quarantine endpoint
+takes an optional `sha256`; without one it fingerprints the object itself
+(`DigestStream`), so large videos never leave Cloudflare to be hashed.
 
 ## 8. Where things are recorded
 

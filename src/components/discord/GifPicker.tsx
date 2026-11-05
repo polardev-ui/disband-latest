@@ -8,6 +8,7 @@ import { gifThumb, gifUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
 import { IconClose, IconStar } from "@/components/icons";
 import { useGifFavorites, type FavGif } from "@/hooks/useGifFavorites";
 import { FavStarButton } from "./GifFavStar";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface GifPickerProps {
   onSelect: (url: string) => void;
@@ -72,18 +73,19 @@ function FavThumb({ fav, onSelect, onRemove }: {
   onSelect: (url: string) => void;
   onRemove: (url: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="relative overflow-hidden rounded hover:ring-2 hover:ring-brand">
       <button
         type="button"
         onClick={() => { onSelect(fav.url); }}
         className="block w-full"
-        title={fav.title ?? "Favourite GIF"}
+        title={fav.title ?? t("Favourite GIF")}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={fav.url}
-          alt={fav.title ?? "Favourite GIF"}
+          alt={fav.title ?? t("Favourite GIF")}
           loading="lazy"
           className="h-24 w-full object-cover"
           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
@@ -95,6 +97,7 @@ function FavThumb({ fav, onSelect, onRemove }: {
 }
 
 export function GifPicker({ onSelect, disabled }: GifPickerProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [preview, setPreview] = useState("Find a GIF for the moment");
@@ -137,7 +140,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
       const res = await searchGifs(q);
       if (reqRef.current === id) setGifs(res);
     } catch {
-      if (reqRef.current === id) setError("Could not load GIFs");
+      if (reqRef.current === id) setError(t("Could not load GIFs"));
     } finally {
       if (reqRef.current === id) setLoading(false);
     }
@@ -201,7 +204,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
       ? createPortal(
           <div
             id="gif-picker-panel"
-            role="dialog" aria-label="GIF picker"
+            role="dialog" aria-label={t("GIF picker")}
             className="menu-pop fixed z-[100] flex h-[420px] flex-col overflow-hidden rounded-[4px] bg-bg-secondary shadow-[var(--elevation-high)]"
             style={{
               left: panelPos.left,
@@ -215,18 +218,18 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  autoFocus aria-label="Search GIFs" placeholder="Search KLIPY for GIFs"
+                  autoFocus aria-label={t("Search GIFs")} placeholder={t("Search KLIPY for GIFs")}
                   className="h-8 min-w-0 flex-1 rounded-[3px] border border-transparent bg-bg-tertiary px-2 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
                 />
               ) : (
                 <p className="min-w-0 flex-1 px-1 text-sm font-semibold text-text-normal">
-                  Favourites
+                  {t("Favourites")}
                 </p>
               )}
               <button
                 type="button"
-                aria-label={tab === "favorites" ? "Back to search" : "View favourite GIFs"}
-                title={tab === "favorites" ? "Back to search" : "Favourites"}
+                aria-label={tab === "favorites" ? t("Back to search") : t("View favourite GIFs")}
+                title={tab === "favorites" ? t("Back to search") : t("Favourites")}
                 onClick={() => setTab((t) => (t === "favorites" ? "search" : "favorites"))}
                 className={`rounded p-1.5 transition-colors hover:bg-interactive-hover ${
                   tab === "favorites" ? "text-yellow-400" : "text-text-muted hover:text-text-normal"
@@ -234,21 +237,21 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
               >
                 <IconStar size={17} className={tab === "favorites" ? "fill-yellow-400" : ""} />
               </button>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Close GIF picker" className="rounded p-1 text-text-muted hover:text-text-normal">
+              <button type="button" onClick={() => setOpen(false)} aria-label={t("Close GIF picker")} className="rounded p-1 text-text-muted hover:text-text-normal">
                 <IconClose size={16} />
               </button>
             </div>
             <div className="flex min-h-0 flex-1">
-            <nav aria-label="GIF categories" className="channel-scroll flex w-[88px] shrink-0 flex-col gap-1 overflow-y-auto bg-bg-tertiary p-2">
+            <nav aria-label={t("GIF categories")} className="channel-scroll flex w-[88px] shrink-0 flex-col gap-1 overflow-y-auto bg-bg-tertiary p-2">
               {["Trending", "Favourites", "Happy", "Thanks", "Celebrate", "Hello"].map(c => <button key={c} type="button" aria-pressed={c === "Favourites" ? tab === "favorites" : tab === "search" && query === (c === "Trending" ? "" : c)} onClick={() => {setTab(c === "Favourites" ? "favorites" : "search"); if(c !== "Favourites") setQuery(c === "Trending" ? "" : c);}} className="rounded-[3px] px-1 py-2 text-left text-[12px] font-medium text-interactive-normal hover:bg-interactive-hover hover:text-white aria-pressed:bg-interactive-selected aria-pressed:text-white">{c}</button>)}
             </nav>
             <div className="channel-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-2" onMouseOver={e => {const title = (e.target as HTMLElement).closest("button[title]")?.getAttribute("title"); if(title) setPreview(title);}} onFocus={e => {const title = (e.target as HTMLElement).closest("button[title]")?.getAttribute("title"); if(title) setPreview(title);}}>
               {tab === "favorites" ? (
                 !favsLoaded && favorites.length === 0 ? (
-                  <p className="py-4 text-center text-sm text-text-muted">Loading…</p>
+                  <p className="py-4 text-center text-sm text-text-muted">{t("Loading…")}</p>
                 ) : favorites.length === 0 ? (
                   <p className="py-4 text-center text-sm text-text-muted">
-                    Nothing starred yet — hover any GIF and tap the star.
+                    {t("Nothing starred yet — hover any GIF and tap the star.")}
                   </p>
                 ) : (
                   <div className="grid grid-cols-2 gap-1">
@@ -273,7 +276,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
               )}
               {error && <p className="py-4 text-center text-sm text-status-dnd">{error}</p>}
               {!loading && !error && gifs.length === 0 && query.trim() && (
-                <p className="py-4 text-center text-sm text-text-muted">No GIFs found</p>
+                <p className="py-4 text-center text-sm text-text-muted">{t("No GIFs found")}</p>
               )}
               {!loading && !error && gifs.length > 0 && (
                 <div className="grid grid-cols-2 gap-1">
@@ -306,10 +309,10 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
       <button
         ref={btnRef}
         type="button"
-        aria-label="Send GIF"
+        aria-label={t("Send GIF")}
         aria-expanded={open}
         disabled={disabled}
-        title={disabled ? "Finish editing before sending a GIF" : "Send GIF"}
+        title={disabled ? t("Finish editing before sending a GIF") : t("Send GIF")}
         onClick={() => {
           setOpen((v) => {
             const next = !v;

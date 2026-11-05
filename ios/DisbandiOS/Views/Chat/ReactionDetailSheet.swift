@@ -22,7 +22,8 @@ struct ReactionDetailSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if reactions.count > 1 {
+                // Always shown, so it is clear which emoji this list is for.
+                if !reactions.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(reactions) { reaction in
@@ -52,15 +53,21 @@ struct ReactionDetailSheet: View {
                 List(current?.userIds ?? [], id: \.self) { userId in
                     HStack(spacing: 10) {
                         if let profile = profiles[userId] {
-                            AvatarView(url: profile.avatarUrl, name: profile.name, size: 32)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(profile.name)
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(Brand.textPrimary)
-                                GuildTagView(userId: userId, size: .small)
-                                Text("@\(profile.handle)")
-                                    .font(.caption)
-                                    .foregroundStyle(Brand.textMuted)
+                            // Tap through to their profile.
+                            NavigationLink {
+                                ProfileDetailView(profile: profile)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    AvatarView(url: profile.avatarUrl, name: profile.name, size: 32)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        StyledName(profile, size: UIFont.preferredFont(forTextStyle: .subheadline).pointSize,
+                                                   weight: .medium)
+                                        GuildTagView(userId: userId, size: .small)
+                                        Text("@\(profile.handle)")
+                                            .font(.caption)
+                                            .foregroundStyle(Brand.textMuted)
+                                    }
+                                }
                             }
                         } else {
                             Circle().fill(Brand.elevated).frame(width: 32, height: 32)

@@ -1,5 +1,6 @@
 "use client";
 
+import { useI18n } from "@/contexts/I18nContext";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { OVERLAY_Z } from "@/lib/overlay";
@@ -17,6 +18,9 @@ interface TooltipProps {
 }
 
 export function Tooltip({ label, children, side = "right", disabled = false, as: Trigger = "div", className = "" }: TooltipProps) {
+  // Text labels are translated here, so callers can pass plain English. A
+  // label with no translation (someone's name) shows as written.
+  const { t } = useI18n();
   const [visible, setVisible] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
@@ -111,7 +115,7 @@ export function Tooltip({ label, children, side = "right", disabled = false, as:
               data-side={side}
               className="tooltip-content relative max-w-[196px] rounded-[5px] bg-bg-floating px-3 py-2 text-[14px] font-semibold leading-[18px] text-text-normal shadow-[0_8px_16px_rgba(0,0,0,0.24)]"
             >
-              {label}
+              {typeof label === "string" ? t(label) : label}
               {side === "right" && (
                 <span className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-bg-floating" />
               )}

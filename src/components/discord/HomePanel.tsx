@@ -2,10 +2,11 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { useContextMenu } from "@/components/ui/ContextMenu";
 import { Avatar } from "@/components/ui/Avatar";
 import { GuildTag } from "@/components/ui/GuildTag";
-import { displayName } from "@/lib/utils";
+import { displayName, formatMessageTime } from "@/lib/utils";
 import { listeningFor } from "@/lib/presence";
 import { ListeningLine } from "@/components/ui/ListeningLine";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -13,7 +14,7 @@ import { Tooltip } from "./Tooltip";
 import { CartIcon } from "@/components/icons/CartIcon";
 import { SolidFriendsIcon, SolidNotesIcon } from "@/components/icons/SolidIcons";
 import { AeroIcon } from "@/components/icons/AeroIcon";
-import { IconClose, IconFriends, IconGroup, IconPlus, IconCrown, IconSparkle } from "@/components/icons";
+import { IconChevronLeft, IconClose, IconFriends, IconGroup, IconInbox, IconPlus, IconCrown, IconSparkle } from "@/components/icons";
 import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
 import type { GroupChatWithMembers } from "@/lib/supabase/types";
 
@@ -94,6 +95,7 @@ export function HomePanel({
     pendingIncoming,
     dmListEntries,
     groupChats,
+    groupMessages,
     groupCallCounts,
     activeGroupChatId,
     activeDmThreadId,
@@ -109,9 +111,14 @@ export function HomePanel({
     closeDmThread,
     tetherProfile,
     subscriptionPlan,
+    messageRequests,
   } = useApp();
+  const { t } = useI18n();
   const { openMenu } = useContextMenu();
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  // The DM list swaps for the Message Requests list while this is on.
+  const [showRequests, setShowRequests] = useState(false);
+  const requestsOpen = showRequests && messageRequests.length > 0;
   // One long-press at a time: holds the pending timer + origin for whichever
   // DM row is being pressed (touch only — mouse gets the hover X and
   // right-click menu).
@@ -172,11 +179,14 @@ export function HomePanel({
       entry?: (typeof dmListEntries)[number];
     }[] = [];
     for (const g of groupChats) {
+      const lastMsg = groupMessages
+        .filter((m) => m.group_id === g.id)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
       items.push({
         kind: "group",
         id: `group:${g.id}`,
         unread: getGroupUnreadCount(g.id),
-        sortAt: g.created_at,
+        sortAt: g.last_message_at ?? lastMsg?.created_at ?? g.created_at,
         group: g,
       });
     }
@@ -195,7 +205,7 @@ export function HomePanel({
       if (aUnread !== bUnread) return bUnread - aUnread;
       return b.sortAt.localeCompare(a.sortAt);
     });
-  }, [groupChats, dmListEntries, getGroupUnreadCount]);
+  }, [groupChats, groupMessages, dmListEntries, getGroupUnreadCount]);
 
   async function openDmEntry(entry: (typeof dmListEntries)[number]) {
     if (entry.threadId) {
@@ -212,7 +222,7 @@ export function HomePanel({
     openMenu(x, y, [
       {
         id: "message",
-        label: "Message",
+        label: t("Message"),
         icon: <IconFriends size={16} />,
         onClick: () => void openDmEntry(entry),
       },
@@ -220,7 +230,7 @@ export function HomePanel({
         ? [
             {
               id: "profile",
-              label: "View Profile",
+              label: t("View Profile"),
               icon: <IconFriends size={16} />,
               onClick: () => onFriendClick(entry.friend.id),
             },
@@ -228,7 +238,7 @@ export function HomePanel({
         : []),
       {
         id: "close",
-        label: "Close DM",
+        label: t("Close DM"),
         icon: <IconClose size={16} />,
         onClick: () => closeDmThread(entry.friend.id),
       },
@@ -243,14 +253,14 @@ export function HomePanel({
           onClick={() => onOpenQuickSwitcher?.()}
           className="h-7 w-full truncate rounded-[4px] bg-bg-tertiary px-1.5 text-left text-[14px] font-medium leading-6 text-text-muted"
         >
-          Find or start a conversation
+          {t("Find or start a conversation")}
         </button>
       </div>
 
       <nav className="px-2 pt-2">
         <NavRow
           icon={<SolidFriendsIcon size={24} />}
-          label="Friends"
+          label={t("Friends")}
           active={onFriends}
           onClick={() => setViewHome()}
           trailing={
@@ -266,7 +276,7 @@ export function HomePanel({
         />
         <NavRow
           icon={<SolidNotesIcon size={24} />}
-          label="Notes"
+          label={t("Notes")}
           active={viewMode === "notes"}
           onClick={() => void setViewNotes()}
         />
@@ -278,21 +288,74 @@ export function HomePanel({
         />
         <NavRow
           icon={<CartIcon />}
-          label="Shop"
+          label={t("Shop")}
           onClick={() => onOpenShop?.()}
         />
+        {messageRequests.length > 0 && (
+          <NavRow
+            icon={<IconInbox size={22} />}
+            label={t("Message Requests")}
+            active={requestsOpen}
+            onClick={() => setShowRequests((v) => !v)}
+            trailing={
+              <span
+                key={messageRequests.length}
+                className="badge-pop flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[12px] font-bold leading-none text-white"
+              >
+                {messageRequests.length > 99 ? "99+" : messageRequests.length}
+              </span>
+            }
+          />
+        )}
       </nav>
 
       <div className="channel-scroll min-h-0 flex-1 overflow-y-auto px-2">
-        {(
+        {requestsOpen ? (
+          <>
+            <div className="flex h-10 items-center gap-1 pb-1 pl-1 pr-2 pt-[18px]">
+              <button
+                type="button"
+                onClick={() => setShowRequests(false)}
+                aria-label={t("Back to Direct Messages")}
+                className="text-interactive-normal hover:text-interactive-active"
+              >
+                <IconChevronLeft size={16} />
+              </button>
+              <p className="text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] text-channels-default">{t("Message Requests")}</p>
+            </div>
+            <p className="px-2 pb-2 text-[12px] leading-4 text-text-muted">
+              {t("From people you share a space with. They won’t know you’ve seen it unless you reply.")}
+            </p>
+            {messageRequests.map((req) => {
+              const active = viewMode === "dm" && activeDmThreadId === req.threadId;
+              return (
+                <button
+                  key={req.threadId}
+                  type="button"
+                  onClick={() => void selectDmThread(req.threadId)}
+                  className={`mb-0.5 flex min-h-[42px] w-full items-center gap-3 rounded-[4px] px-2 py-1 text-left transition-colors duration-75 ${
+                    active ? "bg-interactive-selected text-interactive-active" : "text-channels-default hover:bg-interactive-hover hover:text-text-normal"
+                  }`}
+                >
+                  <Avatar profile={req.friend} size="sm" />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-[16px] font-medium leading-5">{displayName(req.friend)}</span>
+                    {req.preview && <span className="truncate text-[12px] leading-4 text-text-muted">{req.preview}</span>}
+                  </span>
+                  <DmRowBadge count={req.unreadCount} />
+                </button>
+              );
+            })}
+          </>
+        ) : (
           <>
             <div className="group/dmh flex h-10 items-center justify-between pb-1 pl-2 pr-2 pt-[18px]">
-              <p className="text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] text-channels-default group-hover/dmh:text-text-normal">Direct Messages</p>
-              <Tooltip label="Create DM" side="top">
+              <p className="text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] text-channels-default group-hover/dmh:text-text-normal">{t("Direct Messages")}</p>
+              <Tooltip label={t("Create DM")} side="top">
                 <button
                   type="button"
                   onClick={() => setCreateGroupOpen(true)}
-                  aria-label="Create DM"
+                  aria-label={t("Create DM")}
                   className="text-interactive-normal hover:text-interactive-active"
                 >
                   <IconPlus size={16} />
@@ -335,8 +398,9 @@ export function HomePanel({
                     <div className="min-w-0">
                       <span className="block truncate text-[16px] font-medium leading-5">{g.name}</span>
                       <span className="block truncate text-[12px] leading-4 text-text-muted">
-                        {g.members.length} members
-                        {inCallCount > 0 ? ` · ${inCallCount} in voice` : ""}
+                        {t("{count} members", { count: g.members.length })}
+                        {item.sortAt && item.sortAt !== g.created_at ? ` · ${formatMessageTime(item.sortAt)}` : ""}
+                        {inCallCount > 0 ? ` · ${t("{count} in voice", { count: inCallCount })}` : ""}
                       </span>
                     </div>
                   </button>
@@ -394,8 +458,8 @@ export function HomePanel({
                   <span
                     role="button"
                     tabIndex={0}
-                    aria-label={`Close conversation with ${displayName(entry.friend)}`}
-                    title="Close DM"
+                    aria-label={t("Close conversation with {name}", { name: displayName(entry.friend) })}
+                    title={t("Close DM")}
                     onClick={(e) => {
                       e.stopPropagation();
                       closeDmThread(entry.friend.id);
@@ -423,7 +487,7 @@ export function HomePanel({
                 key="tether-dm"
                 type="button"
                 onClick={() => void openDmWithFriend(tetherProfile.id)}
-                title="Message Tether directly"
+                title={t("Message Tether directly")}
                 className="mb-0.5 flex h-[42px] w-full items-center gap-3 rounded-[4px] px-2 text-left text-channels-default transition-colors duration-75 hover:bg-interactive-hover hover:text-text-normal"
               >
                 <div className="relative">
@@ -437,7 +501,7 @@ export function HomePanel({
               </button>
             )}
             {mixedConversations.length === 0 && (
-              <p className="px-2 py-2 text-sm text-text-muted">Add friends to start chatting.</p>
+              <p className="px-2 py-2 text-sm text-text-muted">{t("Add friends to start chatting.")}</p>
             )}
           </>
         )}

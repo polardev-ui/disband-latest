@@ -3,7 +3,7 @@ import UIKit
 
 /// Renders Discord-style markdown to an `AttributedString`: `#`..`###`
 /// headers, fenced code blocks, inline code, **bold**, *italic* / _italic_,
-/// __underline__, ~~strikethrough~~, links and @mentions. Mirrors the web
+/// __underline__, ~~strikethrough~~, ||spoilers||, links and @mentions. Mirrors the web
 /// renderer (`src/lib/markdown.tsx`).
 ///
 /// This is a small parser rather than a set of regexes. The regex version
@@ -12,6 +12,47 @@ import UIKit
 /// italic text with the asterisks still showing, and every header was styled
 /// one character short.
 enum ChatMarkdown {
+
+    // MARK: Role colours
+    //
+    // Role pings take their role's colour, as on the web and Discord. The open
+    // space's roles are registered here (slug -> name + colour); grey, the
+    // default for a new role, keeps the usual blue chip.
+    private static let roleLock = NSLock()
+    nonisolated(unsafe) private static var roleInfo: [String: (name: String, color: UIColor?)] = [:]
+    nonisolated(unsafe) private static var roleVersion = 0
+
+    static func setRoles(_ roles: [(name: String, color: String)]) {
+        var next: [String: (name: String, color: UIColor?)] = [:]
+        for role in roles {
+            let slug = roleSlug(role.name).lowercased()
+            guard !slug.isEmpty else { continue }
+            next[slug] = (role.name, roleColour(role.color))
+        }
+        roleLock.lock(); roleInfo = next; roleVersion += 1; roleLock.unlock()
+    }
+
+    /// `roleMentionSlug` in `src/lib/utils.ts` (and `MentionSearch.roleSlug`).
+    private static func roleSlug(_ name: String) -> String {
+        var s = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        s = s.replacingOccurrences(of: "\\s+", with: "-", options: .regularExpression)
+        s = s.replacingOccurrences(of: "[^a-zA-Z0-9_-]", with: "", options: .regularExpression)
+        s = s.replacingOccurrences(of: "-+", with: "-", options: .regularExpression)
+        return s.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+    }
+
+    private static func roleLookup(_ slug: String) -> (name: String, color: UIColor?)? {
+        roleLock.lock(); defer { roleLock.unlock() }
+        return roleInfo[slug.lowercased()]
+    }
+
+    private static func roleColour(_ hex: String) -> UIColor? {
+        let c = hex.trimmingCharacters(in: .whitespaces).lowercased()
+        guard c.count == 7, c.hasPrefix("#"), !["#949ba4", "#99aab5", "#000000"].contains(c),
+              let v = UInt32(c.dropFirst(), radix: 16) else { return nil }
+        return UIColor(red: CGFloat((v >> 16) & 0xff) / 255, green: CGFloat((v >> 8) & 0xff) / 255,
+                       blue: CGFloat(v & 0xff) / 255, alpha: 1)
+    }
 
     /// `mentionColor` is passed in rather than read from `Brand`, whose
     /// properties are main-actor isolated while this renderer is not.
@@ -24,15 +65,20 @@ enum ChatMarkdown {
         return c
     }()
 
+    /// `revealSpoilers` shows the message's ||spoilers|| (tapping the
+    /// message toggles it).
     static func render(
         _ raw: String,
         baseFont: UIFont,
         baseColor: UIColor,
-        mentionColor: UIColor
+        mentionColor: UIColor,
+        revealSpoilers: Bool = false
     ) -> AttributedString {
-        let key = "\(baseFont.pointSize)|\(baseColor.hashValue)|\(mentionColor.hashValue)|\(raw)" as NSString
+        roleLock.lock(); let rv = roleVersion; roleLock.unlock()
+        let key = "\(rv)|\(baseFont.pointSize)|\(baseColor.hashValue)|\(mentionColor.hashValue)|\(revealSpoilers)|\(raw)" as NSString
         if let hit = cache.object(forKey: key) { return hit.value }
-        let result = renderUncached(raw, baseFont: baseFont, baseColor: baseColor, mentionColor: mentionColor)
+        let result = renderUncached(raw, baseFont: baseFont, baseColor: baseColor, mentionColor: mentionColor,
+                                    revealSpoilers: revealSpoilers)
         cache.setObject(Rendered(result), forKey: key)
         return result
     }
@@ -41,7 +87,8 @@ enum ChatMarkdown {
         _ raw: String,
         baseFont: UIFont,
         baseColor: UIColor,
-        mentionColor: UIColor
+        mentionColor: UIColor,
+        revealSpoilers: Bool
     ) -> AttributedString {
         let out = NSMutableAttributedString()
         let context = Context(baseFont: baseFont, color: baseColor)
@@ -61,8 +108,10 @@ enum ChatMarkdown {
         appendText(source.substring(from: cursor), to: out, context: context)
 
         applyLinks(to: out, tint: mentionColor)
-        // Mentions last, so a name inside emphasis still reads as a mention.
-        applyMentions(to: out, baseFont: baseFont, tint: mentionColor)
+        // Mentions after emphasis, so a name inside it still reads as a mention.
+        applyMentions(to: out, baseFont: baseFont, tint: mentionColor, body: baseColor)
+        // Spoilers last: a hidden one must hide its mentions and links too.
+        applySpoilers(to: out, revealed: revealSpoilers, text: baseColor)
 
         if let result = try? AttributedString(out, including: \.uiKit) {
             return result
@@ -90,20 +139,96 @@ enum ChatMarkdown {
         return name.isEmpty ? nil : name
     }
 
-    private static func applyMentions(to ns: NSMutableAttributedString, baseFont: UIFont, tint: UIColor) {
+    // MARK: - Spoilers
+
+    /// Whether the text has a ||spoiler|| for the reader to tap open.
+    static func hasSpoiler(_ raw: String) -> Bool {
+        guard let open = raw.range(of: "||") else { return false }
+        return raw[open.upperBound...].range(of: "||") != nil
+    }
+
+    fileprivate static let spoilerKey = NSAttributedString.Key("disbandSpoiler")
+
+    /// A hidden spoiler is a dark bar the width of its text: the text is
+    /// there but clear, so opening it never reflows the message. It carries
+    /// no link, because SwiftUI draws links in the tint colour whatever the
+    /// run says, which would show the text. An open one keeps a faint
+    /// background so it is clear what was hidden.
+    private static func applySpoilers(to ns: NSMutableAttributedString, revealed: Bool, text: UIColor) {
+        var runs: [NSRange] = []
+        ns.enumerateAttribute(spoilerKey, in: NSRange(location: 0, length: ns.length)) { value, range, _ in
+            if value != nil { runs.append(range) }
+        }
+        for range in runs {
+            if revealed {
+                ns.addAttribute(.backgroundColor, value: text.withAlphaComponent(0.1), range: range)
+            } else {
+                ns.removeAttribute(.link, range: range)
+                ns.removeAttribute(.underlineStyle, range: range)
+                ns.removeAttribute(.strikethroughStyle, range: range)
+                ns.addAttributes([
+                    .foregroundColor: UIColor.clear,
+                    .backgroundColor: UIColor(red: 0.125, green: 0.133, blue: 0.145, alpha: 1),
+                ], range: range)
+            }
+            ns.removeAttribute(spoilerKey, range: range)
+        }
+    }
+
+    private static let roleKey = NSAttributedString.Key("disbandRole")
+
+    private static func applyMentions(to ns: NSMutableAttributedString, baseFont: UIFont, tint: UIColor,
+                                      body: UIColor) {
+        // Role pings (`@&Staff`, as the web writes them) read as "@Staff",
+        // in a chip but with nobody to open. Replaced back to front so the
+        // earlier ranges stay valid.
+        if let roleRegex = try? NSRegularExpression(pattern: "(?<![\\w.])@&([A-Za-z0-9_-]{1,64})") {
+            let current = ns.string
+            for match in roleRegex.matches(in: current, range: NSRange(location: 0, length: (current as NSString).length)).reversed() {
+                if ns.attribute(.link, at: match.range.location, effectiveRange: nil) != nil { continue }
+                let slug = (current as NSString).substring(with: match.range(at: 1))
+                let known = roleLookup(slug)
+                let label = "@" + (known?.name ?? slug.replacingOccurrences(of: "-", with: " "))
+                let roleColour = known?.color
+                ns.replaceCharacters(in: match.range, with: NSAttributedString(string: label, attributes: [
+                    .foregroundColor: roleColour ?? mentionText(tint: tint, text: body),
+                    .backgroundColor: (roleColour ?? tint).withAlphaComponent(roleColour == nil ? 0.3 : 0.18),
+                    .font: UIFont.systemFont(ofSize: baseFont.pointSize, weight: .medium),
+                    roleKey: true,
+                ]))
+            }
+        }
         let text = ns.string
         guard let regex = try? NSRegularExpression(pattern: "(?<![\\w.])@[a-zA-Z0-9_]{1,32}") else { return }
         for match in regex.matches(in: text, range: NSRange(location: 0, length: (text as NSString).length)) {
             if ns.attribute(.link, at: match.range.location, effectiveRange: nil) != nil { continue }
+            if ns.attribute(roleKey, at: match.range.location, effectiveRange: nil) != nil { continue }
             let username = String((text as NSString).substring(with: match.range).dropFirst())
             guard let url = URL(string: "\(mentionScheme)://\(username)") else { continue }
+            // Brand-coloured text on a brand-tinted chip barely showed,
+            // worst on a highlighted "pinged you" row. The text is mixed
+            // toward the body colour instead (a pale blue on dark themes,
+            // a deep one on light), as Discord does.
             ns.addAttributes([
-                .foregroundColor: tint,
-                .backgroundColor: tint.withAlphaComponent(0.18),
+                .foregroundColor: mentionText(tint: tint, text: body),
+                .backgroundColor: tint.withAlphaComponent(0.3),
                 .font: UIFont.systemFont(ofSize: baseFont.pointSize, weight: .medium),
                 .link: url,
             ], range: match.range)
         }
+        ns.removeAttribute(roleKey, range: NSRange(location: 0, length: ns.length))
+    }
+
+    /// The colour of mention (and link) text. SwiftUI paints links in the
+    /// tint, so the message sets this as its tint too.
+    static func mentionText(tint: UIColor, text: UIColor) -> UIColor { mix(tint, text, 0.55) }
+
+    private static func mix(_ a: UIColor, _ b: UIColor, _ t: CGFloat) -> UIColor {
+        var (r1, g1, b1, a1): (CGFloat, CGFloat, CGFloat, CGFloat) = (0, 0, 0, 0)
+        var (r2, g2, b2, a2): (CGFloat, CGFloat, CGFloat, CGFloat) = (0, 0, 0, 0)
+        guard a.getRed(&r1, green: &g1, blue: &b1, alpha: &a1),
+              b.getRed(&r2, green: &g2, blue: &b2, alpha: &a2) else { return a }
+        return UIColor(red: r1 + (r2 - r1) * t, green: g1 + (g2 - g1) * t, blue: b1 + (b2 - b1) * t, alpha: 1)
     }
 
     // MARK: - Links
@@ -214,6 +339,17 @@ enum ChatMarkdown {
                 continue
             }
 
+            // ||spoiler||: marked here, styled in `applySpoilers`.
+            if c == "|", matches("||", in: chars, at: i),
+               let close = spoilerClose(in: chars, from: i + 2), close > i + 2 {
+                flush()
+                let start = out.length
+                appendInline(String(chars[(i + 2)..<close]), to: out, base: base, style: style, context: context)
+                out.addAttribute(spoilerKey, value: true, range: NSRange(location: start, length: out.length - start))
+                i = close + 2
+                continue
+            }
+
             for (delimiter, added) in delimiters where matches(delimiter, in: chars, at: i) {
                 let length = delimiter.count
                 guard canOpen(delimiter, in: chars, at: i),
@@ -288,6 +424,17 @@ enum ChatMarkdown {
                 if single, k + 1 < chars.count, chars[k + 1] == mark { k += 1; continue }
                 return k
             }
+            k += 1
+        }
+        return nil
+    }
+
+    private static func spoilerClose(in chars: [Character], from start: Int) -> Int? {
+        var k = start
+        while k + 1 < chars.count {
+            if chars[k] == "\\" { k += 2; continue }
+            if chars[k] == "`", let end = firstIndex(of: "`", in: chars, from: k + 1) { k = end + 1; continue }
+            if chars[k] == "|", chars[k + 1] == "|" { return k }
             k += 1
         }
         return nil

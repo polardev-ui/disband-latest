@@ -10,6 +10,8 @@ export interface PresencePayload {
   status: UserStatus;
   /** Live "now listening"; null/absent when nothing is playing. */
   listening?: Listening | null;
+  /** Live game activity; null/absent when not playing. */
+  activity?: import("@/lib/activity").Activity | null;
 }
 
 export type PresenceMap = Map<string, UserStatus>;
@@ -41,6 +43,12 @@ export function listeningFor(
   if (!stale) return null;
   const started = Date.parse(stale.started_at);
   if (Number.isFinite(started) && now - started > 6 * 60 * 60 * 1000) return null;
+  // The row is only rewritten while one of their apps is polling, and the
+  // phone apps stop when they go to the background without clearing it (that
+  // would wipe what their desktop app wrote). A track whose length has run
+  // out, plus slack for a pause, is over.
+  const duration = stale.duration_ms ?? 0;
+  if (Number.isFinite(started) && duration > 0 && now - started > duration + 90_000) return null;
   return stale;
 }
 
@@ -52,7 +60,12 @@ export function flattenPresenceListening(
   for (const key of Object.keys(state)) {
     for (const entry of state[key] ?? []) {
       if (entry && typeof entry.userId === "string") {
-        map.set(entry.userId, (entry.listening as Listening | null | undefined) ?? null);
+        // Someone can be online in several places, and only some of them
+        // know what's playing (the phone apps don't see desktop games, an
+        // older build sends no listening at all). A session that is playing
+        // wins over one that says nothing, whichever was listed last.
+        const value = (entry.listening as Listening | null | undefined) ?? null;
+        if (value || !map.has(entry.userId)) map.set(entry.userId, value);
       }
     }
   }
@@ -131,6 +144,17 @@ export function presetForExpiresAt(expiresAt: string | null | undefined, now = D
   return "never";
 }
 
+/** dnd is a deliberate choice, so it outranks online; idle and offline are what's left over. */
+function presenceRank(status: string): number {
+  switch (status) {
+    case "dnd": return 4;
+    case "online": return 3;
+    case "idle": return 2;
+    case "offline": return 0;
+    default: return 1;
+  }
+}
+
 export function flattenPresenceState(
   state: Record<string, Partial<PresencePayload>[] | undefined>,
 ): PresenceMap {
@@ -141,10 +165,10 @@ export function flattenPresenceState(
         const next = entry.status ?? "online";
         const current = map.get(entry.userId);
         // A person can have more than one live client (two tabs, web + phone).
-        // An invisible/offline entry must never mask another session that is
-        // actually online. Otherwise the roster can drop someone who is right
-        // there, depending on which presence key happened to sync last.
-        if (current === undefined || current === "offline" || next !== "offline") {
+        // The most present one wins, whatever order the keys synced in: an
+        // idle phone must not hide an active desktop, and an offline entry
+        // must never mask a session that is right there.
+        if (current === undefined || presenceRank(next) > presenceRank(current)) {
           map.set(entry.userId, next);
         }
       }

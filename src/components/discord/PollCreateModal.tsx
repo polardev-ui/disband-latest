@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { createPoll } from "@/lib/poll";
 import { IconClose, IconPlus } from "@/components/icons";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface PollCreateModalProps {
   open: boolean;
@@ -17,6 +18,7 @@ interface PollCreateModalProps {
 const MAX_OPTIONS = 10;
 
 export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalProps) {
+  const { t } = useI18n();
   const [mounted, setMounted] = useState(false);
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState<string[]>(["", ""]);
@@ -53,7 +55,7 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
       const poll = await createPoll(question.trim(), validOptions);
       onCreated(poll.id);
     } catch {
-      setError("Could not create the poll. Try again.");
+      setError(t("Could not create the poll. Try again."));
       setCreating(false);
     }
   }
@@ -70,39 +72,39 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Create a Poll"
+        aria-label={t("Create a Poll")}
         className={`classic-modal${exiting ? " modal-pop-out" : ""} flex max-h-[calc(100dvh-32px)] w-full max-w-[480px] flex-col overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
-          <h2 className="text-[20px] font-semibold leading-6 text-header-primary">Create a Poll</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-interactive-normal hover:text-interactive-active">
+          <h2 className="text-[20px] font-semibold leading-6 text-header-primary">{t("Create a Poll")}</h2>
+          <button type="button" onClick={onClose} aria-label={t("Close")} className="text-interactive-normal hover:text-interactive-active">
             <IconClose size={22} />
           </button>
         </div>
 
         <div className="channel-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-5 pt-3">
           <label className="block">
-            <span className={label}>Question</span>
+            <span className={label}>{t("Question")}</span>
             <input
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="What question do you want to ask?"
+              placeholder={t("What question do you want to ask?")}
               maxLength={200}
               autoFocus
               className={field}
             />
           </label>
 
-          <p className={`${label} mt-6`}>Answers</p>
+          <p className={`${label} mt-6`}>{t("Answers")}</p>
           <div className="space-y-2">
             {options.map((opt, i) => (
               <div key={i} className="group relative">
                 <input
                   value={opt}
                   onChange={(e) => updateOption(i, e.target.value)}
-                  placeholder="Type your answer"
-                  aria-label={`Answer ${i + 1}`}
+                  placeholder={t("Type your answer")}
+                  aria-label={t("Answer {value}", { value: i + 1 })}
                   maxLength={100}
                   className={`${field} pr-10`}
                 />
@@ -110,7 +112,7 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
                   <button
                     type="button"
                     onClick={() => setOptions((prev) => prev.filter((_, idx) => idx !== i))}
-                    aria-label={`Remove answer ${i + 1}`}
+                    aria-label={t("Remove answer {value}", { value: i + 1 })}
                     className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-interactive-normal opacity-0 transition-opacity hover:text-status-dnd focus:opacity-100 group-hover:opacity-100"
                   >
                     <IconClose size={16} />
@@ -127,7 +129,7 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
               className="mt-2 flex h-10 w-full items-center gap-2 rounded-[3px] border border-dashed border-interactive-normal/40 px-2.5 text-[16px] text-header-secondary transition-colors hover:border-interactive-normal hover:text-header-primary"
             >
               <IconPlus size={16} />
-              Add another answer
+              {t("Add another answer")}
             </button>
           )}
 
@@ -136,7 +138,7 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
 
         <div className="flex justify-end gap-2 bg-bg-secondary p-4">
           <button type="button" onClick={onClose} className="h-[38px] px-4 text-[14px] font-medium text-white hover:underline">
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             type="button"
@@ -144,7 +146,7 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
             onClick={() => void create()}
             className="h-[38px] min-w-[96px] rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {creating ? "Posting…" : "Post"}
+            {creating ? t("Posting…") : t("Post")}
           </button>
         </div>
       </div>

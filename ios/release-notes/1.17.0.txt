@@ -1,0 +1,17 @@
+What's new in Disband 1.17
+
+• Stages: a new kind of voice channel for talks and events. Speakers are on stage and everyone else listens. Raise your hand to ask to speak, and accept when you're invited up. Moderators can start the stage with a topic, bring people up and move them back down.
+• Edit your messages: hold one of your own messages and tap Edit Message. Edited messages show "(edited)".
+• Paste images and GIFs straight into the message box from your clipboard or keyboard. GIFs stay animated.
+• Send photos and videos with a caption: they wait above the message box (up to 10) and go together with your text.
+• Spoilers: ||hidden text|| stays covered until you tap it.
+• Type @ to pick who to mention, including @everyone and roles where you're allowed to ping them.
+• @everyone and @here messages are now highlighted, just like a direct mention.
+• Your name's font and colour, profile colours and badges now show across the app, and you can edit them. Profiles also show what people are listening to on Spotify and what they're playing.
+• DMs and groups with unread messages sit on the side rail so you can jump straight in.
+• Hold a reaction to see who reacted.
+• Text channel names take dashes for spaces as you type, so you can link them as #hall-of-fame.
+• Fixed: leaving voice from the call bar always works now, even on a poor connection.
+• Fixed: if you're removed from a voice channel, the app now hangs up for you.
+• Fixed: chats no longer jump to the bottom while you're reading back, and messages don't send twice.
+• Plus other fixes and improvements.

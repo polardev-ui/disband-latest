@@ -3,6 +3,7 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, botJsonError } from "@/lib/bot-auth";
 import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
 import { normalizeEmbeds } from "@/lib/embeds";
+import { normalizeComponents } from "@/lib/bot-commands";
 
 export async function GET(
   request: NextRequest,
@@ -54,9 +55,13 @@ export async function POST(
       reply_to_id?: string | null;
       /** Discord-shaped embeds (up to 10); see src/lib/embeds.ts. */
       embeds?: unknown;
+      /** Up to 5 rows of buttons; see src/lib/bot-commands.ts. */
+      components?: unknown;
     };
     const embeds = normalizeEmbeds(body.embeds);
     if (!embeds.ok) return NextResponse.json({ error: embeds.error }, { status: 400 });
+    const components = normalizeComponents(body.components);
+    if (!components.ok) return NextResponse.json({ error: components.error }, { status: 400 });
 
     const service = getServiceSupabase();
     if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
@@ -70,6 +75,7 @@ export async function POST(
       p_content: body.content,
       p_reply_to_id: body.reply_to_id ?? null,
       p_embeds: embeds.embeds.length ? embeds.embeds : null,
+      p_components: components.value,
     });
 
     if (error) {

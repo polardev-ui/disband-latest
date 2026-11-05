@@ -37,6 +37,8 @@ struct MessageRow: View {
     @State private var viewingMedia: ViewedMedia?
     /// The reaction whose reactor list is open, if any.
     @State private var showingReactorsFor: ReactedEmoji?
+    /// The message's ||spoilers|| are showing.
+    @State private var spoilersOpen = false
 
     /// A webhook message shows the webhook's name and picture (or the
     /// per-message override), not the identity behind it.
@@ -65,7 +67,11 @@ struct MessageRow: View {
     private var pingedYou: Bool {
         guard let me = currentUserId, message.authorId != me else { return false }
         if let replyTo, replyTo.authorId == me { return true }
-        return message.mentions?.contains(me) ?? false
+        if message.mentions?.contains(me) == true { return true }
+        // @everyone and @here ping every member, as on the web. Only channel
+        // messages carry `mentions`, so DMs and group chats are left alone.
+        return message.mentions != nil
+            && message.content.range(of: #"@(everyone|here)\b"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     var body: some View {
@@ -81,6 +87,10 @@ struct MessageRow: View {
                 // directly as an @mention — and read exactly like ordinary
                 // traffic until it was marked.
                 .background(pingedYou ? Brand.idle.opacity(0.12) : Brand.surfaceRaised)
+                // Discord's gold edge, so a ping stands out at a glance.
+                .overlay(alignment: .leading) {
+                    if pingedYou { Rectangle().fill(Brand.idle).frame(width: 2) }
+                }
                 .offset(x: dragOffset)
                 .gesture(swipeToReply)
                 /*
@@ -128,7 +138,8 @@ struct MessageRow: View {
                 Color.clear.frame(width: 40)
             } else {
                 Button { tapAuthor() } label: {
-                    AvatarView(url: authorAvatar, name: authorName, size: 40)
+                    AvatarView(url: authorAvatar, name: authorName, size: 40,
+                               decoration: message.webhook == nil ? message.author?.equippedRingEffect : nil)
                 }
                 .buttonStyle(.plain)
             }
@@ -138,11 +149,19 @@ struct MessageRow: View {
 
                 if !grouped {
                     HStack(spacing: 6) {
-                        Text(authorName)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(isOwn ? Brand.accent : Brand.textPrimary)
-                            .lineLimit(1)
-                            .onTapGesture { tapAuthor() }
+                        Group {
+                            // Webhooks post under their own name, with no style.
+                            if message.webhook == nil, let author = message.author {
+                                StyledName(author, size: UIFont.preferredFont(forTextStyle: .subheadline).pointSize,
+                                           fallbackColor: isOwn ? Brand.accent : Brand.textPrimary)
+                            } else {
+                                Text(authorName)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(isOwn ? Brand.accent : Brand.textPrimary)
+                            }
+                        }
+                        .lineLimit(1)
+                        .onTapGesture { tapAuthor() }
                         if message.webhook == nil {
                             GuildTagView(userId: message.authorId, size: .small)
                         }
@@ -160,9 +179,14 @@ struct MessageRow: View {
                     let size = jumbo ?? UIFont.systemFontSize
                     let baseFont = UIFont.systemFont(ofSize: size)
                     let color = UIColor(message.pending ? Brand.textMuted : Brand.textPrimary)
+                    let accent = UIColor(Brand.accent)
                     Text(ChatMarkdown.render(message.content, baseFont: baseFont, baseColor: color,
-                                             mentionColor: UIColor(Brand.accent)))
+                                             mentionColor: accent, revealSpoilers: spoilersOpen))
                         .fixedSize(horizontal: false, vertical: true)
+                        // Links take the tint, whatever colour the run asks for.
+                        .tint(Color(ChatMarkdown.mentionText(tint: accent, text: color)))
+                        .modifier(SpoilerToggle(active: ChatMarkdown.hasSpoiler(message.content),
+                                                open: $spoilersOpen))
                         .environment(\.openURL, OpenURLAction { url in
                             guard let name = ChatMarkdown.mentionedUsername(from: url) else {
                                 return .systemAction
@@ -170,6 +194,11 @@ struct MessageRow: View {
                             onTapMention(name)
                             return .handled
                         })
+                    if message.editedAt != nil {
+                        Text("(edited)")
+                            .font(.caption2)
+                            .foregroundStyle(Brand.textMuted)
+                    }
                 }
 
                 // Invites and link previews, so a shared server can be joined
@@ -229,21 +258,31 @@ struct MessageRow: View {
         // text around it and the chip was an awkward tap target.
         FlowLayout(spacing: 6) {
             ForEach(reactions) { r in
-                Button { onToggleReaction(r.emoji) } label: {
-                    HStack(spacing: 5) {
-                        Text(r.emoji).font(.system(size: 16))
-                        Text("\(r.count)").font(.footnote.weight(.semibold))
-                            .foregroundStyle(r.reacted ? Brand.accent : Brand.textSecondary)
-                    }
-                    .padding(.horizontal, 9).padding(.vertical, 5)
-                    .background(r.reacted ? Brand.accent.opacity(0.2) : Brand.elevated,
-                                in: .capsule)
-                    .overlay(Capsule().stroke(Brand.accent, lineWidth: r.reacted ? 1 : 0))
+                HStack(spacing: 5) {
+                    Text(r.emoji).font(.system(size: 16))
+                    Text("\(r.count)").font(.footnote.weight(.semibold))
+                        .foregroundStyle(r.reacted ? Brand.accent : Brand.textSecondary)
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 9).padding(.vertical, 5)
+                .background(r.reacted ? Brand.accent.opacity(0.2) : Brand.elevated,
+                            in: .capsule)
+                .overlay(Capsule().stroke(Brand.accent, lineWidth: r.reacted ? 1 : 0))
+                .contentShape(Capsule())
                 // No hover on a phone, so "who reacted" is a press and hold.
-                .onLongPressGesture { showingReactorsFor = ReactedEmoji(id: r.emoji) }
+                // Not a Button: a Button's own tap swallowed the hold, and
+                // the message's hold-to-react (0.45 s) fired instead. This
+                // one is shorter and takes priority over it.
+                .highPriorityGesture(
+                    LongPressGesture(minimumDuration: 0.3).onEnded { _ in
+                        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                        showingReactorsFor = ReactedEmoji(id: r.emoji)
+                    }
+                )
+                .onTapGesture { onToggleReaction(r.emoji) }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
                 .accessibilityHint("Double tap to react, press and hold to see who reacted")
+                .accessibilityAction(named: "See who reacted") { showingReactorsFor = ReactedEmoji(id: r.emoji) }
             }
         }
         .padding(.top, 4)
@@ -281,13 +320,7 @@ struct MessageRow: View {
             switch message.attachmentType {
             case .image, .gif:
                 Button { viewingMedia = ViewedMedia(url: url, kind: message.attachmentType == .gif ? .gif : .image) } label: {
-                    RemoteImage(url: urlString, contentMode: .fit) {
-                        RoundedRectangle(cornerRadius: 10).fill(Brand.elevated)
-                            .frame(height: 160)
-                            .overlay(ProgressView().tint(Brand.textMuted))
-                    }
-                    .frame(maxWidth: 260, maxHeight: 280)
-                    .clipShape(.rect(cornerRadius: 10))
+                    SizedChatImage(url: urlString)
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 4)
@@ -303,11 +336,7 @@ struct MessageRow: View {
                 .padding(.top, 4)
 
             case .poll:
-                AttachmentInfoCard(
-                    icon: "chart.bar.xaxis",
-                    title: message.attachmentName ?? "Poll",
-                    caption: "Open Disband on the web to vote on this poll"
-                )
+                PollCardView(pollId: urlString)
 
             default:
                 AttachmentFileCard(
@@ -342,12 +371,7 @@ struct MessageRow: View {
                 .frame(maxWidth: 280)
             } else if let only = tiles.first, let url = URL(string: only.url) {
                 Button { viewingMedia = ViewedMedia(url: url, kind: only.type == .gif ? .gif : .image) } label: {
-                    RemoteImage(url: only.url, contentMode: .fit) {
-                        RoundedRectangle(cornerRadius: 10).fill(Brand.elevated)
-                            .frame(height: 160)
-                    }
-                    .frame(maxWidth: 260, maxHeight: 280)
-                    .clipShape(.rect(cornerRadius: 10))
+                    SizedChatImage(url: only.url)
                 }
                 .buttonStyle(.plain)
             }
@@ -370,6 +394,23 @@ struct MessageRow: View {
             }
         }
         .padding(.top, 4)
+    }
+}
+
+/// Tap a message with spoilers to show them, and again to hide them.
+private struct SpoilerToggle: ViewModifier {
+    let active: Bool
+    @Binding var open: Bool
+
+    func body(content: Content) -> some View {
+        if active {
+            content
+                .contentShape(Rectangle())
+                .onTapGesture { withAnimation(.easeOut(duration: 0.15)) { open.toggle() } }
+                .accessibilityHint(open ? "Double tap to hide the spoiler" : "Double tap to show the spoiler")
+        } else {
+            content
+        }
     }
 }
 

@@ -148,7 +148,8 @@ struct FriendsTab: View {
                         Button { selectedProfile = profile } label: {
                             VStack(spacing: 6) {
                                 AvatarView(url: profile.avatarUrl, name: profile.name, size: 58,
-                                           status: presence.status(for: profile.id))
+                                           status: presence.status(for: profile.id),
+                                           decoration: profile.equippedRingEffect)
                                 Text(profile.name)
                                     .font(.caption.weight(.medium))
                                     .foregroundStyle(Brand.textSecondary)
@@ -293,10 +294,22 @@ struct FriendsTab: View {
         return presence.status(for: profile.id)
     }
 
+    /// Moves the request in the list straight away and writes behind it, so
+    /// Accept and Ignore feel instant. A failed write reloads the real state.
     private func respond(_ f: Friendship, accept: Bool) {
+        if accept {
+            if let i = friendships.firstIndex(where: { $0.id == f.id }) {
+                friendships[i].status = .accepted
+            }
+        } else {
+            friendships.removeAll { $0.id == f.id }
+        }
         Task {
-            try? await DatabaseService.respondToFriendRequest(id: f.id, accept: accept)
-            await load()
+            do {
+                try await DatabaseService.respondToFriendRequest(id: f.id, accept: accept)
+            } catch {
+                await load()
+            }
         }
     }
 
@@ -339,10 +352,14 @@ struct FriendRow: View {
             AvatarView(url: profile?.avatarUrl, name: profile?.name ?? "?", size: 44, status: status)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(profile?.name ?? "Unknown")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Brand.textPrimary)
-                        .lineLimit(1)
+                    Group {
+                        if let profile {
+                            StyledName(profile, size: UIFont.preferredFont(forTextStyle: .body).pointSize)
+                        } else {
+                            Text("Unknown").font(.body.weight(.semibold)).foregroundStyle(Brand.textPrimary)
+                        }
+                    }
+                    .lineLimit(1)
                     GuildTagView(userId: profile?.id, size: .small)
                     if let pronouns = profile?.pronouns, !pronouns.isEmpty {
                         Text(pronouns)

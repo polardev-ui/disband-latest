@@ -12,6 +12,7 @@ import { AudioPlayer } from "./media/AudioPlayer";
 import { VideoPlayer } from "./VideoPlayer";
 import { safeImageUrl } from "@/lib/safe-url";
 import type { Profile } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface MessageAttachmentProps {
   url: string;
@@ -77,6 +78,7 @@ export function MessageAttachment({
   currentUserId,
   onOpenActivity,
 }: MessageAttachmentProps) {
+  const { t } = useI18n();
   const [lightbox, setLightbox] = useState(false);
   const [imgError, setImgError] = useState(false);
 
@@ -126,7 +128,7 @@ export function MessageAttachment({
 
   const skeleton = (
     <div
-      aria-label="Loading attachment"
+      aria-label={t("Loading attachment")}
       className={`flex w-full max-w-md items-center justify-center rounded-lg border border-divider bg-bg-accent ${
         dims ? "" : "aspect-[16/10]"
       } max-h-[min(20rem,35vh)] min-h-24`}
@@ -167,7 +169,7 @@ export function MessageAttachment({
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-text-normal">{fileName}</p>
-        <p className="text-xs text-text-muted">Couldn't load this attachment.</p>
+        <p className="text-xs text-text-muted">{t("Couldn't load this attachment.")}</p>
       </div>
     </div>
   );
@@ -246,7 +248,7 @@ export function MessageAttachment({
           >
             {!mediaLoaded && (
               <div
-                aria-label="Loading attachment"
+                aria-label={t("Loading attachment")}
                 className="absolute inset-0 z-10 flex items-center justify-center rounded-lg border border-divider bg-bg-accent"
               >
                 <span className="h-6 w-6 animate-spin rounded-full border-2 border-text-muted/30 border-t-text-muted" />

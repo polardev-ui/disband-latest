@@ -74,8 +74,25 @@ export function parseMentions(
   return [...ids];
 }
 
+/**
+ * The name a channel is linked by in messages, as on Discord: lower case,
+ * spaces as dashes, and only letters, numbers, - and _ kept, so a channel
+ * named "Hall of Fame!" is linked as #hall-of-fame while its name keeps
+ * the spaces and symbols. Emoji and decorations like ・ are dropped, so
+ * "📢・news" is #news.
+ */
+export function channelLinkName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\p{L}\p{N}\p{M}_-]/gu, "")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export function mentionsEveryone(content: string): boolean {
-  return /@everyone\b/i.test(content);
+  return /@(everyone|here)\b/i.test(content);
 }
 
 export function mentionsUsername(content: string, username: string | null | undefined): boolean {
@@ -125,7 +142,7 @@ export function getEmojiQuery(text: string, cursor: number): { start: number; qu
 
 export function getChannelQuery(text: string, cursor: number): { start: number; query: string } | null {
   const before = text.slice(0, cursor);
-  const match = before.match(/#([a-zA-Z0-9_-]*)$/);
+  const match = before.match(/#([\p{L}\p{N}\p{M}_-]*)$/u);
   if (!match) return null;
   return { start: cursor - match[0].length, query: match[1] };
 }

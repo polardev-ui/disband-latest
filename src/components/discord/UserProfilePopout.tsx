@@ -3,18 +3,21 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "@/contexts/AppContext";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 import { useUserNote, USER_NOTE_MAX } from "@/hooks/useUserNote";
 import { Avatar } from "@/components/ui/Avatar";
 import { GuildTag } from "@/components/ui/GuildTag";
 import { ListeningCard } from "@/components/ui/ListeningCard";
+import { ActivityCard } from "@/components/ui/ActivityCard";
+import { activityFor } from "@/lib/activity";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { HEADER_BADGE_LIMIT, UserBadges, useBadgeCount } from "@/components/ui/UserBadges";
 import { RoleIcon } from "@/components/ui/RoleIcon";
 import { RolePicker } from "@/components/ui/RolePicker";
 import { BotTag } from "@/components/ui/BotTag";
-import { IconClose, IconEdit } from "@/components/icons";
+import { IconClose, IconEdit, IconUserPlus } from "@/components/icons";
 import { displayName } from "@/lib/utils";
 import { NAME_FONT_CLASS, type NameFontId } from "@/lib/nameFonts";
 import { safeImageUrl } from "@/lib/safe-url";
@@ -23,6 +26,7 @@ import { activeStatusNote, listeningFor, presenceStatusFor } from "@/lib/presenc
 import { OVERLAY_Z } from "@/lib/overlay";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { SubscriptionPlan } from "@/lib/subscription";
+import { useI18n } from "@/contexts/I18nContext";
 
 const WIDTH = 340;
 const GAP = 12;
@@ -80,7 +84,11 @@ export function UserProfilePopout({
   selfAssignableRoles = [],
   onSetSelfRoles,
 }: UserProfilePopoutProps) {
-  const { presenceMap, listeningMap, user, openDmWithFriend, sendDmMessage } = useApp();
+  const { t } = useI18n();
+  const {
+    presenceMap, listeningMap, activityMap, user, openDmWithFriend, sendDmMessage,
+    friends, dmThreads, pendingOutgoing, sendFriendRequest,
+  } = useApp();
   const open = !!profile && !!anchor;
   const { mounted, exiting } = usePresence(open);
   const lastProfile = useRef<Profile | null>(null);
@@ -89,8 +97,35 @@ export function UserProfilePopout({
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number; side: "left" | "right" } | null>(null);
   const [message, setMessage] = useState("");
+  const [sendError, setSendError] = useState<string | null>(null);
   const badgeCount = useBadgeCount(p?.id, isSelf ? plan : undefined);
   const note = useUserNote(open && !isSelf ? user?.id : null, open && !isSelf ? p?.id : null);
+  const [friendNote, setFriendNote] = useState<string | null>(null);
+
+  // Strangers can only be messaged as a request, and only when you share a
+  // space other than Disband itself (everyone is in that one). Checked up
+  // front so the card offers Add Friend instead of a box that can't send.
+  const targetId = open && p && !isSelf && !p.is_bot ? p.id : null;
+  const knownContact = !!targetId && (friends.some((f) => f.id === targetId) || dmThreads.some((d) => d.friend?.id === targetId));
+  // Asked of the server, which applies the same rule when the DM opens
+  // (including Disband's staff being able to reach its members).
+  const [canRequest, setCanRequest] = useState<{ id: string; ok: boolean } | null>(null);
+  useEffect(() => {
+    setFriendNote(null);
+    if (!targetId || knownContact) return;
+    let live = true;
+    void getSupabaseClient()
+      .rpc("can_request_dm", { p_user_id: targetId })
+      .then(({ data, error }) => {
+        // On error leave the box: the send reports the real reason.
+        if (live && !error) setCanRequest({ id: targetId, ok: data === true });
+      });
+    return () => {
+      live = false;
+    };
+  }, [targetId, knownContact]);
+  const friendsOnly = !!targetId && !knownContact && canRequest?.id === targetId && !canRequest.ok;
+  const requestSent = !!targetId && pendingOutgoing.some((f) => f.addressee_id === targetId);
 
   useOverlayDismiss(onClose, open);
 
@@ -98,8 +133,11 @@ export function UserProfilePopout({
   // window, otherwise to its left; vertically aligned and kept on screen.
   // Re-placed whenever the card changes height (badges, roles and notes load
   // after it opens) or the window resizes, so it never runs off the bottom.
+  // Waits for `mounted`: usePresence renders the card a beat after `open`,
+  // and running before that measured nothing and never attached the
+  // observer, so a card opened from closed stayed placed for a 480px guess.
   useLayoutEffect(() => {
-    if (!open || !anchor) return;
+    if (!open || !anchor || !mounted) return;
     const place = () => {
       // A roomy bottom margin: on macOS the window often runs behind the Dock,
       // so "just inside the viewport" can still be hidden.
@@ -122,9 +160,10 @@ export function UserProfilePopout({
       ro?.disconnect();
       window.removeEventListener("resize", place);
     };
-  }, [open, anchor, p?.id]);
+  }, [open, anchor, p?.id, mounted]);
 
   const listening = p && presenceStatusFor(p, presenceMap) !== "offline" ? listeningFor(p, listeningMap) : null;
+  const activity = p ? activityFor(p, activityMap) : null;
 
   if (!mounted || !p || typeof document === "undefined") return null;
 
@@ -142,7 +181,13 @@ export function UserProfilePopout({
     const text = message.trim();
     if (!text || !p) return;
     setMessage("");
-    await openDmWithFriend(p.id);
+    const err = await openDmWithFriend(p.id);
+    if (err) {
+      // Never send: the open failed, so the active DM is someone else's.
+      setMessage(text);
+      setSendError(/share a space with/.test(err) ? t("Add {name} as a friend to message them.", { name: displayName(p) }) : err);
+      return;
+    }
     // The thread id settles after the open resolves; same beat as forwarding.
     window.setTimeout(() => void sendDmMessage(text), 250);
     onClose();
@@ -150,11 +195,11 @@ export function UserProfilePopout({
 
   return createPortal(
     <div className="fixed inset-0" style={{ zIndex: OVERLAY_Z.contextMenu - 1 }}>
-      <button type="button" aria-label="Close profile" className="absolute inset-0 cursor-default" onClick={onClose} />
+      <button type="button" aria-label={t("Close profile")} className="absolute inset-0 cursor-default" onClick={onClose} />
       <div
         ref={ref}
         role="dialog"
-        aria-label={`${displayName(p)}'s profile`}
+        aria-label={t("{name}'s profile", { name: displayName(p) })}
         data-side={pos?.side ?? "right"}
         className={`profile-popout${exiting ? " profile-popout-out" : ""} absolute max-h-[calc(100dvh-80px)] w-[340px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg ${theme ? "" : "bg-bg-secondary-alt"} text-text-normal shadow-[0_8px_16px_rgba(0,0,0,0.24),0_0_0_1px_rgba(0,0,0,0.2)]`}
         style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? "visible" : "hidden", ...theme?.style }}
@@ -174,14 +219,14 @@ export function UserProfilePopout({
         <button
           type="button"
           onClick={onOpenFullProfile}
-          aria-label="View full profile"
+          aria-label={t("View full profile")}
           className={`group/avatar absolute left-4 rounded-full p-1.5 ${theme ? "" : "bg-bg-secondary-alt"}`}
           style={{ top: banner ? 76 : 16, backgroundColor: theme?.avatarRing }}
         >
           <span className="relative block">
             <Avatar profile={p} size="xl" className="!h-20 !w-20 !text-2xl" />
             <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-[10px] font-bold uppercase text-white opacity-0 transition-opacity group-hover/avatar:opacity-100">
-              View Profile
+              {t("View Profile")}
             </span>
             <StatusDot
               status={live}
@@ -225,12 +270,12 @@ export function UserProfilePopout({
           <div className={`my-3 h-px ${theme ? "bg-white/15" : "bg-[#2e2f34]"}`} />
 
           {p.bio?.trim() && (
-            <Section title="About Me">
+            <Section title={t("About Me")}>
               <p className="line-clamp-6 whitespace-pre-wrap break-words text-[14px] leading-[18px] text-text-normal">{p.bio.trim()}</p>
             </Section>
           )}
 
-          <Section title="Member Since">
+          <Section title={t("Member Since")}>
             <div className="flex items-center gap-2 text-[14px] leading-[18px] text-text-normal">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo.png" alt="" className="h-4 w-4 object-contain opacity-80" title="Disband" />
@@ -252,17 +297,18 @@ export function UserProfilePopout({
             </div>
           </Section>
 
+          {activity && <div className="mb-3"><ActivityCard activity={activity} /></div>}
           {listening && <div className="mb-3"><ListeningCard listening={listening} /></div>}
 
           {isServerMember && (roles.length > 0 || canManageRoles || canPickSelfRoles) && (
-            <Section title={roles.length === 1 ? "Role" : "Roles"}>
+            <Section title={roles.length === 1 ? t("Role") : t("Roles")}>
               <div className="flex flex-wrap gap-1">
                 {roles.map((r) => (
                   <span key={r.id} className="group/role inline-flex h-[22px] items-center gap-1 rounded-[4px] bg-bg-secondary px-1.5 text-[12px] font-medium text-text-normal">
                     {canManageRoles && onSetRoles ? (
                       <button
                         type="button"
-                        aria-label={`Remove ${r.name}`}
+                        aria-label={t("Remove {name}", { name: r.name })}
                         onClick={() => onSetRoles(memberRoleIds.filter((id) => id !== r.id))}
                         className="relative flex h-3 w-3 items-center justify-center rounded-full"
                         style={{ backgroundColor: r.color }}
@@ -305,14 +351,14 @@ export function UserProfilePopout({
           )}
 
           {!isSelf && note.state !== "unavailable" && (
-            <Section title="Note">
+            <Section title={t("Note")}>
               <textarea
                 value={note.note}
                 onChange={(e) => note.setNote(e.target.value.slice(0, USER_NOTE_MAX))}
                 onBlur={() => void note.save()}
                 disabled={note.state === "loading"}
                 rows={1}
-                placeholder="Click to add a note"
+                placeholder={t("Click to add a note")}
                 className="-mx-1 block min-h-[30px] w-[calc(100%+8px)] resize-none rounded-[3px] bg-transparent px-1 py-1.5 text-[12px] leading-4 text-text-normal outline-none placeholder:text-text-muted focus:bg-bg-tertiary"
               />
             </Section>
@@ -330,23 +376,43 @@ export function UserProfilePopout({
               }`}
               style={theme ? { backgroundColor: theme.primary, color: theme.primaryText } : undefined}
             >
-              <IconEdit size={16} /> Edit Profile
+              <IconEdit size={16} /> {t("Edit Profile")}
             </button>
+          ) : friendsOnly ? (
+            <div className="mt-1">
+              <p className="mb-1.5 text-[12px] leading-4 text-text-muted">
+                {t("Add {name} as a friend to message them.", { name: displayName(p) })}
+              </p>
+              <button
+                type="button"
+                disabled={requestSent}
+                onClick={async () => {
+                  if (!p.username) return;
+                  const err = await sendFriendRequest(p.username);
+                  setFriendNote(err);
+                }}
+                className="flex h-8 w-full items-center justify-center gap-1.5 rounded-[3px] bg-brand text-[14px] font-medium text-white transition-[filter] hover:brightness-110 disabled:cursor-default disabled:bg-button-secondary disabled:text-text-muted disabled:hover:brightness-100"
+              >
+                <IconUserPlus size={16} /> {requestSent ? t("Friend Request Sent") : t("Add Friend")}
+              </button>
+              {friendNote && <p className="mt-1.5 text-[12px] leading-4 text-status-dnd">{friendNote}</p>}
+            </div>
           ) : (
             <input
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => { setMessage(e.target.value); setSendError(null); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   void sendQuickMessage();
                 }
               }}
-              placeholder={`Message @${p.username ?? displayName(p)}`}
-              aria-label={`Message ${displayName(p)}`}
+              placeholder={t("Message @{value}", { value: p.username ?? displayName(p) })}
+              aria-label={t("Message {name}", { name: displayName(p) })}
               className="mt-1 h-10 w-full rounded-[3px] border border-bg-tertiary bg-transparent px-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
             />
           )}
+          {sendError && <p className="mt-1.5 text-[12px] leading-4 text-status-dnd">{sendError}</p>}
         </div>
       </div>
     </div>,

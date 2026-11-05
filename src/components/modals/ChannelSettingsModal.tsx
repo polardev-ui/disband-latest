@@ -10,6 +10,7 @@ import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { IconHash, IconMegaphone, IconSpeaker, IconTrash } from "@/components/icons";
 import type { Channel } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 type ActionKey = "can_view" | "can_post" | "can_react" | "can_attach";
 type TriState = null | boolean;
@@ -44,6 +45,7 @@ interface ChannelSettingsModalProps {
 }
 
 export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelSettingsModalProps) {
+  const { t } = useI18n();
   const app = useApp();
   const { mounted, exiting } = usePresence(channelProp !== null);
   const lastChannelRef = useRef<Channel | null>(null);
@@ -51,6 +53,8 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
   const channel = channelProp ?? lastChannelRef.current;
   const [name, setName] = useState("");
   const [readOnly, setReadOnly] = useState(false);
+  const [userLimit, setUserLimit] = useState(0);
+  const [locked, setLocked] = useState(false);
   const [rows, setRows] = useState<RolePermRow[] | null>(null);
   const [draft, setDraft] = useState<Draft>({});
   const [saving, setSaving] = useState(false);
@@ -80,6 +84,8 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     if (!channel) return;
     setName(channel.name);
     setReadOnly(!!channel.read_only);
+    setUserLimit(channel.user_limit ?? 0);
+    setLocked(!!channel.locked);
     setRows(null);
     setDraft({});
     setSaved(false);
@@ -143,10 +149,14 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     );
   };
 
+  const finalName = name.trim();
+
   // Anything differing from what was loaded raises the classic save bar.
   const dirty =
-    name.trim() !== channel.name ||
+    finalName !== channel.name ||
     readOnly !== !!channel.read_only ||
+    userLimit !== (channel.user_limit ?? 0) ||
+    locked !== !!channel.locked ||
     (rows ?? []).some((r) => ACTIONS.some((a) => (draft[r.role_id]?.[a.key] ?? null) !== r[a.key]));
 
   const save = async () => {
@@ -155,7 +165,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     setError(null);
     const supabase = getSupabaseClient();
     try {
-      const rename = name.trim();
+      const rename = finalName;
       if (rename && rename !== channel.name) {
         const err = await app.renameChannel(channel.id, rename);
         if (err) throw new Error(err);
@@ -163,6 +173,13 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
       if (readOnly !== !!channel.read_only) {
         const err = await app.setChannelReadOnly(channel.id, readOnly);
         if (err) throw new Error(err);
+      }
+      if (userLimit !== (channel.user_limit ?? 0) || locked !== !!channel.locked) {
+        const { error: limitErr } = await supabase
+          .from("channels")
+          .update({ user_limit: userLimit > 0 ? userLimit : null, locked })
+          .eq("id", channel.id);
+        if (limitErr) throw new Error(limitErr.message);
       }
       for (const row of rows ?? []) {
         const cell = draft[row.role_id] ?? { can_view: null, can_post: null, can_react: null, can_attach: null };
@@ -180,15 +197,37 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
       await loadRows(channel.id);
       void app.refreshAll();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save channel settings.");
+      setError(e instanceof Error ? e.message : t("Failed to save channel settings."));
     } finally {
       setSaving(false);
     }
   };
 
+  const lockSwitch = (
+    <label className="flex cursor-pointer items-center justify-between gap-4 border-b border-divider/60 py-4">
+      <span>
+        <span className="block text-[16px] font-medium text-header-primary">{t("Lock channel")}</span>
+        <span className="mt-1 block text-[14px] text-text-muted">
+          {t("Nobody new can join. People already in stay, and admins can still join.")}
+        </span>
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={locked}
+        onClick={() => setLocked(!locked)}
+        className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${locked ? "bg-status-online" : "bg-[#80848e]"}`}
+      >
+        <span
+          className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white transition-all ${locked ? "left-[19px]" : "left-[3px]"}`}
+        />
+      </button>
+    </label>
+  );
+
   return (
     <SettingsLayer
-      label="Channel settings"
+      label={t("Channel settings")}
       exiting={exiting}
       onClose={onClose}
       contentKey={section}
@@ -197,12 +236,12 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
         <select
           value={section}
           onChange={(e) => setSection(e.target.value as typeof section)}
-          aria-label="Channel settings section"
+          aria-label={t("Channel settings section")}
           className="w-full rounded-[4px] bg-bg-tertiary px-2 py-2 text-[16px] font-semibold text-text-normal outline-none"
         >
-          <option value="overview">Overview</option>
-          <option value="permissions">Permissions</option>
-          <option value="delete">Delete Channel</option>
+          <option value="overview">{t("Overview")}</option>
+          <option value="permissions">{t("Permissions")}</option>
+          <option value="delete">{t("Delete Channel")}</option>
         </select>
       }
       sidebar={
@@ -211,24 +250,24 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
             {channel.type === "text" ? (readOnly ? <IconMegaphone size={16} /> : <IconHash size={16} />) : <IconSpeaker size={16} />}
             <h2 className="truncate text-[12px] font-bold uppercase leading-4 tracking-[0.02em]">{channel.name}</h2>
           </div>
-          <SettingsNavItem active={section === "overview"} onClick={() => setSection("overview")}>Overview</SettingsNavItem>
-          <SettingsNavItem active={section === "permissions"} onClick={() => setSection("permissions")}>Permissions</SettingsNavItem>
+          <SettingsNavItem active={section === "overview"} onClick={() => setSection("overview")}>{t("Overview")}</SettingsNavItem>
+          <SettingsNavItem active={section === "permissions"} onClick={() => setSection("permissions")}>{t("Permissions")}</SettingsNavItem>
           <SettingsNavSeparator />
           <SettingsNavItem danger active={section === "delete"} onClick={() => setSection("delete")} trailing={<IconTrash size={16} />}>
-            Delete Channel
+            {t("Delete Channel")}
           </SettingsNavItem>
         </>
       }
     >
       <h2 className="mb-5 text-[20px] font-semibold leading-6 text-header-primary">
-        {section === "overview" ? "Overview" : section === "permissions" ? "Channel Permissions" : "Delete Channel"}
+        {section === "overview" ? t("Overview") : section === "permissions" ? t("Channel Permissions") : t("Delete Channel")}
       </h2>
       {section === "overview" && (
         <>
           <section>
             <div className="mt-2 space-y-3">
               <label className="block">
-                <span className="text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">Channel name</span>
+                <span className="text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">{t("Channel name")}</span>
                 <div className="mt-1 flex items-center">
                   <span className="mr-2 text-text-muted">
                     {channel.type === "text" ? (
@@ -250,11 +289,36 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                 </div>
               </label>
 
-              <label className="flex cursor-pointer items-center justify-between gap-4 border-y border-divider/60 py-4">
+{channel.type === "voice" ? (
+                <>
+                  <div className="border-y border-divider/60 py-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-[16px] font-medium text-header-primary">{t("User limit")}</span>
+                      <span className="text-[14px] font-semibold text-text-normal">
+                        {userLimit > 0 ? t(userLimit === 1 ? "{count} person" : "{count} people", { count: userLimit }) : t("No limit")}
+                      </span>
+                    </div>
+                    <span className="mt-1 block text-[14px] text-text-muted">
+                      {t("Once this many people are in, nobody else can join. Admins can always join.")}
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={99}
+                      value={userLimit}
+                      onChange={(e) => setUserLimit(Number(e.target.value))}
+                      aria-label={t("User limit")}
+                      className="mt-3 w-full accent-brand"
+                    />
+                  </div>
+                  {lockSwitch}
+                </>
+              ) : (
+                              <label className="flex cursor-pointer items-center justify-between gap-4 border-y border-divider/60 py-4">
                 <span>
-                  <span className="block text-[16px] font-medium text-header-primary">Announcement Channel</span>
+                  <span className="block text-[16px] font-medium text-header-primary">{t("Announcement Channel")}</span>
                   <span className="mt-1 block text-[14px] text-text-muted">
-                    Only people who can manage channels may post here.
+                    {t("Only people who can manage channels may post here.")}
                   </span>
                 </span>
                 <button
@@ -269,6 +333,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                   />
                 </button>
               </label>
+              )}
             </div>
           </section>
 
@@ -285,15 +350,15 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
             <div className="mt-2 hidden overflow-x-auto sm:block">
               <div className="min-w-[520px]">
                 <div className="grid grid-cols-[1fr_repeat(4,72px)] items-center gap-1 border-b border-divider pb-1">
-                  <span className="text-[11px] font-bold uppercase text-text-muted">Role</span>
+                  <span className="text-[11px] font-bold uppercase text-text-muted">{t("Role")}</span>
                   {ACTIONS.map((a) => (
                     <span key={a.key} className="text-center text-[11px] font-bold uppercase text-text-muted">
-                      {a.label}
+                      {t(a.label)}
                     </span>
                   ))}
                 </div>
                 {rows === null ? (
-                  <p className="py-4 text-center text-sm text-text-muted">Loading permissions…</p>
+                  <p className="py-4 text-center text-sm text-text-muted">{t("Loading permissions…")}</p>
                 ) : (
                   <div className="divide-y divide-divider/60">
                     {rows.map((r) => (
@@ -312,7 +377,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                 sideways-scrolling table. Same state via renderCell. */}
             <div className="mt-2 space-y-2 sm:hidden">
               {rows === null ? (
-                <p className="py-4 text-center text-sm text-text-muted">Loading permissions…</p>
+                <p className="py-4 text-center text-sm text-text-muted">{t("Loading permissions…")}</p>
               ) : (
                 rows.map((r) => (
                   <div key={r.role_id} className="rounded-lg border border-divider bg-bg-secondary p-3">
@@ -325,7 +390,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                           key={a.key}
                           className="flex items-center justify-between gap-2 rounded bg-bg-accent px-2 py-1.5"
                         >
-                          <span className="text-[11px] font-bold uppercase text-text-muted">{a.label}</span>
+                          <span className="text-[11px] font-bold uppercase text-text-muted">{t(a.label)}</span>
                           {renderCell(r.role_id, a, "min-w-[64px]")}
                         </div>
                       ))}
@@ -341,7 +406,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
           <section className="rounded-lg border border-status-dnd/40 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-[14px] text-text-normal">
-                Permanently delete <span className="font-semibold text-text-normal">#{channel.name}</span> with its
+                {t("Permanently delete")}{" "}<span className="font-semibold text-text-normal">#{channel.name}</span> with its
                 history and permissions. This cannot be undone.
               </p>
               <button
@@ -349,7 +414,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                 onClick={() => setConfirmDelete(true)}
                 className="h-[38px] shrink-0 rounded-[3px] bg-button-danger px-4 text-[14px] font-medium text-white hover:bg-button-danger-hover"
               >
-                Delete Channel
+                {t("Delete Channel")}
               </button>
             </div>
           </section>
@@ -357,9 +422,9 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
 
       <ConfirmDialog
         open={confirmDelete}
-        title={`Delete ${channel.type === "voice" ? "" : "#"}${channel.name}?`}
+        title={t("Delete {name}?", { name: `${channel.type === "voice" ? "" : "#"}${channel.name}` })}
         body="Every message in it is removed for good. This can't be undone."
-        confirmLabel="Delete Channel"
+        confirmLabel={t("Delete Channel")}
         onCancel={() => setConfirmDelete(false)}
         onConfirm={async () => {
           const err = await app.deleteChannel(channel.id);
@@ -372,7 +437,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
       {section !== "delete" && (error || saved || dirty) && (
         <div className="view-enter sticky bottom-5 mt-8 flex items-center justify-between gap-3 rounded-[5px] bg-bg-floating px-4 py-2.5 shadow-[var(--elevation-high)]">
           <p className="text-[14px] font-medium text-text-normal">
-            {error ? <span className="text-status-dnd">{error}</span> : saved && !dirty ? "Changes saved." : "Careful — you have unsaved changes!"}
+            {error ? <span className="text-status-dnd">{error}</span> : saved && !dirty ? t("Changes saved.") : t("Careful — you have unsaved changes!")}
           </p>
           <button
             type="button"
@@ -380,7 +445,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
             disabled={saving}
             className="h-8 shrink-0 rounded-[3px] bg-button-green px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Save Changes"}
+            {saving ? t("Saving…") : t("Save Changes")}
           </button>
         </div>
       )}

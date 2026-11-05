@@ -16,6 +16,7 @@ import {
   type AnonTier,
   type AnonSessionPayload,
 } from "@/lib/anon-accounts";
+import { useI18n } from "@/contexts/I18nContext";
 
 type View = "create" | "login";
 type Step = "form" | "reveal" | "expired" | "purge-confirm" | "purged";
@@ -66,9 +67,10 @@ function isTurnstileCode(code: string | undefined): boolean {
 }
 
 function NewBadge() {
+  const { t } = useI18n();
   return (
     <span className="absolute -right-2 -top-2 rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wide text-white shadow">
-      New
+      {t("New")}
     </span>
   );
 }
@@ -90,6 +92,7 @@ export function AnonymousAuthPanel({
   overlay?: boolean;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const {
     registerAnonymousAccount,
     loginAnonymousAccount,
@@ -147,7 +150,7 @@ export function AnonymousAuthPanel({
       if (result.error) {
         setError(
           isTurnstileCode(result.code)
-            ? "Complete the verification challenge, then try again."
+            ? t("Complete the verification challenge, then try again.")
             : result.error,
         );
         if (isTurnstileCode(result.code)) resetTurnstile();
@@ -177,9 +180,9 @@ export function AnonymousAuthPanel({
         // Rare fallback when session minting failed at creation — send them
         // back to the login screen instead of requiring a verification token
         // we never asked them for here.
-        setError("Your account was created, but sign-in needs your number. Copy it and use 'Log in to an Anonymous Account'.");
+        setError(t("Your account was created, but sign-in needs your number. Copy it and use 'Log in to an Anonymous Account'."));
       } else {
-        setError("Save your account number first.");
+        setError(t("Save your account number first."));
       }
     } finally {
       setLoading(false);
@@ -208,7 +211,7 @@ export function AnonymousAuthPanel({
     if (busyRef.current) return;
     const digits = normalizeAccountNumber(numberInput);
     if (!isValidAccountNumber(digits)) {
-      setError("Enter your 16-digit account number.");
+      setError(t("Enter your 16-digit account number."));
       return;
     }
     busyRef.current = true;
@@ -224,7 +227,7 @@ export function AnonymousAuthPanel({
       if (result.error) {
         setError(
           isTurnstileCode(result.code)
-            ? "Complete the verification challenge, then try again."
+            ? t("Complete the verification challenge, then try again.")
             : result.error,
         );
         return;
@@ -248,12 +251,12 @@ export function AnonymousAuthPanel({
       if (result.error) {
         setError(
           isTurnstileCode(result.code)
-            ? "Complete the verification challenge, then try again."
+            ? t("Complete the verification challenge, then try again.")
             : result.error,
         );
         return;
       }
-      setNotice("Your download has started. Keep the file somewhere safe.");
+      setNotice(t("Your download has started. Keep the file somewhere safe."));
     } finally {
       resetTurnstile();
       setLoading(false);
@@ -271,7 +274,7 @@ export function AnonymousAuthPanel({
       if (result.error) {
         setError(
           isTurnstileCode(result.code)
-            ? "Complete the verification challenge, then try again."
+            ? t("Complete the verification challenge, then try again.")
             : result.error,
         );
         return;
@@ -320,10 +323,10 @@ export function AnonymousAuthPanel({
         <p role="alert" className="rounded-[3px] bg-status-dnd/10 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
           {turnstileAdvice(turnstileError)}{" "}
           <button type="button" className="font-medium text-[#00a8fc] hover:underline" onClick={resetTurnstile}>
-            Retry
+            {t("Retry")}
           </button>
           {turnstileError && turnstileError !== "timeout" && (
-            <span className="ml-1 text-[12px] text-text-muted">(code {turnstileError})</span>
+            <span className="ml-1 text-[12px] text-text-muted">{t("(code")}{" "}{turnstileError})</span>
           )}
         </p>
       )}
@@ -395,18 +398,18 @@ export function AnonymousAuthPanel({
         {/* CREATE — tier picker */}
         {step === "form" && view === "create" && (
           <div className="space-y-5">
-            <div role="radiogroup" aria-label="How long the account lasts">
-              <span className={LABEL}>Account lasts</span>
+            <div role="radiogroup" aria-label={t("How long the account lasts")}>
+              <span className={LABEL}>{t("Account lasts")}</span>
               <div className="grid grid-cols-2 gap-2">
-                {ANON_TIER_ORDER.map((t) => {
-                  const on = tier === t;
+                {ANON_TIER_ORDER.map((tierId) => {
+                  const on = tier === tierId;
                   return (
                     <button
-                      key={t}
+                      key={tierId}
                       type="button"
                       role="radio"
                       aria-checked={on}
-                      onClick={() => setTier(t)}
+                      onClick={() => setTier(tierId)}
                       className={`flex h-11 items-center gap-2.5 rounded-[3px] px-3 text-left text-[16px] font-medium transition-colors ${
                         on ? "bg-interactive-selected text-header-primary" : "bg-bg-secondary text-header-secondary hover:bg-interactive-hover hover:text-header-primary"
                       }`}
@@ -417,7 +420,7 @@ export function AnonymousAuthPanel({
                       >
                         {on && <span className="h-2.5 w-2.5 rounded-full bg-white" />}
                       </span>
-                      {ANON_TIERS[t].label}
+                      {ANON_TIERS[tierId].label}
                     </button>
                   );
                 })}
@@ -425,7 +428,7 @@ export function AnonymousAuthPanel({
             </div>
 
             <div>
-              <span className={LABEL}>Anonymous accounts can&apos;t</span>
+              <span className={LABEL}>{t("Anonymous accounts can’t")}</span>
               <ul className="space-y-1.5 rounded-[3px] bg-bg-secondary px-3 py-2.5">
                 {RESTRICTIONS.map((r) => (
                   <li key={r} className="flex items-center gap-2 text-[14px] text-header-secondary">
@@ -442,7 +445,7 @@ export function AnonymousAuthPanel({
             {errorBlock}
 
             <button type="button" onClick={() => void handleCreate()} disabled={loading || !turnstileToken} className={PRIMARY}>
-              {loading ? spinner : `Create ${ANON_TIERS[tier].label} Account`}
+              {loading ? spinner : t("Create {label} Account", { label: ANON_TIERS[tier].label })}
             </button>
           </div>
         )}
@@ -451,20 +454,20 @@ export function AnonymousAuthPanel({
         {step === "reveal" && (
           <div className="space-y-4">
             <div className="rounded-[3px] bg-bg-tertiary px-4 py-4 text-center">
-              <p className="text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">Your account number</p>
+              <p className="text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">{t("Your account number")}</p>
               <p className="mt-2 select-all font-mono text-[22px] font-semibold tracking-[0.12em] text-header-primary">
                 {createdNumber || "—"}
               </p>
             </div>
             <button type="button" onClick={() => void copyNumber()} className={SECONDARY}>
-              {copied ? "Copied!" : "Copy Account Number"}
+              {copied ? t("Copied!") : t("Copy Account Number")}
             </button>
             <p className="rounded-[3px] bg-[#f0b232]/15 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
-              We can&apos;t recover this number for you. If you lose it, the account is gone.
+              {t("We can’t recover this number for you. If you lose it, the account is gone.")}
             </p>
             {errorBlock}
             <button type="button" onClick={() => void handleRevealContinue()} disabled={loading} className={PRIMARY}>
-              {loading ? spinner : "I've Saved It — Continue"}
+              {loading ? spinner : t("I've Saved It — Continue")}
             </button>
           </div>
         )}
@@ -474,7 +477,7 @@ export function AnonymousAuthPanel({
           <div className="space-y-5">
             <label className="block">
               <span className={LABEL}>
-                Account number <span className="text-status-dnd">*</span>
+                {t("Account number")}{" "}<span className="text-status-dnd">*</span>
               </span>
               <input
                 inputMode="numeric"
@@ -490,7 +493,7 @@ export function AnonymousAuthPanel({
             {errorBlock}
 
             <button type="button" onClick={() => void handleLogin()} disabled={loading || !turnstileToken} className={PRIMARY}>
-              {loading ? spinner : "Log In"}
+              {loading ? spinner : t("Log In")}
             </button>
           </div>
         )}
@@ -499,11 +502,11 @@ export function AnonymousAuthPanel({
         {step === "expired" && expired && (
           <div className="space-y-4">
             <p className="rounded-[3px] bg-bg-secondary px-3 py-2.5 text-[14px] leading-[18px] text-header-secondary">
-              Expired on <span className="font-medium text-header-primary">{formatDay(expired.expiresAt)}</span>.
+              {t("Expired on")}{" "}<span className="font-medium text-header-primary">{formatDay(expired.expiresAt)}</span>.
               {expired.purged
-                ? " Everything has already been deleted."
+                ? t(" Everything has already been deleted.")
                 : expired.canDownload
-                  ? ` You can download a copy of your data until ${formatDay(expired.purgeAfter)} (30 days).`
+                  ? t(" You can download a copy of your data until {value} (30 days).", { value: formatDay(expired.purgeAfter) })
                   : " The download window has closed; this data will be purged."}
             </p>
 
@@ -514,7 +517,7 @@ export function AnonymousAuthPanel({
               <>
                 {turnstile}
                 <button type="button" onClick={() => void handleExport()} disabled={loading || !turnstileToken} className={PRIMARY}>
-                  {loading ? spinner : "Download My Data"}
+                  {loading ? spinner : t("Download My Data")}
                 </button>
                 <button
                   type="button"
@@ -526,7 +529,7 @@ export function AnonymousAuthPanel({
                   }}
                   className="flex h-11 w-full items-center justify-center rounded-[3px] border border-button-danger text-[16px] font-medium text-white transition-colors hover:bg-button-danger"
                 >
-                  Delete Everything Now
+                  {t("Delete Everything Now")}
                 </button>
               </>
             )}
@@ -537,8 +540,7 @@ export function AnonymousAuthPanel({
         {step === "purge-confirm" && expired && (
           <div className="space-y-4">
             <p className="rounded-[3px] bg-status-dnd/10 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
-              This is permanent. Your profile, messages, reactions, notes, saved GIFs and every other trace of this
-              account will be deleted right now, with no copy kept.
+              {t("This is permanent. Your profile, messages, reactions, notes, saved GIFs and every other trace of this account will be deleted right now, with no copy kept.")}
             </p>
             {turnstile}
             {errorBlock}
@@ -548,7 +550,7 @@ export function AnonymousAuthPanel({
               disabled={loading || !turnstileToken}
               className="flex h-11 w-full items-center justify-center rounded-[3px] bg-button-danger text-[16px] font-medium text-white transition-colors hover:bg-button-danger-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? spinner : "Yes, Delete Everything"}
+              {loading ? spinner : t("Yes, Delete Everything")}
             </button>
             <button
               type="button"
@@ -559,7 +561,7 @@ export function AnonymousAuthPanel({
               }}
               className={SECONDARY}
             >
-              Cancel
+              {t("Cancel")}
             </button>
           </div>
         )}
@@ -568,10 +570,10 @@ export function AnonymousAuthPanel({
         {step === "purged" && (
           <div className="space-y-4">
             <p className="rounded-[3px] bg-status-online/10 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
-              Done. This account number now points at nothing and can&apos;t be used to sign in again.
+              {t("Done. This account number now points at nothing and can’t be used to sign in again.")}
             </p>
             <button type="button" onClick={onClose} className={PRIMARY}>
-              Back to Log In
+              {t("Back to Log In")}
             </button>
           </div>
         )}
@@ -581,23 +583,23 @@ export function AnonymousAuthPanel({
           {step === "form" &&
             (view === "create" ? (
               <p>
-                Already have a number?{" "}
+                {t("Already have a number?")}{" "}
                 <button type="button" onClick={() => switchView("login")} className="font-medium text-[#00a8fc] hover:underline">
-                  Log In
+                  {t("Log In")}
                 </button>
               </p>
             ) : (
               <p>
-                Need a throwaway account?{" "}
+                {t("Need a throwaway account?")}{" "}
                 <button type="button" onClick={() => switchView("create")} className="font-medium text-[#00a8fc] hover:underline">
-                  Create One
+                  {t("Create One")}
                 </button>
               </p>
             ))}
           {step !== "purged" && (
             <p>
               <button type="button" onClick={onClose} className="font-medium text-[#00a8fc] hover:underline">
-                {step === "expired" ? "Back to Log In" : "Back"}
+                {step === "expired" ? t("Back to Log In") : t("Back")}
               </button>
             </p>
           )}

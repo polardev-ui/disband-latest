@@ -2,6 +2,7 @@
 
 import { guildTagForeground, showGuildTagSpace, type GuildTag, type GuildTagIcon } from "@/lib/guild-tags";
 import { useGuildTag } from "@/lib/guild-tag-store";
+import { useI18n } from "@/contexts/I18nContext";
 
 /*
  The pixel icons are 12x12 grids: '#' is full ink, '+' half ink for edges and
@@ -185,6 +186,7 @@ export function GuildTagBadge({
   className?: string;
   onActivate?: () => void;
 }) {
+  const { t } = useI18n();
   const foreground = guildTagForeground(tag.color);
   const small = size === "sm";
   return (
@@ -217,7 +219,7 @@ export function GuildTagBadge({
             }
           : undefined
       }
-      title={onActivate ? (tag.is_private ? "Private space — click for details" : "View this space") : `Guild tag: ${tag.tag}`}
+      title={onActivate ? (tag.is_private ? t("Private space — click for details") : t("View this space")) : t("Guild tag: {tag}", { tag: tag.tag })}
       aria-label={`Guild tag ${tag.tag}${onActivate ? ", view space" : ""}`}
     >
       <PixelGuildIcon icon={tag.icon} size={12} />

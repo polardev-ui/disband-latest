@@ -166,7 +166,7 @@ Stripe has an MCP available in some sessions — check for a yearly price id.
 ### (c) Close the detection gap
 
 `MODERATION_PROVIDER=none`, so **new imagery is not detected** — only hash
-matches. Adapters for Sightengine and Hive are already written in `index.ts`.
+matches. A Hive adapter is written in `index.ts` (Sightengine was removed).
 Add a key, then backfill media (see §5). Also recommend Cloudflare's free
 **CSAM Scanning Tool** on the `cdn.disband.dev` zone.
 
@@ -571,3 +571,19 @@ All pushed to main; release chain (push → tag → desktop) verified working.
 - Honestly deferred: message E2EE implementation (blueprint only — a
   drive-by would be toy crypto), sustained load soak (needs staging),
   DB-backed rate limits on non-auth routes (low value targets).
+
+## 9. Voice through Cloudflare Realtime (SFU), 2026-11-01
+
+Voice channels send through Cloudflare Realtime when the web app has
+`CLOUDFLARE_REALTIME_APP_ID` and `CLOUDFLARE_REALTIME_APP_TOKEN` (Vercel
+environment variables; the site is served by Vercel, wrangler.jsonc is unused). Without them,
+`GET /api/voice/sfu` says `enabled: false` and everyone stays on the old mesh.
+
+- `src/lib/voice-sfu.ts`: one RTCPeerConnection per seat; every SDP exchange runs
+  through one queue. Track names are audio, camera, screen, screenaudio.
+- `src/app/api/voice/sfu/route.ts`: proxies Cloudflare's API with the secret and
+  checks the caller is live in the channel. Pulls only reach people in the same room.
+- `voice_presence.transport` / `sfu_session_id` / `sfu_tracks` (migration 0201).
+  Only the server writes `sfu_session_id`. Older apps and iOS are `mesh`; SFU
+  clients keep direct connections with them so mixed rooms work.
+- If Cloudflare can't be reached at join, the seat falls back to mesh by itself.

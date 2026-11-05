@@ -36,6 +36,10 @@ export function BotInviteCard({ code }: { code: string }) {
   const [invite, setInvite] = useState<InviteData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  // A failed lookup that isn't "no such invite" (rate limit, server error).
+  // It used to read as "Invite not found", which sent people off to ask for
+  // a new link that would have failed the same way.
+  const [lookupFailed, setLookupFailed] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +49,15 @@ export function BotInviteCard({ code }: { code: string }) {
       try {
         const res = await apiFetch(`/api/bot/invites/${code}`);
         const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data?.bot) {
+        if (res.status === 429) {
+          setLookupFailed("Too many tries. Wait a minute, then reload this page.");
+          return;
+        }
+        if (!res.ok && res.status !== 404) {
+          setLookupFailed("Couldn't load this invite just now. Try again in a moment.");
+          return;
+        }
+        if (!data?.bot) {
           setNotFound(true);
           return;
         }
@@ -119,6 +131,18 @@ export function BotInviteCard({ code }: { code: string }) {
         {loading ? (
           <div className="w-full max-w-md rounded-lg bg-bg-primary p-8 text-center text-sm text-text-muted shadow-[var(--elevation-high)]">
             Loading invite…
+          </div>
+        ) : lookupFailed ? (
+          <div className="w-full max-w-md rounded-lg bg-bg-primary p-8 text-center shadow-[var(--elevation-high)]">
+            <h1 className="text-lg font-semibold text-text-normal">Something went wrong</h1>
+            <p className="mt-2 text-sm leading-relaxed text-text-muted">{lookupFailed}</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-6 inline-block rounded-[3px] bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+            >
+              Try again
+            </button>
           </div>
         ) : notFound || !invite ? (
           <div className="w-full max-w-md rounded-lg bg-bg-primary p-8 text-center shadow-[var(--elevation-high)]">

@@ -2,14 +2,27 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getDisbandUserMedia } from "@/lib/media";
+import { buildAudioConstraints, type NoiseSuppressionMode } from "@/lib/audio-settings";
+import { VoiceMixer } from "@/lib/voice-mixer";
+import { useI18n } from "@/contexts/I18nContext";
 
-export function MicTest({ deviceId }: { deviceId: string }) {
+/** Plays your mic back through the same pipeline a call uses, so the
+ *  noise suppression choice can be heard before joining. */
+export function MicTest({ deviceId, noiseMode, inputVolume, autoGain, echoCancellation }: {
+  deviceId: string;
+  noiseMode: NoiseSuppressionMode;
+  inputVolume: number;
+  autoGain: boolean;
+  echoCancellation: boolean;
+}) {
+  const { t } = useI18n();
   const [running, setRunning] = useState(false);
   const [level, setLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
+  const mixerRef = useRef<VoiceMixer | null>(null);
   const rafRef = useRef<number | null>(null);
 
   const stop = useCallback(() => {
@@ -19,11 +32,29 @@ export function MicTest({ deviceId }: { deviceId: string }) {
     streamRef.current = null;
     void ctxRef.current?.close();
     ctxRef.current = null;
+    void mixerRef.current?.close();
+    mixerRef.current = null;
     setRunning(false);
     setLevel(0);
   }, []);
 
   useEffect(() => stop, [stop]);
+
+  useEffect(() => {
+    void mixerRef.current?.setNoiseMode(noiseMode);
+  }, [noiseMode]);
+
+  useEffect(() => {
+    mixerRef.current?.setInputVolume(inputVolume);
+  }, [inputVolume]);
+
+  useEffect(() => {
+    void mixerRef.current?.setAutoGainControl(autoGain);
+  }, [autoGain]);
+
+  useEffect(() => {
+    void mixerRef.current?.setEchoCancellation(echoCancellation);
+  }, [echoCancellation]);
 
   useEffect(() => {
     if (running) stop();
@@ -34,13 +65,15 @@ export function MicTest({ deviceId }: { deviceId: string }) {
     setError(null);
     try {
       const stream = await getDisbandUserMedia({
-        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+        audio: deviceId ? { ...buildAudioConstraints(), deviceId: { exact: deviceId } } : true,
       });
       streamRef.current = stream;
+      const mixer = new VoiceMixer(stream.getAudioTracks()[0] ?? null, { noiseMode });
+      mixerRef.current = mixer;
 
       const ctx = new AudioContext();
       ctxRef.current = ctx;
-      const source = ctx.createMediaStreamSource(stream);
+      const source = ctx.createMediaStreamSource(mixer.stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 1024;
       const monitor = ctx.createGain();
@@ -65,9 +98,11 @@ export function MicTest({ deviceId }: { deviceId: string }) {
       tick();
       setRunning(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not open the microphone.");
+      setError(err instanceof Error ? err.message : t("Could not open the microphone."));
       stop();
     }
+    // noiseMode changes are applied live by the effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceId, stop]);
 
   return (
@@ -78,12 +113,12 @@ export function MicTest({ deviceId }: { deviceId: string }) {
           onClick={() => (running ? stop() : void start())}
           className="shrink-0 rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
         >
-          {running ? "Stop test" : "Test mic"}
+          {running ? t("Stop test") : t("Test mic")}
         </button>
         <div
           className="h-2 flex-1 overflow-hidden rounded-full bg-bg-tertiary"
           role="meter"
-          aria-label="Microphone input level"
+          aria-label={t("Microphone input level")}
           aria-valuenow={Math.round(level * 100)}
           aria-valuemin={0}
           aria-valuemax={100}
@@ -98,7 +133,7 @@ export function MicTest({ deviceId }: { deviceId: string }) {
         </div>
       </div>
       {running && (
-        <p className="mt-1.5 text-[12px] text-text-muted">Say something — the bar should move, and you should hear yourself at low volume.</p>
+        <p className="mt-1.5 text-[12px] text-text-muted">{t("Say something — the bar should move, and you should hear yourself at low volume.")}</p>
       )}
       {error && <p className="mt-1.5 text-[12px] text-status-dnd">{error}</p>}
     </div>

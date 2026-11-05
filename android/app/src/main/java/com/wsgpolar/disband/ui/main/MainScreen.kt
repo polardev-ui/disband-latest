@@ -1,6 +1,14 @@
 package com.wsgpolar.disband.ui.main
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -38,6 +46,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.wsgpolar.disband.core.LocalPalette
+import com.wsgpolar.disband.core.leave
 import com.wsgpolar.disband.data.Channel
 import com.wsgpolar.disband.data.ChannelCategory
 import com.wsgpolar.disband.data.ChannelType
@@ -55,6 +64,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.async
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 
 @Composable
@@ -80,6 +92,11 @@ fun MainScreen(
     var inviteFor by remember { mutableStateOf<Server?>(null) }
     var membersFor by remember { mutableStateOf<Server?>(null) }
     var overflowFor by remember { mutableStateOf<Server?>(null) }
+    var settingsFor by remember { mutableStateOf<Server?>(null) }
+    var showAddSpace by remember { mutableStateOf(false) }
+    var showDiscover by remember { mutableStateOf(false) }
+    var inviteToJoin by remember { mutableStateOf<String?>(null) }
+    AskForNotificationsOnce()
     val shellChrome = rememberShellChrome()
     val currentUserId = app.currentUserId
     // `app.servers.value` read the flow ONCE at composition and never
@@ -99,7 +116,9 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
     var inboxLoading by remember { mutableStateOf(true) }
     var inboxError by remember { mutableStateOf<String?>(null) }
-    var spaceLoading by remember { mutableStateOf(false) }
+    // A restored space has a selected id but no channels yet. Starting false
+    // briefly showed "This conversation couldn't be opened" before the load.
+    var spaceLoading by remember { mutableStateOf(shellChrome.selectedServerId != null) }
     var spaceError by remember { mutableStateOf<String?>(null) }
     var retryVersion by remember { mutableStateOf(0) }
 
@@ -110,12 +129,26 @@ fun MainScreen(
             coroutineScope {
                 val threads = async { Database.myDmThreads(uid) }
                 val groups = async { Database.myGroups(uid) }
+                // The unread maps used to be seeded once at sign-in and never
+                // again, so every dot, bold row, Unread filter and dock badge
+                // stayed frozen at their launch-time values.
+                val dmCounts = async { runCatching { Database.unreadDmCounts() }.getOrNull() }
+                val groupCounts = async { runCatching { Database.unreadGroupCounts() }.getOrNull() }
                 dmThreads = threads.await()
                 groupChats = groups.await()
+                dmCounts.await()?.let { rows ->
+                    app.dmUnread.seedUnread(rows.associate { it.threadId to it.unreadCount })
+                }
+                groupCounts.await()?.let { rows ->
+                    app.dmUnread.seedGroupUnread(rows.associate { it.groupId to it.unreadCount })
+                }
                 inboxError = null
             }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-        catch (_: Exception) { inboxError = "Couldn't refresh conversations. Try again." }
+        catch (e: Exception) {
+            android.util.Log.e("Disband", "refreshInbox failed", e)
+            inboxError = "Couldn't refresh conversations. Try again."
+        }
         finally { inboxLoading = false }
     }
 
@@ -141,9 +174,39 @@ fun MainScreen(
         finally { spaceLoading = false }
     }
 
+    // Who's in each voice channel of the open space, and live stages'
+    // topics. Polled while the space is open, like iOS.
+    var voiceOccupants by remember { mutableStateOf<Map<String, List<com.wsgpolar.disband.call.VoiceMember>>>(emptyMap()) }
+    val voiceSpeaking by app.voice.speaking.collectAsStateValue()
+    LaunchedEffect(currentUserId, shellChrome.selectedServerId) {
+        val id = shellChrome.selectedServerId ?: return@LaunchedEffect
+        while (true) {
+            val voiceChannels = allChannels.filter { it.serverId == id && it.type == ChannelType.Voice }
+            runCatching { com.wsgpolar.disband.call.VoiceSession.occupants(voiceChannels.map { it.id }) }
+                .getOrNull()?.let { voiceOccupants = it }
+            val stageIds = voiceChannels.filter { it.isStage == true }.map { it.id }
+            if (stageIds.isNotEmpty()) {
+                runCatching { Database.stageStates(stageIds) }.getOrNull()?.let { states ->
+                    allChannels = allChannels.map { channel ->
+                        val state = states[channel.id] ?: return@map channel
+                        if (state.stageTopic == channel.stageTopic && state.stageStartedAt == channel.stageStartedAt) channel
+                        else channel.copy(stageTopic = state.stageTopic, stageStartedAt = state.stageStartedAt)
+                    }
+                }
+            }
+            delay(6_000)
+        }
+    }
+
     // --- Notification deep link: route once, then tell the caller it's done. ---
     LaunchedEffect(pendingNav) {
         if (pendingNav == null || pendingNav.isBlank) return@LaunchedEffect
+
+        pendingNav.inviteCode?.let { code ->
+            inviteToJoin = code
+            onPendingNavConsumed()
+            return@LaunchedEffect
+        }
 
         // A raw push source has to be identified before it can be opened:
         // it is a bare uuid, and a channel, a DM thread and a group all look
@@ -190,6 +253,47 @@ fun MainScreen(
         }
     }
 
+    // Keep the inbox live while it is on screen. The old screen loaded once
+    // and only refreshed on resume, so a message arriving in front of you did
+    // not reorder the list, update its preview or raise an unread count.
+    LaunchedEffect(currentUserId, lifecycle) {
+        if (currentUserId == null) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            val dmLive = try {
+                com.wsgpolar.disband.data.RealtimeService.observeChanges("dm_messages")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            val groupLive = try {
+                com.wsgpolar.disband.data.RealtimeService.observeChanges("group_messages")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            try {
+                val flows = listOfNotNull(dmLive?.flow, groupLive?.flow)
+                if (flows.isNotEmpty()) {
+                    merge(*flows.toTypedArray()).collectLatest {
+                        // A burst of messages is one inbox refresh.
+                        delay(350)
+                        refreshInbox()
+                    }
+                }
+            } finally {
+                // The effect is cancelled whenever the screen stops, so the
+                // unsubscribe must not inherit that cancellation or the
+                // channels are left subscribed for the next screen.
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                    runCatching { dmLive?.channel?.leave() }
+                    runCatching { groupLive?.channel?.leave() }
+                }
+            }
+        }
+    }
+
 
     val openChannel = allChannels.firstOrNull { it.id == selectedChannelId && it.serverId == selectedServerId }
     val openGroup = groupChats.firstOrNull { it.id == selectedChannelId }
@@ -226,10 +330,10 @@ fun MainScreen(
 
     fun openNotificationSource(source: String) {
         scope.launch {
-            // Notification inbox rows store "channel:<uuid>" / "dm:<uuid>";
-            // push payloads store a bare uuid. The resolver only understands
-            // the bare id, so drop the kind hint before asking.
-            val raw = source.substringAfter(':', source)
+            // Notification inbox rows store "channel:<uuid>" / "dm:<uuid>" /
+            // "/group/<uuid>"; push payloads store a bare uuid. The resolver
+            // only understands the bare id, so drop the kind hint first.
+            val raw = notificationSourceId(source)
             val resolved = when (val answer = Database.resolveNotificationSource(raw)) {
                 null -> null
                 else -> when (answer.kind) {
@@ -301,6 +405,19 @@ fun MainScreen(
                             onInvite = { inviteFor = it },
                             onMembers = { membersFor = it },
                             onOverflow = { overflowFor = it },
+                            occupantsFor = { channel ->
+                                voiceOccupants[channel.id].orEmpty().map { member ->
+                                    VoiceOccupant(
+                                        id = member.userId,
+                                        name = member.name,
+                                        avatarUrl = member.profile?.avatarUrl,
+                                        speaking = member.userId in voiceSpeaking,
+                                        onStage = channel.isStage != true || member.stageSpeaker,
+                                    )
+                                }
+                            },
+                            onAddServer = { showAddSpace = true },
+                            onExplore = { showDiscover = true },
                             // Still unwired, but deliberately left as the
                             // panel's own defaults rather than dead params
                             // here: server unread counts and live voice
@@ -388,7 +505,55 @@ fun MainScreen(
             )
         }
 
+        // In voice but looking elsewhere: a pill to get back, mute or leave.
+        val voiceRoom by app.voice.room.collectAsStateValue()
+        val voiceMembers by app.voice.members.collectAsStateValue()
+        val voiceMuted by app.voice.micMuted.collectAsStateValue()
+        val voiceStage by app.voice.stage.collectAsStateValue()
+        val inVoice = voiceRoom
+        AnimatedVisibility(
+            visible = inVoice != null && shellChrome.dockVisible,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            if (inVoice != null) {
+                val me = voiceMembers.firstOrNull { it.userId == currentUserId }
+                com.wsgpolar.disband.ui.calls.VoicePill(
+                    participantCount = voiceMembers.size,
+                    channelName = inVoice.name,
+                    micMuted = voiceMuted,
+                    canMute = voiceStage == null || me?.stageSpeaker == true,
+                    isStage = voiceStage != null,
+                    onToggleMute = { app.voice.toggleMute() },
+                    onLeave = { app.voice.leave() },
+                    onReturn = {
+                        shellChrome.navigateTo(Destination.Home, inVoice.serverId)
+                        shellChrome.selectedChannelId = inVoice.channelId
+                    },
+                    modifier = Modifier.navigationBarsPadding().padding(bottom = 78.dp),
+                )
+            }
+        }
+
         CallOverlay(app, shellChrome = shellChrome)
+    }
+
+    // The rail's + and Explore, and an invite link that opened the app.
+    val openSpace: (String) -> Unit = { id -> shellChrome.navigateTo(Destination.Home, id) }
+    if (showAddSpace) {
+        AddSpaceSheet(
+            app = app,
+            onDismiss = { showAddSpace = false },
+            onOpenSpace = openSpace,
+            onExplore = { showDiscover = true },
+        )
+    }
+    if (showDiscover) {
+        DiscoverSheet(app = app, onDismiss = { showDiscover = false }, onOpenSpace = openSpace)
+    }
+    inviteToJoin?.let { code ->
+        InviteJoinSheet(app = app, code = code, onDismiss = { inviteToJoin = null }, onOpenSpace = openSpace)
     }
 
     // The three sheets the space header opens.
@@ -406,6 +571,22 @@ fun MainScreen(
             // Leaving a space you are looking at has to put you somewhere
             // else, or the panel renders a server you are no longer in.
             onLeft = { shellChrome.selectedServerId = null },
+            onOpenSettings = { settingsFor = server },
+        )
+    }
+    settingsFor?.let { server ->
+        SpaceSettingsScreen(
+            app = app,
+            server = servers.firstOrNull { it.id == server.id } ?: server,
+            onDismiss = { settingsFor = null },
+            onDeleted = {
+                settingsFor = null
+                shellChrome.selectedServerId = null
+            },
+            onChannelsChanged = {
+                loadedSpaces.remove(server.id)
+                retryVersion++
+            },
         )
     }
 }
@@ -417,3 +598,26 @@ private data class OpenConversation(
     val group: GroupChat?,
     val serverName: String,
 )
+
+/**
+ * Android 13+ shows nothing until the app is allowed to post notifications,
+ * and the only place that asked was a row deep in You — so most people never
+ * got a message or call notification at all. Ask once after sign-in, as iOS
+ * does; after that the row in You is the way back.
+ */
+@Composable
+private fun AskForNotificationsOnce() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        val prefs = context.getSharedPreferences("disband_prefs", Context.MODE_PRIVATE)
+        if (granted || prefs.getBoolean(NOTIFICATIONS_ASKED, false)) return@LaunchedEffect
+        prefs.edit().putBoolean(NOTIFICATIONS_ASKED, true).apply()
+        launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+}
+
+private const val NOTIFICATIONS_ASKED = "notifications_asked_v1"

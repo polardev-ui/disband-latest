@@ -1105,11 +1105,12 @@ private fun BansPage(serverId: String, onBack: () -> Unit) {
 // MARK: - Channels
 
 /** Text channel names take dashes for spaces, as on the web; anything else stays. */
-private fun channelSlug(name: String, type: ChannelType): String {
-    val trimmed = name.trim()
-    val clean = if (type == ChannelType.Text) trimmed.replace(Regex("\\s+"), "-") else trimmed
-    return clean.take(100)
-}
+/**
+ * Channel names are saved as typed. Links match a channel by its
+ * `#link-name` (spaces as dashes, punctuation dropped), worked out when a
+ * message is shown, so the name itself can keep spaces and symbols.
+ */
+private fun cleanChannelName(name: String): String = name.trim().take(100)
 
 private fun channelIcon(channel: Channel): ImageVector = when {
     channel.type == ChannelType.Voice -> Icons.AutoMirrored.Filled.VolumeUp
@@ -1230,7 +1231,7 @@ private fun ChannelsPage(server: Server, push: (Page) -> Unit, onChanged: () -> 
                     }
                     SettingsField(text, { text = it }, placeholder = if (newType == ChannelType.Voice) "Lounge" else "new-channel",
                         capitalise = newType == ChannelType.Voice, padded = false)
-                    val clean = channelSlug(text, newType)
+                    val clean = cleanChannelName(text)
                     if (newType == ChannelType.Text && text.isNotBlank() && clean != text) {
                         Text("It'll be created as #$clean.", color = palette.textMuted, fontSize = 13.sp)
                     }
@@ -1248,7 +1249,7 @@ private fun ChannelsPage(server: Server, push: (Page) -> Unit, onChanged: () -> 
                 }
             },
             confirmButton = {
-                val clean = channelSlug(text, newType)
+                val clean = cleanChannelName(text)
                 TextButton(enabled = clean.isNotEmpty(), onClick = {
                     dialog = null
                     val type = newType
@@ -1319,7 +1320,7 @@ private fun ChannelEditPage(channel: Channel, onChanged: () -> Unit, onBack: () 
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
-    val clean = channelSlug(name, channel.type)
+    val clean = cleanChannelName(name)
     val renamed = clean.isNotEmpty() && clean != channel.name
 
     fun run(close: Boolean, work: suspend () -> Unit) {

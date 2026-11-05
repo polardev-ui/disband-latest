@@ -18,6 +18,7 @@ class AppContainer(private val context: Application) {
     val turnService = com.wsgpolar.disband.data.TurnService()
     val notes = com.wsgpolar.disband.data.NotesService(appScope)
     val calls = com.wsgpolar.disband.call.CallManager(appScope, context)
+    val music = com.wsgpolar.disband.data.MusicPresenceService(appScope, presence)
 
     val appState = com.wsgpolar.disband.state.AppState(
         scope = appScope,
@@ -29,6 +30,7 @@ class AppContainer(private val context: Application) {
         notes = notes,
         turnService = turnService,
         calls = calls,
+        music = music,
     )
 
     fun begin() {

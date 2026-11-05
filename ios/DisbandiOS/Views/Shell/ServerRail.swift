@@ -6,17 +6,33 @@ enum SpaceSelection: Hashable {
     case server(String)
 }
 
+/// A DM or group with unread messages, shown on the rail like the desktop.
+struct RailConversation: Identifiable {
+    let id: String
+    let name: String
+    let avatarUrl: String?
+    let unread: Int
+    let open: () -> Void
+}
+
 /// The vertical strip of spaces on Home's left edge — the same model as the
 /// desktop rail. Inbox on top, then servers, then create / discover.
 struct ServerRail: View {
     let servers: [Server]
     @Binding var selection: SpaceSelection
     var inboxUnread: Int
+    /// Conversations with new messages, under the inbox button.
+    var unreadConversations: [RailConversation] = []
     /// The server whose voice channel you're connected to, if any.
     var voiceServerId: String?
+    /// Servers with a channel you haven't read: the small white pill.
+    var unreadServerIds: Set<String> = []
     var onJoin: () -> Void
     var onCreate: () -> Void
     var onDiscover: () -> Void
+
+    /// Live Catalysts per space, for the level seal in each icon's corner.
+    @State private var catalysts: [String: Int] = [:]
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -34,6 +50,26 @@ struct ServerRail: View {
                     UnreadDot(count: inboxUnread)
                 }
 
+                // Each conversation with something new, as its own picture,
+                // one tap from opening it — as on desktop.
+                ForEach(unreadConversations) { convo in
+                    railButton(selected: false, label: "\(convo.name), \(convo.unread) unread") {
+                        convo.open()
+                    } icon: {
+                        RemoteImage(url: convo.avatarUrl, contentMode: .fill) {
+                            ZStack {
+                                Color(seed: convo.id)
+                                Text(Self.initials(convo.name))
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                    } badge: {
+                        UnreadDot(count: convo.unread)
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                }
+
                 Capsule()
                     .fill(Brand.divider)
                     .frame(width: 26, height: 2)
@@ -41,7 +77,8 @@ struct ServerRail: View {
 
                 ForEach(servers) { server in
                     let isSelected = selection == .server(server.id)
-                    railButton(selected: isSelected, label: server.name) {
+                    railButton(selected: isSelected, unread: unreadServerIds.contains(server.id),
+                               label: unreadServerIds.contains(server.id) ? "\(server.name), unread messages" : server.name) {
                         selection = .server(server.id)
                     } icon: {
                         RemoteImage(url: server.iconUrl, contentMode: .fill) {
@@ -61,11 +98,12 @@ struct ServerRail: View {
                                 .background(Brand.online, in: Circle())
                                 .overlay(Circle().stroke(Brand.background, lineWidth: 2.5))
                                 .offset(x: 3, y: 3)
-                        } else if server.verified == true {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 13))
-                                .foregroundStyle(Brand.verified)
-                                .background(Circle().fill(Brand.background).padding(-1.5))
+                        } else if let kind = ServerBadgeKind.of(verified: server.verified, partner: server.partner,
+                                                                catalysts: catalysts[server.id] ?? 0) {
+                            // The same seal the desktop shows beside a space's
+                            // name: Verified, Partner, or its Catalyst level.
+                            ServerBadgeView(kind: kind, size: 16)
+                                .background(Circle().fill(Brand.background).padding(-2))
                                 .offset(x: 3, y: 3)
                         }
                     }
@@ -83,14 +121,21 @@ struct ServerRail: View {
                     .accessibilityLabel("Discover spaces")
             }
             .padding(.vertical, 12)
+            .animation(.snappy, value: unreadConversations.map(\.id))
             // Room for the floating dock to sit over the end of the list.
             .padding(.bottom, 90)
         }
         .frame(width: 72)
+        .task(id: servers.map(\.id)) {
+            if let counts = try? await DatabaseService.catalystCounts(serverIds: servers.map(\.id)) {
+                catalysts = counts
+            }
+        }
     }
 
     private func railButton<Icon: View, Badge: View>(
         selected: Bool,
+        unread: Bool = false,
         label: String,
         action: @escaping () -> Void,
         @ViewBuilder icon: () -> Icon,
@@ -110,10 +155,11 @@ struct ServerRail: View {
                 .overlay(alignment: .leading) {
                     Capsule()
                         .fill(Color.white)
-                        .frame(width: 4, height: selected ? 38 : 0)
+                        .frame(width: 4, height: selected ? 38 : (unread ? 8 : 0))
                         .offset(x: -2)
                 }
                 .animation(.snappy(duration: 0.25), value: selected)
+                .animation(.snappy(duration: 0.25), value: unread)
         }
         .buttonStyle(RailPressStyle())
         .accessibilityLabel(label)

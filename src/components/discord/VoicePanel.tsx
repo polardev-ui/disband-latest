@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getCallIndicatorState, subscribeCallIndicator } from "@/lib/call-status";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { useVoiceSession } from "@/contexts/VoiceSessionContext";
 import { CallStage, type StageMember, type StageScreen } from "./CallStage";
 import { CallControls, VoiceStatus } from "./CallUI";
@@ -25,6 +27,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
     setMicMuted,
     setDeafened,
   } = useApp();
+  const { t } = useI18n();
 
   const session = useVoiceSession();
   const inThisChannel = session.connectedChannelId === channelId;
@@ -59,24 +62,33 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
     }
   }, [voice.joined, voice.error]);
 
+  // The same clock as the "Voice Connected" card: it starts when you join
+  // and lives above this panel, so switching layouts, channels or views and
+  // coming back no longer restarts it at zero.
   useEffect(() => {
-    if (!voice.joined || connecting) {
+    if (!voice.joined) {
       setElapsed(0);
       return;
     }
-    const started = Date.now();
-    const tick = () => setElapsed(Math.max(0, Date.now() - started));
+    const tick = () => {
+      const started = getCallIndicatorState().startedAt;
+      setElapsed(started ? Math.max(0, Date.now() - started) : 0);
+    };
     tick();
     const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
-  }, [voice.joined, connecting, channelId]);
+    const unsubscribe = subscribeCallIndicator(tick);
+    return () => {
+      window.clearInterval(id);
+      unsubscribe();
+    };
+  }, [voice.joined]);
 
   const stageMembers: StageMember[] = members.map((p) => {
     const isSelf = p.user_id === user?.id;
     return {
       id: p.user_id,
       profile: p.profile,
-      label: p.profile ? displayName(p.profile) + (isSelf ? " (you)" : "") : isSelf ? "You" : "Member",
+      label: p.profile ? displayName(p.profile) + (isSelf ? ` ${t("(you)")}` : "") : isSelf ? t("You") : t("Member"),
       stream: inThisChannel
         ? (isSelf ? session.localStream : session.remoteStreams.get(p.user_id)) ?? null
         : null,
@@ -95,8 +107,8 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
       id: `screen:${p.user_id}`,
       profile: p.profile,
       label: isSelf
-        ? "Your screen"
-        : p.profile ? `${displayName(p.profile)}'s screen` : "Screen",
+        ? t("Your screen")
+        : p.profile ? t("{name}'s screen", { name: displayName(p.profile) }) : t("Screen"),
       stream,
       audio: isSelf ? null : session.remoteScreenAudio.get(p.user_id) ?? null,
       local: isSelf,
@@ -136,7 +148,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
               <IconSpeaker size={34} />
             </span>
             <h2 className="text-[20px] font-bold leading-6 text-header-primary">{channelName}</h2>
-            <p className="mt-1.5 text-[14px] text-header-secondary">No one is currently in voice</p>
+            <p className="mt-1.5 text-[14px] text-header-secondary">{t("No one is currently in voice")}</p>
           </div>
         ) : (
           <div className="flex min-h-0 w-full max-w-5xl flex-1 flex-col py-4">
@@ -170,7 +182,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
                 className="flex h-12 items-center gap-2 rounded-full bg-button-green px-6 text-[15px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:cursor-wait disabled:opacity-60"
               >
                 <IconPhone size={20} />
-                {joining ? "Joining…" : "Join Voice"}
+                {joining ? t("Joining…") : t("Join Voice")}
               </button>
             </>
           ) : (
@@ -187,11 +199,11 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
               }}
               onToggleCamera={() => {
                 setActionError(null);
-                void session.toggleCamera().catch(() => setActionError("Couldn't access the camera."));
+                void session.toggleCamera().catch(() => setActionError(t("Couldn't access the camera.")));
               }}
               onToggleScreenShare={() => {
                 setActionError(null);
-                void session.toggleScreenShare().catch(() => setActionError("Couldn't start screen sharing."));
+                void session.toggleScreenShare().catch(() => setActionError(t("Couldn't start screen sharing.")));
               }}
               onEnd={() => void voice.leave()}
               onOpenSettings={onOpenSettings}

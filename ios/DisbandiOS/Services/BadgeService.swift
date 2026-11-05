@@ -108,6 +108,45 @@ final class BadgeService {
 
     func invalidate(_ userId: String) { cache[userId] = nil }
 
+    /// Every badge you hold, shown or hidden, for the badge settings.
+    func ownBadges(_ userId: String) async -> [(badge: AwardedBadge, visible: Bool)] {
+        await loadCatalogue()
+        struct Row: Decodable {
+            let badgeKey: String
+            let awardedAt: String?
+            let visible: Bool?
+            enum CodingKeys: String, CodingKey {
+                case badgeKey = "badge_key", awardedAt = "awarded_at", visible
+            }
+        }
+        let rows: [Row] = (try? await SupabaseManager.client
+            .from("user_badges")
+            .select("badge_key, awarded_at, visible")
+            .eq("user_id", value: userId)
+            .execute().value) ?? []
+        return rows.compactMap { row in
+            guard let def = catalogue[row.badgeKey] else { return nil }
+            return (AwardedBadge(def: def, awardedAt: RelativeTime.date(from: row.awardedAt), detail: nil),
+                    row.visible ?? true)
+        }
+        .sorted { $0.badge.def.sort < $1.badge.def.sort }
+    }
+
+    /// Show or hide one of your own badges. The RPC only touches the caller's
+    /// rows, so a badge you don't hold can't be switched on.
+    func setVisible(_ userId: String, key: String, visible: Bool) async -> Bool {
+        struct Params: Encodable { let p_key: String; let p_visible: Bool }
+        do {
+            try await SupabaseManager.client
+                .rpc("set_badge_visible", params: Params(p_key: key, p_visible: visible))
+                .execute()
+            invalidate(userId)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     /// Ask the server to re-evaluate what this person has earned.
     func refresh(_ userId: String) async {
         _ = try? await SupabaseManager.client

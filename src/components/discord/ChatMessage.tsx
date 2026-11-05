@@ -1,14 +1,14 @@
 "use client";
 
-import { Fragment, memo, useMemo, type ReactNode } from "react";
+import { Fragment, memo, useMemo, useState, useEffect, type ReactNode } from "react";
 import { AttachmentGrid } from "@/components/discord/AttachmentGrid";
 import { readAttachments } from "@/lib/message-attachments";
 import {
   formatMessageTime, displayName, extractInviteCodes, normalizeMessageContent,
-  mentionsEveryone, mentionsUsername,
+  mentionsEveryone, mentionsUsername, roleMentionSlug,
 } from "@/lib/utils";
 import { extractGiftCodes } from "@/lib/gifts";
-import { renderMarkdown } from "@/lib/markdown";
+import { renderMarkdown, roleMentionColour } from "@/lib/markdown";
 import { embedColorHex, type Embed } from "@/lib/embeds";
 import { safeImageUrl } from "@/lib/safe-url";
 import {
@@ -37,10 +37,12 @@ import { MessageAttachment } from "./MessageAttachment";
 import { AttachmentUploadCard } from "./AttachmentUploadCard";
 import { MessageReactions } from "./MessageReactions";
 import { MessageActionBar } from "./MessageActionBar";
+import { InteractionHeader, MessageComponents } from "./MessageComponents";
 import { Twemoji } from "@/components/ui/Twemoji";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { MessageReaction, ReplyPreview } from "@/lib/messages";
 import type { ChannelLite } from "@/lib/markdown";
+import { useI18n } from "@/contexts/I18nContext";
 
 export interface ChatMessageData {
   id: string;
@@ -53,9 +55,12 @@ export interface ChatMessageData {
   attachment_name?: string | null;
   attachment_size?: number | null;
   reply_to_id?: string | null;
+  reply_to_deleted?: boolean;
   reply_to?: ReplyPreview | null;
   embeds?: Embed[] | null;
   webhook?: import("@/lib/embeds").MessageWebhookInfo | null;
+  components?: import("@/lib/bot-commands").ActionRow[] | null;
+  interaction?: import("@/lib/bot-commands").MessageInteractionInfo | null;
   edited_at?: string | null;
   created_at: string;
   mentions?: string[];
@@ -65,6 +70,8 @@ export interface ChatMessageData {
 }
 
 interface ChatMessageProps {
+  /** The viewer's role ids in this space; a ping through one colours the row. */
+  myRoleIds?: string[];
   message: ChatMessageData;
   showHeader: boolean;
   compact: boolean;
@@ -316,7 +323,66 @@ function MessageBody({  content,
   customEmoji?: Record<string, string>;
   roles?: ServerRole[];
 }) {
-  const codes = extractInviteCodes(content);
+  function formatDiscordTimestamp(unix: number, flag: string): string {
+  const date = new Date(unix * 1000);
+  switch (flag) {
+    case "t":
+      return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    case "T":
+      return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" });
+    case "d":
+      return date.toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "numeric" });
+    case "D":
+      return date.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+    case "F":
+      return date.toLocaleString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+    case "R": {
+      const diff = (unix * 1000 - Date.now()) / 1000;
+      const abs = Math.abs(diff);
+      const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+      if (abs < 60) return rtf.format(Math.round(diff), "second");
+      if (abs < 3600) return rtf.format(Math.round(diff / 60), "minute");
+      if (abs < 86400) return rtf.format(Math.round(diff / 3600), "hour");
+      if (abs < 2592000) return rtf.format(Math.round(diff / 86400), "day");
+      if (abs < 31536000) return rtf.format(Math.round(diff / 2592000), "month");
+      return rtf.format(Math.round(diff / 31536000), "year");
+    }
+    case "f":
+    default:
+      return date.toLocaleString(undefined, { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+}
+
+function fullTimestampLabel(unix: number): string {
+  return new Date(unix * 1000).toLocaleString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function TimestampChip({ unix, flag }: { unix: number; flag: string }) {
+  const [label, setLabel] = useState(() => formatDiscordTimestamp(unix, flag));
+  useEffect(() => {
+    const interval = flag === "R" ? 1000 : 60000;
+    const id = window.setInterval(() => setLabel(formatDiscordTimestamp(unix, flag)), interval);
+    return () => clearInterval(id);
+  }, [unix, flag]);
+  return (
+    <span
+      className="inline rounded bg-white/10 px-1 py-0.5 text-[0.9em] font-medium text-text-normal"
+      title={fullTimestampLabel(unix)}
+    >
+      {label}
+    </span>
+  );
+}
+
+const codes = extractInviteCodes(content);
   const giftCodes = extractGiftCodes(content);
   const previewUrls = areLinkPreviewsEnabled() ? extractPreviewUrls(content) : [];
   // A GIF link renders as the GIF itself (see GifLinkEmbed below), so its raw
@@ -349,7 +415,18 @@ function MessageBody({  content,
           ) : emojiOnly ? (
             <Twemoji>{textOnly}</Twemoji>
           ) : (
-            <Twemoji>{renderCustomEmojiMarkdown(textOnly, members, onMentionClick, channels, onChannelClick, customEmoji, roles)}</Twemoji>
+            <>
+              {textOnly.split(/(<t:\d+:[tTdDfFR]>)/g).map((segment, i) => {
+                const m = segment.match(/^<t:(\d+):([tTdDfFR])>$/);
+                if (m) return <TimestampChip key={i} unix={Number(m[1])} flag={m[2]} />;
+                if (!segment) return null;
+                return (
+                  <Twemoji key={i}>
+                    {renderCustomEmojiMarkdown(segment, members, onMentionClick, channels, onChannelClick, customEmoji, roles)}
+                  </Twemoji>
+                );
+              })}
+            </>
           )}
         </div>
       )}
@@ -385,6 +462,7 @@ function ReplyQuote({
   reply: ReplyPreview;
   onJump?: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const label = reply.author ? displayName(reply.author as Profile) : "Unknown";
   // The spine curls from the avatar column up into the quoted line.
   const spine = (
@@ -396,10 +474,10 @@ function ReplyQuote({
   // real delete nulls reply_to_id in the database.
   if (reply.pending) {
     return (
-      <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label="Loading original message">
+      <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label={t("Loading original message")}>
         {spine}
         <span className="h-4 w-4 shrink-0 rounded-full bg-button-secondary" />
-        <span className="truncate italic text-text-muted">Original message</span>
+        <span className="truncate italic text-text-muted">{t("Original message")}</span>
       </div>
     );
   }
@@ -408,10 +486,10 @@ function ReplyQuote({
   // ordinary outside-the-window case renders the fetched quote instead.
   if (reply.deleted) {
     return (
-      <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label="Original message unavailable">
+      <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label={t("Original message unavailable")}>
         {spine}
         <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-button-secondary text-[9px] text-text-muted">!</span>
-        <span className="truncate italic text-text-muted">Original message unavailable</span>
+        <span className="truncate italic text-text-muted">{t("Original message unavailable")}</span>
       </div>
     );
   }
@@ -464,7 +542,9 @@ function ChatMessageImpl({
   onChannelClick,
   customEmoji,
   roles,
+  myRoleIds,
 }: ChatMessageProps & { members?: Profile[] }) {
+  const { t } = useI18n();
   const author = message.author;
   const webhook = message.webhook ?? null;
   // Webhooks post as a backing bot profile. Show the webhook's own name and
@@ -572,11 +652,19 @@ function ChatMessageImpl({
     />
   ) : null;
 
-  const replyBlock = message.reply_to ? (
+  const replyBlock = message.interaction?.type === "command" ? (
+    <InteractionHeader interaction={message.interaction} />
+  ) : message.reply_to ? (
     <ReplyQuote reply={message.reply_to} onJump={onJumpToReply} />
+  ) : message.reply_to_deleted ? (
+    <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px]" aria-label={t("Original message was deleted")}>
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-button-secondary text-[9px] text-text-muted">!</span>
+      <span className="truncate italic text-text-muted">{t("Original message was deleted")}</span>
+    </div>
   ) : null;
 
   const embedBlock = (
+    <>
     <MessageEmbeds
       embeds={message.embeds}
       members={renderMembers}
@@ -586,6 +674,8 @@ function ChatMessageImpl({
       onContentResize={onContentResize}
       roles={roles}
     />
+    {!message.sending && <MessageComponents messageId={message.id} rows={message.components} />}
+    </>
   );
 
   const reactionBlock = onToggleReaction ? (
@@ -593,7 +683,7 @@ function ChatMessageImpl({
   ) : null;
 
   const editedTag = message.edited_at ? (
-    <span className="ml-1 select-none text-[10px] leading-none text-text-muted" title={new Date(message.edited_at).toLocaleString()}>(edited)</span>
+    <span className="ml-1 select-none text-[10px] leading-none text-text-muted" title={new Date(message.edited_at).toLocaleString()}>{t("(edited)")}</span>
   ) : null;
 
   const highlightClass = highlight ? "!bg-brand/10 shadow-[inset_2px_0_0_0_var(--brand)]" : "";
@@ -609,9 +699,33 @@ function ChatMessageImpl({
     && message.author_id !== currentUserId
   );
   const pingedYou = mentionedYou || repliedToYou;
-  const rowBgClass = pingedYou
-    ? "bg-[var(--ping-bg)] hover:bg-[var(--ping-bg-hover)] shadow-[inset_2px_0_0_0_var(--ping-bar)]"
-    : "hover:bg-bg-message-hover";
+  // Pinged through a coloured role you hold (and not by name): the row takes
+  // that role's colour, as on Discord. The highest such role wins.
+  const pingRoleColour = (() => {
+    if (!pingedYou || !roles?.length || !myRoleIds?.length) return null;
+    if (mentionsUsername(body, currentUserName)) return null;
+    const mine = new Set(myRoleIds);
+    const slugs = new Set([...body.matchAll(/@&([a-zA-Z0-9_-]{1,64})/g)].map((m) => m[1].toLowerCase()));
+    if (slugs.size === 0) return null;
+    const hit = roles
+      .filter((r) => mine.has(r.id) && slugs.has(roleMentionSlug(r.name).toLowerCase()))
+      .sort((a, b) => b.position - a.position)
+      .map((r) => roleMentionColour(r))
+      .find((c): c is string => !!c);
+    return hit ?? null;
+  })();
+  const rowBgClass = pingRoleColour
+    ? "bg-[var(--ping-role-bg)] hover:bg-[var(--ping-role-bg-hover)] shadow-[inset_2px_0_0_0_var(--ping-role)]"
+    : pingedYou
+      ? "bg-[var(--ping-bg)] hover:bg-[var(--ping-bg-hover)] shadow-[inset_2px_0_0_0_var(--ping-bar)]"
+      : "hover:bg-bg-message-hover";
+  const rowStyle = pingRoleColour
+    ? ({
+        "--ping-role": pingRoleColour,
+        "--ping-role-bg": `color-mix(in srgb, ${pingRoleColour} 10%, transparent)`,
+        "--ping-role-bg-hover": `color-mix(in srgb, ${pingRoleColour} 14%, transparent)`,
+      } as React.CSSProperties)
+    : undefined;
 
   if (isSystem) {
     const sysText = normalizeMessageContent(message.content);
@@ -659,7 +773,7 @@ function ChatMessageImpl({
             <span className="text-[15px] font-semibold text-text-normal">Disband</span>
             <IconVerified size={15} className="shrink-0 text-sky-400" />
             <span className="rounded bg-brand/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand">
-              Official
+              {t("Official")}
             </span>
             <time className="ml-auto shrink-0 text-xs text-text-muted">
               {formatMessageTime(message.created_at).split(" at ").pop()}
@@ -741,7 +855,7 @@ function ChatMessageImpl({
           type="button"
           onClick={openAuthor}
           onContextMenu={authorContextMenu}
-          aria-label={`Open ${displayName(shownAuthor ?? {})}'s profile`}
+          aria-label={t("Open {name}'s profile", { name: displayName(shownAuthor ?? {}) })}
           className={`absolute left-4 ${avatarTop} mt-0.5 rounded-full transition-transform active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-brand`}
         >
           <Avatar profile={shownAuthor ?? { display_name: "?" }} size="md" />
@@ -815,7 +929,7 @@ export function shouldGroupMessages(
   ) {
     return false;
   }
-  if (msg.reply_to_id) return false;
+  if (msg.reply_to_id || msg.interaction) return false;
   // Grouped rows hide the header (avatar, name, full timestamp), so anything
   // that changes how the row reads starts a new group instead.
   if (new Date(prev.created_at).toDateString() !== new Date(msg.created_at).toDateString()) return false;

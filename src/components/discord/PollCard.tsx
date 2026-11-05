@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { closePoll, getPoll, totalVotes, votePoll, type Poll } from "@/lib/poll";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { IconClose } from "@/components/icons";
+import { useI18n } from "@/contexts/I18nContext";
 
 /*
  Polls wear the same flat card as every other attachment: 4px corners, a
@@ -11,6 +12,7 @@ import { IconClose } from "@/components/icons";
  quiet footer. No floating pills or brand-coloured glow.
 */
 export function PollCard({ pollId, currentUserId }: { pollId: string; currentUserId?: string | null }) {
+  const { t } = useI18n();
   const [poll, setPoll] = useState<Poll | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +25,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
       setPoll(await getPoll(pollId));
       setError(null);
     } catch {
-      setError("This poll could not be loaded.");
+      setError(t("This poll could not be loaded."));
     } finally {
       setLoading(false);
     }
@@ -33,22 +35,27 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
     void load();
   }, [load]);
 
+  // Votes and poll rows are private to their owners (0155), so table change
+  // feeds never reach other viewers and only produced Realtime errors. Anyone
+  // who votes or closes the poll tells the others on a broadcast topic, and
+  // they reload the aggregate counts through get_poll().
+  const channelRef = useRef<ReturnType<ReturnType<typeof getSupabaseClient>["channel"]> | null>(null);
   useEffect(() => {
-    const channel = getSupabaseClient()
-      .channel(`poll:${pollId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "poll_votes", filter: `poll_id=eq.${pollId}` },
-        () => { if (!inFlight.current) void load(); },
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "polls", filter: `id=eq.${pollId}` },
-        () => { if (!inFlight.current) void load(); },
-      )
+    const supabase = getSupabaseClient();
+    const channel = supabase
+      .channel(`poll:${pollId}`, { config: { broadcast: { self: false } } })
+      .on("broadcast", { event: "changed" }, () => { if (!inFlight.current) void load(); })
       .subscribe();
-    return () => { void getSupabaseClient().removeChannel(channel); };
+    channelRef.current = channel;
+    return () => {
+      channelRef.current = null;
+      void supabase.removeChannel(channel);
+    };
   }, [pollId, load]);
+
+  function announce() {
+    void channelRef.current?.send({ type: "broadcast", event: "changed", payload: {} });
+  }
 
   async function vote(index: number) {
     if (busy || !poll || poll.closed) return;
@@ -56,8 +63,9 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
     inFlight.current = true;
     try {
       setPoll(await votePoll(pollId, index));
+      announce();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not record your vote.");
+      setError(err instanceof Error ? err.message : t("Could not record your vote."));
     } finally {
       inFlight.current = false;
       setBusy(false);
@@ -70,8 +78,9 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
     inFlight.current = true;
     try {
       setPoll(await closePoll(pollId));
+      announce();
     } catch {
-      setError("Could not close the poll.");
+      setError(t("Could not close the poll."));
     } finally {
       inFlight.current = false;
       setBusy(false);
@@ -92,7 +101,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
   if (!poll) {
     return (
       <div className="mt-1 w-full max-w-[520px] rounded-[4px] border border-divider bg-bg-secondary p-3 text-[14px] text-text-muted">
-        {error ?? "Poll unavailable"}
+        {error ?? t("Poll unavailable")}
       </div>
     );
   }
@@ -105,7 +114,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
     <div className="mt-1 w-full max-w-[520px] overflow-hidden rounded-[4px] border border-divider bg-bg-secondary">
       <div className="flex items-start gap-3 border-b border-divider px-3.5 py-2.5">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.09em] text-text-muted">Poll</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.09em] text-text-muted">{t("Poll")}</p>
           <p className="mt-0.5 text-[15px] font-semibold leading-snug text-text-normal">
             {poll.question}
           </p>
@@ -115,7 +124,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
             type="button"
             onClick={() => void close()}
             disabled={busy}
-            title="Close this poll"
+            title={t("Close this poll")}
             className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-[2px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
           >
             <IconClose size={14} />
@@ -136,7 +145,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
               type="button"
               disabled={poll.closed || busy}
               onClick={() => void vote(i)}
-              title={mine ? "Click again to take your vote back" : undefined}
+              title={mine ? t("Click again to take your vote back") : undefined}
               className={`relative block w-full overflow-hidden rounded-[3px] border px-3 py-2 text-left transition-colors ${
                 mine
                   ? "border-brand bg-[#5865f2]/15"
@@ -176,7 +185,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
           {total} {total === 1 ? "vote" : "votes"}
           {poll.myVote !== null ? " · You voted" : ""}
         </span>
-        <span>{poll.closed ? "Poll closed" : "Select one option"}</span>
+        <span>{poll.closed ? t("Poll closed") : t("Select one option")}</span>
       </div>
 
       {error && <p className="border-t border-divider px-3.5 py-2 text-[12px] text-status-dnd">{error}</p>}

@@ -18,9 +18,33 @@ let rpcOverride: Rpc | null = null;
 export function setMemberWindowRpcForPreview(fn: Rpc | null) {
   rpcOverride = fn;
 }
+/**
+ * "Permission denied" or a rejected JWT means this client has no signed-in
+ * session. Retrying cannot succeed; two such clients once sent 15,000
+ * member lookups in a day retrying every two seconds.
+ */
+function isAuthError(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code;
+  return code === "42501" || code === "PGRST301" || code === "PGRST303";
+}
+
+const ONLINE_RETRY_MIN_MS = 2_000;
+const ONLINE_RETRY_MAX_MS = 60_000;
+
+// Presence churn and roster pings re-run every lookup within seconds, so a
+// signed-out client pauses them all for a while after its first rejection.
+const AUTH_PAUSE_MS = 30_000;
+let authPausedUntil = 0;
+
 function rpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: unknown }> {
   if (rpcOverride) return rpcOverride(fn, args);
-  return Promise.resolve(getSupabaseClient().rpc(fn, args)).then(({ data, error }) => ({ data, error }));
+  if (Date.now() < authPausedUntil) {
+    return Promise.resolve({ data: null, error: { code: "42501", message: "Signed out; member lookups paused" } });
+  }
+  return Promise.resolve(getSupabaseClient().rpc(fn, args)).then(({ data, error }) => {
+    if (isAuthError(error)) authPausedUntil = Date.now() + AUTH_PAUSE_MS;
+    return { data, error };
+  });
 }
 
 interface Row {
@@ -39,6 +63,8 @@ interface Row {
  */
 const spaceCache = new Map<string, { total: number | null; onlineById: Map<string, WindowMember> }>();
 const SPACE_CACHE_LIMIT = 12;
+/** How often the offline section re-reads who to leave out. */
+const OFFLINE_REFRESH_MS = 15_000;
 
 function toMember(r: Row): WindowMember | null {
   if (!r.profile) return null;
@@ -68,7 +94,20 @@ function toMember(r: Row): WindowMember | null {
  * database, or a preview without a session); callers then fall back to the
  * members they already have.
  */
-export function useMemberWindow(serverId: string | null, presence: PresenceMap) {
+export function useMemberWindow(
+  serverId: string | null,
+  presence: PresenceMap,
+  /** Scope the list to who can see this channel (a private channel lists fewer people). */
+  channelId: string | null = null,
+  /** Bumped when the roster changed (kick, join, role or channel permission change). */
+  version = 0,
+) {
+  // One list per space+channel; the channel RPCs take the channel instead of the space.
+  const listKey = serverId ? `${serverId}:${channelId ?? ""}` : null;
+  const scope = channelId ? { p_channel_id: channelId } : { p_server_id: serverId };
+  const fn = (name: "counts" | "ids" | "offline") => channelId
+    ? { counts: "get_channel_member_counts", ids: "get_channel_members_by_ids", offline: "get_channel_offline_members" }[name]
+    : { counts: "get_server_member_counts", ids: "get_server_members_by_ids", offline: "get_server_offline_members" }[name];
   const [total, setTotal] = useState<number | null>(null);
   const [mode, setMode] = useState<"window" | "local">("window");
   const [onlineById, setOnlineById] = useState<Map<string, WindowMember>>(new Map());
@@ -86,6 +125,7 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
   // changed role, name or avatar doesn't stick around.
   const refreshCached = useRef(false);
   const onlineRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onlineRetryDelay = useRef(ONLINE_RETRY_MIN_MS);
   // Bumped when the space changes: drops every in-flight response.
   const generation = useRef(0);
   // Bumped when the offline pages are invalidated (who's online changed).
@@ -117,14 +157,14 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
   // New space: start over, from the cache when this space was seen before.
   useEffect(() => {
     generation.current += 1;
-    const cached = serverId ? spaceCache.get(serverId) : undefined;
+    const cached = listKey ? spaceCache.get(listKey) : undefined;
     setTotal(cached?.total ?? null);
     setMode("window");
     setOnlineById(cached ? new Map(cached.onlineById) : new Map());
     setResolvedOnlineIds(cached ? new Set(cached.onlineById.keys()) : new Set());
     setOnlineReady(!!cached);
     refreshCached.current = !!cached;
-    setStateServerId(serverId);
+    setStateServerId(listKey);
     setPages(new Map());
     inflight.current.clear();
     attemptedOnlineIds.current.clear();
@@ -134,7 +174,7 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
     }
     if (!serverId) return;
     const gen = generation.current;
-    void rpc("get_server_member_counts", { p_server_id: serverId })
+    void rpc(fn("counts"), scope)
       .then(({ data, error }) => {
         if (gen !== generation.current) return;
         const row = (Array.isArray(data) ? data[0] : data) as { total?: number | string } | null;
@@ -144,7 +184,8 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
         }
         setTotal(Number(row.total));
       });
-  }, [serverId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listKey, version]);
 
   // Resolve the online ids to members of this space. Chunked instead of
   // slicing at 1,000: the old cap silently dropped the rest of a busy roster
@@ -169,15 +210,17 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
     void Promise.all(
       chunks.map(async (ids) => ({
         ids,
-        result: await rpc("get_server_members_by_ids", { p_server_id: serverId, p_user_ids: ids }),
+        result: await rpc(fn("ids"), { ...scope, p_user_ids: ids }),
       })),
     ).then((results) => {
       if (gen !== generation.current) return;
       const rows: Row[] = [];
       let failed = false;
+      let signedOut = false;
       for (const { ids, result } of results) {
         if (result.error) {
           failed = true;
+          if (isAuthError(result.error)) signedOut = true;
           for (const id of ids) attemptedOnlineIds.current.delete(id);
           continue;
         }
@@ -202,27 +245,34 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
       setOnlineReady(true);
 
       // A transient failure must not downgrade a 5,000-person roster to the
-      // first local page. Retry those ids shortly instead.
-      if (failed && !onlineRetryTimer.current) {
+      // first local page. Retry those ids, backing off while it keeps
+      // failing. A signed-out client waits for the next space or roster
+      // change instead of retrying at all.
+      if (!failed) {
+        onlineRetryDelay.current = ONLINE_RETRY_MIN_MS;
+      } else if (!signedOut && !onlineRetryTimer.current) {
+        const delay = onlineRetryDelay.current;
+        onlineRetryDelay.current = Math.min(delay * 2, ONLINE_RETRY_MAX_MS);
         onlineRetryTimer.current = setTimeout(() => {
           onlineRetryTimer.current = null;
           setOnlineRetry((n) => n + 1);
-        }, 2000);
+        }, delay);
       }
     });
-  }, [serverId, mode, settledOnline, onlineById, onlineRetry]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listKey, version, mode, settledOnline, onlineById, onlineRetry]);
 
   // Keep the cache current for the next visit.
   useEffect(() => {
-    if (!serverId || mode !== "window" || stateServerId !== serverId) return;
-    spaceCache.delete(serverId);
-    spaceCache.set(serverId, { total, onlineById });
+    if (!listKey || mode !== "window" || stateServerId !== listKey) return;
+    spaceCache.delete(listKey);
+    spaceCache.set(listKey, { total, onlineById });
     while (spaceCache.size > SPACE_CACHE_LIMIT) {
       const oldest = spaceCache.keys().next().value;
       if (oldest === undefined) break;
       spaceCache.delete(oldest);
     }
-  }, [serverId, stateServerId, mode, total, onlineById]);
+  }, [listKey, stateServerId, mode, total, onlineById]);
 
   // Members of this space who are online right now (non-members drop out
   // because the RPC only returns people in the space).
@@ -243,8 +293,36 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
   }, [resolvedOnlineIds, settledOnline]);
 
   // The offline pages exclude the online ids, so a change in who's online
-  // shifts every offset: drop the cached pages and let the list ask again.
-  const excludeKey = onlineMemberIds.join(",");
+  // shifts every offset and costs every viewer a refetch. In a big space
+  // presence never stops changing, and that refetch loop was the heaviest
+  // load on the database. Take a new snapshot at most every
+  // OFFLINE_REFRESH_MS; for those seconds someone who just came online can
+  // also still be listed under Offline. A new list, or the first resolved
+  // roster, applies straight away.
+  const liveOnlineKey = onlineMemberIds.join(",");
+  const [excludeIds, setExcludeIds] = useState<string[]>(onlineMemberIds);
+  const excludeApplied = useRef<{ list: string | null; ready: boolean; at: number }>({
+    list: null,
+    ready: false,
+    at: 0,
+  });
+  useEffect(() => {
+    const last = excludeApplied.current;
+    const apply = () => {
+      excludeApplied.current = { list: listKey, ready: onlineReady, at: Date.now() };
+      setExcludeIds(onlineMemberIds);
+    };
+    const wait = last.at + OFFLINE_REFRESH_MS - Date.now();
+    if (last.list !== listKey || (onlineReady && !last.ready) || wait <= 0) {
+      apply();
+      return;
+    }
+    const t = window.setTimeout(apply, wait);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveOnlineKey, listKey, onlineReady]);
+
+  const excludeKey = excludeIds.join(",");
   useEffect(() => {
     pageGeneration.current += 1;
     setPages(new Map());
@@ -255,7 +333,7 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
   // actually members. Otherwise an online person can flash in Offline and
   // then jump into Online, which is what made the order look unstable.
   const offlineCount =
-    total === null || !onlineReady ? null : Math.max(0, total - onlineMemberIds.length);
+    total === null || !onlineReady ? null : Math.max(0, total - excludeIds.length);
 
   /**
    * Ask for the offline rows [from, to) to be loaded; drop pages far away.
@@ -268,7 +346,7 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
       const lastPage = Math.max(firstPage, Math.floor(Math.max(from, to - 1) / MEMBER_WINDOW_PAGE));
       const gen = generation.current;
       const pageGen = pageGeneration.current;
-      const exclude = onlineMemberIds;
+      const exclude = excludeIds;
 
       // Release pages well outside the window.
       setPages((prev) => {
@@ -287,8 +365,8 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
         if (page * MEMBER_WINDOW_PAGE >= offlineCount) break;
         if (inflight.current.has(page)) continue;
         inflight.current.add(page);
-        void rpc("get_server_offline_members", {
-            p_server_id: serverId,
+        void rpc(fn("offline"), {
+            ...scope,
             p_exclude: exclude,
             p_offset: page * MEMBER_WINDOW_PAGE,
             p_limit: MEMBER_WINDOW_PAGE,
@@ -310,7 +388,8 @@ export function useMemberWindow(serverId: string | null, presence: PresenceMap) 
           });
       }
     },
-    [serverId, mode, offlineCount, onlineMemberIds],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [listKey, version, mode, offlineCount, excludeIds],
   );
 
   const offlineAt = useCallback(

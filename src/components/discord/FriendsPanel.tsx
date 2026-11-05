@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { GuildTag } from "@/components/ui/GuildTag";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -25,6 +26,13 @@ const STATUS_LABEL: Record<UserStatus, string> = {
   idle: "Away",
   dnd: "Do Not Disturb",
   offline: "Offline",
+};
+
+const TAB_LABEL: Record<FriendsTab, string> = {
+  online: "Online",
+  all: "All",
+  pending: "Pending",
+  blocked: "Blocked",
 };
 
 function StatusAvatar({ profile, presence }: { profile: Profile; presence: PresenceMap }) {
@@ -98,6 +106,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
     openDmWithFriend,
     presenceMap,
   } = useApp();
+  const { t } = useI18n();
 
   const [tab, setTab] = useState<FriendsTab>("online");
   const [query, setQuery] = useState("");
@@ -152,7 +161,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
     if (err) {
       setAddError(err);
     } else {
-      setAddSuccess(`Friend request sent to ${name}.`);
+      setAddSuccess(t("Friend request sent to {name}.", { name }));
       setAddValue("");
     }
     setSending(false);
@@ -160,38 +169,38 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
 
   const heading =
     tab === "pending"
-      ? `Pending — ${pendingIncoming.length + pendingOutgoing.length}`
+      ? t("Pending — {count}", { count: pendingIncoming.length + pendingOutgoing.length })
       : tab === "blocked"
-        ? `Blocked — ${blocked.length}`
+        ? t("Blocked — {count}", { count: blocked.length })
         : tab === "online"
-          ? `Online — ${visible.length}`
-          : `All friends — ${visible.length}`;
+          ? t("Online — {count}", { count: visible.length })
+          : t("All friends — {count}", { count: visible.length });
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
       <header className="relative z-[2] flex h-12 shrink-0 items-center gap-2 px-4 shadow-[var(--elevation-low)]">
         <IconFriends size={24} className="shrink-0 text-channels-default" />
-        <h1 className="shrink-0 text-[16px] font-semibold text-header-primary">Friends</h1>
+        <h1 className="shrink-0 text-[16px] font-semibold text-header-primary">{t("Friends")}</h1>
 
         <span className="mx-2 h-6 w-px shrink-0 bg-divider" />
 
         <nav className="flex items-center gap-4 overflow-x-auto">
-          {(["online", "all", "pending", "blocked"] as const).map((t) => (
+          {(["online", "all", "pending", "blocked"] as const).map((id) => (
             <button
-              key={t}
+              key={id}
               type="button"
               onClick={() => {
-                setTab(t);
+                setTab(id);
                 setAddOpen(false);
               }}
-              className={`flex shrink-0 items-center rounded-[4px] px-2 py-0.5 text-[16px] font-medium capitalize leading-5 transition-colors ${
-                tab === t && !addOpen
+              className={`flex shrink-0 items-center rounded-[4px] px-2 py-0.5 text-[16px] font-medium leading-5 transition-colors ${
+                tab === id && !addOpen
                   ? "bg-interactive-selected text-interactive-active"
                   : "text-interactive-normal hover:bg-interactive-hover hover:text-text-normal"
               }`}
             >
-              {t}
-              {t === "pending" && pendingCount > 0 && (
+              {t(TAB_LABEL[id])}
+              {id === "pending" && pendingCount > 0 && (
                 <span
                   key={pendingCount}
                   className="badge-pop ml-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-dnd px-1 text-[12px] font-bold leading-none text-white"
@@ -215,16 +224,16 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                 : "bg-button-green text-white hover:bg-button-green-hover"
             }`}
           >
-            Add Friend
+            {t("Add Friend")}
           </button>
         </nav>
       </header>
 
       {addOpen && (
         <div className="shrink-0 border-b border-divider px-[30px] py-5">
-          <h2 className="text-[16px] font-semibold uppercase leading-5 text-header-primary">Add Friend</h2>
+          <h2 className="text-[16px] font-semibold uppercase leading-5 text-header-primary">{t("Add Friend")}</h2>
           <p className="mt-1 text-sm text-text-muted">
-            You can add friends by their Disband username.
+            {t("You can add friends by their Disband username.")}
           </p>
           <form onSubmit={submitAdd} className="mt-3 flex max-w-xl gap-2">
             <input
@@ -235,7 +244,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                 setAddError(null);
                 setAddSuccess(null);
               }}
-              placeholder="Enter a username"
+              placeholder={t("Enter a username")}
               className="min-w-0 flex-1 rounded-lg border border-bg-tertiary bg-bg-tertiary px-3 py-3 text-[16px] text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc] focus:ring-brand/20"
             />
             <button
@@ -243,7 +252,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
               disabled={!addValue.trim() || sending}
               className="shrink-0 rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {sending ? "Sending…" : "Send request"}
+              {sending ? t("Sending…") : t("Send request")}
             </button>
           </form>
           {addError && <p className="mt-2 text-sm text-status-dnd">{addError}</p>}
@@ -261,14 +270,14 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={tab === "online" ? "Search online friends" : "Search friends"}
+              placeholder={tab === "online" ? t("Search online friends") : t("Search friends")}
               className="w-full rounded-[4px] border border-transparent bg-bg-tertiary py-[5px] pl-9 pr-10 text-[16px] text-text-normal outline-none placeholder:text-text-muted focus:ring-0 focus:ring-brand/20"
             />
             {query && (
               <button
                 type="button"
                 onClick={() => setQuery("")}
-                aria-label="Clear search"
+                aria-label={t("Clear search")}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-normal"
               >
                 <IconClose size={16} />
@@ -288,8 +297,8 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
             visiblePendingIncoming.length === 0 && visiblePendingOutgoing.length === 0 ? (
               <p className="py-10 text-sm text-text-muted">
                 {query.trim()
-                  ? `No pending requests match “${query.trim()}”.`
-                  : "There are no pending friend requests."}
+                  ? t("No pending requests match “{query}”.", { query: query.trim() })
+                  : t("There are no pending friend requests.")}
               </p>
             ) : (
               <PendingList
@@ -303,8 +312,8 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
             visibleBlocked.length === 0 ? (
               <p className="py-10 text-sm text-text-muted">
                 {query.trim()
-                  ? `No blocked users match “${query.trim()}”.`
-                  : "You haven’t blocked anyone."}
+                  ? t("No blocked users match “{query}”.", { query: query.trim() })
+                  : t("You haven’t blocked anyone.")}
               </p>
             ) : (
               <ul className="border-t border-divider">
@@ -318,14 +327,14 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                       <p className="truncate text-[16px] font-semibold leading-5 text-header-primary">
                         {displayName(person)}
                       </p>
-                      <p className="truncate text-[13px] text-text-muted">Blocked</p>
+                      <p className="truncate text-[13px] text-text-muted">{t("Blocked")}</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => void unblockUser(person.id)}
                       className="shrink-0 rounded-full border border-divider px-4 py-1.5 text-[13px] font-semibold text-text-normal transition-all hover:border-text-muted hover:bg-interactive-hover"
                     >
-                      Unblock
+                      {t("Unblock")}
                     </button>
                   </li>
                 ))}
@@ -379,15 +388,15 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                         </p>
                       )}
                       <p className="truncate text-[13px] text-text-muted">
-                        {STATUS_LABEL[presenceMap.get(friend.id) ?? "offline"]}
+                        {t(STATUS_LABEL[presenceMap.get(friend.id) ?? "offline"])}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <RowAction label="Message" onClick={() => void openDmWithFriend(friend.id)}>
+                      <RowAction label={t("Message")} onClick={() => void openDmWithFriend(friend.id)}>
                         <IconMessage />
                       </RowAction>
                       <RowAction
-                        label="More"
+                        label={t("More")}
                         onClick={(e) => {
                           // Anchor to the clicked button itself: the old code
                           // read document.activeElement, which mispositions
@@ -421,10 +430,11 @@ function EmptyState({
   totalFriends: number;
   onAdd: () => void;
 }) {
+  const { t } = useI18n();
   if (query) {
     return (
       <p className="py-10 text-sm text-text-muted">
-        No friends match &ldquo;{query}&rdquo;.
+        {t("No friends match “{query}”.", { query })}
       </p>
     );
   }
@@ -432,16 +442,16 @@ function EmptyState({
     return (
       <div className="py-12">
         <IconFriends size={48} className="mb-4 text-text-muted" />
-        <h2 className="text-lg font-semibold text-text-normal">No friends yet</h2>
+        <h2 className="text-lg font-semibold text-text-normal">{t("No friends yet")}</h2>
         <p className="mt-1 max-w-sm text-sm text-text-muted">
-          Add someone by their username to start sending messages and calls.
+          {t("Add someone by their username to start sending messages and calls.")}
         </p>
         <button
           type="button"
           onClick={onAdd}
           className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
         >
-          Add Friend
+          {t("Add Friend")}
         </button>
       </div>
     );
@@ -449,8 +459,8 @@ function EmptyState({
   return (
     <p className="py-10 text-sm text-text-muted">
       {tab === "online"
-        ? "Nobody's online right now."
-        : "No friends to show."}
+        ? t("Nobody's online right now.")
+        : t("No friends to show.")}
     </p>
   );
 }
@@ -467,9 +477,10 @@ function PendingList({
   onOpenProfile: (profile: Profile) => void;
 }) {
   const { presenceMap } = useApp();
+  const { t } = useI18n();
   if (incoming.length === 0 && outgoing.length === 0) {
     return (
-      <p className="py-10 text-sm text-text-muted">There are no pending friend requests.</p>
+      <p className="py-10 text-sm text-text-muted">{t("There are no pending friend requests.")}</p>
     );
   }
 
@@ -487,17 +498,17 @@ function PendingList({
               onClick={() => f.requester && onOpenProfile(f.requester)}
               className="block truncate text-[15px] font-semibold text-text-normal hover:underline"
             >
-              {f.requester ? displayName(f.requester) : "Unknown user"}
+              {f.requester ? displayName(f.requester) : t("Unknown user")}
             </button>
-            <p className="text-[13px] text-text-muted">Incoming friend request</p>
+            <p className="text-[13px] text-text-muted">{t("Incoming friend request")}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <RowAction label="Accept" onClick={() => void onRespond(f.id, true)}>
+            <RowAction label={t("Accept")} onClick={() => void onRespond(f.id, true)}>
               <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </RowAction>
-            <RowAction label="Ignore" onClick={() => void onRespond(f.id, false)}>
+            <RowAction label={t("Ignore")} onClick={() => void onRespond(f.id, false)}>
               <IconClose size={18} />
             </RowAction>
           </div>
@@ -514,10 +525,10 @@ function PendingList({
             <p className="truncate text-[15px] font-semibold text-text-normal">
               {f.addressee ? displayName(f.addressee) : "…"}
             </p>
-            <p className="text-[13px] text-text-muted">Outgoing friend request</p>
+            <p className="text-[13px] text-text-muted">{t("Outgoing friend request")}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <RowAction label="Cancel request" onClick={() => void onRespond(f.id, false)}>
+            <RowAction label={t("Cancel request")} onClick={() => void onRespond(f.id, false)}>
               <IconClose size={18} />
             </RowAction>
           </div>
@@ -529,6 +540,7 @@ function PendingList({
 
 export function ActiveNowPanel() {
   const { friends, dmListEntries, presenceMap } = useApp();
+  const { t } = useI18n();
 
   const active = useMemo(() => {
     const inDm = new Set(dmListEntries.map((e) => e.friend.id));
@@ -544,14 +556,14 @@ export function ActiveNowPanel() {
   return (
     <aside className="hidden w-[360px] shrink-0 flex-col overflow-hidden border-l border-divider bg-bg-primary xl:flex">
       <div className="flex shrink-0 items-center px-4 pb-4 pt-4">
-        <h2 className="text-[20px] font-extrabold leading-6 text-header-primary">Active Now</h2>
+        <h2 className="text-[20px] font-extrabold leading-6 text-header-primary">{t("Active Now")}</h2>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
         {active.length === 0 ? (
           <div className="pt-2 text-center">
-            <p className="text-[16px] font-semibold text-header-primary">It&rsquo;s quiet for now...</p>
+            <p className="text-[16px] font-semibold text-header-primary">{t("It’s quiet for now…")}</p>
             <p className="mt-1 text-sm leading-relaxed text-text-muted">
-              When a friend starts an activity or comes online, you&rsquo;ll see them here.
+              {t("When a friend starts an activity or comes online, you’ll see them here.")}
             </p>
           </div>
         ) : (
@@ -563,7 +575,7 @@ export function ActiveNowPanel() {
                   <p className="truncate text-sm font-semibold text-text-normal">
                     {displayName(f)}
                   </p>
-                  <p className="truncate text-[13px] text-text-muted">{STATUS_LABEL[presenceMap.get(f.id) ?? "offline"]}</p>
+                  <p className="truncate text-[13px] text-text-muted">{t(STATUS_LABEL[presenceMap.get(f.id) ?? "offline"])}</p>
                 </div>
               </li>
             ))}

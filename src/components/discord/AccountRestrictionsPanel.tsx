@@ -7,6 +7,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 import { apiFetch } from "@/lib/api";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface RestrictionRow {
   user_id: string;
@@ -63,6 +64,7 @@ function formatExpiry(expiresAt: string | null): string {
 }
 
 export function AccountRestrictionsPanel() {
+  const { t } = useI18n();
   const { profile, refreshRestrictions } = useApp();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Profile[]>([]);
@@ -147,7 +149,7 @@ export function AccountRestrictionsPanel() {
     setError(null); setSuccess(null); setLoading(true);
     try {
       const { data: { session } } = await getSupabaseClient().auth.getSession();
-      if (!session) { setError("Not authenticated"); return; }
+      if (!session) { setError(t("Not authenticated")); return; }
       const res = await apiFetch("/api/moderation/restrict", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
@@ -169,7 +171,7 @@ export function AccountRestrictionsPanel() {
       await loadRows();
       await refreshRestrictions();
     } catch {
-      setError("An unexpected error occurred.");
+      setError(t("An unexpected error occurred."));
     } finally { setLoading(false); }
   }
 
@@ -177,7 +179,7 @@ export function AccountRestrictionsPanel() {
     setError(null); setSuccess(null); setLoading(true);
     try {
       const { data: { session } } = await getSupabaseClient().auth.getSession();
-      if (!session) { setError("Not authenticated"); return; }
+      if (!session) { setError(t("Not authenticated")); return; }
       const res = await apiFetch("/api/moderation/restrict", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
@@ -185,11 +187,11 @@ export function AccountRestrictionsPanel() {
       });
       const json = (await res.json()) as { error?: string; success?: boolean };
       if (json.error) { setError(json.error); return; }
-      setSuccess("Restriction removed.");
+      setSuccess(t("Restriction removed."));
       await loadRows();
       await refreshRestrictions();
     } catch {
-      setError("An unexpected error occurred.");
+      setError(t("An unexpected error occurred."));
     } finally { setLoading(false); }
   }
 
@@ -200,15 +202,15 @@ export function AccountRestrictionsPanel() {
   return (
     <div className="mt-8 space-y-4 border-t border-divider pt-6">
       <div>
-        <h3 className="text-sm font-bold uppercase text-orange-400">Account restrictions</h3>
+        <h3 className="text-sm font-bold uppercase text-orange-400">{t("Account restrictions")}</h3>
         <p className="mt-1 text-xs text-text-muted">
-          Staff &amp; owner only. Restrict specific capabilities without full platform bans.
+          {t("Staff & owner only. Restrict specific capabilities without full platform bans.")}
         </p>
       </div>
 
       {}
       <div ref={containerRef} className="relative">
-        <span className="text-xs font-bold uppercase text-text-muted">User</span>
+        <span className="text-xs font-bold uppercase text-text-muted">{t("User")}</span>
         {selected ? (
           <div className="mt-1 flex items-center gap-3 rounded bg-bg-accent px-3 py-2">
             <Avatar profile={selected} size="sm" />
@@ -216,7 +218,7 @@ export function AccountRestrictionsPanel() {
               <p className="truncate text-sm font-medium">{displayName(selected)}</p>
               {selected.username && <p className="truncate text-xs text-text-muted">@{selected.username}</p>}
             </div>
-            <button type="button" onClick={() => setSelected(null)} className="shrink-0 rounded border border-divider px-2 py-1 text-xs hover:bg-interactive-hover">Change</button>
+            <button type="button" onClick={() => setSelected(null)} className="shrink-0 rounded border border-divider px-2 py-1 text-xs hover:bg-interactive-hover">{t("Change")}</button>
           </div>
         ) : (
           <>
@@ -224,13 +226,13 @@ export function AccountRestrictionsPanel() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onFocus={() => results.length > 0 && setDropdownOpen(true)}
-              placeholder="Search by username or display name..."
+              placeholder={t("Search by username or display name...")}
               className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:border-[#00a8fc]"
             />
             {dropdownOpen && (searching || results.length > 0 || query.trim().length > 0) && (
               <div className="absolute z-10 mt-1 max-h-72 w-full overflow-y-auto rounded-[4px] border border-divider bg-bg-floating shadow-[var(--elevation-high)]">
-                {searching && <p className="px-3 py-3 text-xs text-text-muted">Searching...</p>}
-                {!searching && results.length === 0 && <p className="px-3 py-3 text-xs text-text-muted">No users found.</p>}
+                {searching && <p className="px-3 py-3 text-xs text-text-muted">{t("Searching...")}</p>}
+                {!searching && results.length === 0 && <p className="px-3 py-3 text-xs text-text-muted">{t("No users found.")}</p>}
                 {!searching && results.map((user) => (
                   <button key={user.id} type="button" onClick={() => { setSelected(user); setQuery(""); setResults([]); setDropdownOpen(false); }} className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-interactive-hover">
                     <Avatar profile={user} size="sm" />
@@ -249,7 +251,7 @@ export function AccountRestrictionsPanel() {
       {selected && (
         <div className="space-y-3">
           <div>
-            <span className="text-xs font-bold uppercase text-text-muted">Apply restriction</span>
+            <span className="text-xs font-bold uppercase text-text-muted">{t("Apply restriction")}</span>
             <div className="mt-1 flex flex-wrap gap-2">
               {ALL_RESTRICTIONS.map((r) => {
                 const active = userRestrictions.includes(r);
@@ -271,13 +273,12 @@ export function AccountRestrictionsPanel() {
               })}
             </div>
             <p className="mt-1.5 text-xs text-text-muted">
-              Sending and reacting are enforced by the database, so a modified client cannot
-              work around them. The other three are still checked in the app only.
+              {t("Sending and reacting are enforced by the database, so a modified client cannot work around them. The other three are still checked in the app only.")}
             </p>
           </div>
 
           <div>
-            <span className="text-xs font-bold uppercase text-text-muted">For how long</span>
+            <span className="text-xs font-bold uppercase text-text-muted">{t("For how long")}</span>
             <div className="mt-1 flex flex-wrap gap-2">
               {DURATIONS.map((d) => (
                 <button
@@ -291,19 +292,19 @@ export function AccountRestrictionsPanel() {
                       : "bg-bg-accent text-text-normal hover:bg-interactive-hover"
                   }`}
                 >
-                  {d.label}
+                  {t(d.label)}
                 </button>
               ))}
             </div>
           </div>
 
           <div>
-            <span className="text-xs font-bold uppercase text-text-muted">Reason (optional)</span>
+            <span className="text-xs font-bold uppercase text-text-muted">{t("Reason (optional)")}</span>
             <input
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               maxLength={200}
-              placeholder="Kept on the moderation record. The user is not shown this."
+              placeholder={t("Kept on the moderation record. The user is not shown this.")}
               className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:border-[#00a8fc]"
             />
           </div>
@@ -315,7 +316,7 @@ export function AccountRestrictionsPanel() {
 
       {rows.length > 0 && (
         <div className="rounded-lg border border-divider bg-bg-secondary">
-          <p className="border-b border-divider px-4 py-2 text-xs font-bold uppercase text-text-muted">Active restrictions</p>
+          <p className="border-b border-divider px-4 py-2 text-xs font-bold uppercase text-text-muted">{t("Active restrictions")}</p>
           <ul className="divide-y divide-divider">
             {rows.map((row, i) => (
               <li key={`${row.user_id}-${row.restriction}-${i}`} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
@@ -334,7 +335,7 @@ export function AccountRestrictionsPanel() {
                   onClick={() => void removeRestriction(row.user_id, row.restriction)}
                   className="shrink-0 rounded border border-divider px-3 py-1 text-xs hover:bg-interactive-hover disabled:opacity-50"
                 >
-                  {row.active === false ? "Clear" : "Remove"}
+                  {row.active === false ? t("Clear") : t("Remove")}
                 </button>
               </li>
             ))}

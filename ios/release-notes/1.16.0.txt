@@ -1,0 +1,9 @@
+What's new in Disband 1.16
+
+• Message requests: people you share a space with can now message you. Their first message lands in Message Requests, and nothing moves to your DMs until you reply or accept. You can turn this off in Privacy settings.
+• Faster busy channels: large channels like #general open quicker, and scrolling up loads older messages as you go.
+• Snappier friends list: adding, accepting and ignoring friend requests is quicker.
+• Favourite GIFs now stay put after a reload and match across all your devices.
+• New Creator and Manager badges on profiles.
+• Fixed: the username check during sign-up now warns you when a name is already taken.
+• Plus smoother images and avatars, and other fixes.

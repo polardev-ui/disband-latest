@@ -13,6 +13,7 @@ import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 import type { GroupCallParticipant } from "@/hooks/useGroupCallManager";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface GroupCallStageProps {
   groupName: string;
@@ -49,6 +50,7 @@ export function GroupCallStage({
   localScreen, cameraEnabled,
   micMuted, deafened, connectedAt, onJoin, onLeave, onToggleCamera, onToggleMic,
 }: GroupCallStageProps) {
+  const { t } = useI18n();
   const { height: callHeight, setHeight: setCallHeight } = useCallHeight();
   // While a share or camera is focused the panel takes most of the window,
   // without overwriting the height you dragged it to.
@@ -81,7 +83,7 @@ export function GroupCallStage({
     muted: p.user_id === selfId ? micMuted : undefined,
     label: p.profile ?? members.find((m) => m.id === p.user_id)
       ? displayName((p.profile ?? members.find((m) => m.id === p.user_id))!)
-      : "Member",
+      : t("Member"),
   }));
 
   const shares = presence.flatMap((p) => {
@@ -95,8 +97,8 @@ export function GroupCallStage({
       audio: p.user_id === selfId ? null : remoteScreenAudio?.get(p.user_id) ?? null,
       local: p.user_id === selfId,
       label: p.user_id === selfId
-        ? "Your screen"
-        : profile ? `${displayName(profile)}'s screen` : "Screen",
+        ? t("Your screen")
+        : profile ? t("{name}'s screen", { name: displayName(profile) }) : t("Screen"),
     }];
   });
 
@@ -116,7 +118,7 @@ export function GroupCallStage({
         <div className="ml-auto flex shrink-0 items-center gap-3">
           <span className="hidden text-[12px] text-header-secondary sm:inline">
             {presence.length} in voice
-            {ringingIds.size > 0 ? ` · ${ringingIds.size} ringing` : ""}
+            {ringingIds.size > 0 ? t(" · {size} ringing", { size: ringingIds.size }) : ""}
           </span>
           {joined && (
             <VoiceStatus connected={!connecting} elapsed={connectedAt ? elapsed : null} />
@@ -131,8 +133,8 @@ export function GroupCallStage({
               <span className="flex h-20 w-20 items-center justify-center rounded-full bg-bg-secondary text-text-muted">
                 <IconGroup size={32} />
               </span>
-              <p className="text-sm font-medium text-header-primary">You&apos;re the only one here.</p>
-              <p className="text-sm text-header-secondary">Others can join from the group.</p>
+              <p className="text-sm font-medium text-header-primary">{t("You’re the only one here.")}</p>
+              <p className="text-sm text-header-secondary">{t("Others can join from the group.")}</p>
             </div>
           ) : (
             <CallStage members={people} screens={shares} deafened={deafened} onFocusChange={setFocused} />
@@ -142,11 +144,11 @@ export function GroupCallStage({
         <div className="flex shrink-0 items-center gap-4 pb-6 pt-2">
           {!joined ? (
             <>
-              <Tooltip label={micMuted ? "Unmute before joining" : "Mute before joining"} side="top">
+              <Tooltip label={micMuted ? t("Unmute before joining") : t("Mute before joining")} side="top">
                 <button
                   type="button"
                   onClick={onToggleMic}
-                  aria-label={micMuted ? "Unmute" : "Mute"}
+                  aria-label={micMuted ? t("Unmute") : t("Mute")}
                   className={`flex h-14 w-14 items-center justify-center rounded-full transition-colors ${
                     micMuted ? "bg-white text-status-dnd" : "bg-bg-secondary text-white hover:bg-bg-tertiary"
                   }`}
@@ -159,7 +161,7 @@ export function GroupCallStage({
                 onClick={onJoin}
                 className="flex h-14 items-center gap-2 rounded-full bg-button-green px-6 text-[16px] font-medium text-white transition-colors hover:bg-button-green-hover"
               >
-                <IconPhone size={22} /> Join Call
+                <IconPhone size={22} /> {t("Join Call")}
               </button>
             </>
           ) : (

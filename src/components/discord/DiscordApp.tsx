@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { isThemeId } from "@/lib/theme/themes";
 import { useProfileMember } from "@/hooks/useProfileMember";
 import { usePresence } from "@/hooks/usePresence";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useZoom, ZOOM_STEP } from "@/hooks/useZoom";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
@@ -35,13 +38,14 @@ import {
   IncomingCallOverlay,
 } from "./CallUI";
 import { GroupCallStage } from "./GroupCallStage";
+import { StagePanel } from "./StagePanel";
 import { GroupMemberList } from "./GroupMemberList";
 import { InviteGroupModal } from "./InviteGroupModal";
 import { InviteSpaceModal } from "./InviteSpaceModal";
 import { alertDialog, confirmDialog, promptDialog } from "@/lib/dialogs";
 const SettingsModal = dynamic(() => import("./SettingsModal").then(m => m.SettingsModal));
 import { CreateServerModal } from "@/components/modals/CreateServerModal";
-import { ReleaseModal } from "@/components/modals/ReleaseModal";
+import { WhatsNewModal } from "@/components/modals/WhatsNewModal";
 const ServerSettingsModal = dynamic(() => import("@/components/modals/ServerSettingsModal").then(m => m.ServerSettingsModal));
 const ChannelSettingsModal = dynamic(() => import("@/components/modals/ChannelSettingsModal").then(m => m.ChannelSettingsModal));
 import { UserProfileModal } from "@/components/modals/UserProfileModal";
@@ -85,7 +89,9 @@ import { ForwardModal, type ForwardDestination } from "./ForwardModal";
 import { PinnedMessagesPanel } from "./PinnedMessagesPanel";
 import { HeaderToolbar } from "./HeaderToolbar";
 import SearchPanel from "./SearchPanel";
+import { useGameActivity } from "@/hooks/useGameActivity";
 import { DmProfileRail } from "./DmProfileRail";
+import { MessageRequestBar } from "./MessageRequestBar";
 import { CatalystModal } from "./CatalystModal";
 import { CallIndicator } from "./CallIndicator";
 import { QuickSwitcher } from "./QuickSwitcher";
@@ -93,7 +99,20 @@ import { UserProfilePopout } from "./UserProfilePopout";
 
 export function DiscordApp() {
   const app = useApp();
+  const { t } = useI18n();
   const { openMenu } = useContextMenu();
+  const { theme, setTheme } = useTheme();
+
+  // The theme is saved to the account, and phones already follow it. The web
+  // only kept its own copy, so a theme picked elsewhere never showed up here.
+  // Adopt the account's theme once per sign-in; picking one here saves it back.
+  const adoptedThemeFor = useRef<string | null>(null);
+  useEffect(() => {
+    const profile = app.profile;
+    if (!profile || adoptedThemeFor.current === profile.id) return;
+    adoptedThemeFor.current = profile.id;
+    if (isThemeId(profile.theme) && profile.theme !== theme) setTheme(profile.theme);
+  }, [app.profile, theme, setTheme]);
   const [timeoutTarget, setTimeoutTarget] = useState<{ userId: string; profile: Profile } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [discoverTab, setDiscoverTab] = useState<DiscoverTab>("popular");
@@ -118,7 +137,7 @@ export function DiscordApp() {
   const [shopCategory, setShopCategory] = useState<ShopCategory>("ring");
   const [shopPurchase, setShopPurchase] = useState<string | null>(null);
   const [giftReturn, setGiftReturn] = useState<string | null>(null);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<"subscriptions" | null>(null);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<"subscriptions" | "creator" | "account" | null>(null);
   const [createServerOpen, setCreateServerOpen] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [folderDialog, setFolderDialog] = useState<{ mode: "create" | "edit"; folderId: string | null } | null>(null);
@@ -154,7 +173,15 @@ export function DiscordApp() {
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
 
   const [showDmProfile, setShowDmProfile] = useState(true);
+  // Desktop: publish the game you're playing (detection and Rich Presence).
+  useGameActivity();
   const [searchOpen, setSearchOpen] = useState(false);
+  // Typed in the header search box; the search panel shows its results.
+  const [searchQuery, setSearchQuery] = useState("");
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery("");
+  }, []);
   const [membersVisible, setMembersVisible] = useState(true);
   useEffect(() => {
     try {
@@ -188,13 +215,24 @@ export function DiscordApp() {
   const [catalystServerId, setCatalystServerId] = useState<string | null>(null);
   const { plan: subPlan, entitlements } = useSubscription(app.user?.id);
 
+  // Back from connecting YouTube, TikTok or Twitch: open the Creator Program
+  // tab, which reads the result from the same query string.
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("creator")) return;
+    setSettingsInitialTab("creator");
+    setSettingsOpen(true);
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     // Payment-failure emails (and the lapsed-theme notice) link straight to
     // Settings → Subscription, where "Manage billing" opens the Stripe portal
     // and lets the member replace the declined card.
-    if (params.get("settings") === "subscriptions") {
-      setSettingsInitialTab("subscriptions");
+    // "account" is where the desktop app sends people to add a passkey,
+    // which only works on disband.dev.
+    const settingsTab = params.get("settings");
+    if (settingsTab === "subscriptions" || settingsTab === "account") {
+      setSettingsInitialTab(settingsTab);
       setSettingsOpen(true);
       params.delete("settings");
       const query = params.toString();
@@ -293,7 +331,6 @@ export function DiscordApp() {
   const dmChatRef = useRef<ChatCanvasHandle>(null);
   const groupChatRef = useRef<ChatCanvasHandle>(null);
   const notesChatRef = useRef<ChatCanvasHandle>(null);
-  const [online, setOnline] = useState(true);
   const isMobile = useIsMobile();
   const [zoom, setZoom] = useZoom();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -339,18 +376,6 @@ export function DiscordApp() {
     app.activeDmThreadId,
     app.activeGroupChatId,
   ]);
-
-  useEffect(() => {
-    setOnline(navigator.onLine);
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => {
-      window.removeEventListener("online", on);
-      window.removeEventListener("offline", off);
-    };
-  }, []);
 
   const call = useCallManager(
     app.user?.id ?? null,
@@ -504,6 +529,7 @@ export function DiscordApp() {
   // Prefer a freshly fetched row (it reflects the latest role edit), then the
   // loaded roster, which on big spaces holds only part of the members.
   const profileServerMember = fetchedProfileMember ?? loadedProfileMember;
+  const profileIsSelf = !!profileTarget && profileTarget.id === app.user?.id;
   const profileCanManageRoles =
     app.viewMode === "space" &&
     !!profileTarget &&
@@ -511,10 +537,10 @@ export function DiscordApp() {
       isServerOwner ||
       (app.serverPermissions.manage_roles &&
         app.serverPermissions.manage_server &&
-        app.canModerateMember(profileTarget.id))
+        (profileIsSelf || app.canModerateMember(profileTarget.id)))
     )
-    // The server refuses role edits on the owner, so don't offer them.
-    && profileTarget.id !== app.activeServer?.owner_id;
+    // Only the owner can change the owner's roles (0228).
+    && (profileIsSelf || profileTarget.id !== app.activeServer?.owner_id);
   const assignableServerRoles = useMemo(
     () => app.serverRoles.filter((role) => !role.is_default && (isServerOwner || role.position < app.myTopRolePosition)),
     [app.serverRoles, app.myTopRolePosition, isServerOwner],
@@ -544,6 +570,25 @@ export function DiscordApp() {
     setProfileTarget(profile);
   }, []);
 
+  // The call stage's right-click menu (CallStage.tsx) asks for these.
+  const openDmWithFriend = app.openDmWithFriend;
+  useEffect(() => {
+    const onProfile = (e: Event) => {
+      const profile = (e as CustomEvent<Profile>).detail;
+      if (profile?.id) openProfile(profile);
+    };
+    const onDm = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if (typeof id === "string") void openDmWithFriend(id);
+    };
+    window.addEventListener("disband:open-profile", onProfile);
+    window.addEventListener("disband:open-dm", onDm);
+    return () => {
+      window.removeEventListener("disband:open-profile", onProfile);
+      window.removeEventListener("disband:open-dm", onDm);
+    };
+  }, [openProfile, openDmWithFriend]);
+
   const handleAuthorClick = useCallback(
     (author: Profile) => {
       if (author.id === app.user?.id && app.profile) openProfile(app.profile);
@@ -569,12 +614,12 @@ export function DiscordApp() {
         });
         if (!res.ok) {
           const json = (await res.json().catch(() => null)) as { error?: string } | null;
-          void alertDialog(json?.error ?? "Could not update the space badge.");
+          void alertDialog(json?.error ?? t("Could not update the space badge."));
           return;
         }
         await app.refreshAll();
       } catch {
-        void alertDialog("Could not reach the server. Try again.");
+        void alertDialog(t("Could not reach the server. Try again."));
       }
     },
     [app],
@@ -593,13 +638,13 @@ export function DiscordApp() {
           ? [
               {
                 id: "invite-people",
-                label: "Invite People",
+                label: t("Invite People"),
                 icon: <IconUserPlus size={16} />,
                 onClick: () => setInviteSpace(server),
               } as ContextMenuItem,
               {
                 id: "invite",
-                label: "Copy Invite Link",
+                label: t("Copy Invite Link"),
                 icon: <IconLink size={16} />,
                 onClick: () => void navigator.clipboard.writeText(getInviteUrl(inviteCode)),
               } as ContextMenuItem,
@@ -609,13 +654,13 @@ export function DiscordApp() {
           ? [
               {
                 id: "partner-badge",
-                label: server.partner ? "Remove Partner Badge" : "Mark as Partner",
+                label: server.partner ? t("Remove Partner Badge") : t("Mark as Partner"),
                 icon: <IconStar size={16} />,
                 onClick: () => void setSpaceBadge(server.id, { partner: !server.partner }),
               } as ContextMenuItem,
               {
                 id: "verified-badge",
-                label: server.verified ? "Remove Verified Badge" : "Mark as Verified",
+                label: server.verified ? t("Remove Verified Badge") : t("Mark as Verified"),
                 icon: <IconVerified size={16} />,
                 onClick: () => void setSpaceBadge(server.id, { verified: !server.verified }),
               } as ContextMenuItem,
@@ -623,27 +668,36 @@ export function DiscordApp() {
           : []),
         {
           id: "settings",
-          label: "Space Settings",
+          label: t("Space Settings"),
           icon: <IconSettings size={16} />,
           onClick: () => setServerSettingsOpen(true),
         },
           ...[
             {
               id: "boost",
-              label: "Boost Space",
+              label: t("Boost Space"),
               icon: <IconStar size={16} />,
               onClick: () => void boostServer(server.id),
             } as ContextMenuItem,
           ],
         {
           id: "copy-id",
-          label: "Copy Space ID",
+          label: t("Copy Space ID"),
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(server.id),
         },
+        ...(server.owner_id !== app.user?.id
+          ? [{
+              id: "report",
+              label: t("Report Space"),
+              icon: <IconShield size={16} />,
+              danger: true,
+              onClick: () => setReportTarget({ kind: "server", server: { id: server.id, name: server.name } }),
+            } as ContextMenuItem]
+          : []),
         {
           id: "leave",
-          label: "Leave Space",
+          label: t("Leave Space"),
           icon: <IconLeave size={16} />,
           onClick: () => void app.leaveServer(server.id),
         },
@@ -651,7 +705,7 @@ export function DiscordApp() {
           ? [
               {
                 id: "unfolder",
-                label: `Remove from ${inFolder.name}`,
+                label: t("Remove from {name}", { name: inFolder.name }),
                 icon: <IconFolderMinus size={16} />,
                 onClick: () => {
                   const state = app.serverListState.find((s) => s.server_id === server.id);
@@ -664,7 +718,7 @@ export function DiscordApp() {
           .filter((f) => f.id !== inFolder?.id)
           .map((f) => ({
             id: `move-folder-${f.id}`,
-            label: `Move to ${f.name}`,
+            label: t("Move to {name}", { name: f.name }),
             icon: <IconFolder size={16} />,
             onClick: () => {
               const members = app.serverListState.filter((s) => s.folder_id === f.id);
@@ -673,7 +727,7 @@ export function DiscordApp() {
           }) as ContextMenuItem),
         {
           id: "new-folder",
-          label: "Create Folder with Space",
+          label: t("Create Folder with Space"),
           icon: <IconFolderPlus size={16} />,
           onClick: () => {
             setPendingFolderServer(server);
@@ -684,14 +738,14 @@ export function DiscordApp() {
           ? [
               {
                 id: "delete",
-                label: "Delete Space",
+                label: t("Delete Space"),
                 icon: <IconTrash size={16} />,
                 danger: true,
                 onClick: () => {
                   void confirmDialog({
-                    title: `Delete ${server.name}`,
-                    body: "This deletes the space, its channels and messages for everyone. It can't be undone.",
-                    confirmLabel: "Delete Space",
+                    title: t("Delete {name}", { name: server.name }),
+                    body: t("This deletes the space, its channels and messages for everyone. It can't be undone."),
+                    confirmLabel: t("Delete Space"),
                   }).then((ok) => { if (ok) void app.deleteServer(server.id); });
                 },
               },
@@ -708,7 +762,7 @@ export function DiscordApp() {
       openMenu(x, y, [
         {
           id: "rename",
-          label: "Rename Folder",
+          label: t("Rename Folder"),
           icon: <IconEdit size={16} />,
           onClick: () => {
             setPendingFolderServer(null);
@@ -717,14 +771,14 @@ export function DiscordApp() {
         },
         {
           id: "delete",
-          label: "Delete Folder",
+          label: t("Delete Folder"),
           icon: <IconTrash size={16} />,
           danger: true,
           onClick: () => {
             void confirmDialog({
-              title: `Delete ${folder.name}`,
+              title: t("Delete {name}", { name: folder.name }),
               body: "The folder goes; the spaces in it stay where they are.",
-              confirmLabel: "Delete Folder",
+              confirmLabel: t("Delete Folder"),
             }).then((ok) => { if (ok) void app.deleteFolder(folder.id); });
           },
         },
@@ -763,7 +817,7 @@ export function DiscordApp() {
       const items: ContextMenuItem[] = [
         {
           id: "copy",
-          label: "Copy Channel ID",
+          label: t("Copy Channel ID"),
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(channel.id),
         },
@@ -772,20 +826,20 @@ export function DiscordApp() {
         items.push(
           {
             id: "settings",
-            label: "Edit Channel",
+            label: t("Edit Channel"),
             icon: <IconEdit size={16} />,
             onClick: () => setChannelSettingsChannel(channel),
           },
           {
             id: "delete",
-            label: "Delete Channel",
+            label: t("Delete Channel"),
             icon: <IconTrash size={16} />,
             danger: true,
             onClick: () => {
               void confirmDialog({
-                title: `Delete #${channel.name}`,
-                body: "Its messages go with it. This can't be undone.",
-                confirmLabel: "Delete Channel",
+                title: t("Delete #{name}", { name: channel.name }),
+                body: t("Its messages go with it. This can't be undone."),
+                confirmLabel: t("Delete Channel"),
               }).then((ok) => { if (ok) void app.deleteChannel(channel.id); });
             },
           },
@@ -801,13 +855,13 @@ export function DiscordApp() {
       const items: ContextMenuItem[] = [
         {
           id: "copy-id",
-          label: "Copy Category ID",
+          label: t("Copy Category ID"),
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(category.id),
         },
         {
           id: "copy-server-id",
-          label: "Copy Space ID",
+          label: t("Copy Space ID"),
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(category.server_id),
         },
@@ -816,28 +870,29 @@ export function DiscordApp() {
         items.push(
           {
             id: "add-channel",
-            label: "Create Channel",
+            label: t("Create Channel"),
             icon: <IconPlus size={16} />,
             onClick: () => {
               void promptDialog({
-                title: "Create Channel",
+                title: t("Create Channel"),
                 body: `In ${category.name}`,
-                label: "Channel name",
+                label: t("Channel name"),
                 placeholder: "new-channel",
-                confirmLabel: "Create Channel",
+                confirmLabel: t("Create Channel"),
               }).then((name) => {
-                if (name?.trim()) void app.createChannel({ name: name.trim(), type: "text", categoryId: category.id });
+                const clean = name?.trim().slice(0, 100) ?? "";
+                if (clean) void app.createChannel({ name: clean, type: "text", categoryId: category.id });
               });
             },
           },
           {
             id: "rename",
-            label: "Rename Category",
+            label: t("Rename Category"),
             icon: <IconEdit size={16} />,
             onClick: () => {
               void promptDialog({
-                title: "Rename Category",
-                label: "Category name",
+                title: t("Rename Category"),
+                label: t("Category name"),
                 defaultValue: category.name,
               }).then((name) => {
                 if (name?.trim()) void app.renameCategory(category.id, name.trim());
@@ -846,14 +901,14 @@ export function DiscordApp() {
           },
           {
             id: "delete",
-            label: "Delete Category",
+            label: t("Delete Category"),
             icon: <IconTrash size={16} />,
             danger: true,
             onClick: () => {
               void confirmDialog({
-                title: `Delete ${category.name}`,
-                body: "The channels inside are kept and moved out of the category.",
-                confirmLabel: "Delete Category",
+                title: t("Delete {name}", { name: category.name }),
+                body: t("The channels inside are kept and moved out of the category."),
+                confirmLabel: t("Delete Category"),
               }).then((ok) => { if (ok) void app.deleteCategory(category.id); });
             },
           },
@@ -902,19 +957,19 @@ export function DiscordApp() {
       openMenu(x, y, [
         {
           id: "pin",
-          label: isPinned ? "Unpin note" : "Pin note",
+          label: isPinned ? t("Unpin note") : t("Pin note"),
           icon: isPinned ? <IconPinOff size={16} /> : <IconPin size={16} />,
           onClick: () => void app.toggleNotePinned(message.id),
         },
         {
           id: "copy-id",
-          label: "Copy Note ID",
+          label: t("Copy Note ID"),
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(message.id),
         },
         {
           id: "reply",
-          label: "Reply to note",
+          label: t("Reply to note"),
           icon: <IconNotes size={16} />,
           onClick: () =>
             notesChatRef.current?.setReplyTo({
@@ -928,14 +983,14 @@ export function DiscordApp() {
           ? [
               {
                 id: "edit",
-                label: "Edit note",
+                label: t("Edit note"),
                 icon: <IconSettings size={16} />,
                 onClick: () =>
                   notesChatRef.current?.setEditing({ id: message.id, content: message.content }),
               },
               {
                 id: "copy",
-                label: "Copy text",
+                label: t("Copy text"),
                 icon: <IconCopy size={16} />,
                 onClick: () => void navigator.clipboard.writeText(message.content),
               },
@@ -943,14 +998,14 @@ export function DiscordApp() {
           : []),
         {
           id: "delete",
-          label: "Delete note",
+          label: t("Delete note"),
           icon: <IconTrash size={16} />,
           danger: true,
           onClick: () => {
             void confirmDialog({
-              title: "Delete Note",
-              body: "This can't be undone.",
-              confirmLabel: "Delete",
+              title: t("Delete Note"),
+              body: t("This can't be undone."),
+              confirmLabel: t("Delete"),
             }).then((ok) => { if (ok) void app.deleteNote(message.id); });
           },
         },
@@ -978,7 +1033,7 @@ export function DiscordApp() {
       openMenu(x, y, [
         {
           id: "reply",
-          label: "Reply",
+          label: t("Reply"),
           icon: <IconFriends size={16} />,
           onClick: () => {
             chatRef.current?.setReplyTo({
@@ -992,7 +1047,7 @@ export function DiscordApp() {
         },
         {
           id: "react",
-          label: "Add Reaction",
+          label: t("Add Reaction"),
           icon: <IconCopy size={16} />,
           onClick: () => chatRef.current?.openReactionPicker(message.id, x, y),
         },
@@ -1000,7 +1055,7 @@ export function DiscordApp() {
           ? [
               {
                 id: "pin",
-                label: isPinned ? "Unpin Message" : "Pin Message",
+                label: isPinned ? t("Unpin Message") : t("Pin Message"),
                 icon: isPinned ? <IconPinOff size={16} /> : <IconPin size={16} />,
                 onClick: () => {
                   if (isPinned) {
@@ -1020,7 +1075,7 @@ export function DiscordApp() {
           ? [
               {
                 id: "pin",
-                label: isPinned ? "Unpin Message" : "Pin Message",
+                label: isPinned ? t("Unpin Message") : t("Pin Message"),
                 icon: isPinned ? <IconPinOff size={16} /> : <IconPin size={16} />,
                 onClick: () => {
                   if (isPinned) {
@@ -1038,14 +1093,14 @@ export function DiscordApp() {
           : []),
         {
           id: "copy",
-          label: "Copy Text",
+          label: t("Copy Text"),
           icon: <IconCopy size={16} />,
           disabled: !message.content,
           onClick: () => void navigator.clipboard.writeText(message.content),
         },
         {
           id: "copy-id",
-          label: "Copy Message ID",
+          label: t("Copy Message ID"),
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(String(message.display_id ?? message.id)),
         },
@@ -1053,7 +1108,7 @@ export function DiscordApp() {
           ? [
               {
                 id: "report",
-                label: "Report Message",
+                label: t("Report Message"),
                 icon: <IconShield size={16} />,
                 onClick: () =>
                   setReportTarget({
@@ -1068,7 +1123,7 @@ export function DiscordApp() {
           ? [
               {
                 id: "edit",
-                label: "Edit Message",
+                label: t("Edit Message"),
                 icon: <IconSettings size={16} />,
                 onClick: () =>
                   chatRef.current?.setEditing({ id: message.id, content: message.content }),
@@ -1080,7 +1135,7 @@ export function DiscordApp() {
           ? [
               {
                 id: "delete",
-                label: "Delete Message",
+                label: t("Delete Message"),
                 icon: <IconTrash size={16} />,
                 danger: true,
                 onClick: () => {
@@ -1103,19 +1158,19 @@ export function DiscordApp() {
       const items: ContextMenuItem[] = [
         {
           id: "profile",
-          label: "View Profile",
+          label: t("View Profile"),
           icon: <IconFriends size={16} />,
           onClick: () => openProfile(member),
         },
         {
           id: "dm",
-          label: "Message",
+          label: t("Message"),
           icon: <IconFriends size={16} />,
           onClick: () => void app.openDmWithFriend(member.id),
         },
         {
           id: "copy",
-          label: "Copy User ID",
+          label: t("Copy User ID"),
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(member.id),
         },
@@ -1123,14 +1178,14 @@ export function DiscordApp() {
       if (isOwner && member.id !== app.user?.id && member.id !== activeGroup.owner_id) {
         items.push({
           id: "remove",
-          label: `Remove ${displayName(member)}`,
+          label: t("Remove {name}", { name: displayName(member) }),
           icon: <IconLeave size={16} />,
           danger: true,
           onClick: () => {
             void confirmDialog({
-              title: `Remove ${displayName(member)}`,
-              body: `They'll leave "${activeGroup.name}".`,
-              confirmLabel: "Remove",
+              title: t("Remove {name}", { name: displayName(member) }),
+              body: t("They'll leave \"{name}\".", { name: activeGroup.name }),
+              confirmLabel: t("Remove"),
             }).then((ok) => {
               if (!ok) return;
               void app.removeGroupMember(activeGroup.id, member.id).then((err) => {
@@ -1152,14 +1207,14 @@ export function DiscordApp() {
       openMenu(x, y, [
         {
           id: "call",
-          label: groupCall.joined ? "In voice" : "Start voice call",
+          label: groupCall.joined ? t("In voice") : t("Start voice call"),
           icon: <IconPhone size={16} />,
           disabled: groupCall.joined || call.phase !== "idle",
           onClick: startGroupVoiceCall,
         },
         {
           id: "invite",
-          label: "Invite friends",
+          label: t("Invite friends"),
           icon: <IconFriends size={16} />,
           onClick: () => {
             setInviteGroupId(group.id);
@@ -1168,7 +1223,7 @@ export function DiscordApp() {
         },
         {
           id: "copy-id",
-          label: "Copy Group ID",
+          label: t("Copy Group ID"),
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(group.id),
         },
@@ -1176,12 +1231,12 @@ export function DiscordApp() {
           ? [
               {
                 id: "rename",
-                label: "Rename group",
+                label: t("Rename group"),
                 icon: <IconSettings size={16} />,
                 onClick: () => {
                   void promptDialog({
-                    title: "Rename Group",
-                    label: "Group name",
+                    title: t("Rename Group"),
+                    label: t("Group name"),
                     defaultValue: group.name,
                   }).then((next) => {
                     if (next?.trim()) void app.renameGroupChat(group.id, next.trim());
@@ -1192,14 +1247,14 @@ export function DiscordApp() {
           : []),
         {
           id: "leave",
-          label: "Leave group",
+          label: t("Leave group"),
           icon: <IconLeave size={16} />,
           danger: true,
           onClick: () => {
             void confirmDialog({
-              title: `Leave ${group.name}`,
-              body: "You won't get its messages until someone adds you back.",
-              confirmLabel: "Leave Group",
+              title: t("Leave {name}", { name: group.name }),
+              body: t("You won't get its messages until someone adds you back."),
+              confirmLabel: t("Leave Group"),
             }).then((ok) => {
               if (!ok) return;
               if (groupCall.groupId === group.id && groupCall.joined) void groupCall.endGroupCall();
@@ -1219,13 +1274,13 @@ export function DiscordApp() {
       openMenu(e.clientX, e.clientY, [
         {
           id: "settings",
-          label: "User Settings",
+          label: t("User Settings"),
           icon: <IconSettings size={16} />,
           onClick: () => setSettingsOpen(true),
         },
         {
           id: "copy-id",
-          label: "Copy User ID",
+          label: t("Copy User ID"),
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(app.profile!.id),
         },
@@ -1241,19 +1296,19 @@ export function DiscordApp() {
       const items: ContextMenuItem[] = [
         {
           id: "profile",
-          label: "View Profile",
+          label: t("View Profile"),
           icon: <IconFriends size={16} />,
           onClick: () => openProfile(member.profile),
         },
         {
           id: "dm",
-          label: "Message",
+          label: t("Message"),
           icon: <IconFriends size={16} />,
           onClick: () => void app.openDmWithFriend(member.user_id),
         },
         {
           id: "copy",
-          label: "Copy User ID",
+          label: t("Copy User ID"),
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(member.user_id),
         },
@@ -1263,13 +1318,13 @@ export function DiscordApp() {
         if (canKick) {
           items.push({
             id: "kick",
-            label: "Kick",
+            label: t("Kick"),
             icon: <IconLeave size={16} />,
             onClick: () => {
               void confirmDialog({
-                title: `Kick ${displayName(member.profile)}`,
-                body: "They can rejoin with an invite.",
-                confirmLabel: "Kick",
+                title: t("Kick {name}", { name: displayName(member.profile) }),
+                body: t("They can rejoin with an invite."),
+                confirmLabel: t("Kick"),
               }).then((ok) => {
                 if (ok) void app.kickMember(member.user_id).then((err) => { if (err) void alertDialog(err); });
               });
@@ -1279,14 +1334,14 @@ export function DiscordApp() {
         if (canBan) {
           items.push({
             id: "ban",
-            label: "Ban",
+            label: t("Ban"),
             icon: <IconTrash size={16} />,
             danger: true,
             onClick: () => {
               void confirmDialog({
-                title: `Ban ${displayName(member.profile)}`,
-                body: "This deletes all their messages and stops them rejoining.",
-                confirmLabel: "Ban",
+                title: t("Ban {name}", { name: displayName(member.profile) }),
+                body: t("This deletes all their messages and stops them rejoining."),
+                confirmLabel: t("Ban"),
               }).then((ok) => {
                 if (ok) void app.banMember(member.user_id).then((err) => { if (err) void alertDialog(err); });
               });
@@ -1302,14 +1357,14 @@ export function DiscordApp() {
             const remaining = mins >= 1440 ? `${Math.floor(mins / 1440)}d ${Math.floor((mins % 1440) / 60)}h` : mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
             items.push({
               id: "timeout-info",
-              label: `Timed out · ${remaining} left`,
+              label: t("Timed out · {remaining} left", { remaining }),
               icon: <IconTimer size={16} />,
               disabled: true,
               onClick: () => {},
             });
             items.push({
               id: "timeout-remove",
-              label: "Remove Timeout",
+              label: t("Remove Timeout"),
               icon: <IconTimer size={16} />,
               onClick: () => {
                 void app.removeMemberTimeout(member.user_id).then((err) => { if (err) void alertDialog(err); });
@@ -1318,7 +1373,7 @@ export function DiscordApp() {
           } else {
             items.push({
               id: "timeout",
-              label: "Time out…",
+              label: t("Time out…"),
               icon: <IconTimer size={16} />,
               onClick: () => {
                 if (member.profile) setTimeoutTarget({ userId: member.user_id, profile: member.profile });
@@ -1355,7 +1410,7 @@ export function DiscordApp() {
         if (memberRoleIds.length > 0) {
           items.push({
             id: "role-clear",
-            label: "Clear all roles",
+            label: t("Clear all roles"),
             icon: <IconClose size={16} />,
             onClick: () =>
               void app.setMemberRoles(member.user_id, []).then((err) => {
@@ -1384,19 +1439,19 @@ export function DiscordApp() {
       openMenu(e.clientX, e.clientY, [
         {
           id: "profile",
-          label: "View Profile",
+          label: t("View Profile"),
           icon: <IconFriends size={16} />,
           onClick: () => openProfile(profile),
         },
         {
           id: "dm",
-          label: "Message",
+          label: t("Message"),
           icon: <IconFriends size={16} />,
           onClick: () => void app.openDmWithFriend(profile.id),
         },
         {
           id: "copy",
-          label: "Copy User ID",
+          label: t("Copy User ID"),
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(profile.id),
         },
@@ -1410,45 +1465,45 @@ export function DiscordApp() {
       const items: ContextMenuItem[] = [
         {
           id: "profile",
-          label: "View Profile",
+          label: t("View Profile"),
           icon: <IconFriends size={16} />,
           onClick: () => openProfile(friend),
         },
         {
           id: "dm",
-          label: "Message",
+          label: t("Message"),
           icon: <IconFriends size={16} />,
           onClick: () => void app.openDmWithFriend(friend.id),
         },
         {
           id: "copy",
-          label: "Copy User ID",
+          label: t("Copy User ID"),
           icon: <IconCopy size={16} />,
           onClick: () => void navigator.clipboard.writeText(friend.id),
         },
         {
           id: "remove",
-          label: "Remove Friend",
+          label: t("Remove Friend"),
           icon: <IconLeave size={16} />,
           danger: true,
           onClick: () => {
             void confirmDialog({
-              title: `Remove ${displayName(friend)}`,
-              body: "They'll be removed from your friends.",
-              confirmLabel: "Remove Friend",
+              title: t("Remove {name}", { name: displayName(friend) }),
+              body: t("They'll be removed from your friends."),
+              confirmLabel: t("Remove Friend"),
             }).then((ok) => { if (ok) void app.removeFriend(friend.id); });
           },
         },
         {
           id: "block",
-          label: "Block",
+          label: t("Block"),
           icon: <IconTrash size={16} />,
           danger: true,
           onClick: () => {
             void confirmDialog({
-              title: `Block ${displayName(friend)}`,
-              body: "They won't be able to message you.",
-              confirmLabel: "Block",
+              title: t("Block {name}", { name: displayName(friend) }),
+              body: t("They won't be able to message you."),
+              confirmLabel: t("Block"),
             }).then((ok) => { if (ok) void app.blockUser(friend.id); });
           },
         },
@@ -1475,6 +1530,9 @@ export function DiscordApp() {
     created_at: string;
     mentions?: string[];
     author?: Profile | null;
+    embeds?: import("@/lib/embeds").Embed[] | null;
+    webhook?: import("@/lib/embeds").MessageWebhookInfo | null;
+    reply_to_deleted?: boolean;
   }): ChatMessageData => ({
     id: m.id,
     author_id: m.author_id,
@@ -1495,6 +1553,11 @@ export function DiscordApp() {
     created_at: m.created_at,
     mentions: m.mentions ?? [],
     author: m.author ?? undefined,
+    // Webhook and bot posts (GitHub, CI) carry their content in embeds; left
+    // out here they reached the renderer as bare one-line text.
+    embeds: m.embeds ?? null,
+    webhook: m.webhook ?? null,
+    reply_to_deleted: m.reply_to_deleted ?? false,
   });
 
   const channelMessages = useMemo(
@@ -1639,7 +1702,7 @@ export function DiscordApp() {
           peer={callBannerPeer}
           selfProfile={app.profile}
           title={displayName(callBannerPeer)}
-          subtitle={call.phase === "outgoing" ? "Calling… waiting for answer" : "Connecting…"}
+          subtitle={call.phase === "outgoing" ? t("Calling… waiting for answer") : t("Connecting…")}
           phase={call.phase === "outgoing" ? "outgoing" : "active"}
           connected={call.rtcConnected}
           localStream={call.localStream}
@@ -1675,7 +1738,7 @@ export function DiscordApp() {
   const mobileMenuButton = isMobile ? (
     <button
       type="button"
-      aria-label="Open navigation"
+      aria-label={t("Open navigation")}
       onClick={() => setMobileMenuOpen((v) => !v)}
       className="-ml-2 mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] text-interactive-normal hover:text-interactive-active"
     >
@@ -1694,7 +1757,7 @@ export function DiscordApp() {
         <div className="absolute inset-x-0 top-0 z-[60] flex h-10 items-center gap-2 border-b border-divider bg-bg-tertiary px-2">
           <button
             type="button"
-            aria-label="Open navigation"
+            aria-label={t("Open navigation")}
             onClick={() => setMobileMenuOpen((v) => !v)}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-normal hover:bg-interactive-hover"
           >
@@ -1706,7 +1769,7 @@ export function DiscordApp() {
           <NotificationBell compact />
           <button
             type="button"
-            aria-label="Settings"
+            aria-label={t("Settings")}
             onClick={() => setSettingsOpen(true)}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-interactive-hover hover:text-text-normal"
           >
@@ -1715,14 +1778,9 @@ export function DiscordApp() {
         </div>
       )}
 
-      {!online && (
-        <div className="fixed left-0 right-0 top-0 z-[100] bg-status-dnd px-4 py-2 text-center text-sm font-medium text-white">
-          You are offline. Messages will send when your connection returns.
-        </div>
-      )}
       {checkoutSuccess && (
         <div className="fixed left-0 right-0 top-0 z-[100] bg-[#57f287] px-4 py-2 text-center text-sm font-medium text-black">
-          Subscription activated successfully!
+          {t("Subscription activated successfully!")}
         </div>
       )}
       {shopPurchase && (
@@ -1732,7 +1790,7 @@ export function DiscordApp() {
       )}
       {giftReturn && (
         <div className="fixed left-0 right-0 top-0 z-[100] flex items-center justify-center gap-3 bg-[#fee75c] px-4 py-2 text-center text-sm font-medium text-black">
-          <span>Your gift is ready — grab the link from Settings → Subscription.</span>
+          <span>{t("Your gift is ready — grab the link from Settings → Subscription.")}</span>
           <button
             type="button"
             onClick={() => {
@@ -1742,7 +1800,7 @@ export function DiscordApp() {
             }}
             className="shrink-0 rounded bg-black px-2.5 py-1 text-xs font-bold text-[#fee75c]"
           >
-            Open settings
+            {t("Open settings")}
           </button>
         </div>
       )}
@@ -1777,7 +1835,7 @@ export function DiscordApp() {
               onClick={() => void call.retryCall()}
               className="shrink-0 rounded-md bg-brand px-2.5 py-1 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
             >
-              Retry
+              {t("Retry")}
             </button>
           )}
         </div>
@@ -1836,7 +1894,7 @@ export function DiscordApp() {
                 />
               ) : (
                 <ChannelList
-                  title={app.activeServer?.name ?? "Space"}
+                  title={app.activeServer?.name ?? t("Space")}
                   verified={app.activeServer?.verified}
                   partner={app.activeServer?.partner}
                   bannerUrl={app.activeServer?.banner_url ?? null}
@@ -1848,6 +1906,7 @@ export function DiscordApp() {
                   canManageChannels={canManageChannels}
                   voicePresence={serverVoicePresence.byChannel}
                   voiceStartTimes={serverVoicePresence.startTimes}
+                  stageTopics={serverVoicePresence.stageTopics}
                   onSelectChannel={handleSelectChannel}
                   onOpenSettings={() => setSettingsOpen(true)}
                   onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
@@ -1931,7 +1990,7 @@ export function DiscordApp() {
               ) : (
                 <div className="flex min-h-0 w-full">
                   <ChannelList
-                    title={app.activeServer?.name ?? "Space"}
+                    title={app.activeServer?.name ?? t("Space")}
                     verified={app.activeServer?.verified}
                     partner={app.activeServer?.partner}
                     bannerUrl={app.activeServer?.banner_url ?? null}
@@ -1943,6 +2002,7 @@ export function DiscordApp() {
                     canManageChannels={canManageChannels}
                     voicePresence={serverVoicePresence.byChannel}
                     voiceStartTimes={serverVoicePresence.startTimes}
+                  stageTopics={serverVoicePresence.stageTopics}
                     onSelectChannel={handleSelectChannel}
                     onOpenSettings={() => setSettingsOpen(true)}
                     onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined}
@@ -1989,17 +2049,19 @@ export function DiscordApp() {
                 ? "This is a certified Disband broadcast. Replies are closed — watch for new notices here."
                 : undefined
             }
+            composerNotice={<MessageRequestBar threadId={app.activeDmThreadId!} friend={dmFriend} />}
             headerTrailing={
               !dmCallActive ? (
-	                <div className="flex items-center gap-1">
-	                  <HeaderToolbar
+	                <HeaderToolbar
 	                    scopeKind="dm"
 	                    serverId={null}
 	                    containerId={app.activeDmThreadId}
 	                    pinnedOpen={pinnedOpen}
 	                    searchOpen={searchOpen}
 	                    onOpenSearch={() => setSearchOpen(true)}
-	                    onCloseSearch={() => setSearchOpen(false)}
+	                    onCloseSearch={closeSearch}
+	                    searchQuery={searchQuery}
+	                    onSearchQueryChange={setSearchQuery}
 	                    onTogglePins={() => {
 	                      setPinnedOpen(true);
 	                      if (app.activeDmThreadId) void app.loadPinnedMessages("dm", app.activeDmThreadId);
@@ -2007,12 +2069,13 @@ export function DiscordApp() {
 	                    showMembersToggle
 	                    membersVisible={showDmProfile}
 	                    onToggleMembers={() => setShowDmProfile((v) => !v)}
+	                    leading={
+	                      <HeaderCallButton
+	                        disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
+	                        onClick={() => void startVoiceCall(dmFriend)}
+	                      />
+	                    }
 	                  />
-                  <HeaderCallButton
-                    disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
-                    onClick={() => void startVoiceCall(dmFriend)}
-                  />
-                </div>
               ) : null
             }
             callPanel={renderCallPanel()}
@@ -2027,13 +2090,15 @@ export function DiscordApp() {
           />
           </div>
           {searchOpen && (
-            <div className="hidden min-h-0 w-[360px] shrink-0 flex-col overflow-hidden bg-bg-secondary lg:flex">
+            <div className="fixed inset-y-0 right-0 z-40 flex min-h-0 w-full max-w-[360px] flex-col overflow-hidden bg-bg-secondary shadow-[var(--elevation-high)] lg:static lg:z-auto lg:w-[360px] lg:max-w-none lg:shrink-0 lg:shadow-none">
               <SearchPanel
                 scopeKind="dm"
                 serverId={null}
                 containerId={app.activeDmThreadId}
                 onJump={handleSearchJump}
-                onClose={() => setSearchOpen(false)}
+                onClose={closeSearch}
+                query={searchQuery}
+                onQueryChange={setSearchQuery}
               />
             </div>
           )}
@@ -2054,16 +2119,16 @@ export function DiscordApp() {
           render an honest dead-end instead of a blank pane. */}
       {app.viewMode === "dm" && !dmFriend && (
         <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-bg-primary px-6 text-center">
-          <p className="text-[15px] font-semibold text-text-normal">Conversation unavailable</p>
+          <p className="text-[15px] font-semibold text-text-normal">{t("Conversation unavailable")}</p>
           <p className="max-w-sm text-sm text-text-muted">
-            This conversation may have been deleted, or you may no longer have access to it.
+            {t("This conversation may have been deleted, or you may no longer have access to it.")}
           </p>
           <button
             type="button"
             onClick={() => app.setViewHome()}
             className="mt-1 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
           >
-            Back to friends
+            {t("Back to friends")}
           </button>
         </div>
       )}
@@ -2113,15 +2178,16 @@ export function DiscordApp() {
                 typingScope={{ kind: "group", id: app.activeGroupChatId! }}
                 readCursorScope={{ kind: "group", id: app.activeGroupChatId! }}
                 headerTrailing={
-	                  <div className="flex items-center gap-1">
-	                    <HeaderToolbar
+	                  <HeaderToolbar
 	                      scopeKind="group"
 	                      serverId={null}
 	                      containerId={app.activeGroupChatId}
 	                      pinnedOpen={pinnedOpen}
 	                      searchOpen={searchOpen}
 	                      onOpenSearch={() => setSearchOpen(true)}
-	                      onCloseSearch={() => setSearchOpen(false)}
+	                      onCloseSearch={closeSearch}
+	                      searchQuery={searchQuery}
+	                      onSearchQueryChange={setSearchQuery}
 	                      onTogglePins={() => {
 	                        setPinnedOpen(true);
 	                        if (app.activeGroupChatId) void app.loadPinnedMessages("group", app.activeGroupChatId);
@@ -2129,12 +2195,13 @@ export function DiscordApp() {
 	                      showMembersToggle
                           membersVisible={membersVisible}
                           onToggleMembers={() => persistMembersVisible(!membersVisible)}
+	                      leading={
+	                        <HeaderCallButton
+	                          disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
+	                          onClick={startGroupVoiceCall}
+	                        />
+	                      }
 	                    />
-                    <HeaderCallButton
-                      disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
-                      onClick={startGroupVoiceCall}
-                    />
-                  </div>
                 }
                 onSend={app.sendGroupMessage}
                 onEdit={app.editGroupMessage}
@@ -2148,13 +2215,15 @@ export function DiscordApp() {
             )}
           </div>
           {searchOpen ? (
-            <div className="hidden min-h-0 w-[360px] shrink-0 flex-col overflow-hidden bg-bg-secondary lg:flex">
+            <div className="fixed inset-y-0 right-0 z-40 flex min-h-0 w-full max-w-[360px] flex-col overflow-hidden bg-bg-secondary shadow-[var(--elevation-high)] lg:static lg:z-auto lg:w-[360px] lg:max-w-none lg:shrink-0 lg:shadow-none">
               <SearchPanel
                 scopeKind="group"
                 serverId={null}
                 containerId={app.activeGroupChatId}
                 onJump={handleSearchJump}
-                onClose={() => setSearchOpen(false)}
+                onClose={closeSearch}
+                query={searchQuery}
+                onQueryChange={setSearchQuery}
               />
             </div>
           ) : (membersVisible ? (
@@ -2174,16 +2243,16 @@ export function DiscordApp() {
 
       {app.viewMode === "group" && !activeGroup && (
         <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-bg-primary px-6 text-center">
-          <p className="text-[15px] font-semibold text-text-normal">Conversation unavailable</p>
+          <p className="text-[15px] font-semibold text-text-normal">{t("Conversation unavailable")}</p>
           <p className="max-w-sm text-sm text-text-muted">
-            This group may have been deleted, or you may no longer be a member.
+            {t("This group may have been deleted, or you may no longer be a member.")}
           </p>
           <button
             type="button"
             onClick={() => app.setViewHome()}
             className="mt-1 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
           >
-            Back to friends
+            {t("Back to friends")}
           </button>
         </div>
       )}
@@ -2196,7 +2265,7 @@ export function DiscordApp() {
           channelName="Notes"
           channelIcon={<IconNotes size={22} className="text-text-muted" />}
           introText="Your private Notes — only you can see this"
-          placeholder="Write a note, or drop in an image, video or file…"
+          placeholder={t("Write a note, or drop in an image, video or file…")}
           messages={noteMessages}
           members={notesMembers}
           currentUserId={app.user?.id}
@@ -2227,7 +2296,11 @@ export function DiscordApp() {
 
       {app.viewMode === "discover" && <DiscoverPanel tab={discoverTab} onTabChange={setDiscoverTab} query={discoverQuery} onQueryChange={setDiscoverQuery} />}
 
-      {app.viewMode === "space" && activeChannel && isVoice && (
+      {app.viewMode === "space" && activeChannel && isVoice && activeChannel.is_stage && (
+        <StagePanel channel={activeChannel} />
+      )}
+
+      {app.viewMode === "space" && activeChannel && isVoice && !activeChannel.is_stage && (
         <VoicePanel
           channelId={activeChannel.id}
           channelName={activeChannel.name}
@@ -2286,7 +2359,9 @@ export function DiscordApp() {
               pinnedOpen={pinnedOpen}
               searchOpen={searchOpen}
               onOpenSearch={() => setSearchOpen(true)}
-              onCloseSearch={() => setSearchOpen(false)}
+              onCloseSearch={closeSearch}
+              searchQuery={searchQuery}
+              onSearchQueryChange={setSearchQuery}
               onTogglePins={() => {
                 setPinnedOpen(true);
                 if (app.activeChannelId) void app.loadPinnedMessages("channel", app.activeChannelId);
@@ -2304,19 +2379,21 @@ export function DiscordApp() {
       {app.viewMode === "space" && !activeChannel && (
         <div className="flex min-w-0 flex-1 items-center justify-center bg-bg-primary px-6 text-center">
           <p className="text-[15px] text-text-muted">
-            {app.channels.length ? "Pick a channel to start talking." : "This space has no channels yet."}
+            {app.channels.length ? t("Pick a channel to start talking.") : t("This space has no channels yet.")}
           </p>
         </div>
       )}
 
-      {app.viewMode === "space" && !isMobile && searchOpen && (
-        <div className="hidden min-h-0 w-[360px] shrink-0 flex-col overflow-hidden bg-bg-secondary lg:flex">
+      {app.viewMode === "space" && searchOpen && (
+        <div className="fixed inset-y-0 right-0 z-40 flex min-h-0 w-full max-w-[360px] flex-col overflow-hidden bg-bg-secondary shadow-[var(--elevation-high)] lg:static lg:z-auto lg:w-[360px] lg:max-w-none lg:shrink-0 lg:shadow-none">
           <SearchPanel
             scopeKind="server"
             serverId={app.activeServerId}
             containerId={null}
             onJump={handleSearchJump}
-            onClose={() => setSearchOpen(false)}
+            onClose={closeSearch}
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
           />
         </div>
       )}
@@ -2324,6 +2401,7 @@ export function DiscordApp() {
       {app.viewMode === "space" && !isMobile && !searchOpen && membersVisible && (
         <MemberList
           serverId={app.activeServerId}
+          channelId={app.activeChannelId}
           members={app.members}
           roles={app.serverRoles}
           ownerId={app.activeServer?.owner_id ?? null}
@@ -2392,8 +2470,10 @@ export function DiscordApp() {
         onMessage={
           profileTarget
             ? () => {
-                void app.openDmWithFriend(profileTarget.id);
-                setProfileTarget(null);
+                void app.openDmWithFriend(profileTarget.id).then((err) => {
+                  if (err) void alertDialog(err);
+                  else setProfileTarget(null);
+                });
               }
             : undefined
         }
@@ -2433,9 +2513,9 @@ export function DiscordApp() {
           profileTarget && profileFriend
             ? () => {
                 void confirmDialog({
-                  title: `Remove ${displayName(profileTarget)}`,
-                  body: "They'll be removed from your friends.",
-                  confirmLabel: "Remove Friend",
+                  title: t("Remove {name}", { name: displayName(profileTarget) }),
+                  body: t("They'll be removed from your friends."),
+                  confirmLabel: t("Remove Friend"),
                 }).then((ok) => {
                   if (ok) void app.removeFriend(profileTarget.id).then(() => setProfileTarget(null));
                 });
@@ -2446,9 +2526,9 @@ export function DiscordApp() {
           profileTarget && !app.isBlocked(profileTarget.id)
             ? () => {
                 void confirmDialog({
-                  title: `Block ${displayName(profileTarget)}`,
-                  body: "They won't be able to message you.",
-                  confirmLabel: "Block",
+                  title: t("Block {name}", { name: displayName(profileTarget) }),
+                  body: t("They won't be able to message you."),
+                  confirmLabel: t("Block"),
                 }).then((ok) => {
                   if (!ok) return;
                   void app.blockUser(profileTarget.id).then((err) => {
@@ -2553,12 +2633,12 @@ export function DiscordApp() {
       <ReportModal target={reportTarget} onClose={() => setReportTarget(null)} />
 
       <CreateServerModal open={createServerOpen} onClose={() => setCreateServerOpen(false)} />
-      <ReleaseModal />
+      <WhatsNewModal />
       <QuickSwitcher open={quickSwitcherOpen} onClose={() => setQuickSwitcherOpen(false)} />
       {folderDialogMounted && shownFolderDialog && (
         <ServerFolderDialog
           exiting={folderDialogExiting}
-          title={shownFolderDialog.mode === "create" ? "Create Folder" : "Edit Folder"}
+          title={shownFolderDialog.mode === "create" ? t("Create Folder") : t("Edit Folder")}
           initialName={
             shownFolderDialog.mode === "edit"
               ? (app.serverFolders.find((f) => f.id === shownFolderDialog.folderId)?.name ?? "")

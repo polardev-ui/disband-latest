@@ -2,6 +2,7 @@
 
 import { IconStar } from "@/components/icons";
 import { useGifFavorites } from "@/hooks/useGifFavorites";
+import { useI18n } from "@/contexts/I18nContext";
 
 /**
  * The star chrome itself — one implementation shared by the GIF picker and
@@ -10,11 +11,12 @@ import { useGifFavorites } from "@/hooks/useGifFavorites";
  * owns positioning.
  */
 export function FavStarButton({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
-      aria-label={active ? "Remove from favourites" : "Save to favourites"}
-      title={active ? "Remove from favourites" : "Save to favourites"}
+      aria-label={active ? t("Remove from favourites") : t("Save to favourites")}
+      title={active ? t("Remove from favourites") : t("Save to favourites")}
       onClick={(e) => {
         e.stopPropagation();
         onToggle();

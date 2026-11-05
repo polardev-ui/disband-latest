@@ -8,8 +8,12 @@ export interface PresenceMember extends VoicePresence {
   profile?: Profile;
 }
 
+/** An open stage's topic, by channel: the sidebar shows it live. */
+export type StageTopics = Map<string, string>;
+
 export function useServerVoicePresence(serverId: string | null) {
   const [byChannel, setByChannel] = useState<Map<string, PresenceMember[]>>(new Map());
+  const [stageTopics, setStageTopics] = useState<StageTopics>(new Map());
 
   const [startTimes, setStartTimes] = useState<Map<string, number>>(new Map());
 
@@ -17,18 +21,30 @@ export function useServerVoicePresence(serverId: string | null) {
     if (!serverId) {
       setByChannel(new Map());
       setStartTimes(new Map());
+      setStageTopics(new Map());
       return;
     }
     let active = true;
+    // The space's voice channel ids barely change; reading them on every
+    // presence event doubled each update's round trips.
+    let voiceIds: string[] | null = null;
+    let timer: number | undefined;
 
     const load = async () => {
       const supabase = getSupabaseClient();
-      const { data: chs } = await supabase
-        .from("channels")
-        .select("id")
-        .eq("server_id", serverId)
-        .eq("type", "voice");
-      const voiceIds = ((chs as { id: string }[] | null) ?? []).map((c) => c.id);
+      if (!voiceIds) {
+        const { data: chs } = await supabase
+          .from("channels")
+          // "*" so a missing stage column (before its migration) can't
+          // blank every voice channel in the sidebar.
+          .select("*")
+          .eq("server_id", serverId)
+          .eq("type", "voice");
+        const list = (chs as { id: string; stage_topic?: string | null }[] | null) ?? [];
+        voiceIds = list.map((c) => c.id);
+        if (!active) return;
+        setStageTopics(new Map(list.filter((c) => c.stage_topic).map((c) => [c.id, c.stage_topic as string])));
+      }
       if (!active) return;
       if (voiceIds.length === 0) {
         setByChannel(new Map());
@@ -50,13 +66,29 @@ export function useServerVoicePresence(serverId: string | null) {
 
     void load();
 
+    // One burst of changes (a join writes, then heartbeats) is one reload.
+    // Changes in other spaces' channels are ignored.
+    const schedule = (channelId?: string) => {
+      if (channelId && voiceIds && !voiceIds.includes(channelId)) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void load(), 120);
+    };
+
     const sub = getSupabaseClient()
       .channel(`server-voice:${serverId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "voice_presence" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "voice_presence" }, (change) => {
+        const row = (change.new && "channel_id" in change.new ? change.new : change.old) as { channel_id?: string };
+        schedule(row?.channel_id);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "channels", filter: `server_id=eq.${serverId}` }, () => {
+        voiceIds = null;
+        schedule();
+      })
       .subscribe();
 
     return () => {
       active = false;
+      window.clearTimeout(timer);
       void sub.unsubscribe();
     };
   }, [serverId]);
@@ -81,5 +113,5 @@ export function useServerVoicePresence(serverId: string | null) {
     });
   }, [byChannel]);
 
-  return { byChannel, startTimes };
+  return { byChannel, startTimes, stageTopics };
 }

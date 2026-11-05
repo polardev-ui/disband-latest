@@ -6,8 +6,10 @@ import { SKINS, type SkinId } from "@/lib/theme/skins";
 import { isValidIconName, MAX_CUSTOM_CSS_BYTES } from "@/lib/theme/custom-css";
 import { uploadMedia } from "@/lib/media/uploadMedia";
 import { IconClose } from "@/components/icons";
+import { useI18n } from "@/contexts/I18nContext";
 
 export function ThemesPanel() {
+  const { t } = useI18n();
   const skin = useSkin();
   const [draftCss, setDraftCss] = useState(skin.customCss);
   const [status, setStatus] = useState<string | null>(null);
@@ -29,14 +31,14 @@ export function ThemesPanel() {
     setError(null);
     setStatus(null);
     try { const err = await skin.save(patch); if(err)setError(err);else setStatus(message); }
-    catch(e){setError(e instanceof Error?e.message:"Could not save theme.");}
+    catch(e){setError(e instanceof Error?e.message:t("Could not save theme."));}
     finally{setSaving(false);}
   }
 
   async function addIcon(file: File) {
     const name = iconName.trim().toLowerCase();
     if (!isValidIconName(name)) {
-      setError("Icon names can use lowercase letters, numbers and dashes, up to 40 characters.");
+      setError(t("Icon names can use lowercase letters, numbers and dashes, up to 40 characters."));
       return;
     }
     setUploading(true);
@@ -49,7 +51,7 @@ export function ThemesPanel() {
       );
       setIconName("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not upload that icon.");
+      setError(err instanceof Error ? err.message : t("Could not upload that icon."));
     } finally {
       setUploading(false);
     }
@@ -61,23 +63,21 @@ export function ThemesPanel() {
         <span className="mr-1.5 inline-block rounded bg-super/15 px-1.5 py-0.5 align-[1px] text-[10px] font-bold uppercase tracking-wide text-super">
           Aero
         </span>
-        Skins change the shape of Disband, not just its colours — corners,
-        typefaces and the way every button is drawn. They apply on web and
-        desktop and follow your account between them.
+        {t("Skins change the shape of Disband, not just its colours — corners, typefaces and the way every button is drawn. They apply on web and desktop and follow your account between them.")}
       </p>
 
       {locked && (
         <p className="rounded-lg border border-super/30 bg-super/[0.08] px-4 py-3 text-[13px] leading-relaxed text-super">
-          Themes are part of Disband <span className="font-bold">Aero</span>.
+          {t("Themes are part of Disband")}{" "}<span className="font-bold">Aero</span>.
           {skin.lapsed
-            ? " Your theme is still saved — resubscribe and it comes back exactly as you left it."
-            : " Subscribe to use a skin, write custom CSS and upload your own icons."}
+            ? t(" Your theme is still saved — resubscribe and it comes back exactly as you left it.")
+            : t(" Subscribe to use a skin, write custom CSS and upload your own icons.")}
         </p>
       )}
 
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-[14.5px] font-semibold text-text-normal">Skin</h3>
+          <h3 className="text-[14.5px] font-semibold text-text-normal">{t("Skin")}</h3>
           {skin.preset && !locked && (
             <button
               type="button"
@@ -85,15 +85,15 @@ export function ThemesPanel() {
               onClick={() => void commit({ enabled: !skin.enabled }, skin.enabled ? "Skin turned off." : "Skin turned on.")}
               className="text-xs font-semibold text-text-muted hover:text-text-normal"
             >
-              {skin.enabled ? "Turn off" : "Turn on"}
+              {skin.enabled ? t("Turn off") : t("Turn on")}
             </button>
           )}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <SkinCard
-            label="None"
-            description="The standard Disband look."
+            label={t("None")}
+            description={t("The standard Disband look.")}
             swatch={["#0b0c0e", "#101114", "#141519", "#5865f2"]}
             selected={!skin.preset}
             locked={locked}
@@ -119,21 +119,21 @@ export function ThemesPanel() {
         </div>
         {!locked && (
           <p className="mt-2 text-xs text-text-muted">
-            Hover a skin to try it. Nothing is saved until you click.
+            {t("Hover a skin to try it. Nothing is saved until you click.")}
           </p>
         )}
       </section>
 
       <section>
         <div className="mb-2 flex items-baseline justify-between gap-3">
-          <h3 className="text-[14.5px] font-semibold text-text-normal">Custom CSS</h3>
+          <h3 className="text-[14.5px] font-semibold text-text-normal">{t("Custom CSS")}</h3>
           <a
             href="https://docs.disband.dev/docs/themes/"
             target="_blank"
             rel="noreferrer"
             className="text-xs font-semibold text-text-link hover:underline"
           >
-            Theming guide &amp; template →
+            {t("Theming guide & template →")}
           </a>
         </div>
         <textarea
@@ -158,7 +158,7 @@ export function ThemesPanel() {
             }}
             className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Save CSS"}
+            {saving ? t("Saving…") : t("Save CSS")}
           </button>
           <span className="text-xs text-text-muted">
             {draftCss.length.toLocaleString()} / {MAX_CUSTOM_CSS_BYTES.toLocaleString()}
@@ -167,7 +167,7 @@ export function ThemesPanel() {
 
         {skin.removedNotes.length > 0 && (
           <div className="mt-3 rounded-md border border-status-idle/30 bg-status-idle/[0.08] px-3.5 py-2.5 text-[13px] text-status-idle">
-            <p className="font-semibold">Some of that CSS was removed before saving:</p>
+            <p className="font-semibold">{t("Some of that CSS was removed before saving:")}</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-5">
               {skin.removedNotes.map((note) => <li key={note}>{note}</li>)}
             </ul>
@@ -176,9 +176,9 @@ export function ThemesPanel() {
       </section>
 
       <section>
-        <p className="mb-1 text-sm font-semibold">Custom icons</p>
+        <p className="mb-1 text-sm font-semibold">{t("Custom icons")}</p>
         <p className="mb-3 text-sm text-text-muted">
-          Upload an image and reference it from your CSS as{" "}
+          {t("Upload an image and reference it from your CSS as")}{" "}
           <code className="rounded bg-bg-tertiary px-1 py-0.5 font-mono text-xs">var(--icon-name)</code>.
         </p>
 
@@ -207,7 +207,7 @@ export function ThemesPanel() {
             onClick={() => fileRef.current?.click()}
             className="rounded-md border border-divider px-4 py-2 text-sm font-semibold text-text-normal hover:bg-interactive-hover disabled:opacity-50"
           >
-            {uploading ? "Uploading…" : "Upload icon"}
+            {uploading ? t("Uploading…") : t("Upload icon")}
           </button>
         </div>
 
@@ -226,7 +226,7 @@ export function ThemesPanel() {
                 <button
                   type="button"
                   disabled={locked || saving}
-                  aria-label={`Remove ${name}`}
+                  aria-label={t("Remove {name}", { name })}
                   onClick={() => {
                     const next = { ...skin.icons };
                     delete next[name];

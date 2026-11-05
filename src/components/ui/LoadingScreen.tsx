@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { SplitLogoLoader } from "@/components/ui/SplitLogoLoader";
+import { useI18n } from "@/contexts/I18nContext";
 
 export function LoadingScreen({ label = "Loading Disband" }: { label?: string }) {
+  const { t } = useI18n();
   const [showStatus, setShowStatus] = useState(false);
   const [cached, setCached] = useState(false);
 
@@ -62,12 +64,12 @@ export function LoadingScreen({ label = "Loading Disband" }: { label?: string })
 
       {showStatus && (
         <p className="absolute bottom-8 animate-[tooltip-enter_0.3s_ease-out_forwards] text-center text-xs text-text-muted">
-          Connection issues?{" "}
+          {t("Connection issues?")}{" "}
           <a
             href="/status"
             className="text-brand underline underline-offset-2 transition-colors hover:text-brand-light"
           >
-            Check our status
+            {t("Check our status")}
           </a>
         </p>
       )}

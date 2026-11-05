@@ -172,9 +172,11 @@ function MonitorRow({ monitor, incidents }: { monitor: StatusMonitor; incidents:
 function IncidentRow({ incident, past = false }: { incident: StatusIncident; past?: boolean }) {
   const hydrated = useHydrated();
   const latest = incident.updates[incident.updates.length - 1];
+  // Live incidents exist only in this response; there's no page to open.
+  const live = incident.id.startsWith("live-");
   return (
     <Link
-      href={`/status/incidents/${incident.id}`}
+      href={live ? "/status" : `/status/incidents/${incident.id}`}
       className="block border-b border-white/[0.05] px-4 py-3.5 transition-colors last:border-b-0 hover:bg-white/[0.025]"
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -225,7 +227,7 @@ export function StatusView({ initial }: { initial: StatusSnapshot }) {
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (!document.hidden) void refresh();
-    }, 60_000);
+    }, 30_000);
     const onVisible = () => {
       if (!document.hidden) void refresh();
     };

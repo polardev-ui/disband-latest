@@ -73,7 +73,15 @@ export async function GET(request: NextRequest) {
 
   try {
     const connection = await loadSpotifyConnection(user.id);
-    return NextResponse.json({ connected: Boolean(connection) });
+    // The phone apps run the OAuth sign-in themselves, so they need the
+    // (public) client id and the redirect the web registered with Spotify —
+    // built the same way as spotifyRedirectUri() in the browser.
+    const site = (process.env.NEXT_PUBLIC_SITE_URL ?? new URL(request.url).origin).replace(/\/$/, "");
+    return NextResponse.json({
+      connected: Boolean(connection),
+      client_id: process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID ?? null,
+      redirect_uri: `${site}/connect/spotify/callback`,
+    });
   } catch {
     return NextResponse.json({ error: "Could not load the Spotify connection." }, { status: 500 });
   }

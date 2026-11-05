@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -32,6 +33,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -104,11 +107,13 @@ fun MessageRow(
                 Spacer(Modifier.width(40.dp))
             } else {
                 AvatarImage(
-                    url = row.author?.avatarUrl,
-                    name = row.author?.name ?: "?",
+                    url = row.webhook?.avatarUrl ?: row.author?.avatarUrl,
+                    name = row.webhook?.name ?: row.author?.name ?: "?",
                     size = 40.dp,
-                    modifier = Modifier.clip(androidx.compose.foundation.shape.CircleShape)
-                        .clickable(role = Role.Button, onClickLabel = "View profile", onClick = onAuthorClick),
+                    // No clip here: it would cut off the decoration, which
+                    // reaches past the photo.
+                    modifier = Modifier.clickable(role = Role.Button, onClickLabel = "View profile", onClick = onAuthorClick),
+                    decoration = row.author?.equippedRingEffect,
                 )
             }
             Spacer(Modifier.width(12.dp))
@@ -117,7 +122,7 @@ fun MessageRow(
                 if (!grouped) {
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            row.author?.name ?: "Unknown",
+                            row.webhook?.name ?: row.author?.name ?: "Unknown",
                             color = palette.textPrimary,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -126,7 +131,8 @@ fun MessageRow(
                             modifier = Modifier.weight(1f, fill = false)
                                 .clickable(role = Role.Button, onClickLabel = "View profile", onClick = onAuthorClick),
                         )
-                        GuildTagView(userId = row.author?.id, size = GuildTagBadgeSize.Small)
+                        if (row.webhook != null) AppTag(palette)
+                        else GuildTagView(userId = row.author?.id, size = GuildTagBadgeSize.Small)
                         Spacer(Modifier.width(6.dp))
                         Text(
                             TimeFormat.short(row.createdAt),
@@ -150,6 +156,13 @@ fun MessageRow(
 
                 Attachments(attachments, palette, onOpenAttachment)
 
+                if (row.embeds.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        row.embeds.forEach { EmbedCard(it, palette) }
+                    }
+                }
+
                 if (row.reactions.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
                     ReactionChips(row.reactions, palette, onToggleReaction)
@@ -163,11 +176,160 @@ fun MessageRow(
     }
 }
 
+/** Marks a webhook's message, so nobody mistakes it for a person. */
+@Composable
+private fun AppTag(palette: Palette) {
+    Spacer(Modifier.width(6.dp))
+    Text(
+        "APP",
+        color = androidx.compose.ui.graphics.Color.White,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(palette.accent)
+            .padding(horizontal = 4.dp, vertical = 1.dp),
+    )
+}
+
+/**
+ * A rich embed, laid out the way the web draws it: a coloured bar on the
+ * left, then author, linked title, description, fields, image and footer.
+ * Android dropped them entirely, so a GitHub push showed only its one-line
+ * summary and never the commits.
+ */
+@Composable
+private fun EmbedCard(embed: com.wsgpolar.disband.data.Embed, palette: Palette) {
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    val open: (String?) -> Unit = { url ->
+        if (url != null && url.startsWith("https://")) runCatching { uriHandler.openUri(url) }
+    }
+    val bar = embed.color?.let { androidx.compose.ui.graphics.Color(0xFF000000 or (it and 0xFFFFFF)) } ?: palette.textMuted
+
+    Row(
+        Modifier
+            .widthIn(max = 420.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(4.dp))
+            .background(palette.elevated)
+            .height(androidx.compose.foundation.layout.IntrinsicSize.Min)
+    ) {
+        Box(Modifier.width(4.dp).fillMaxHeight().background(bar))
+        Row(Modifier.weight(1f).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 10.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                embed.author?.takeIf { it.name.isNotBlank() }?.let { author ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (author.iconUrl != null) {
+                            AsyncImage(
+                                model = author.iconUrl,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp).clip(CircleShape),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(
+                            author.name,
+                            color = palette.textPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = if (author.url != null) Modifier.clickable { open(author.url) } else Modifier,
+                        )
+                    }
+                }
+                embed.title?.takeIf { it.isNotBlank() }?.let { title ->
+                    Text(
+                        title,
+                        color = if (embed.url != null) palette.accent else palette.textPrimary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = if (embed.url != null) Modifier.clickable { open(embed.url) } else Modifier,
+                    )
+                }
+                embed.description?.takeIf { it.isNotBlank() }?.let { MarkdownBody(it, palette) }
+                embed.fields?.takeIf { it.isNotEmpty() }?.let { fields ->
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        // Inline fields sit side by side, up to three a row, like the web.
+                        val rows = mutableListOf<List<com.wsgpolar.disband.data.EmbedField>>()
+                        var current = mutableListOf<com.wsgpolar.disband.data.EmbedField>()
+                        for (field in fields) {
+                            if (!field.inline || current.size == 3) {
+                                if (current.isNotEmpty()) rows += current
+                                current = mutableListOf()
+                            }
+                            current += field
+                            if (!field.inline) {
+                                rows += current
+                                current = mutableListOf()
+                            }
+                        }
+                        if (current.isNotEmpty()) rows += current
+                        rows.forEach { line ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                line.forEach { field ->
+                                    Column(Modifier.weight(1f)) {
+                                        Text(field.name, color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        MarkdownBody(field.value, palette)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                embed.image?.url?.takeIf { it.startsWith("https://") }?.let { url ->
+                    AsyncImage(
+                        model = url,
+                        contentDescription = embed.title,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            .fillMaxWidth()
+                            .heightIn(max = 300.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { open(url) },
+                    )
+                }
+                val footer = embed.footer?.text?.takeIf { it.isNotBlank() }
+                val time = embed.timestamp?.let { TimeFormat.short(it) }
+                if (footer != null || time != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        embed.footer?.iconUrl?.let {
+                            AsyncImage(model = it, contentDescription = null, modifier = Modifier.size(16.dp).clip(CircleShape))
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(
+                            listOfNotNull(footer, time).joinToString(" • "),
+                            color = palette.textMuted,
+                            fontSize = 11.sp,
+                        )
+                    }
+                }
+            }
+            embed.thumbnail?.url?.takeIf { it.startsWith("https://") }?.let { url ->
+                Spacer(Modifier.width(10.dp))
+                AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(4.dp)),
+                )
+            }
+        }
+    }
+}
+
 /** The message body, block by block, so code keeps its own background. */
 @Composable
 private fun MarkdownBody(content: String, palette: Palette) {
-    val blocks = remember(content, palette) { ChatMarkdown.blocks(content, palette) }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // Tap a message with ||spoilers|| to show them, and again to hide them.
+    val hasSpoiler = remember(content) { ChatMarkdown.hasSpoiler(content) }
+    var reveal by remember(content) { mutableStateOf(false) }
+    val blocks = remember(content, palette, reveal) { ChatMarkdown.blocks(content, palette, reveal = reveal) }
+    val tap = if (hasSpoiler) {
+        Modifier.clickable(onClickLabel = if (reveal) "Hide spoiler" else "Show spoiler") { reveal = !reveal }
+    } else Modifier
+    Column(tap, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         blocks.forEach { block ->
             when (block) {
                 is ChatMarkdown.Block.Text ->
@@ -239,6 +401,7 @@ private fun Attachments(
         rest.forEach {
             when (it.type) {
                 "audio" -> AudioCard(it, palette, onOpen)
+                "poll" -> PollCard(it.url)
                 else -> FileCard(it, palette, onOpen)
             }
         }

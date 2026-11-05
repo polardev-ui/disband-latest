@@ -16,6 +16,7 @@ import {
   type ReportSurface,
   type ReportTargetType,
 } from "@/lib/reports";
+import { useI18n } from "@/contexts/I18nContext";
 
 export type ReportTarget =
   | {
@@ -26,6 +27,10 @@ export type ReportTarget =
   | {
       kind: "profile";
       profile: Profile;
+    }
+  | {
+      kind: "server";
+      server: { id: string; name: string };
     };
 
 interface ReportModalProps {
@@ -35,6 +40,7 @@ interface ReportModalProps {
 
 function targetIdentity(target: ReportTarget | null) {
   if (!target) return "";
+  if (target.kind === "server") return target.server.id;
   return target.kind === "message" ? target.message.id : target.profile.id;
 }
 
@@ -51,6 +57,7 @@ function messagePreview(message: ChatMessageData): string {
 }
 
 export function ReportModal({ target, onClose }: ReportModalProps) {
+  const { t } = useI18n();
   const open = target !== null;
   useOverlayDismiss(onClose, open);
 
@@ -69,13 +76,14 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
     setSubmitted(false);
   }, [identity, open]);
 
-  const targetType: ReportTargetType = target?.kind === "profile" ? "profile" : "message";
+  const targetType: ReportTargetType = target?.kind === "profile" ? "profile" : target?.kind === "server" ? "server" : "message";
   const reasons = useMemo(() => reportReasonsFor(targetType), [targetType]);
 
-  const author = target?.kind === "message" ? target.message.author : target?.profile;
-  const name = author ? displayName(author) : "this user";
-  const preview = target?.kind === "message" ? messagePreview(target.message) : "Report this profile";
-  const heading = target?.kind === "profile" ? "Report profile" : "Report message";
+  const author = target?.kind === "message" ? target.message.author : target?.kind === "profile" ? target.profile : undefined;
+  const name = target?.kind === "server" ? target.server.name : author ? displayName(author) : "this user";
+  const preview = target?.kind === "message" ? messagePreview(target.message)
+    : target?.kind === "server" ? "Report this space" : "Report this profile";
+  const heading = target?.kind === "profile" ? "Report profile" : target?.kind === "server" ? "Report space" : "Report message";
 
   if (!target) return null;
 
@@ -85,7 +93,9 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
     setError(null);
 
     const payload =
-      target?.kind === "profile"
+      target?.kind === "server"
+        ? { targetType: "server", surface: "server", targetId: target.server.id, reason, details }
+        : target?.kind === "profile"
         ? {
             targetType: "profile",
             surface: "profile",
@@ -109,12 +119,12 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
       });
       const body = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) {
-        setError(body.error ?? "Could not send the report. Try again.");
+        setError(body.error ?? t("Could not send the report. Try again."));
         return;
       }
       setSubmitted(true);
     } catch {
-      setError("Couldn't reach Disband. Check your connection and try again.");
+      setError(t("Couldn't reach Disband. Check your connection and try again."));
     } finally {
       setSubmitting(false);
     }
@@ -126,7 +136,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
         type="button"
         className="absolute inset-0 bg-overlay-scrim-strong overlay-fade"
         onClick={onClose}
-        aria-label="Close report"
+        aria-label={t("Close report")}
       />
       <div
         role="dialog"
@@ -144,7 +154,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close report"
+            aria-label={t("Close report")}
             className="flex h-8 w-8 items-center justify-center rounded-[3px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
           >
             <IconClose size={16} />
@@ -157,17 +167,17 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
               <IconCheck size={24} />
             </div>
             <h3 className="mt-4 text-center text-[18px] font-semibold text-header-primary">
-              Report submitted
+              {t("Report submitted")}
             </h3>
             <p className="mx-auto mt-2 max-w-[340px] text-center text-[14px] leading-relaxed text-text-muted">
-              Thank you. Sentinel reviews reports every hour, and anything that needs context goes to a person.
+              {t("Thank you. Sentinel reviews reports every hour, and anything that needs context goes to a person.")}
             </p>
             <button
               type="button"
               onClick={onClose}
               className="mt-6 flex h-9 w-full items-center justify-center rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
             >
-              Done
+              {t("Done")}
             </button>
           </div>
         ) : (
@@ -186,9 +196,9 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
               </div>
 
               <p className="mb-2 mt-4 text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">
-                What would you like to report?
+                {t("What would you like to report?")}
               </p>
-              <div role="radiogroup" aria-label="Report reason" className="space-y-1">
+              <div role="radiogroup" aria-label={t("Report reason")} className="space-y-1">
                 {reasons.map((option) => {
                   const selected = reason === option.id;
                   return (
@@ -231,7 +241,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
 
               <label className="mt-4 block">
                 <span className="mb-1.5 flex items-center justify-between text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">
-                  <span>More details (optional)</span>
+                  <span>{t("More details (optional)")}</span>
                   <span className="font-medium normal-case tracking-normal text-text-muted">
                     {details.length}/{MAX_REPORT_DETAILS}
                   </span>
@@ -241,7 +251,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
                   onChange={(event) => setDetails(event.target.value.slice(0, MAX_REPORT_DETAILS))}
                   rows={3}
                   maxLength={MAX_REPORT_DETAILS}
-                  placeholder="Add context that helps us understand what happened."
+                  placeholder={t("Add context that helps us understand what happened.")}
                   className="block w-full resize-none rounded-[3px] border border-transparent bg-bg-tertiary px-3 py-2.5 text-[14px] leading-[19px] text-text-normal outline-none transition-[border-color] placeholder:text-text-muted/80 focus:border-brand"
                 />
               </label>
@@ -260,7 +270,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
                 disabled={submitting}
                 className="inline-flex h-9 items-center justify-center rounded-[3px] px-4 text-[14px] font-medium text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-50"
               >
-                Cancel
+                {t("Cancel")}
               </button>
               <button
                 type="button"
@@ -268,7 +278,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
                 disabled={!reason || submitting}
                 className="inline-flex h-9 items-center justify-center rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {submitting ? "Sending…" : "Submit report"}
+                {submitting ? t("Sending…") : t("Submit report")}
               </button>
             </div>
           </>

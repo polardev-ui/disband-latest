@@ -30,6 +30,12 @@ period = 60
 binding = "MEDIA"
 bucket_name = "disband-media"
 
+# Cloudflare Images, used to serve HEIC/HEIF photos as JPEG (serveHeicAsJpeg).
+# Needs Images enabled on the account; without the binding photos are served
+# as uploaded.
+[images]
+binding = "IMAGES"
+
 [[durable_objects.bindings]]
 name = "MEDIA_QUOTA"
 class_name = "MediaQuota"
@@ -46,7 +52,11 @@ PUBLIC_BASE = "https://cdn.disband.dev"
 # or the bucket becomes free storage for anyone who finds the endpoint.
 REQUIRE_AUTH = "true"
 ALLOWED_ORIGIN = "*"
-MAX_UPLOAD_MB = "50"
+# The biggest single request body. Cloudflare allows 100 MB on Free and Pro;
+# per-plan limits (PLAN_LIMITS in src/index.js) sit under or above it, and
+# anything above goes up in parts through /v1/uploads.
+MAX_UPLOAD_MB = "100"
+# Fallback storage caps for callers that don't pass a plan (URL imports).
 MAX_USER_STORAGE_MB = "1024"
 MAX_USER_OBJECTS = "500"
 LEGACY_MEDIA_ORIGIN = "https://api.wsgpolar.me"

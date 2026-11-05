@@ -8,6 +8,8 @@ import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 @Serializable
 data class BadgeDef(
@@ -24,6 +26,7 @@ private data class UserBadgeRow(
     @SerialName("user_id") val userId: String,
     @SerialName("badge_key") val badgeKey: String,
     @SerialName("awarded_at") val awardedAt: String? = null,
+    val visible: Boolean? = null,
 )
 
 data class AwardedBadge(
@@ -77,5 +80,30 @@ class BadgeService {
 
     fun invalidate(userId: String) {
         cache.remove(userId)
+    }
+
+    /** Every badge you hold, shown or hidden, for the Badges settings screen. */
+    suspend fun ownBadges(userId: String): List<Pair<AwardedBadge, Boolean>> {
+        loadCatalogue()
+        val rows = DisbandSupabase.client.from("user_badges")
+            .select(Columns.list("user_id", "badge_key", "awarded_at", "visible")) {
+                filter { eq("user_id", userId) }
+            }
+            .decodeList<UserBadgeRow>()
+        return rows.mapNotNull { row ->
+            catalogue[row.badgeKey]?.let { AwardedBadge(it, row.awardedAt) to (row.visible ?: true) }
+        }.sortedBy { it.first.def.sort }
+    }
+
+    /** Hiding a badge only takes it off your profile; you keep it. */
+    suspend fun setVisible(userId: String, key: String, visible: Boolean) {
+        DisbandSupabase.postgrest.rpc(
+            "set_badge_visible",
+            buildJsonObject {
+                put("p_key", key)
+                put("p_visible", visible)
+            },
+        )
+        invalidate(userId)
     }
 }

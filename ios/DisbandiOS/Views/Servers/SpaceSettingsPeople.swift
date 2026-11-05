@@ -663,8 +663,8 @@ struct RoleEditorView: View {
     }
 }
 
-private extension Color {
-    /// "#rrggbb", the form roles are stored in.
+extension Color {
+    /// "#rrggbb", the form roles, profile colours and name colours are stored in.
     var hexString: String {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Highlight, themes } from "prism-react-renderer";
+import { useI18n } from "@/contexts/I18nContext";
 
 /**
  * A fenced code block in a sent message: highlighted, with the language
@@ -12,6 +13,7 @@ import { Highlight, themes } from "prism-react-renderer";
  * bonus on top of monospaced text, never a requirement for it.
  */
 export function CodeBlock({ code, language }: { code: string; language: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
   // Prism's grammar names differ from what people type at the fence.
@@ -42,9 +44,9 @@ export function CodeBlock({ code, language }: { code: string; language: string }
           // Hidden until the block is hovered or the button is focused, so it
           // does not sit on top of the code while you are reading.
           className="pointer-events-auto rounded bg-black/40 px-2 py-0.5 text-[11px] font-semibold text-text-muted opacity-0 transition-opacity hover:text-text-normal focus:opacity-100 group-hover/code:opacity-100"
-          aria-label={copied ? "Copied" : "Copy code"}
+          aria-label={copied ? t("Copied") : t("Copy code")}
         >
-          {copied ? "Copied" : "Copy"}
+          {copied ? t("Copied") : t("Copy")}
         </button>
       </div>
 

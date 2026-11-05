@@ -2,7 +2,7 @@
 -- Disband — App Store review demo data
 --
 -- Seeds a self-contained sandbox for the App Review demo account:
---     disband@apple.com / AppleDev123!
+--     disband@apple.com (password: see App Store Connect > App Review sign-in; never commit it)
 --
 -- Everything created here uses deterministic ids in the de00.../5e00.../a000...
 -- ranges, so the script is safe to re-run: it tears down its own previous

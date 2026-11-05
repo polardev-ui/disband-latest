@@ -101,6 +101,41 @@ function profileFields(profile: Record<string, unknown>): SnapshotField[] {
   return out;
 }
 
+/**
+ * What a space looks like to Sentinel: its name and description, its
+ * channel names, and a sample of recent messages. Shared shape with the
+ * routine space check in the content-sentinel function.
+ */
+async function serverSnapshot(
+  service: NonNullable<ReturnType<typeof getServiceSupabase>>,
+  server: Record<string, unknown>,
+): Promise<{ textFields: SnapshotField[]; media: SnapshotMedia[] }> {
+  const textFields: SnapshotField[] = [];
+  if (typeof server.name === "string" && server.name.trim()) textFields.push({ field: "name", value: server.name });
+  if (typeof server.description === "string" && server.description.trim()) {
+    textFields.push({ field: "description", value: server.description });
+  }
+
+  const { data: channels } = await service.from("channels").select("id, name").eq("server_id", server.id as string).limit(200);
+  const names = (channels ?? []).map((c: { name: string | null }) => c.name).filter(Boolean);
+  if (names.length) textFields.push({ field: "channel_names", value: names.join(", ").slice(0, 2000) });
+
+  const ids = (channels ?? []).map((c: { id: string }) => c.id);
+  if (ids.length) {
+    const { data: recent } = await service.from("messages").select("content")
+      .in("channel_id", ids).not("content", "is", null)
+      .order("created_at", { ascending: false }).limit(80);
+    const sample = (recent ?? []).map((m: { content: string | null }) => (m.content ?? "").trim())
+      .filter(Boolean).reverse().join("\n").slice(-6000);
+    if (sample) textFields.push({ field: "recent_messages", value: sample });
+  }
+
+  const media: SnapshotMedia[] = [];
+  if (isCdnMediaUrl(server.icon_url)) media.push({ url: server.icon_url, field: "icon_url", kind: "image" });
+  if (isCdnMediaUrl(server.banner_url)) media.push({ url: server.banner_url, field: "banner_url", kind: "image" });
+  return { textFields, media };
+}
+
 function profileContext(profile: Record<string, unknown>) {
   return {
     username: typeof profile.username === "string" ? profile.username : null,
@@ -133,7 +168,7 @@ export async function POST(request: NextRequest) {
   const reason = body.reason;
   const details = typeof body.details === "string" ? body.details.trim() : "";
 
-  if (targetType !== "message" && targetType !== "profile") {
+  if (targetType !== "message" && targetType !== "profile" && targetType !== "server") {
     return NextResponse.json({ error: "Choose what you are reporting." }, { status: 400 });
   }
   if (!UUID_RE.test(targetId)) {
@@ -152,6 +187,9 @@ export async function POST(request: NextRequest) {
   if (targetType === "message" && surface !== "channel" && surface !== "dm" && surface !== "group") {
     return NextResponse.json({ error: "That message location is invalid." }, { status: 400 });
   }
+  if (targetType === "server" && surface !== "server") {
+    return NextResponse.json({ error: "That space report is invalid." }, { status: 400 });
+  }
   if (targetType === "profile" && surface !== "profile") {
     return NextResponse.json({ error: "That profile report is invalid." }, { status: 400 });
   }
@@ -161,7 +199,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Reporting is unavailable right now." }, { status: 503 });
   }
 
-  let targetTable: "messages" | "dm_messages" | "group_messages" | "profiles";
+  let targetTable: "messages" | "dm_messages" | "group_messages" | "profiles" | "servers";
   let containerId: string | null = null;
   let reportedUserId: string | null = null;
   let textFields: SnapshotField[] = [];
@@ -262,6 +300,31 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
       if (author) context = profileContext(author);
     }
+  } else if (targetType === "server") {
+    const { data: server, error } = await service
+      .from("servers")
+      .select("id, name, description, icon_url, banner_url, owner_id, discoverable, created_at")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: "Could not load that space." }, { status: 500 });
+    if (!server) return NextResponse.json({ error: "That space no longer exists." }, { status: 404 });
+
+    // Members can report a space, and so can anyone who can see it on Discover.
+    const { count } = await service.from("server_members")
+      .select("server_id", { count: "exact", head: true })
+      .eq("server_id", server.id).eq("user_id", user.id);
+    if ((count ?? 0) === 0 && !server.discoverable) {
+      return NextResponse.json({ error: "That space is not available." }, { status: 404 });
+    }
+    if (server.owner_id === user.id) {
+      return NextResponse.json({ error: "You cannot report your own space." }, { status: 400 });
+    }
+
+    targetTable = "servers";
+    reportedUserId = server.owner_id ?? null;
+    ({ textFields, media } = await serverSnapshot(service, server));
+    createdAt = server.created_at;
+    context = { space_name: server.name };
   } else {
     const { data: profile, error } = await service
       .from("profiles")

@@ -11,6 +11,7 @@ import { displayName } from "@/lib/utils";
 import { presenceStatusFor } from "@/lib/presence";
 import { IconClose } from "@/components/icons";
 import type { Profile } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface CreateGroupChatModalProps {
   open: boolean;
@@ -20,7 +21,7 @@ interface CreateGroupChatModalProps {
 /** Group DMs hold ten people: you and nine friends. Discord still needs a
  *  real group, so creation starts at three friends (four people including
  *  you). Once the group exists the owner can remove people freely. */
-const MAX_PICKS = 9;
+const MAX_PICKS = 19;
 const MIN_PICKS = 3;
 
 /*
@@ -29,6 +30,7 @@ const MIN_PICKS = 3;
  with a check on the right, and one full-width create button.
 */
 export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProps) {
+  const { t } = useI18n();
   const { friends, createGroupChat, presenceMap } = useApp();
   const [search, setSearch] = useState("");
   const [name, setName] = useState("");
@@ -63,7 +65,7 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (selected.length < MIN_PICKS) {
-      setError(`Select at least ${MIN_PICKS} friends to start a group DM.`);
+      setError(t("Select at least {MIN_PICKS} friends to start a group DM.", { MIN_PICKS }));
       return;
     }
     setLoading(true);
@@ -82,27 +84,27 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
 
   return (
     <div className={`fixed inset-0 z-[90] flex items-center justify-center bg-black/85 p-4 overlay-fade${exiting ? " overlay-fade-out" : ""}`}>
-      <button type="button" aria-label="Close" className="absolute inset-0 cursor-default" onClick={onClose} />
+      <button type="button" aria-label={t("Close")} className="absolute inset-0 cursor-default" onClick={onClose} />
       <form
         onSubmit={submit}
         role="dialog"
         aria-modal="true"
-        aria-label="Select Friends"
+        aria-label={t("Select Friends")}
         className={`classic-modal${exiting ? " modal-pop-out" : ""} relative flex max-h-[calc(100dvh-32px)] w-full max-w-[440px] flex-col overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
       >
         <div className="px-4 pt-4">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-[20px] font-semibold leading-6 text-header-primary">Select Friends</h2>
+              <h2 className="text-[20px] font-semibold leading-6 text-header-primary">{t("Select Friends")}</h2>
               <p className="mt-1 text-[12px] text-header-secondary">
                 {left === 0
-                  ? "This group has a 10 member limit."
+                  ? t("This group has a 20 member limit.")
                   : need > 0
-                    ? `Add ${need} more friend${need === 1 ? "" : "s"} to start — 10 members max.`
-                    : `You can add ${left} more friend${left === 1 ? "" : "s"}.`}
+                    ? t(need === 1 ? "Add {count} more friend to start — 20 members max." : "Add {count} more friends to start — 20 members max.", { count: need })
+                    : t(left === 1 ? "You can add {count} more friend." : "You can add {count} more friends.", { count: left })}
               </p>
             </div>
-            <button type="button" aria-label="Close" onClick={onClose} className="text-interactive-normal hover:text-interactive-active">
+            <button type="button" aria-label={t("Close")} onClick={onClose} className="text-interactive-normal hover:text-interactive-active">
               <IconClose size={22} />
             </button>
           </div>
@@ -122,7 +124,7 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
                 key={f.id}
                 type="button"
                 onClick={() => toggle(f.id)}
-                aria-label={`Remove ${displayName(f)}`}
+                aria-label={t("Remove {name}", { name: displayName(f) })}
                 className="flex h-[26px] items-center gap-1 rounded-[3px] bg-bg-secondary-alt px-1.5 text-[14px] text-header-primary hover:bg-interactive-hover"
               >
                 {displayName(f)}
@@ -132,8 +134,8 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
             <input
               ref={searchRef}
               autoFocus
-              aria-label="Search friends"
-              placeholder={picked.length ? "" : "Type the username of a friend"}
+              aria-label={t("Search friends")}
+              placeholder={picked.length ? "" : t("Type the username of a friend")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
@@ -146,9 +148,9 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
 
         <div className="channel-scroll mt-2 min-h-0 flex-1 overflow-y-auto px-2 pb-2">
           {friends.length === 0 ? (
-            <p className="px-2 py-6 text-center text-[14px] text-header-secondary">You don&apos;t have any friends to add yet.</p>
+            <p className="px-2 py-6 text-center text-[14px] text-header-secondary">{t("You don’t have any friends to add yet.")}</p>
           ) : shown.length === 0 ? (
-            <p className="px-2 py-6 text-center text-[14px] text-header-secondary">No friends match that.</p>
+            <p className="px-2 py-6 text-center text-[14px] text-header-secondary">{t("No friends match that.")}</p>
           ) : (
             shown.map((f) => {
               const on = selected.includes(f.id);
@@ -189,8 +191,8 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={64}
-              aria-label="Group name"
-              placeholder="Group name (optional)"
+              aria-label={t("Group name")}
+              placeholder={t("Group name (optional)")}
               className="mb-3 h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
             />
           )}
@@ -200,7 +202,7 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
             disabled={loading || selected.length < MIN_PICKS}
             className="h-[38px] w-full rounded-[3px] bg-brand text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Creating…" : selected.length < MIN_PICKS ? `Select ${need} more friend${need === 1 ? "" : "s"}` : "Create Group DM"}
+            {loading ? t("Creating…") : selected.length < MIN_PICKS ? t(need === 1 ? "Select {count} more friend" : "Select {count} more friends", { count: need }) : t("Create Group DM")}
           </button>
         </div>
       </form>

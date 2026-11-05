@@ -5,7 +5,7 @@ import { checkVpnStrict } from "@/lib/vpn-check";
 import { usernameContainsBlockedWord, usernameFormatError } from "@/lib/username-policy";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { persistentRateLimitCheck, logGateEvent } from "@/lib/auth-guard";
-import { verifyTurnstileToken } from "@/lib/turnstile";
+import { requireTurnstile } from "@/lib/turnstile";
 
 // Agreed limits: 3/hr + 5/day per IP, 3/hr per email, plus existing 15/min burst guard.
 export async function POST(request: Request) {
@@ -13,14 +13,17 @@ export async function POST(request: Request) {
   const checkLimit = rateLimit(`signup-check:${checkIp}`, 15, 60_000);
   if (!checkLimit.allowed) return tooManyRequests(checkLimit.retryAfterSeconds);
 
-  let body: { email?: string; username?: string; turnstileToken?: string };
+  let body: { email?: string; username?: string; turnstileToken?: string; platform?: string };
   try {
-    body = (await request.json()) as { email?: string; username?: string; turnstileToken?: string };
+    body = (await request.json()) as typeof body;
   } catch {
     return NextResponse.json({ allowed: false, error: "Invalid request." }, { status: 400 });
   }
 
   const email = body.email?.trim().toLowerCase() ?? "";
+  // The iOS and Android apps have no captcha widget; they still go through
+  // every other check here, and still need the ticket issued at the end.
+  const isMobile = body.platform === "ios" || body.platform === "android";
   const username = body.username?.trim().toLowerCase() ?? "";
 
   const sanitized = username.replace(/[^a-z0-9_]/g, "");
@@ -61,12 +64,34 @@ export async function POST(request: Request) {
     );
   }
 
-  // Optional Turnstile: verified when a token is supplied and a secret is
-  // configured. Not yet mandatory so Tauri builds without the widget keep working.
-  if (body.turnstileToken && process.env.TURNSTILE_SECRET_KEY) {
-    const ok = await verifyTurnstileToken(body.turnstileToken, checkIp === "unknown" ? undefined : checkIp);
-    if (!ok) {
-      return NextResponse.json({ allowed: false, error: "Verification failed. Try again." }, { status: 403 });
+  // Turnstile. A token that is sent must verify. Without one (the widget
+  // failed to load or run for this browser, which making it mandatory showed
+  // happens to a lot of real people: Cloudflare error 300010, tracking
+  // prevention, blockers) sign-up still works, but under a much tighter
+  // per-network limit than verified sign-ups, so skipping the check doesn't
+  // buy an attacker volume.
+  if (!isMobile) {
+    const token = typeof body.turnstileToken === "string" ? body.turnstileToken : "";
+    if (token) {
+      const turnstileFail = await requireTurnstile(token, {
+        ip: checkIp === "unknown" ? undefined : checkIp,
+      });
+      if (turnstileFail) {
+        const json = (await turnstileFail.json()) as { error?: string; code?: string };
+        return NextResponse.json({ allowed: false, ...json }, { status: turnstileFail.status });
+      }
+    } else if (checkIp !== "unknown") {
+      const unverifiedHit = await persistentRateLimitCheck(service, [
+        { key: `signup:nocaptcha:${ipHash}:hr`, max: 2, windowSeconds: 3600 },
+        { key: `signup:nocaptcha:${ipHash}:day`, max: 4, windowSeconds: 86400 },
+      ]);
+      if (unverifiedHit) {
+        await logGateEvent(service, "signup_rate_limited", ipHash, emailHash);
+        return NextResponse.json(
+          { allowed: false, code: "TURNSTILE_REQUIRED", error: "Complete the verification check to create another account from this network." },
+          { status: 429, headers: { "Retry-After": "3600" } },
+        );
+      }
     }
   }
 
@@ -82,16 +107,26 @@ export async function POST(request: Request) {
   }
 
   if (email) {
-    const { data: bannedEmail } = await service
-      .from("platform_bans")
+    // Resolve the email to a user via the service-role-only account_emails
+    // table, then check platform_bans by user_id. Emails are never stored in
+    // public.platform_bans.
+    const { data: acct } = await service
+      .from("account_emails")
       .select("user_id")
-      .ilike("email", email)
+      .eq("canonical", email.trim().toLowerCase())
       .maybeSingle();
-    if (bannedEmail) {
-      return NextResponse.json({
-        allowed: false,
-        error: "This email cannot create an account while a platform ban is active.",
-      }, { status: 403 });
+    if (acct?.user_id) {
+      const { data: bannedUser } = await service
+        .from("platform_bans")
+        .select("user_id")
+        .eq("user_id", acct.user_id)
+        .maybeSingle();
+      if (bannedUser) {
+        return NextResponse.json({
+          allowed: false,
+          error: "This email cannot create an account while a platform ban is active.",
+        }, { status: 403 });
+      }
     }
   }
 
@@ -108,7 +143,8 @@ export async function POST(request: Request) {
     }
   }
 
-  const formatErr = usernameFormatError(sanitized);
+  // The Android app picks a username after sign-up, so it may send none.
+  const formatErr = isMobile && !sanitized ? null : usernameFormatError(sanitized);
   if (formatErr) {
     // Patch 4 (fail-soft): a single bad username no longer burns the whole
     // network for 24h (griefable on schools/shared IPs, and responsible for
@@ -144,9 +180,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ allowed: false, error: formatErr }, { status: 400 });
   }
 
-  const { data: availability } = await service.rpc("check_username_available", {
-    p_username: sanitized,
-  });
+  const { data: availability } = sanitized
+    ? await service.rpc("check_username_available", { p_username: sanitized })
+    : { data: null };
   if (availability && availability.available === false) {
     return NextResponse.json({
       allowed: false,
@@ -185,6 +221,22 @@ export async function POST(request: Request) {
     if (vpn.unavailable) {
       // Logged, not enforced — see the fail-open note above.
       await logGateEvent(service, "signup_vpn_detection_unavailable", ipHash, emailHash);
+    }
+  }
+
+  // Every check passed: issue a short-lived, single-use sign-up ticket for this
+  // email. The before-user-created auth hook (migration 0224) refuses any new
+  // account without one, so calling Supabase's /auth/v1/signup directly, and
+  // skipping this route and its captcha, no longer creates an account.
+  if (email) {
+    const { error: ticketError } = await service.from("signup_tickets").upsert({
+      email,
+      expires_at: new Date(Date.now() + 15 * 60_000).toISOString(),
+    });
+    // Logged, not fatal: until the hook is switched on no ticket is needed,
+    // and once it is, a missing ticket is refused by Supabase anyway.
+    if (ticketError) {
+      console.error("[signup-check] Could not issue sign-up ticket:", ticketError.message);
     }
   }
 

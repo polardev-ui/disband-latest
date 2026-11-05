@@ -9,6 +9,7 @@ import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui
 import { serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { Tooltip } from "./Tooltip";
+import { useI18n } from "@/contexts/I18nContext";
 
 export interface DiscoverableServer {
   id: string;
@@ -23,6 +24,8 @@ export interface DiscoverableServer {
   created_at: string;
   verified?: boolean;
   partner?: boolean;
+  /** Set while a paid promotion is running; promoted spaces lead both tabs. */
+  promoted_until?: string | null;
 }
 
 export type DiscoverTab = "popular" | "new";
@@ -71,24 +74,25 @@ const SORTS: { id: DiscoverTab; label: string; icon: React.ReactNode; hint: stri
 ];
 
 export function DiscoverSidebar({ tab, onTabChange }: DiscoverSidebarProps) {
+  const { t } = useI18n();
   return (
     <aside className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-bg-secondary">
-      <h1 className="px-4 pb-3 pt-6 text-[24px] font-bold leading-[30px] text-header-primary">Discover</h1>
-      <nav aria-label="Browse spaces" className="channel-scroll min-h-0 flex-1 overflow-y-auto px-2">
-        {SORTS.map((t) => {
-          const active = tab === t.id;
+      <h1 className="px-4 pb-3 pt-6 text-[24px] font-bold leading-[30px] text-header-primary">{t("Discover")}</h1>
+      <nav aria-label={t("Browse spaces")} className="channel-scroll min-h-0 flex-1 overflow-y-auto px-2">
+        {SORTS.map((sort) => {
+          const active = tab === sort.id;
           return (
             <button
-              key={t.id}
+              key={sort.id}
               type="button"
-              onClick={() => onTabChange(t.id)}
+              onClick={() => onTabChange(sort.id)}
               aria-current={active ? "page" : undefined}
               className={`mb-0.5 flex h-11 w-full items-center gap-3 rounded-[4px] px-2 text-left text-[16px] font-medium transition-colors duration-100 ${
                 active ? "bg-brand text-white" : "text-channels-default hover:bg-interactive-hover hover:text-interactive-active"
               }`}
             >
-              <span className={`flex h-8 w-8 shrink-0 items-center justify-center ${active ? "text-white" : ""}`}>{t.icon}</span>
-              {t.label}
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center ${active ? "text-white" : ""}`}>{sort.icon}</span>
+              {t(sort.label)}
             </button>
           );
         })}
@@ -113,17 +117,18 @@ function SpaceIcon({ server, className }: { server: DiscoverableServer; classNam
 }
 
 function Counts({ server }: { server: DiscoverableServer }) {
+  const { t } = useI18n();
   return (
     <p className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-header-secondary">
       {typeof server.online_count === "number" && (
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-status-online" aria-hidden />
-          {server.online_count.toLocaleString()} Online
+          {server.online_count.toLocaleString()} {t("Online")}
         </span>
       )}
       <span className="inline-flex items-center gap-1.5">
         <span className="h-2 w-2 rounded-full bg-[#80848e]" aria-hidden />
-        {server.member_count.toLocaleString()} {server.member_count === 1 ? "Member" : "Members"}
+        {server.member_count.toLocaleString()} {server.member_count === 1 ? t("Member") : t("Members")}
       </span>
     </p>
   );
@@ -138,10 +143,11 @@ function JoinButton({
   joining: boolean;
   onJoin: () => void;
 }) {
+  const { t } = useI18n();
   if (joined) {
     return (
       <span className="inline-flex h-8 shrink-0 items-center gap-1 px-1 text-[14px] font-medium text-header-secondary">
-        <IconCheck size={15} /> Joined
+        <IconCheck size={15} /> {t("Joined")}
       </span>
     );
   }
@@ -152,7 +158,7 @@ function JoinButton({
       onClick={onJoin}
       className="inline-flex h-8 shrink-0 items-center justify-center rounded-[3px] bg-button-green px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:opacity-50"
     >
-      {joining ? "Joining…" : "Join"}
+      {joining ? t("Joining…") : t("Join")}
     </button>
   );
 }
@@ -187,6 +193,7 @@ export function DiscoverView({
   joinError,
   onJoin,
 }: DiscoverViewProps) {
+  const { t } = useI18n();
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = q
@@ -199,7 +206,8 @@ export function DiscoverView({
       : items;
 
     return [...filtered].sort((a, b) =>
-      tab === "popular" ? b.member_count - a.member_count : b.created_at.localeCompare(a.created_at),
+      Number(!!b.promoted_until) - Number(!!a.promoted_until) ||
+      (tab === "popular" ? b.member_count - a.member_count : b.created_at.localeCompare(a.created_at)),
     );
   }, [items, query, tab]);
 
@@ -215,8 +223,8 @@ export function DiscoverView({
         <header className="relative flex min-h-[200px] items-center justify-center overflow-hidden rounded-lg bg-brand px-5 py-10 text-center sm:min-h-[280px] sm:px-12">
           <CommunityBackdrop className="opacity-35" />
           <div className="relative w-full max-w-[680px]">
-            <h1 className="text-[24px] font-bold leading-[30px] text-white sm:text-[28px]">Find your community on Disband</h1>
-            <p className="mt-2 text-[16px] leading-5 text-white/90">From gaming, to music, to learning, there&apos;s a place for you.</p>
+            <h1 className="text-[24px] font-bold leading-[30px] text-white sm:text-[28px]">{t("Find your community on Disband")}</h1>
+            <p className="mt-2 text-[16px] leading-5 text-white/90">{t("From gaming, to music, to learning, there’s a place for you.")}</p>
 
             <div className="relative mx-auto mt-6 w-full max-w-[560px]">
               <input
@@ -228,15 +236,15 @@ export function DiscoverView({
                     onQueryChange("");
                   }
                 }}
-                placeholder="Explore spaces"
-                aria-label="Search spaces"
+                placeholder={t("Explore spaces")}
+                aria-label={t("Search spaces")}
                 className="h-11 w-full rounded-[4px] bg-white pl-4 pr-11 text-[16px] text-[#060607] outline-none placeholder:text-[#5c5e66] shadow-[var(--elevation-high)]"
               />
               {query ? (
                 <button
                   type="button"
                   onClick={() => onQueryChange("")}
-                  aria-label="Clear search"
+                  aria-label={t("Clear search")}
                   className="absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-[#5c5e66] hover:text-[#060607]"
                 >
                   <IconClose size={18} />
@@ -249,30 +257,30 @@ export function DiscoverView({
         </header>
 
         {onTabChange && (
-          <div role="group" aria-label="Sort spaces" className="mt-6 flex gap-2 md:hidden">
-            {SORTS.map((t) => (
+          <div role="group" aria-label={t("Sort spaces")} className="mt-6 flex gap-2 md:hidden">
+            {SORTS.map((sort) => (
               <button
-                key={t.id}
+                key={sort.id}
                 type="button"
-                aria-pressed={tab === t.id}
-                title={t.hint}
-                onClick={() => onTabChange(t.id)}
+                aria-pressed={tab === sort.id}
+                title={t(sort.hint)}
+                onClick={() => onTabChange(sort.id)}
                 className={`h-8 rounded-full px-3 text-[14px] font-medium transition-colors ${
-                  tab === t.id ? "bg-brand text-white" : "bg-bg-secondary text-header-secondary hover:text-header-primary"
+                  tab === sort.id ? "bg-brand text-white" : "bg-bg-secondary text-header-secondary hover:text-header-primary"
                 }`}
               >
-                {t.label}
+                {t(sort.label)}
               </button>
             ))}
           </div>
         )}
 
         <h2 className="mb-4 mt-8 text-[20px] font-semibold leading-6 text-header-primary" aria-live="polite">
-          {loading ? (tab === "popular" ? "Featured spaces" : "New spaces") : heading}
+          {loading ? (tab === "popular" ? t("Featured spaces") : t("New spaces")) : heading}
         </h2>
 
         {loading ? (
-          <ul aria-label="Loading spaces" className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(248px,1fr))]">
+          <ul aria-label={t("Loading spaces")} className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(248px,1fr))]">
             {Array.from({ length: 8 }).map((_, i) => (
               <li key={i} className="animate-pulse overflow-hidden rounded-lg bg-bg-secondary">
                 <div className="h-[138px] w-full bg-bg-tertiary" />
@@ -287,24 +295,24 @@ export function DiscoverView({
           </ul>
         ) : error ? (
           <div className="max-w-md rounded-lg bg-bg-secondary p-5" role="alert">
-            <h3 className="text-[16px] font-semibold text-header-primary">Couldn&apos;t load spaces</h3>
+            <h3 className="text-[16px] font-semibold text-header-primary">{t("Couldn’t load spaces")}</h3>
             <p className="mt-1 text-[14px] text-header-secondary">{error}</p>
             <button
               type="button"
               onClick={onRetry}
               className="mt-4 inline-flex h-8 items-center rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white hover:bg-button-secondary-hover"
             >
-              Try Again
+              {t("Try Again")}
             </button>
           </div>
         ) : visible.length === 0 ? (
           <div className="flex flex-col items-center px-6 py-16 text-center">
             <IconSearch size={40} className="text-interactive-muted" />
             <h3 className="mt-4 text-[20px] font-semibold text-header-primary">
-              {query ? "No results found" : "Nothing to discover yet"}
+              {query ? t("No results found") : t("Nothing to discover yet")}
             </h3>
             <p className="mt-2 max-w-sm text-[16px] leading-5 text-header-secondary">
-              {query ? "Try searching for something else, or a topic instead of a name." : "Public spaces will show up here once people create them."}
+              {query ? t("Try searching for something else, or a topic instead of a name.") : t("Public spaces will show up here once people create them.")}
             </p>
           </div>
         ) : (
@@ -322,6 +330,11 @@ export function DiscoverView({
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={banner} alt="" className="h-full w-full object-cover" />
                     )}
+                    {server.promoted_until && (
+                      <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-[#ffd166] backdrop-blur-sm">
+                        {t("Promoted")}
+                      </span>
+                    )}
                     <span className="absolute -bottom-[26px] left-3 rounded-[16px] bg-bg-secondary p-1 transition-colors group-hover:bg-bg-secondary-alt">
                       <SpaceIcon server={server} className="h-10 w-10 rounded-[12px] text-[14px]" />
                     </span>
@@ -337,7 +350,7 @@ export function DiscoverView({
                       <span className="truncate">{server.name}</span>
                     </p>
                     <p className="mt-1 line-clamp-3 min-h-[54px] flex-1 text-[14px] leading-[18px] text-header-secondary">
-                      {server.description || "No description yet."}
+                      {server.description || t("No description yet.")}
                     </p>
                     <div className="mt-3 flex items-center justify-between gap-2">
                       <Counts server={server} />

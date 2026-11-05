@@ -252,7 +252,19 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         }
     }
 
-    val readOnly = channel.readOnly == true
+    // An announcement channel is closed only to people who can't manage
+    // channels. This locked it for everyone, so a space's own owner was told
+    // only moderators could post. my_server_permissions reports everything
+    // as allowed for the owner.
+    // The space's roles, so role pings show in their colour.
+    LaunchedEffect(channel.serverId) {
+        runCatching { com.wsgpolar.disband.data.ServerAdmin.roles(channel.serverId) }
+            .onSuccess { list -> ChatMarkdown.setRoles(list.map { it.name to it.color }) }
+    }
+    val permissions by androidx.compose.runtime.produceState<Map<String, Boolean>?>(null, channel.serverId) {
+        value = com.wsgpolar.disband.data.ServerAdmin.permissions(channel.serverId)
+    }
+    val readOnly = channel.readOnly == true && permissions?.get("manage_channels") != true
     ChatScaffold(
         title = "#" + channel.name,
         subtitle = serverName,
@@ -377,6 +389,9 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
     }
 }
 
+/** @everyone and @here ping every member, as on the web. */
+private val EVERYONE_PING = Regex("@(everyone|here)\\b", RegexOption.IGNORE_CASE)
+
 private fun Message.toRow(me: String? = null): ChatRow = ChatRow(
     id = id,
     author = author,
@@ -392,9 +407,11 @@ private fun Message.toRow(me: String? = null): ChatRow = ChatRow(
     replyToId = replyToId,
     editedAt = editedAt,
     pingsYou = me != null && authorId != me && (
-    mentions?.contains(me) == true
+    mentions?.contains(me) == true || EVERYONE_PING.containsMatchIn(content)
     ),
     createdAt = createdAt,
+    embeds = embeds.orEmpty(),
+    webhook = webhook,
 )
 
 private fun GroupMessage.toRow(me: String? = null): ChatRow = ChatRow(

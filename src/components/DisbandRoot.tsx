@@ -11,12 +11,16 @@ import { PlatformBanScreen } from "@/components/auth/PlatformBanScreen";
 import { DiscordApp } from "@/components/discord/DiscordApp";
 import { VoiceSessionProvider } from "@/contexts/VoiceSessionContext";
 import { UpdateToast } from "@/components/desktop/UpdateToast";
+import { WebUpdateWatcher } from "@/components/WebUpdateWatcher";
 import { DesktopShell } from "@/components/desktop/DesktopShell";
 import { SelfXssWarning } from "@/components/SelfXssWarning";
 import { MobileAppPromo } from "@/components/mobile/MobileAppPromo";
 import { AgePrompt } from "@/components/AgePrompt";
 import { CookieConsent } from "@/components/CookieConsent";
+import { TosConsentPopup } from "@/components/TosConsentPopup";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { AppSkeleton } from "@/components/ui/AppSkeleton";
+import { ConnectionScreen } from "@/components/ConnectionScreen";
 import { useEffect, useRef } from "react";
 import { alertDialog } from "@/lib/dialogs";
 
@@ -77,7 +81,8 @@ function AppShell() {
   if (mfaRequired) return <MfaChallengeScreen />;
   if (platformBan?.banned) return <PlatformBanScreen />;
 
-  if (!hydrated) return <LoadingScreen />;
+  // Signed in: show the app's shape while spaces and messages load.
+  if (!hydrated) return <AppSkeleton />;
 
   return (
     <>
@@ -98,6 +103,7 @@ export function DisbandRoot() {
         <SkinBoundary>
         <ContextMenuProvider>
           <UpdateToast />
+          <WebUpdateWatcher />
           <SelfXssWarning />
           {}
           <MobileAppPromo />
@@ -110,7 +116,9 @@ export function DisbandRoot() {
             </div>
           </div>
           <AddAccountOverlay />
+          <ConnectionScreen />
           <CookieConsent />
+          <TosConsentPopup />
         </ContextMenuProvider>
         </SkinBoundary>
       </AppProvider>

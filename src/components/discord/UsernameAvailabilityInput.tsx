@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api";
+import { useI18n } from "@/contexts/I18nContext";
 
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid";
 
@@ -21,6 +22,7 @@ export function UsernameAvailabilityInput({
   className = "",
   maxLength = 25,
 }: UsernameAvailabilityInputProps) {
+  const { t } = useI18n();
   const [status, setStatus] = useState<UsernameStatus>("idle");
   const [message, setMessage] = useState<string | null>(null);
   const requestId = useRef(0);
@@ -37,7 +39,7 @@ export function UsernameAvailabilityInput({
 
     if (norm === current) {
       setStatus("available");
-      setMessage("Current username");
+      setMessage(t("Current username"));
       return;
     }
 
@@ -55,10 +57,10 @@ export function UsernameAvailabilityInput({
           const json = (await res.json()) as { available?: boolean; reason?: string };
           if (json.available) {
             setStatus("available");
-            setMessage("Available");
+            setMessage(t("Available"));
           } else {
             setStatus(json.reason?.includes("not allowed") ? "invalid" : "taken");
-            setMessage(json.reason ?? "Unavailable");
+            setMessage(json.reason ?? t("Unavailable"));
           }
         } catch {
           if (id !== requestId.current) return;
@@ -105,7 +107,7 @@ export function UsernameAvailabilityInput({
             status === "available" ? "text-status-online" : status === "checking" ? "text-text-muted" : "text-status-danger"
           }`}
         >
-          {status === "checking" ? "Checking availability…" : message}
+          {status === "checking" ? t("Checking availability…") : message}
         </p>
       )}
     </div>

@@ -218,6 +218,7 @@ export async function createWebhookIdentity(service: SupabaseClient, name: strin
     email: `${handle}@webhooks.disband.dev`,
     password: randomBytes(24).toString("base64url"),
     email_confirm: true,
+    app_metadata: { created_by: "server" },
     user_metadata: { username: handle, display_name: name, webhook: "true" },
   });
   if (error || !data?.user) throw new Error(error?.message ?? "Could not create the webhook identity");

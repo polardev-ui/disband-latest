@@ -9,8 +9,10 @@ import {
   verifyTotpChallenge,
   type MfaFactor,
 } from "@/lib/mfa";
+import { useI18n } from "@/contexts/I18nContext";
 
 export function MfaStepUpForm({ onVerified }: { onVerified: () => void }) {
+  const { t } = useI18n();
   const [factors, setFactors] = useState<MfaFactor[]>([]);
   const [selectedFactorId, setSelectedFactorId] = useState("");
   const [code, setCode] = useState("");
@@ -55,14 +57,13 @@ export function MfaStepUpForm({ onVerified }: { onVerified: () => void }) {
   }
 
   if (loadingFactors) {
-    return <p className="py-4 text-center text-sm text-text-muted">Loading…</p>;
+    return <p className="py-4 text-center text-sm text-text-muted">{t("Loading…")}</p>;
   }
 
   if (totpFactors.length === 0 && !passkeyReady) {
     return (
       <p className="rounded border border-status-dnd/40 bg-status-dnd/10 px-3 py-2.5 text-sm text-status-dnd">
-        This account has two-factor authentication enabled, but no working method is
-        registered. Contact support to recover it.
+        {t("This account has two-factor authentication enabled, but no working method is registered. Contact support to recover it.")}
       </p>
     );
   }
@@ -70,15 +71,14 @@ export function MfaStepUpForm({ onVerified }: { onVerified: () => void }) {
   return (
     <div className="space-y-4">
       <p className="rounded border border-divider bg-bg-accent px-3 py-2.5 text-sm text-text-muted">
-        This account uses two-factor authentication. Confirm it&apos;s you before
-        setting a new password.
+        {t("This account uses two-factor authentication. Confirm it’s you before setting a new password.")}
       </p>
 
       {totpFactors.length > 0 && (
         <form onSubmit={submitTotp} className="space-y-4">
           {totpFactors.length > 1 && (
             <label className="block">
-              <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Authenticator</span>
+              <span className="mb-1 block text-xs font-bold uppercase text-text-muted">{t("Authenticator")}</span>
               <select
                 value={selectedFactorId}
                 onChange={(e) => setSelectedFactorId(e.target.value)}
@@ -91,7 +91,7 @@ export function MfaStepUpForm({ onVerified }: { onVerified: () => void }) {
             </label>
           )}
           <label className="block">
-            <span className="mb-1 block text-xs font-bold uppercase text-text-muted">Authentication code</span>
+            <span className="mb-1 block text-xs font-bold uppercase text-text-muted">{t("Authentication code")}</span>
             <input
               required
               inputMode="numeric"
@@ -109,7 +109,7 @@ export function MfaStepUpForm({ onVerified }: { onVerified: () => void }) {
             disabled={loading || code.length !== 6}
             className="w-full rounded bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
           >
-            {loading ? "…" : "Verify code"}
+            {loading ? "…" : t("Verify code")}
           </button>
         </form>
       )}
@@ -125,7 +125,7 @@ export function MfaStepUpForm({ onVerified }: { onVerified: () => void }) {
             onClick={() => void usePasskey()}
             className="w-full rounded border border-divider bg-bg-accent py-2.5 text-sm font-semibold text-text-normal hover:bg-interactive-hover disabled:opacity-50"
           >
-            {loading ? "…" : "Use a passkey"}
+            {loading ? "…" : t("Use a passkey")}
           </button>
         </div>
       )}

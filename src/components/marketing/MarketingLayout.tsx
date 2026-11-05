@@ -99,6 +99,7 @@ export function MarketingFooter() {
         <div className="flex flex-wrap gap-4 text-sm text-[#b5bac1]">
           <Link href="/bug-report" className="hover:text-white">Bug Report</Link>
           <Link href="/downloads" className="hover:text-white">Downloads</Link>
+          <Link href="/badges" className="hover:text-white">Badges</Link>
           <Link href="/review" className="hover:text-white">Reviews</Link>
           <Link href="/legal" className="hover:text-white">Legal</Link>
           <Link href="/privacy" className="hover:text-white">Privacy Policy</Link>

@@ -7,11 +7,13 @@ import type { ServerSound } from "@/lib/supabase/types";
 import { IconMusic, IconTrash } from "@/components/icons";
 import { ConfirmDialog, DropZone, EmptyState, FieldLabel, InlineError, SettingsSection, SlotMeter, btn, enterStyle, iconBtnDanger } from "./ui";
 import type { SectionProps } from "./types";
+import { useI18n } from "@/contexts/I18nContext";
 
 const MAX_SOUNDS = 15;
 const MAX_BYTES = 10 * 1024 * 1024;
 
 export function SoundboardSection({ server, isOwner }: SectionProps) {
+  const { t } = useI18n();
   const { user } = useApp();
   const [sounds, setSounds] = useState<ServerSound[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -57,11 +59,11 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
 
   function pick(f: File) {
     if (!f.type.startsWith("audio/")) {
-      setError("That file isn't audio. MP3, OGG, WAV or M4A work.");
+      setError(t("That file isn't audio. MP3, OGG, WAV or M4A work."));
       return;
     }
     if (f.size > MAX_BYTES) {
-      setError("Sounds can be up to 10 MB.");
+      setError(t("Sounds can be up to 10 MB."));
       return;
     }
     setError(null);
@@ -83,7 +85,7 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
         currentCount: sounds.length,
       });
       if (!uploaded) {
-        setError("That sound couldn't be added. Check it's under 10 MB and try again.");
+        setError(t("That sound couldn't be added. Check it's under 10 MB and try again."));
         return;
       }
       setSounds((prev) => [uploaded, ...prev]);
@@ -99,38 +101,38 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
 
   return (
     <div className="pb-10">
-      <SettingsSection title="Slots">
-        <SlotMeter used={sounds.length} limit={MAX_SOUNDS} label="Sounds" />
+      <SettingsSection title={t("Slots")}>
+        <SlotMeter used={sounds.length} limit={MAX_SOUNDS} label={t("Sounds")} />
       </SettingsSection>
 
       {isOwner && !full && (
-        <SettingsSection title="Add a sound" description="Keep it short: a few seconds plays best. Every sound gets an emoji so it's easy to spot on the board.">
+        <SettingsSection title={t("Add a sound")} description={t("Keep it short: a few seconds plays best. Every sound gets an emoji so it's easy to spot on the board.")}>
           <div className="space-y-4 px-5 py-4">
             {file ? (
               <div className="view-enter flex items-center gap-3 rounded-lg bg-bg-tertiary px-4 py-3">
                 <IconMusic size={18} className="shrink-0 text-brand" />
                 <span className="min-w-0 flex-1 truncate text-[14px] text-text-normal">{file.name}</span>
-                <span className="shrink-0 text-[12px] tabular-nums text-text-muted">{(file.size / 1024).toFixed(0)} KB</span>
+                <span className="shrink-0 text-[12px] tabular-nums text-text-muted">{(file.size / 1024).toFixed(0)} {t("KB")}</span>
                 <button type="button" onClick={() => setFile(null)} className="shrink-0 text-[13px] text-text-muted hover:text-text-normal">
-                  Change
+                  {t("Change")}
                 </button>
               </div>
             ) : (
-              <DropZone accept="audio/*" onPick={pick} title="Drop an audio file" hint="MP3, OGG, WAV or M4A · up to 10 MB" />
+              <DropZone accept="audio/*" onPick={pick} title={t("Drop an audio file")} hint={t("MP3, OGG, WAV or M4A · up to 10 MB")} />
             )}
             <div className="grid gap-3 sm:grid-cols-[1fr_96px]">
               <div>
-                <FieldLabel htmlFor="sound-name" aside={`${name.length}/32`}>Name</FieldLabel>
+                <FieldLabel htmlFor="sound-name" aside={`${name.length}/32`}>{t("Name")}</FieldLabel>
                 <input
                   id="sound-name"
                   value={name}
                   onChange={(e) => setName(e.target.value.slice(0, 32))}
-                  placeholder="Airhorn"
+                  placeholder={t("Airhorn")}
                   className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-[#00a8fc]"
                 />
               </div>
               <div>
-                <FieldLabel htmlFor="sound-emoji">Emoji</FieldLabel>
+                <FieldLabel htmlFor="sound-emoji">{t("Emoji")}</FieldLabel>
                 <input
                   id="sound-emoji"
                   value={emoji}
@@ -141,7 +143,7 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
               </div>
             </div>
             <button type="button" onClick={() => void add()} disabled={!file || !name.trim() || !emoji.trim() || uploading} className={btn.primary}>
-              {uploading ? "Uploading…" : "Add sound"}
+              {uploading ? t("Uploading…") : t("Add sound")}
             </button>
           </div>
         </SettingsSection>
@@ -151,11 +153,11 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
 
       <section className="mt-8">
         <h3 className="mb-3 text-[14.5px] font-semibold text-text-normal">
-          Board <span className="font-normal text-text-muted">· {sounds.length}</span>
+          {t("Board")}{" "}<span className="font-normal text-text-muted">· {sounds.length}</span>
         </h3>
         {loaded && sounds.length === 0 ? (
           <div className="rounded-lg bg-bg-secondary">
-            <EmptyState icon={<IconMusic size={20} />} title="No sounds yet" body="Add one above and members can play it in voice." />
+            <EmptyState icon={<IconMusic size={20} />} title={t("No sounds yet")} body="Add one above and members can play it in voice." />
           </div>
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2">
@@ -172,7 +174,7 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
                   <button
                     type="button"
                     onClick={() => play(s)}
-                    aria-label={playing ? `Stop ${s.name}` : `Play ${s.name}`}
+                    aria-label={playing ? t("Stop {name}", { name: s.name }) : t("Play {name}", { name: s.name })}
                     className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] text-[22px] transition-[background-color,transform] duration-150 active:scale-95 ${
                       playing ? "bg-brand/18" : "bg-bg-accent hover:bg-interactive-hover"
                     }`}
@@ -181,10 +183,10 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
                   </button>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[14px] font-medium text-text-normal">{s.name}</p>
-                    <p className="text-[12px] text-text-muted">{playing ? "Playing…" : "Tap to preview"}</p>
+                    <p className="text-[12px] text-text-muted">{playing ? t("Playing…") : t("Tap to preview")}</p>
                   </div>
                   {isOwner && (
-                    <button type="button" onClick={() => setRemoving(s)} className={iconBtnDanger} aria-label={`Remove ${s.name}`} title="Remove">
+                    <button type="button" onClick={() => setRemoving(s)} className={iconBtnDanger} aria-label={t("Remove {name}", { name: s.name })} title={t("Remove")}>
                       <IconTrash size={15} />
                     </button>
                   )}
@@ -197,9 +199,9 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
 
       <ConfirmDialog
         open={!!removing}
-        title={removing ? `Remove ${removing.name}?` : ""}
+        title={removing ? t("Remove {name}?", { name: removing.name }) : ""}
         body="It comes off the board for everyone."
-        confirmLabel="Remove sound"
+        confirmLabel={t("Remove sound")}
         onCancel={() => setRemoving(null)}
         onConfirm={async () => {
           if (!removing) return;

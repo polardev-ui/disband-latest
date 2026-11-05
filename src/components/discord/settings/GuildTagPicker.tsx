@@ -12,11 +12,13 @@ import { GuildTagBadge } from "@/components/ui/GuildTag";
 import { SettingsSection } from "@/components/discord/settings/SettingsPrimitives";
 import { safeImageUrl } from "@/lib/safe-url";
 import { serverInitials } from "@/lib/utils";
+import { useI18n } from "@/contexts/I18nContext";
 
 const ACTION =
   "shrink-0 rounded-[3px] px-3 py-1.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50";
 
 export function GuildTagPicker({ userId }: { userId: string }) {
+  const { t } = useI18n();
   const [options, setOptions] = useState<GuildTagOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +43,7 @@ export function GuildTagPicker({ userId }: { userId: string }) {
     const result = await equipGuildTag(option.server_id);
     setBusy(null);
     if (result.error || !result.tag) {
-      setError(result.error ?? "Could not wear that guild tag.");
+      setError(result.error ?? t("Could not wear that guild tag."));
       return;
     }
     primeGuildTag(userId, result.tag);
@@ -66,8 +68,8 @@ export function GuildTagPicker({ userId }: { userId: string }) {
 
   return (
     <SettingsSection
-      title="Guild tag"
-      description="Wear a space's tag next to your name. You can wear one at a time, and wearing is always free — spaces need Catalyst Level 3 to create a tag."
+      title={t("Guild tag")}
+      description={t("Wear a space's tag next to your name. You can wear one at a time, and wearing is always free — spaces need Catalyst Level 3 to create a tag.")}
     >
       {loading ? (
         <div className="space-y-1 p-2" aria-hidden>
@@ -87,14 +89,14 @@ export function GuildTagPicker({ userId }: { userId: string }) {
             onClick={() => void load()}
             className="mt-2 text-[13px] font-medium text-interactive-normal underline hover:text-interactive-active"
           >
-            Try again
+            {t("Try again")}
           </button>
         </div>
       ) : options.length === 0 ? (
         <div className="px-4 py-5">
-          <p className="text-[14px] leading-5 text-text-normal">You&apos;re not in a space with a guild tag yet.</p>
+          <p className="text-[14px] leading-5 text-text-normal">{t("You’re not in a space with a guild tag yet.")}</p>
           <p className="mt-1 text-[13px] leading-5 text-text-muted">
-            Space owners can create one from Space settings → Guild tag once the space reaches Catalyst Level 3. Then anyone in the space can wear it here.
+            {t("Space owners can create one from Space settings → Guild tag once the space reaches Catalyst Level 3. Then anyone in the space can wear it here.")}
           </p>
         </div>
       ) : (
@@ -123,7 +125,7 @@ export function GuildTagPicker({ userId }: { userId: string }) {
                     <GuildTagBadge tag={option} size="sm" />
                   </div>
                   <p className="mt-0.5 text-[12px] leading-4 text-text-muted">
-                    {option.equipped ? "Wearing this tag" : "Available to wear"}
+                    {option.equipped ? t("Wearing this tag") : t("Available to wear")}
                   </p>
                 </div>
                 {option.equipped ? (
@@ -133,7 +135,7 @@ export function GuildTagPicker({ userId }: { userId: string }) {
                     disabled={isBusy}
                     className={`${ACTION} bg-bg-tertiary text-text-normal hover:bg-interactive-hover`}
                   >
-                    {isBusy ? "Removing…" : "Remove"}
+                    {isBusy ? t("Removing…") : t("Remove")}
                   </button>
                 ) : (
                   <button
@@ -142,7 +144,7 @@ export function GuildTagPicker({ userId }: { userId: string }) {
                     disabled={!!busy}
                     className={`${ACTION} bg-brand text-white hover:bg-brand-hover`}
                   >
-                    {isBusy ? "Wearing…" : "Wear"}
+                    {isBusy ? t("Wearing…") : t("Wear")}
                   </button>
                 )}
               </div>
@@ -159,7 +161,7 @@ export function GuildTagPicker({ userId }: { userId: string }) {
             onClick={() => void load()}
             className="shrink-0 text-[12px] font-medium text-interactive-normal underline hover:text-interactive-active"
           >
-            Retry
+            {t("Retry")}
           </button>
         </div>
       )}

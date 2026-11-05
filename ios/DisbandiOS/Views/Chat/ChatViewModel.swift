@@ -74,6 +74,13 @@ final class ChatViewModel {
     }
 
     func reloadOnForeground() async {
+        // iOS drops the socket while the app is in the background, and the
+        // channels joined before that never came back, so new messages
+        // stopped arriving until the chat was reopened. Join again.
+        if listenTask != nil {
+            stop()
+            await subscribeAll()
+        }
         await load()
         await loadReactions()
     }
@@ -310,6 +317,9 @@ final class ChatViewModel {
                 // not that the cache should keep showing deleted history.
                 olderPages = []
             }
+            // Bring the newest pictures in before painting, so the page
+            // arrives at its final height instead of growing under the reader.
+            await MediaSize.prefetch(Self.imageUrls(in: loaded.suffix(30)))
             messages = olderPages + loaded + stillPending
             // If the newest page was full there is probably another one
             // above it. A cached older page also means more may exist above
@@ -598,7 +608,13 @@ final class ChatViewModel {
              the row becomes the real row here, and the echo (if it arrives)
              dedupes against that id instead of guessing from the text.
              */
-            if let index = messages.firstIndex(where: { $0.id == optimistic.id }) {
+            if messages.contains(where: { $0.id == messageId }) {
+                // The echo got here first and, not matching the text exactly
+                // (the server trims and tidies it), was added as a new row.
+                // Keep that one; two rows with one id was the duplicate.
+                messages.removeAll { $0.id == optimistic.id }
+                cacheNow()
+            } else if let index = messages.firstIndex(where: { $0.id == optimistic.id }) {
                 messages[index].id = messageId
                 messages[index].pending = false
                 cacheNow()
@@ -663,6 +679,36 @@ final class ChatViewModel {
     }
 
     /// Delete a message (author-only, enforced by RLS) and drop it locally.
+    /// Save new text for one of my messages. Shows straight away; put back
+    /// if the server refuses.
+    func editMessage(_ message: DisplayMessage, to newContent: String) async {
+        guard let uid = currentUserId, message.authorId == uid else { return }
+        let content = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty, content != message.content else { return }
+        let editedAt = ISO8601DateFormatter().string(from: Date())
+        let table: String
+        switch source {
+        case .channel: table = "messages"
+        case .dm: table = "dm_messages"
+        case .group: table = "group_messages"
+        }
+        if let i = messages.firstIndex(where: { $0.id == message.id }) {
+            messages[i].content = content
+            messages[i].editedAt = editedAt
+        }
+        do {
+            try await DatabaseService.editMessage(table: table, id: message.id, authorId: uid,
+                                                  content: content, editedAt: editedAt)
+            cacheNow()
+        } catch {
+            if let i = messages.firstIndex(where: { $0.id == message.id }) {
+                messages[i].content = message.content
+                messages[i].editedAt = message.editedAt
+            }
+            loadError = error.localizedDescription
+        }
+    }
+
     func deleteMessage(_ message: DisplayMessage) async {
         do {
             switch source {
@@ -814,12 +860,22 @@ final class ChatViewModel {
                 // message read in place still came back as unread after the
                 // next foreground reload.
                 Task { try? await DatabaseService.markGroupRead(groupId: groupId) }
-            case .channel:
-                break
+            case .channel(let channelId, _):
+                ChannelUnreadStore.shared.sawMessage(in: channelId)
             }
         }
 
         let author = await resolveProfile(row.authorId)
+        // The send may have promoted its own row while the profile loaded.
+        if row.authorId == currentUserId, messages.contains(where: { $0.id == row.id }) == false,
+           let idx = messages.firstIndex(where: {
+               $0.pending && $0.authorId == row.authorId
+                   && $0.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                       == (row.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+           }) {
+            messages[idx].id = row.id
+            messages[idx].pending = false
+        }
         var message = DisplayMessage(
             id: row.id, authorId: row.authorId, author: author,
             content: row.content ?? "", attachmentUrl: row.attachmentUrl,
@@ -846,8 +902,23 @@ final class ChatViewModel {
             cacheNow()
             return
         }
+        await MediaSize.prefetch(Self.imageUrls(in: [message]), timeout: .milliseconds(1200))
+        guard !messages.contains(where: { $0.id == message.id }) else { return }
         messages.append(message)
         cacheNow()
+    }
+
+    /// Image and GIF addresses in these messages, for `MediaSize.prefetch`.
+    static func imageUrls<S: Sequence>(in messages: S) -> [String] where S.Element == DisplayMessage {
+        var urls: [String] = []
+        for m in messages {
+            if m.attachments.count > 1 {
+                urls += m.attachments.filter { $0.type == .image || $0.type == .gif }.map(\.url)
+            } else if let url = m.attachmentUrl, m.attachmentType == .image || m.attachmentType == .gif {
+                urls.append(url)
+            }
+        }
+        return urls
     }
 
     private func resolveProfile(_ id: String) async -> Profile? {

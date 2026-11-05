@@ -9,6 +9,7 @@ import { IconClose } from "@/components/icons";
 import { CopyField } from "@/components/modals/server-settings/InvitesSection";
 import { SendInvitePanel } from "@/components/modals/SendInvitePanel";
 import type { Server } from "@/lib/supabase/types";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface InviteSpaceModalProps {
   server: Server | null;
@@ -21,6 +22,7 @@ interface InviteSpaceModalProps {
  * Space settings keeps the vanity controls; this is the everyday way in.
  */
 export function InviteSpaceModal({ server, onClose }: InviteSpaceModalProps) {
+  const { t } = useI18n();
   const open = !!server;
   useOverlayDismiss(onClose, open);
   const { mounted, exiting } = usePresence(open);
@@ -34,13 +36,13 @@ export function InviteSpaceModal({ server, onClose }: InviteSpaceModalProps) {
 
   return (
     <div className={`fixed inset-0 z-[90] flex items-center justify-center bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""} p-4`}>
-      <div role="dialog" aria-modal="true" aria-label={`Invite people to ${shown.name}`} className={`modal-pop${exiting ? " modal-pop-out" : ""} flex max-h-[80vh] w-full max-w-md flex-col rounded-lg bg-bg-secondary shadow-[var(--elevation-high)]`}>
+      <div role="dialog" aria-modal="true" aria-label={t("Invite people to {name}", { name: shown.name })} className={`modal-pop${exiting ? " modal-pop-out" : ""} flex max-h-[80vh] w-full max-w-md flex-col rounded-lg bg-bg-secondary shadow-[var(--elevation-high)]`}>
         <div className="flex items-start justify-between gap-4 px-5 pb-3 pt-5">
           <div className="min-w-0">
-            <h2 className="text-lg font-bold">Invite people</h2>
+            <h2 className="text-lg font-bold">{t("Invite people")}</h2>
             <p className="truncate text-[13px] text-text-muted">to {shown.name}</p>
           </div>
-          <button type="button" aria-label="Close" onClick={onClose} className="text-interactive-normal hover:text-interactive-active"><IconClose size={20} /></button>
+          <button type="button" aria-label={t("Close")} onClick={onClose} className="text-interactive-normal hover:text-interactive-active"><IconClose size={20} /></button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {inviteUrl ? (
@@ -48,11 +50,11 @@ export function InviteSpaceModal({ server, onClose }: InviteSpaceModalProps) {
           ) : null}
         </div>
         <div className="border-t border-divider px-5 py-4">
-          <p className="mb-2 text-[12px] font-bold uppercase text-header-secondary">Or send a link</p>
+          <p className="mb-2 text-[12px] font-bold uppercase text-header-secondary">{t("Or send a link")}</p>
           {inviteUrl ? (
             <CopyField value={inviteUrl} />
           ) : (
-            <p className="text-[14px] text-text-muted">This space doesn&apos;t have an invite link yet.</p>
+            <p className="text-[14px] text-text-muted">{t("This space doesn’t have an invite link yet.")}</p>
           )}
         </div>
       </div>

@@ -11,15 +11,18 @@ import { memberIconRole } from "@/lib/role-icons";
 import type { ServerRole } from "@/lib/supabase/types";
 import { ConfirmDialog, EmptyState, InlineError, SearchField, enterStyle, iconBtnDanger } from "./ui";
 import type { SectionProps } from "./types";
+import { useI18n } from "@/contexts/I18nContext";
 
 type Pending = { kind: "kick" | "ban"; userId: string; name: string } | null;
 
 export function MembersSection({ isOwner }: SectionProps) {
-  const { members, serverRoles, serverPermissions, setMemberRoles, kickMember, banMember, loadAllMembers, user, myTopRolePosition, canModerateMember } = useApp();
+  const { t } = useI18n();
+  const { members, serverRoles, serverPermissions, setMemberRoles, kickMember, banMember, transferOwnership, loadAllMembers, user, myTopRolePosition, canModerateMember, activeServer } = useApp();
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending>(null);
+  const [transferTo, setTransferTo] = useState<{ userId: string; name: string } | null>(null);
 
   // The member rail loads one page at a time; moderating the whole space
   // (search, role assignment, kicks) needs every page.
@@ -69,7 +72,7 @@ export function MembersSection({ isOwner }: SectionProps) {
     <div className="pb-10">
       <div className="mb-4 flex items-center gap-3">
         <div className="flex-1">
-          <SearchField value={query} onChange={setQuery} placeholder="Search members" label="Search members" />
+          <SearchField value={query} onChange={setQuery} placeholder={t("Search members")} label={t("Search members")} />
         </div>
         <span className="shrink-0 text-[13px] tabular-nums text-text-muted">
           {members.length} {members.length === 1 ? "member" : "members"}
@@ -80,7 +83,7 @@ export function MembersSection({ isOwner }: SectionProps) {
 
       <div className="mt-3 overflow-hidden rounded-lg bg-bg-secondary">
         {shown.length === 0 ? (
-          <EmptyState icon={<IconFriends size={20} />} title={query ? "Nobody matches that" : "No members yet"} />
+          <EmptyState icon={<IconFriends size={20} />} title={query ? t("Nobody matches that") : t("No members yet")} />
         ) : (
           <ul>
             {shown.map((m, i) => {
@@ -102,12 +105,12 @@ export function MembersSection({ isOwner }: SectionProps) {
                     <p className="flex items-center gap-1.5 text-[14px] font-medium" style={top?.color ? { color: top.color } : undefined}>
                       <span className="truncate">{name}</span>
                       {iconRole && <RoleIcon icon={iconRole.icon} name={iconRole.name} size={15} />}
-                      {isOwnerRow && <IconCrown size={13} className="shrink-0 text-[#f0b232]" aria-label="Owner" />}
+                      {isOwnerRow && <IconCrown size={13} className="shrink-0 text-[#f0b232]" aria-label={t("Owner")} />}
                       {isSelf && <span className="shrink-0 text-[11px] font-normal text-text-muted">you</span>}
                     </p>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {roles.length === 0 ? (
-                        <span className="text-[12px] text-text-muted">{m.profile?.username ? `@${m.profile.username}` : "No roles"}</span>
+                        <span className="text-[12px] text-text-muted">{m.profile?.username ? `@${m.profile.username}` : t("No roles")}</span>
                       ) : (
                         roles
                           .sort((a, b) => b.position - a.position)
@@ -123,7 +126,7 @@ export function MembersSection({ isOwner }: SectionProps) {
                       )}
                     </div>
                   </div>
-                  {!isOwnerRow && canModerateTarget(m.user_id) && (
+                  {((!isOwnerRow && canModerateTarget(m.user_id)) || (isSelf && canEditRoles)) && (
                     <div className="flex shrink-0 items-center gap-1">
                       {canEditRoles && assignable.length > 0 && (
                         <RolePicker
@@ -135,24 +138,35 @@ export function MembersSection({ isOwner }: SectionProps) {
                           compact
                         />
                       )}
-                      {canKick && (
+                      {isOwner && !isSelf && !m.profile?.is_bot && (
+                        <button
+                          type="button"
+                          onClick={() => setTransferTo({ userId: m.user_id, name })}
+                          className={iconBtnDanger}
+                          aria-label={t("Transfer ownership to {name}", { name })}
+                          title={t("Transfer ownership")}
+                        >
+                          <IconCrown size={15} />
+                        </button>
+                      )}
+                      {canKick && !isSelf && (
                         <button
                           type="button"
                           onClick={() => setPending({ kind: "kick", userId: m.user_id, name })}
                           className={iconBtnDanger}
-                          aria-label={`Kick ${name}`}
-                          title="Kick"
+                          aria-label={t("Kick {name}", { name })}
+                          title={t("Kick")}
                         >
                           <IconLeave size={16} />
                         </button>
                       )}
-                      {canBan && (
+                      {canBan && !isSelf && (
                         <button
                           type="button"
                           onClick={() => setPending({ kind: "ban", userId: m.user_id, name })}
                           className={iconBtnDanger}
-                          aria-label={`Ban ${name}`}
-                          title="Ban"
+                          aria-label={t("Ban {name}", { name })}
+                          title={t("Ban")}
                         >
                           <IconLock size={15} />
                         </button>
@@ -168,14 +182,14 @@ export function MembersSection({ isOwner }: SectionProps) {
 
       <ConfirmDialog
         open={!!pending}
-        title={pending ? `${pending.kind === "kick" ? "Kick" : "Ban"} ${pending.name}?` : ""}
+        title={pending ? t(pending.kind === "kick" ? "Kick {name}?" : "Ban {name}?", { name: pending.name }) : ""}
         body={
           pending?.kind === "kick"
             ? "They're removed from the space but can come back with a new invite."
             : "They're removed and can't rejoin until you lift the ban in Bans."
         }
-        input={pending?.kind === "ban" ? { label: "Reason (optional)", placeholder: "Only moderators see this" } : undefined}
-        confirmLabel={pending?.kind === "kick" ? "Kick" : "Ban"}
+        input={pending?.kind === "ban" ? { label: t("Reason (optional)"), placeholder: t("Only moderators see this") } : undefined}
+        confirmLabel={pending?.kind === "kick" ? t("Kick") : t("Ban")}
         onCancel={() => setPending(null)}
         onConfirm={async (reason) => {
           if (!pending) return;
@@ -183,6 +197,22 @@ export function MembersSection({ isOwner }: SectionProps) {
           const err = pending.kind === "kick" ? await kickMember(pending.userId) : await banMember(pending.userId, reason || undefined);
           if (err) setError(err);
           setPending(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!transferTo}
+        title={transferTo ? t("Transfer ownership to {name}?", { name: transferTo.name }) : ""}
+        body={t("They'll own the space and be able to delete it. You'll stay as a member with your roles, but you can't take ownership back unless they give it to you.")}
+        requireText={activeServer?.name}
+        confirmLabel={t("Transfer ownership")}
+        onCancel={() => setTransferTo(null)}
+        onConfirm={async () => {
+          if (!transferTo) return;
+          setError(null);
+          const err = await transferOwnership(transferTo.userId);
+          if (err) setError(err);
+          setTransferTo(null);
         }}
       />
     </div>

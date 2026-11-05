@@ -7,8 +7,10 @@ import { IconLock } from "@/components/icons";
 import { displayName } from "@/lib/utils";
 import { ConfirmDialog, EmptyState, InlineError, SearchField, enterStyle } from "./ui";
 import type { SectionProps } from "./types";
+import { useI18n } from "@/contexts/I18nContext";
 
 export function BansSection(_props: SectionProps) {
+  const { t } = useI18n();
   const { serverBans, unbanMember } = useApp();
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +28,7 @@ export function BansSection(_props: SectionProps) {
     <div className="pb-10">
       {serverBans.length > 5 && (
         <div className="mb-4">
-          <SearchField value={query} onChange={setQuery} placeholder="Search bans" label="Search bans" />
+          <SearchField value={query} onChange={setQuery} placeholder={t("Search bans")} label={t("Search bans")} />
         </div>
       )}
       <InlineError>{error}</InlineError>
@@ -34,7 +36,7 @@ export function BansSection(_props: SectionProps) {
         {shown.length === 0 ? (
           <EmptyState
             icon={<IconLock size={20} />}
-            title={serverBans.length === 0 ? "Nobody is banned" : "No bans match that"}
+            title={serverBans.length === 0 ? t("Nobody is banned") : t("No bans match that")}
             body={serverBans.length === 0 ? "When you ban someone from Members, they'll appear here." : undefined}
           />
         ) : (
@@ -47,7 +49,7 @@ export function BansSection(_props: SectionProps) {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[14px] font-medium text-text-normal">{name}</p>
                     <p className="truncate text-[13px] text-text-muted">
-                      {b.reason ? b.reason : "No reason given"}
+                      {b.reason ? b.reason : t("No reason given")}
                       {b.created_at ? ` · ${new Date(b.created_at).toLocaleDateString()}` : ""}
                     </p>
                   </div>
@@ -56,7 +58,7 @@ export function BansSection(_props: SectionProps) {
                     onClick={() => setLifting({ userId: b.user_id, name })}
                     className="inline-flex h-8 shrink-0 items-center rounded-[8px] border border-divider px-3 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
                   >
-                    Lift ban
+                    {t("Lift ban")}
                   </button>
                 </li>
               );
@@ -68,9 +70,9 @@ export function BansSection(_props: SectionProps) {
       <ConfirmDialog
         open={!!lifting}
         tone="primary"
-        title={lifting ? `Lift ${lifting.name}'s ban?` : ""}
+        title={lifting ? t("Lift {name}'s ban?", { name: lifting.name }) : ""}
         body="They'll be able to rejoin with an invite. They don't come back automatically."
-        confirmLabel="Lift ban"
+        confirmLabel={t("Lift ban")}
         onCancel={() => setLifting(null)}
         onConfirm={async () => {
           if (!lifting) return;

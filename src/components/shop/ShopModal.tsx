@@ -18,6 +18,10 @@ import {
   type ShopItem,
 } from "@/lib/shop";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { useApp } from "@/contexts/AppContext";
+import { Avatar } from "@/components/ui/Avatar";
+import { displayName } from "@/lib/utils";
+import type { Profile } from "@/lib/supabase/types";
 
 interface Inventory {
   owned: string[];
@@ -43,6 +47,20 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Gifting: the item being gifted (picker open) and who it is for.
+  const [giftItem, setGiftItem] = useState<ShopItem | null>(null);
+  const [giftTo, setGiftTo] = useState<Profile | null>(null);
+  const [friendQuery, setFriendQuery] = useState("");
+  const { friendships, user } = useApp();
+  const friends = useMemo(
+    () => friendships
+      .filter((f) => f.status === "accepted")
+      .map((f) => (f.requester_id === user?.id ? f.addressee : f.requester))
+      .filter((p): p is Profile => !!p && !p.is_bot)
+      .sort((a, b) => displayName(a).localeCompare(displayName(b))),
+    [friendships, user?.id],
+  );
   // Live sale prices keyed by item id. The catalogue carries list prices;
   // sales live in the database (public readable) so a price change never
   // needs a client deploy. Missing entry = no sale.
@@ -65,6 +83,9 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
     setError(null);
     setBuying(null);
     setClientSecret(null);
+    setGiftItem(null);
+    setGiftTo(null);
+    setNotice(null);
     setTab(initialCategory);
     void (async () => {
       try {
@@ -99,14 +120,16 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
   const { mounted, exiting } = usePresence(open);
   if (!mounted) return null;
 
-  const startPurchase = async (item: ShopItem) => {
+  const startPurchase = async (item: ShopItem, recipient: Profile | null = null) => {
     setBusyId(item.id);
     setError(null);
+    setNotice(null);
+    setGiftTo(recipient);
     try {
       const res = await apiFetch("/api/stripe/create-shop-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item_id: item.id }),
+        body: JSON.stringify({ item_id: item.id, recipient_id: recipient?.id }),
       });
       const data = (await res.json()) as { clientSecret?: string; error?: string };
       if (!res.ok || !data.clientSecret) {
@@ -114,6 +137,7 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
         return;
       }
       setBuying(item);
+      setGiftItem(null);
       setClientSecret(data.clientSecret);
     } catch {
       setError("Could not reach the shop.");
@@ -152,6 +176,12 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
     const bought = buying;
     setClientSecret(null);
     setBuying(null);
+    if (giftTo) {
+      // Theirs, not ours: nothing to wait for in our own inventory.
+      setNotice(`Sent! ${displayName(giftTo)} gets ${bought?.name ?? "it"} and a notification as soon as the payment clears.`);
+      setGiftTo(null);
+      return;
+    }
     // The webhook writes the grant, so the row may land a moment after Stripe
     // returns. Poll briefly rather than showing a just-bought item as unowned.
     for (let i = 0; i < 6; i++) {
@@ -205,6 +235,7 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
           <div className="overflow-y-auto px-5 py-4">
             <p className="text-sm font-semibold text-text-normal">
               {buying.name} · {formatPrice(effectivePriceCents(buying.priceCents, buying.salePriceCents))}
+              {giftTo && <span className="font-normal text-text-muted"> · a gift for {displayName(giftTo)}</span>}
             </p>
             <p className="mt-0.5 text-[13px] text-text-muted">{buying.description}</p>
             <div className="mt-3">
@@ -214,9 +245,86 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
                 onCancel={() => {
                   setClientSecret(null);
                   setBuying(null);
+                  setGiftTo(null);
                 }}
               />
             </div>
+          </div>
+        ) : giftItem ? (
+          <div className="grid min-h-0 flex-1 gap-5 overflow-hidden px-5 pb-5 pt-2 md:grid-cols-[260px_1fr]">
+            <aside className="flex flex-col rounded-lg bg-bg-secondary p-4">
+              <p className="text-[12px] font-bold uppercase tracking-[0.04em] text-header-secondary">Gift</p>
+              <div className="mt-3"><ShopPreview item={giftItem} self={giftTo ? { name: friendName(giftTo), avatarUrl: giftTo.avatar_url } : self} /></div>
+              <p className="mt-3 text-[16px] font-semibold text-header-primary">{giftItem.name}</p>
+              <p className="mt-1 text-[13px] leading-[18px] text-text-muted">{giftItem.description}</p>
+              <p className="mt-auto pt-4 text-[13px] text-text-muted">
+                They get it the moment you&apos;ve paid, with a note that it&apos;s from you.
+              </p>
+            </aside>
+
+            <section className="flex min-h-0 flex-col">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-[16px] font-semibold text-header-primary">Who&apos;s it for?</h3>
+                <span className="text-[13px] text-text-muted">{friends.length} {friends.length === 1 ? "friend" : "friends"}</span>
+              </div>
+              <div className="relative mt-3">
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"><path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13Zm9.5 3-4.5-4.5" /></svg>
+                <input
+                  value={friendQuery}
+                  onChange={(e) => setFriendQuery(e.target.value)}
+                  placeholder="Search friends"
+                  autoFocus
+                  className="h-10 w-full rounded-[6px] bg-bg-tertiary pl-9 pr-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:ring-2 focus:ring-[#00a8fc]"
+                />
+              </div>
+              {error && <p className="pt-2 text-[13px] text-status-dnd">{error}</p>}
+              <ul role="listbox" aria-label="Friends" className="mt-2 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
+                {(() => {
+                  const q = friendQuery.trim().toLowerCase();
+                  const shown = friends.filter((f) => !q || `${friendName(f)} ${f.username ?? ""}`.toLowerCase().includes(q));
+                  if (friends.length === 0) return <li className="px-2 py-10 text-center text-[14px] text-text-muted">Add some friends to send gifts.</li>;
+                  if (shown.length === 0) return <li className="px-2 py-10 text-center text-[14px] text-text-muted">No friends match &ldquo;{friendQuery.trim()}&rdquo;.</li>;
+                  return shown.map((f) => {
+                    const selected = giftTo?.id === f.id;
+                    return (
+                      <li key={f.id}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          onClick={() => setGiftTo(f)}
+                          className={`flex w-full items-center gap-3 rounded-[6px] px-2.5 py-2 text-left transition-colors ${selected ? "bg-brand/20 ring-1 ring-brand" : "hover:bg-interactive-hover"}`}
+                        >
+                          <Avatar profile={f} size="sm" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[15px] font-medium leading-5 text-header-primary">{friendName(f)}</span>
+                            <span className="block truncate text-[12px] leading-4 text-text-muted">@{f.username}</span>
+                          </span>
+                          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${selected ? "border-brand bg-brand" : "border-interactive-normal/60"}`}>
+                            {selected && <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden><path fill="#fff" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z" /></svg>}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  });
+                })()}
+              </ul>
+              <div className="mt-3 flex items-center justify-end gap-2 border-t border-divider pt-3">
+                <button type="button" onClick={() => { setGiftItem(null); setGiftTo(null); setError(null); }} className="h-[38px] rounded-[3px] px-4 text-[14px] font-medium text-text-normal hover:underline">Back</button>
+                <button
+                  type="button"
+                  disabled={!giftTo || busyId === giftItem.id}
+                  onClick={() => giftTo && void startPurchase(giftItem, giftTo)}
+                  className="h-[38px] min-w-[160px] rounded-[3px] bg-brand px-4 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {busyId === giftItem.id
+                    ? "Opening…"
+                    : giftTo
+                      ? `Gift to ${friendName(giftTo)} · ${formatPrice(effectivePriceCents(giftItem.priceCents, giftItem.salePriceCents))}`
+                      : "Pick a friend"}
+                </button>
+              </div>
+            </section>
           </div>
         ) : (
           <>
@@ -254,6 +362,7 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
             </div>
 
             {error && <p className="px-5 pt-2 text-[13px] text-status-dnd">{error}</p>}
+            {notice && <p className="px-5 pt-2 text-[13px] text-status-online">{notice}</p>}
 
             <div className="grid grid-cols-1 gap-4 overflow-y-auto p-4 sm:grid-cols-2 lg:grid-cols-3">
               {items.map((item) => (
@@ -265,6 +374,7 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
                   equipped={inventory.equipped[item.category] === item.id}
                   busy={busyId === item.id}
                   onBuy={() => void startPurchase(item)}
+                  onGift={isShopItemAvailable(item) ? () => { setGiftItem(item); setGiftTo(null); setFriendQuery(""); setError(null); } : undefined}
                   onEquip={() => void equip(item, item.category)}
                 />
               ))}
@@ -276,6 +386,12 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
   );
 }
 
+/** A name that actually shows: display names made of invisible or decorative characters fall back to the username. */
+function friendName(p: Profile): string {
+  const shown = displayName(p).replace(/[\u200B-\u200F\u2060\uFEFF\s]/g, "");
+  return shown.length >= 1 && /[\p{L}\p{N}]/u.test(shown) ? displayName(p) : p.username ?? displayName(p);
+}
+
 function ShopCard({
   item,
   self,
@@ -283,6 +399,7 @@ function ShopCard({
   equipped,
   busy,
   onBuy,
+  onGift,
   onEquip,
 }: {
   item: ShopItem;
@@ -291,6 +408,7 @@ function ShopCard({
   equipped: boolean;
   busy: boolean;
   onBuy: () => void;
+  onGift?: () => void;
   onEquip: () => void;
 }) {
   return (
@@ -320,7 +438,8 @@ function ShopCard({
       </div>
       <p className="mt-1 flex-1 text-[14px] leading-[18px] text-text-muted">{item.description}</p>
 
-      <div className="mt-3">
+      <div className="mt-3 flex gap-2">
+        <div className="min-w-0 flex-1">
         {!owned ? (
           <button
             type="button"
@@ -342,6 +461,18 @@ function ShopCard({
             className="h-[38px] w-full rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover disabled:opacity-50"
           >
             {busy ? "…" : "Equip"}
+          </button>
+        )}
+        </div>
+        {onGift && (
+          <button
+            type="button"
+            onClick={onGift}
+            aria-label={`Gift ${item.name}`}
+            title="Gift to a friend"
+            className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[3px] bg-button-secondary text-white transition-colors hover:bg-button-secondary-hover"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden><path fill="currentColor" d="M20 7h-2.2A3 3 0 0 0 12 3.8 3 3 0 0 0 6.2 7H4a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-5-2a1 1 0 1 1 0 2h-2a1 1 0 0 1 2-2ZM9 5a1 1 0 0 1 1 1v1H9a1 1 0 0 1 0-2Zm2 15H6v-8h5v8Zm0-10H5V9h6v1Zm7 10h-5v-8h5v8Zm1-10h-6V9h6v1Z" /></svg>
           </button>
         )}
       </div>

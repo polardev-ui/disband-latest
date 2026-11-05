@@ -344,14 +344,88 @@ struct PartnerBadge: View {
     var size: CGFloat = 17
 
     var body: some View {
-        Image(systemName: "seal.fill")
-            .font(.system(size: size))
-            .foregroundStyle(Color(hex: 0x5865F2))
-            .overlay {
-                Image(systemName: "link")
-                    .font(.system(size: size * 0.45, weight: .bold))
-                    .foregroundStyle(.white)
+        ServerBadgeView(kind: .partner, size: size)
+    }
+}
+
+/// Which seal a space wears beside its name. Verified beats Partner, Partner
+/// beats the Catalyst levels, as on the web (`serverBadgeFor`).
+enum ServerBadgeKind {
+    case verified, partner, level1, level2, level3
+
+    static func of(verified: Bool?, partner: Bool?, catalysts: Int) -> ServerBadgeKind? {
+        if verified == true { return .verified }
+        if partner == true { return .partner }
+        if catalysts >= 6 { return .level3 }
+        if catalysts >= 3 { return .level2 }
+        if catalysts >= 1 { return .level1 }
+        return nil
+    }
+
+    var label: String {
+        switch self {
+        case .verified: return "Verified by Disband"
+        case .partner: return "Disband Partner"
+        case .level1: return "Catalyst Level 1"
+        case .level2: return "Catalyst Level 2"
+        case .level3: return "Catalyst Level 3"
+        }
+    }
+}
+
+/// The scalloped space seal, drawn from the same 24-unit artwork as the web's
+/// `ServerBadge` so a space reads the same on every client.
+struct ServerBadgeView: View {
+    let kind: ServerBadgeKind
+    var size: CGFloat = 16
+
+    private static let scallop: [CGPoint] = [
+        (12.00, 1.00), (14.48, 2.73), (17.50, 2.47), (18.79, 5.21), (21.53, 6.50), (21.27, 9.52),
+        (23.00, 12.00), (21.27, 14.48), (21.53, 17.50), (18.79, 18.79), (17.50, 21.53), (14.48, 21.27),
+        (12.00, 23.00), (9.52, 21.27), (6.50, 21.53), (5.21, 18.79), (2.47, 17.50), (2.73, 14.48),
+        (1.00, 12.00), (2.73, 9.52), (2.47, 6.50), (5.21, 5.21), (6.50, 2.47), (9.52, 2.73),
+    ].map { CGPoint(x: $0.0, y: $0.1) }
+
+    var body: some View {
+        Canvas { ctx, box in
+            let s = box.width / 24
+            func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * s, y: y * s) }
+            func poly(_ pts: [CGPoint], closed: Bool) -> Path {
+                var path = Path()
+                path.addLines(pts.map { p($0.x, $0.y) })
+                if closed { path.closeSubpath() }
+                return path
             }
-            .accessibilityLabel("Disband Partner")
+
+            let bg: Color = kind == .verified ? Color(hex: 0x23A55A) : kind == .partner ? Color(hex: 0x5865F2) : .white
+            let seal = poly(Self.scallop, closed: true)
+            ctx.fill(seal, with: .color(bg))
+            ctx.stroke(seal, with: .color(bg), style: StrokeStyle(lineWidth: 1.2 * s, lineJoin: .round))
+
+            switch kind {
+            case .verified:
+                ctx.stroke(poly([CGPoint(x: 7.5, y: 12.3), CGPoint(x: 10.5, y: 15.3), CGPoint(x: 16.5, y: 9)], closed: false),
+                           with: .color(.white), style: StrokeStyle(lineWidth: 2.4 * s, lineCap: .round, lineJoin: .round))
+            case .partner:
+                // The handshake glyph, placed as the web's translate(4.4) scale(0.63).
+                func t(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: 4.4 + 0.63 * x, y: 4.4 + 0.63 * y) }
+                let left = poly([t(10, 7), t(7, 6), t(3, 10), t(7, 14), t(10, 13)], closed: false)
+                let right = poly([t(14, 11), t(17, 10), t(21, 14), t(17, 18), t(14, 17)], closed: false)
+                let bar = poly([t(8, 15), t(16, 9)], closed: false)
+                let hands = StrokeStyle(lineWidth: 4 * 0.63 * s, lineCap: .round, lineJoin: .round)
+                ctx.stroke(left, with: .color(.white), style: hands)
+                ctx.stroke(right, with: .color(.white), style: hands)
+                ctx.stroke(bar, with: .color(.white), style: StrokeStyle(lineWidth: 3 * 0.63 * s, lineCap: .round))
+            case .level1, .level2, .level3:
+                let gem = poly([CGPoint(x: 12, y: 6.2), CGPoint(x: 15.6, y: 8.6), CGPoint(x: 15.6, y: 15.4),
+                                CGPoint(x: 12, y: 17.8), CGPoint(x: 8.4, y: 15.4), CGPoint(x: 8.4, y: 8.6)], closed: true)
+                let ink: Color = kind == .level1 ? Color(hex: 0xF47FFF) : kind == .level2 ? Color(hex: 0x060607) : Color(hex: 0x80848E)
+                if kind == .level1 { ctx.fill(gem, with: .color(ink)) }
+                ctx.stroke(gem, with: .color(ink), style: StrokeStyle(lineWidth: 1.8 * s, lineJoin: .round))
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityElement()
+        .accessibilityLabel(kind.label)
     }
 }

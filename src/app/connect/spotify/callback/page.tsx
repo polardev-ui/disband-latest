@@ -6,7 +6,7 @@ import { exchangeSpotifyCode } from "@/lib/music-presence";
 
 function CallbackInner() {
   const params = useSearchParams();
-  const [state, setState] = useState<"working" | "done" | "manual" | "error">("working");
+  const [state, setState] = useState<"working" | "done" | "manual" | "error" | "app">("working");
   const [message, setMessage] = useState("Connecting Spotify…");
   const [copied, setCopied] = useState(false);
 
@@ -14,6 +14,10 @@ function CallbackInner() {
     const code = params.get("code");
     const error = params.get("error");
     if (error) {
+      if (params.get("state")?.startsWith("app:")) {
+        window.location.replace("disband://spotify-callback?error=cancelled");
+        return;
+      }
       setState("error");
       setMessage("Spotify connection was cancelled.");
       return;
@@ -21,6 +25,17 @@ function CallbackInner() {
     if (!code) {
       setState("error");
       setMessage("No authorisation code from Spotify.");
+      return;
+    }
+    // Started by the iPhone or Android app (its sign-in sheet tags the state):
+    // hand the code straight back to the app, which exchanges it with its own
+    // session. The sheet closes as soon as it sees the disband:// link.
+    if (params.get("state")?.startsWith("app:")) {
+      // A browser may refuse to jump to an app on its own; the button below
+      // does it from a tap.
+      setState("app");
+      setMessage("Returning to Disband…");
+      window.location.replace(`disband://spotify-callback?code=${encodeURIComponent(code)}`);
       return;
     }
     // No opener means this landed in the system browser — the desktop app's
@@ -65,6 +80,14 @@ function CallbackInner() {
                 : "Connecting…"}
         </p>
         <p className="mt-2 text-sm text-text-muted">{message}</p>
+        {state === "app" && (
+          <a
+            href={`disband://spotify-callback?code=${encodeURIComponent(code)}`}
+            className="mt-4 block w-full rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
+          >
+            Open Disband
+          </a>
+        )}
         {state === "manual" && (
           <div className="mt-4 space-y-3">
             <code className="block break-all rounded-[4px] border border-divider bg-bg-tertiary px-3 py-2 text-left font-mono text-[13px] text-text-normal">

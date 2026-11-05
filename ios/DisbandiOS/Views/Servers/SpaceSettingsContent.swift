@@ -183,14 +183,11 @@ struct ChannelsAdminView: View {
     }
 }
 
-/// Text channel names take dashes for spaces, as on the web; anything else
-/// (emoji too) stays.
-private func channelSlug(_ name: String, type: ChannelType) -> String {
-    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    let clean = type == .text
-        ? trimmed.replacingOccurrences(of: "\\s+", with: "-", options: .regularExpression)
-        : trimmed
-    return String(clean.prefix(100))
+/// Channel names are saved as typed. Links match a channel by its
+/// `#link-name` (spaces as dashes, punctuation dropped), worked out when a
+/// message is shown, so the name itself can keep spaces and symbols.
+private func cleanChannelName(_ name: String) -> String {
+    String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(100))
 }
 
 struct NewChannelSheet: View {
@@ -206,7 +203,7 @@ struct NewChannelSheet: View {
     @State private var error: String?
     @FocusState private var focused: Bool
 
-    private var clean: String { channelSlug(name, type: type) }
+    private var clean: String { cleanChannelName(name) }
 
     var body: some View {
         NavigationStack {
@@ -313,7 +310,7 @@ struct ChannelEditView: View {
         _readOnly = State(initialValue: channel.readOnly == true)
     }
 
-    private var clean: String { channelSlug(name, type: channel.type) }
+    private var clean: String { cleanChannelName(name) }
     private var renamed: Bool { !clean.isEmpty && clean != channel.name }
 
     var body: some View {

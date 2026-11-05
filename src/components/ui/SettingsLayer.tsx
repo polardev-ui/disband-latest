@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { IconClose } from "@/components/icons";
+import { useI18n } from "@/contexts/I18nContext";
 
 /*
  The classic full-screen settings layer, shared by User Settings, Space
@@ -38,6 +39,7 @@ export function SettingsLayer({
   /** Shown above the page on narrow screens, where the sidebar is hidden. */
   mobileNav?: ReactNode;
 }) {
+  const { t } = useI18n();
   useEffect(() => {
     if (exiting) {
       document.body.classList.remove("layer-open");
@@ -56,24 +58,24 @@ export function SettingsLayer({
       aria-label={label}
       className={`settings-layer${exiting ? " settings-layer-out" : ""} fixed inset-0 z-[70] flex bg-bg-primary`}
     >
-      <div className="hidden flex-[1_0_218px] justify-end bg-bg-secondary md:flex">
-        <nav aria-label={`${label} sections`} className="settings-sidebar w-[218px] overflow-y-auto py-[60px] pl-5 pr-1.5">
+      <div className="hidden flex-[1_0_240px] justify-end bg-bg-secondary md:flex">
+        <nav aria-label={t("{label} sections", { label })} className="settings-sidebar w-[240px] overflow-y-auto py-[60px] pl-5 pr-1.5">
           {sidebar}
         </nav>
       </div>
-      <div className="relative min-w-0 flex-[1_1_800px] bg-bg-primary">
+      <div className={`relative min-w-0 bg-bg-primary ${wide ? "flex-[0_1_1392px]" : "flex-[0_1_972px]"}`}>
         <div className="settings-scroll h-full overflow-y-auto">
           <div className="flex">
-            <div key={contentKey} className={`view-enter min-w-0 flex-1 px-4 pb-20 pt-6 md:min-w-[460px] md:px-10 md:pt-[60px] ${wide ? "max-w-[1000px]" : "max-w-[740px]"}`}>
+            <div key={contentKey} className={`view-enter min-w-0 flex-1 px-4 pb-20 pt-6 md:min-w-[460px] md:px-10 md:pt-[60px] ${wide ? "max-w-[1320px]" : "max-w-[900px]"}`}>
               {mobileNav && <div className="mb-4 md:hidden">{mobileNav}</div>}
               {children}
             </div>
-            <div className="w-[60px] shrink-0 pt-6 md:pt-[60px]">
+            <div className="w-[48px] shrink-0 pt-6 md:mr-6 md:pt-[60px]">
               <div className="sticky top-[60px] flex flex-col items-center">
                 <button
                   type="button"
                   onClick={onClose}
-                  aria-label="Close"
+                  aria-label={t("Close")}
                   className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-interactive-normal text-interactive-normal transition-colors hover:border-interactive-active hover:bg-interactive-hover hover:text-interactive-active active:translate-y-px"
                 >
                   <IconClose size={18} />
@@ -84,6 +86,8 @@ export function SettingsLayer({
           </div>
         </div>
       </div>
+      {/* Mirrors the sidebar's spare width so the sidebar and page sit centred. */}
+      <div aria-hidden className="hidden flex-[1_1_0px] bg-bg-primary md:block" />
     </div>,
     document.body,
   );

@@ -1,19 +1,22 @@
 import type { DesignSpec, DecorationLayerProps } from "../Decoration";
 
 /*
- Angelic: a gold halo tilted in perspective over the head. Its far half is
- drawn in the back layer, so the top of the photo passes in front of it; its
- near half is in the front layer and dips over the top of the photo. Both
- halves float together. On hover the glow swells and breathes, rays fan out
+ Angelic: a gold halo tilted in perspective round the head, seen from just
+ below. Its upper arc is the near side, drawn in the front layer across the
+ top of the photo; its lower arc is the far side, in the back layer, so it
+ passes behind the head. Both halves float together. On hover the glow swells and breathes, rays fan out
  behind it, light spills onto the photo and a few stars catch.
 */
 
 const CX = 100;
-const CY = 52;
-const RX = 40;
-const RY = 11;
-const BACK_ARC = `M${CX - RX} ${CY}A${RX} ${RY} 0 0 1 ${CX + RX} ${CY}`;
-const FRONT_ARC = `M${CX - RX} ${CY}A${RX} ${RY} 0 0 0 ${CX + RX} ${CY}`;
+const CY = 63;
+const RX = 42;
+const RY = 12;
+// Upper arc in front of the photo, lower arc behind it. The back arc dips
+// deeper than the front one, so the far side sits lower behind the head.
+const BACK_RY = RY + 7;
+const FRONT_ARC = `M${CX - RX} ${CY}A${RX} ${RY} 0 0 1 ${CX + RX} ${CY}`;
+const BACK_ARC = `M${CX - RX} ${CY}A${RX} ${BACK_RY} 0 0 0 ${CX + RX} ${CY}`;
 
 function Torus({ uid, d, far }: { uid: string; d: string; far?: boolean }) {
   return (

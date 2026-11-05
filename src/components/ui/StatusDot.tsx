@@ -2,6 +2,7 @@
 
 import type { UserStatus } from "@/lib/supabase/types";
 import { statusLabel } from "@/lib/presence";
+import { useI18n } from "@/contexts/I18nContext";
 
 /*
  Classic status glyphs: online is a filled dot, idle a crescent, Do Not
@@ -48,11 +49,12 @@ export function StatusDot({
   ring?: string;
   className?: string;
 }) {
+  const { t } = useI18n();
   const box = size + 6;
   return (
     <span
       role="img"
-      aria-label={status === "streaming" ? "Streaming" : statusLabel(status)}
+      aria-label={status === "streaming" ? t("Streaming") : statusLabel(status)}
       className={`flex items-center justify-center rounded-full ${className}`}
       style={{ width: box, height: box, background: ring }}
     >

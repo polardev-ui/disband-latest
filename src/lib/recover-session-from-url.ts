@@ -17,6 +17,13 @@ export function isPasswordResetLink(): boolean {
       || url.searchParams.has("token")
       || url.searchParams.has("code");
   }
+  // Some flows omit `type` but still carry a recovery code/token.
+  if (url.searchParams.has("code") || url.searchParams.has("token_hash") || url.searchParams.has("token")) {
+    // Heuristic: if there's no explicit type, treat presence of a code/token as a recovery attempt
+    // only when the path is the site root or home (not an OAuth callback path).
+    const path = url.pathname.replace(/\/+$/, "") || "/";
+    if (path === "/" || path === "/home" || path === "") return true;
+  }
   const hash = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
   return hash.get("type") === "recovery" && hash.has("access_token") && hash.has("refresh_token");
 }

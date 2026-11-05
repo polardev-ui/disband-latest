@@ -1,6 +1,12 @@
 package com.wsgpolar.disband.data
 
+import com.wsgpolar.disband.core.ApiHttp
+import com.wsgpolar.disband.core.AppConfig
 import com.wsgpolar.disband.core.DisbandSupabase
+import io.github.jan.supabase.auth.auth
+import io.ktor.client.request.get
+import io.ktor.client.request.parameter
+import io.ktor.client.statement.bodyAsText
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
@@ -681,10 +687,20 @@ object Database {
     suspend fun usernameUnavailableReason(username: String): String? {
         if (username.isBlank()) return null
         return try {
-            val result = postgrest.rpc(
-                "check_username_available",
-                buildJsonObject { put("p_username", username) },
-            ).decodeSingle<UsernameCheckResult>()
+            val result = if (DisbandSupabase.auth.currentSessionOrNull() == null) {
+                // Sign-up has no session yet, and the RPC is members-only: it
+                // was refused every time and read as "available". The web's
+                // rate-limited endpoint answers for signed-out callers.
+                val text = ApiHttp.client.get("${AppConfig.WEB_APP_URL}/api/profile/check-username") {
+                    parameter("username", username)
+                }.bodyAsText()
+                ApiHttp.json.decodeFromString(UsernameCheckResult.serializer(), text)
+            } else {
+                postgrest.rpc(
+                    "check_username_available",
+                    buildJsonObject { put("p_username", username) },
+                ).decodeSingle<UsernameCheckResult>()
+            }
             if (result.available) null else result.reason ?: "That username is taken."
         } catch (e: Exception) {
             null
@@ -692,6 +708,12 @@ object Database {
     }
 
     // MARK: - Voice presence
+
+    /** Live stage topics, by channel id; the rows' other columns are left out. */
+    suspend fun stageStates(channelIds: List<String>): Map<String, Channel> =
+        client.from("channels").select(columns("id,server_id,name,type,position,stage_topic,stage_started_at")) {
+            filter { isIn("id", channelIds) }
+        }.decodeList<Channel>().associateBy { it.id }
 
     suspend fun voiceParticipants(channelId: String): List<VoiceParticipant> {
         return client.from("voice_presence")

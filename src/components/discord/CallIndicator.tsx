@@ -6,6 +6,7 @@ import { getCallIndicatorState, subscribeCallIndicator, type CallIndicatorState 
 import { useVoiceSession } from "@/contexts/VoiceSessionContext";
 import { Tooltip } from "./Tooltip";
 import { Soundboard } from "./Soundboard";
+import { useI18n } from "@/contexts/I18nContext";
 
 function connectionQuality(): "good" | "ok" | "bad" {
   if (typeof navigator === "undefined" || !("connection" in navigator)) return "good";
@@ -42,6 +43,7 @@ function SignalIcon({ quality }: { quality: "good" | "ok" | "bad" }) {
  * call or voice channel, laid out like the classic RTC connection panel.
  */
 export function CallIndicator() {
+  const { t } = useI18n();
   const [state, setState] = useState<CallIndicatorState>(() => getCallIndicatorState());
   const [now, setNow] = useState(() => Date.now());
   const [quality, setQuality] = useState(connectionQuality);
@@ -79,7 +81,7 @@ export function CallIndicator() {
           <div className="flex items-center gap-1">
             <SignalIcon quality={quality} />
             <span className="truncate text-[14px] font-semibold leading-[18px]" style={{ color: quality === "bad" ? "var(--status-dnd)" : "var(--status-online)" }}>
-              {connected ? "Voice Connected" : "Connecting…"}
+              {connected ? t("Voice Connected") : t("Connecting…")}
             </span>
           </div>
           <button
@@ -94,11 +96,11 @@ export function CallIndicator() {
           </button>
         </div>
         {hangup && (
-          <Tooltip label="Disconnect" side="top">
+          <Tooltip label={t("Disconnect")} side="top">
             <button
               type="button"
               onClick={hangup}
-              aria-label="Disconnect"
+              aria-label={t("Disconnect")}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
             >
               <IconPhoneOff size={20} />
@@ -108,12 +110,12 @@ export function CallIndicator() {
       </div>
       <div className="mt-2 flex gap-2">
         {camera && (
-          <PanelButton label={camera.on ? "Turn Off Camera" : "Turn On Camera"} active={camera.on} onClick={camera.toggle}>
+          <PanelButton label={camera.on ? t("Turn Off Camera") : t("Turn On Camera")} active={camera.on} onClick={camera.toggle}>
             <IconVideo size={18} />
           </PanelButton>
         )}
         {screen && (
-          <PanelButton label={screen.on ? "Stop Streaming" : "Share Your Screen"} active={screen.on} onClick={screen.toggle}>
+          <PanelButton label={screen.on ? t("Stop Streaming") : t("Share Your Screen")} active={screen.on} onClick={screen.toggle}>
             <IconScreenShare size={18} />
           </PanelButton>
         )}

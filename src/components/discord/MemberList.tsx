@@ -12,10 +12,13 @@ import { memberIconRole } from "@/lib/role-icons";
 import { listeningFor } from "@/lib/presence";
 import type { Listening } from "@/lib/music-presence";
 import { ListeningLine } from "@/components/ui/ListeningLine";
+import { ActivityLine } from "@/components/ui/ActivityLine";
+import { activityFor, type Activity } from "@/lib/activity";
 import { useMemberWindow } from "@/hooks/useMemberWindow";
 import { RoleIcon } from "@/components/ui/RoleIcon";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { IconShield } from "@/components/icons";
 import { Tooltip } from "./Tooltip";
 import type { Profile, ServerMember, ServerRole, UserStatus } from "@/lib/supabase/types";
@@ -25,6 +28,8 @@ interface MemberListProps {
   serverId?: string | null;
   members: (ServerMember & { profile: Profile })[];
   roles: ServerRole[];
+  /** The open channel: only people who can see it are listed. */
+  channelId?: string | null;
   /** The space's owner. Wins over member rows, a few of which carry a stale role. */
   ownerId?: string | null;
   loading?: boolean;
@@ -82,6 +87,9 @@ function topRole(member: ServerMember, roles: ServerRole[]): ServerRole | null {
   return best;
 }
 
+/** Headers Disband names itself; role names are the space's own and stay as typed. */
+const BUILT_IN_HEADERS = new Set(["Owner", "Admin", "Online", "Offline"]);
+
 function roleLabel(member: ServerMember, roles: ServerRole[]): string {
   if (member.role === "owner") return "Owner";
   return topRole(member, roles)?.name ?? (member.role === "admin" ? "Admin" : "Online");
@@ -91,9 +99,10 @@ function roleColor(member: ServerMember, roles: ServerRole[]): string | null {
   return topRole(member, roles)?.color ?? null;
 }
 
-export function MemberList({ serverId = null, members, roles, ownerId = null, loading, hasMore, onLoadMore, onMemberClick, onMemberContext }: MemberListProps) {
-  const { presenceMap, listeningMap, serverTimeouts } = useApp();
-  const windowed = useMemberWindow(serverId, presenceMap);
+export function MemberList({ serverId = null, channelId = null, members, roles, ownerId = null, loading, hasMore, onLoadMore, onMemberClick, onMemberContext }: MemberListProps) {
+  const { presenceMap, listeningMap, activityMap, serverTimeouts, rosterVersion } = useApp();
+  const { t } = useI18n();
+  const windowed = useMemberWindow(serverId, presenceMap, channelId, rosterVersion);
   const useWindow = !!serverId && windowed.mode === "window" && windowed.total !== null;
 
   const timedOutIds = useMemo(() => {
@@ -152,11 +161,11 @@ export function MemberList({ serverId = null, members, roles, ownerId = null, lo
       // The exact offline count, as positions; rows fill in page by page.
       const n = windowed.offlineCount ?? 0;
       if (n > 0) {
-        out.push({ kind: "header", key: "h:offline", label: "Offline", count: n });
+        out.push({ kind: "header", key: "h:offline", label: t("Offline"), count: n });
         for (let i = 0; i < n; i++) out.push({ kind: "slot", key: `o:${i}`, index: i });
       }
     } else if (offline.length > 0) {
-      out.push({ kind: "header", key: "h:offline", label: "Offline", count: offline.length });
+      out.push({ kind: "header", key: "h:offline", label: t("Offline"), count: offline.length });
       for (const m of offline.sort(byName)) out.push({ kind: "member", key: m.user_id, member: m });
     }
     return out;
@@ -256,9 +265,9 @@ export function MemberList({ serverId = null, members, roles, ownerId = null, lo
   // members followed by a pop-in list.
   if (loading && !useWindow) {
     return (
-      <aside className="flex w-60 shrink-0 flex-col bg-bg-secondary px-4 py-4" aria-label="Loading members">
+      <aside className="flex w-60 shrink-0 flex-col bg-bg-secondary px-4 py-4" aria-label={t("Loading members")}>
         <h2 className="px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
-          Members
+          {t("Members")}
         </h2>
         <div className="flex flex-col gap-1" aria-hidden>
           {Array.from({ length: 10 }).map((_, i) => (
@@ -283,10 +292,10 @@ export function MemberList({ serverId = null, members, roles, ownerId = null, lo
     return (
       <aside className="flex w-60 shrink-0 flex-col bg-bg-secondary px-4 py-4">
         <h2 className="px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
-          Members
+          {t("Members")}
         </h2>
         <p className="px-2 py-2 text-sm text-text-muted">
-          No members to show yet.
+          {t("No members to show yet.")}
         </p>
       </aside>
     );
@@ -308,7 +317,7 @@ export function MemberList({ serverId = null, members, roles, ownerId = null, lo
               data-member-header
               className="flex h-10 items-end truncate pb-1 pl-2 pr-2 pt-6 text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] text-channels-default"
             >
-              {item.label} — {item.count}
+              {BUILT_IN_HEADERS.has(item.label) ? t(item.label) : item.label} — {item.count}
             </h2>
           ) : item.kind === "slot" ? (
             (() => {
@@ -321,6 +330,7 @@ export function MemberList({ serverId = null, members, roles, ownerId = null, lo
                   roles={roles}
                   live={liveStatus(m.profile)}
                   listening={null}
+                  activity={null}
                   timedOut={timedOutIds.has(m.user_id)}
                   onClick={onMemberClick}
                   onContext={onMemberContext}
@@ -336,6 +346,7 @@ export function MemberList({ serverId = null, members, roles, ownerId = null, lo
               roles={roles}
               live={liveStatus(item.member.profile)}
               listening={liveStatus(item.member.profile) === "offline" ? null : listeningFor(item.member.profile, listeningMap)}
+              activity={liveStatus(item.member.profile) === "offline" ? null : activityFor(item.member.profile, activityMap)}
               timedOut={timedOutIds.has(item.member.user_id)}
               onClick={onMemberClick}
               onContext={onMemberContext}
@@ -385,16 +396,18 @@ function binarySearch(offsets: number[], y: number, count: number): number {
 }
 
 function Row({
-  m, roles, live, listening, timedOut, onClick, onContext,
+  m, roles, live, listening, activity, timedOut, onClick, onContext,
 }: {
   m: Member;
   roles: ServerRole[];
   live: UserStatus;
   listening: Listening | null;
+  activity: Activity | null;
   timedOut: boolean;
   onClick?: (m: Member) => void;
   onContext?: (m: Member, x: number, y: number) => void;
 }) {
+  const { t } = useI18n();
   const p = m.profile;
   const color = roleColor(m, roles);
   const gradRole = topRole(m, roles);
@@ -445,26 +458,28 @@ function Row({
         <BotTag profile={p} size="sm" />
         <PlatformBadge userId={p.id} />
         {m.role === "owner" && (
-          <Tooltip label="Space Owner" side="top" as="span">
+          <Tooltip label={t("Space Owner")} side="top" as="span">
             <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden className="shrink-0 text-[#f0b232]">
               <path fill="currentColor" fillRule="evenodd" d="M13.656 4.938 11.5 7.094 8.438 3.25a.555.555 0 0 0-.876 0L4.5 7.094 2.344 4.938a.5.5 0 0 0-.844.437l1.375 6.25c.05.23.255.375.488.375h9.274a.5.5 0 0 0 .488-.375l1.375-6.25a.5.5 0 0 0-.844-.437ZM3 13.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5Z" />
             </svg>
           </Tooltip>
         )}
         {m.role === "admin" && (
-          <Tooltip label="Admin" side="top" as="span">
+          <Tooltip label={t("Admin")} side="top" as="span">
             <IconShield size={14} className="shrink-0 text-interactive-normal" />
           </Tooltip>
         )}
         {timedOut && (
-          <Tooltip label="Timed out" side="top" as="span">
+          <Tooltip label={t("Timed out")} side="top" as="span">
             <span className="shrink-0 rounded bg-status-dnd/20 px-1 py-px text-[10px] font-bold uppercase text-status-dnd">
-              Muted
+              {t("Muted")}
             </span>
           </Tooltip>
         )}
       </span>
-      {listening && <ListeningLine listening={listening} className="w-full !leading-[16px]" />}
+      {activity ? (
+        <ActivityLine activity={activity} className="w-full !leading-[16px]" />
+      ) : listening && <ListeningLine listening={listening} className="w-full !leading-[16px]" />}
       </span>
     </button>
   );

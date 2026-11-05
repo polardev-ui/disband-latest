@@ -146,6 +146,12 @@ data class Profile(
     @SerialName("desktop_notifications_enabled") var desktopNotificationsEnabled: Boolean? = null,
     @SerialName("link_previews_enabled") var linkPreviewsEnabled: Boolean? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    /** The avatar decoration they wear (a shop item id such as "ring-angelic"). */
+    @SerialName("equipped_ring_effect") var equippedRingEffect: String? = null,
+    /** What they're playing on Spotify, published by whichever app is open. */
+    var listening: Listening? = null,
+    /** The game they're in, published by the desktop app. */
+    var activity: ProfileActivity? = null,
 ) {
     val name: String get() = displayName ?: username ?: "Unknown"
     val handle: String get() = username ?: "user"
@@ -224,6 +230,11 @@ data class Channel(
     @SerialName("created_at") val createdAt: String? = null,
     /// Announcement channel: only people who can manage channels may post.
     @SerialName("read_only") var readOnly: Boolean? = null,
+    /// A stage: a voice channel where speakers talk and everyone else listens.
+    @SerialName("is_stage") var isStage: Boolean? = null,
+    /// Set while the stage is live.
+    @SerialName("stage_topic") var stageTopic: String? = null,
+    @SerialName("stage_started_at") var stageStartedAt: String? = null,
 )
 
 @Serializable
@@ -308,6 +319,48 @@ data class Message(
     @SerialName("created_at") val createdAt: String,
     @SerialName("edited_at") var editedAt: String? = null,
     var author: Profile? = null,
+    /** Rich cards from webhooks and bots (GitHub pushes, bot replies). */
+    var embeds: List<Embed>? = null,
+    /** Set when a webhook sent this: the name and picture it posts under. */
+    var webhook: MessageWebhook? = null,
+)
+
+/*
+ Rich embeds, in Discord's shape, as the web stores them in messages.embeds.
+ Every field is optional so one odd embed can't fail the whole message.
+*/
+@Serializable
+data class Embed(
+    val title: String? = null,
+    val description: String? = null,
+    val url: String? = null,
+    /** 0xRRGGBB as an integer. */
+    val color: Long? = null,
+    val timestamp: String? = null,
+    val footer: EmbedFooter? = null,
+    val image: EmbedMedia? = null,
+    val thumbnail: EmbedMedia? = null,
+    val author: EmbedAuthor? = null,
+    val fields: List<EmbedField>? = null,
+)
+
+@Serializable
+data class EmbedFooter(val text: String = "", @SerialName("icon_url") val iconUrl: String? = null)
+
+@Serializable
+data class EmbedMedia(val url: String = "", val width: Int? = null, val height: Int? = null)
+
+@Serializable
+data class EmbedAuthor(val name: String = "", val url: String? = null, @SerialName("icon_url") val iconUrl: String? = null)
+
+@Serializable
+data class EmbedField(val name: String = "", val value: String = "", val inline: Boolean = false)
+
+@Serializable
+data class MessageWebhook(
+    val id: String? = null,
+    val name: String = "Webhook",
+    @SerialName("avatar_url") val avatarUrl: String? = null,
 )
 
 // MARK: - Direct messages
@@ -503,6 +556,83 @@ data class VoiceJoin(
     @SerialName("channel_id") val channelId: String,
     @SerialName("user_id") val userId: String,
 )
+
+/** A track playing on Spotify, as the web's `Listening` (`src/lib/presence.ts`). */
+@Serializable
+data class Listening(
+    val source: String? = null,
+    val track: String? = null,
+    val artists: String? = null,
+    val artwork: String? = null,
+    @SerialName("track_url") val trackUrl: String? = null,
+    val album: String? = null,
+    @SerialName("duration_ms") val durationMs: Double? = null,
+    @SerialName("started_at") val startedAt: String? = null,
+) {
+    val startedInstant: java.time.Instant? get() = startedAt?.let { TimeParse.instant(it) }
+
+    /** Same song, whatever its progress. */
+    val identity: String get() = "${trackUrl ?: ""}|${track ?: ""}|${artists ?: ""}"
+
+    /**
+     * Whether it still reads as playing. Nobody clears the row when a phone
+     * closes the app, so a track drops out once its length (plus slack) has
+     * run out, and anything without a length after six hours.
+     */
+    fun isCurrent(now: java.time.Instant = java.time.Instant.now()): Boolean {
+        if (track.isNullOrBlank()) return false
+        val started = startedInstant ?: return true
+        val limitMs = durationMs?.takeIf { it > 0 }?.let { it + 90_000 } ?: (6 * 3_600_000.0)
+        return now.toEpochMilli() - started.toEpochMilli() <= limitMs
+    }
+}
+
+/** A game in progress, as the web's `ProfileActivity` (`src/lib/activity.ts`). */
+@Serializable
+data class ProfileActivity(
+    val kind: String? = null,
+    val name: String? = null,
+    val details: String? = null,
+    val state: String? = null,
+    @SerialName("large_image") val largeImage: String? = null,
+    @SerialName("small_image") val smallImage: String? = null,
+    @SerialName("started_at") val startedAt: String? = null,
+    @SerialName("ends_at") val endsAt: String? = null,
+    @SerialName("expires_at") val expiresAt: String? = null,
+    val buttons: List<ActivityButton>? = null,
+    @SerialName("application_id") val applicationId: String? = null,
+) {
+    @Serializable
+    data class ActivityButton(val label: String? = null, val url: String? = null)
+
+    private companion object {
+        val NOT_GAMES = setOf("epic online services", "easyanticheat", "battleye", "epic games launcher")
+    }
+
+    /** The desktop app keeps pushing expires_at forward while the game runs. */
+    fun isLive(now: java.time.Instant = java.time.Instant.now()): Boolean {
+        if (name.isNullOrBlank()) return false
+        // Launchers and services older desktop builds reported as games.
+        if ((kind ?: "playing") == "playing" && name.lowercase() in NOT_GAMES) return false
+        val expires = expiresAt?.let { TimeParse.instant(it) } ?: return false
+        return expires.isAfter(now)
+    }
+
+    val verb: String get() = when (kind) {
+        "streaming" -> "Streaming"
+        "listening" -> "Listening to"
+        "watching" -> "Watching"
+        "competing" -> "Competing in"
+        else -> "Playing"
+    }
+}
+
+/** ISO timestamps as Postgres and JavaScript write them. */
+internal object TimeParse {
+    fun instant(raw: String): java.time.Instant? =
+        runCatching { java.time.OffsetDateTime.parse(raw).toInstant() }.getOrNull()
+            ?: runCatching { java.time.Instant.parse(raw) }.getOrNull()
+}
 
 @Serializable
 data class ProfilePatch(

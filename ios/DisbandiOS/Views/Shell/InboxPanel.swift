@@ -134,7 +134,7 @@ struct InboxPanel: View {
     @ViewBuilder private func row(_ item: Item) -> some View {
         switch item {
         case .dm(let thread):
-            NavigationLink(value: SpacesRoute.chat(
+            RouteLink(value: SpacesRoute.chat(
                 .dm(threadId: thread.id, title: thread.friend?.name ?? "Direct Message"),
                 callPeer: thread.friend, canModerate: false)
             ) {
@@ -145,7 +145,8 @@ struct InboxPanel: View {
                     status: thread.friend.map { presence.status(for: $0.id) },
                     preview: DirectMessagesViewModel.preview(for: thread),
                     time: RelativeTime.compact(thread.lastMessageAt ?? thread.createdAt),
-                    unread: unreadStore.count(for: thread.id)
+                    unread: unreadStore.count(for: thread.id),
+                                    nameStyle: thread.friend.map { NameStyle($0) }
                 )
                 .padding(.horizontal, 8)
                 .contentShape(RoundedRectangle(cornerRadius: 14))
@@ -161,7 +162,7 @@ struct InboxPanel: View {
                 }
             }
         case .group(let group):
-            NavigationLink(value: SpacesRoute.chat(.group(id: group.id, name: group.name),
+            RouteLink(value: SpacesRoute.chat(.group(id: group.id, name: group.name),
                                                    callPeer: nil, canModerate: false)) {
                 ConversationRow(
                     iconUrl: group.iconUrl,

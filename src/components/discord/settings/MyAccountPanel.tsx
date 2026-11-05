@@ -12,6 +12,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { ClassicLabel, ClassicModal, classicBtn, classicInput } from "@/components/ui/ClassicModal";
 import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
+import { useI18n } from "@/contexts/I18nContext";
 
 /*
  Settings › My Account, after Discord's 2021–22 layout:
@@ -42,6 +43,7 @@ export function MyAccountPanel({
   onEditProfile: () => void;
   onDeleteAccount: () => void;
 }) {
+  const { t } = useI18n();
   const { profile, user, presenceMap, updatePassword, requestPasswordReset, cancelAccountDeletion } = useApp();
   const [revealEmail, setRevealEmail] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -67,7 +69,7 @@ export function MyAccountPanel({
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
-      setError("Couldn't copy to the clipboard.");
+      setError(t("Couldn't copy to the clipboard."));
     }
   }, [profile?.id]);
 
@@ -90,25 +92,25 @@ export function MyAccountPanel({
 
   const rows: { label: string; value: React.ReactNode; action: React.ReactNode }[] = [
     {
-      label: "Display Name",
+      label: t("Display Name"),
       value: displayName(profile),
       action: (
         <button type="button" onClick={onEditProfile} className={`${classicBtn.grey} ${classicBtn.sm}`}>
-          Edit
+          {t("Edit")}
         </button>
       ),
     },
     {
-      label: "Username",
+      label: t("Username"),
       value: profile.username ?? "—",
       action: (
         <button type="button" onClick={onEditProfile} className={`${classicBtn.grey} ${classicBtn.sm}`}>
-          Edit
+          {t("Edit")}
         </button>
       ),
     },
     {
-      label: "Email",
+      label: t("Email"),
       value: email ? (
         <>
           {revealEmail ? email : maskEmail(email)}
@@ -117,24 +119,24 @@ export function MyAccountPanel({
             onClick={() => setRevealEmail((v) => !v)}
             className="ml-1 text-[14px] text-[#00a8fc] hover:underline"
           >
-            {revealEmail ? "Hide" : "Reveal"}
+            {revealEmail ? t("Hide") : t("Reveal")}
           </button>
         </>
       ) : (
-        <span className="text-text-muted">You haven&apos;t added an email.</span>
+        <span className="text-text-muted">{t("You haven’t added an email.")}</span>
       ),
       action: email ? (
         <button type="button" onClick={() => setEmailOpen(true)} className={`${classicBtn.grey} ${classicBtn.sm}`}>
-          Edit
+          {t("Edit")}
         </button>
       ) : null,
     },
     {
-      label: "User ID",
+      label: t("User ID"),
       value: <span className="font-mono text-[14px]">{profile.id}</span>,
       action: (
         <button type="button" onClick={() => void copyId()} className={`${classicBtn.grey} ${classicBtn.sm}`}>
-          {copied ? "Copied" : "Copy"}
+          {copied ? t("Copied") : t("Copy")}
         </button>
       ),
     },
@@ -164,7 +166,7 @@ export function MyAccountPanel({
             )}
           </p>
           <button type="button" onClick={onEditProfile} className={`${classicBtn.brand} ${classicBtn.sm} shrink-0`}>
-            Edit User Profile
+            {t("Edit User Profile")}
           </button>
         </div>
         <div className="mx-4 mb-4 space-y-6 rounded-lg bg-bg-secondary p-4">
@@ -184,14 +186,14 @@ export function MyAccountPanel({
 
       {/* Password and Authentication */}
       <section>
-        <h2 className="mb-5 text-[20px] font-semibold leading-6 text-header-primary">Password and Authentication</h2>
+        <h2 className="mb-5 text-[20px] font-semibold leading-6 text-header-primary">{t("Password and Authentication")}</h2>
         <div className="flex flex-wrap items-center gap-4">
           <button type="button" onClick={() => setPasswordOpen(true)} className={`${classicBtn.brand} ${classicBtn.sm}`}>
-            Change Password
+            {t("Change Password")}
           </button>
           {email && (
             <p className="text-[14px] text-header-secondary">
-              Forgot it?{" "}
+              {t("Forgot it?")}{" "}
               <button
                 type="button"
                 disabled={resetSent}
@@ -203,7 +205,7 @@ export function MyAccountPanel({
                 }}
                 className="text-[#00a8fc] hover:underline disabled:text-status-online disabled:no-underline"
               >
-                {resetSent ? "Reset link sent — check your inbox." : "Email me a reset link"}
+                {resetSent ? t("Reset link sent — check your inbox.") : t("Email me a reset link")}
               </button>
             </p>
           )}
@@ -218,9 +220,9 @@ export function MyAccountPanel({
 
       {/* Devices */}
       <section>
-        <h3 className={`${HEADING} mb-2`}>Devices</h3>
+        <h3 className={`${HEADING} mb-2`}>{t("Devices")}</h3>
         <p className="mb-4 text-[14px] leading-[18px] text-header-secondary">
-          Signed in somewhere you don&apos;t recognise? Log out everywhere else. You&apos;ll stay logged in here.
+          {t("Signed in somewhere you don’t recognise? Log out everywhere else. You’ll stay logged in here.")}
         </p>
         <button
           type="button"
@@ -228,7 +230,7 @@ export function MyAccountPanel({
           onClick={() => void signOutOthers()}
           className={`${classicBtn.danger} ${classicBtn.sm}`}
         >
-          {signedOut ? "Logged Out Everywhere Else" : signingOut ? "Logging Out…" : "Log Out All Known Devices"}
+          {signedOut ? t("Logged Out Everywhere Else") : signingOut ? t("Logging Out…") : t("Log Out All Known Devices")}
         </button>
       </section>
 
@@ -236,21 +238,20 @@ export function MyAccountPanel({
 
       {/* Your age */}
       <section>
-        <h3 className={`${HEADING} mb-2`}>Your Age</h3>
+        <h3 className={`${HEADING} mb-2`}>{t("Your Age")}</h3>
         <p className="mb-4 text-[14px] leading-[18px] text-header-secondary">
-          Your age is used to apply the right requirements for your region. It is stored privately and
-          is never shown to other users. Age can only be set once.
+          {t("Your age is used to apply the right requirements for your region. It is stored privately and is never shown to other users. Age can only be set once.")}
         </p>
         {ageValue ? (
           <p className="text-[14px] text-header-primary">
-            Date of birth on file: <span className="font-mono">{ageValue}</span>
+            {t("Date of birth on file:")}{" "}<span className="font-mono">{ageValue}</span>
           </p>
         ) : (
           <>
             <div className="flex flex-wrap items-end gap-3">
               <label className="block">
                 <span className="mb-1.5 block text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">
-                  Date of birth
+                  {t("Date of birth")}
                 </span>
                 <input
                   type="date"
@@ -276,11 +277,11 @@ export function MyAccountPanel({
                 }}
                 className={`${classicBtn.brand} ${classicBtn.sm}`}
               >
-                {savingAge ? "Saving…" : "Save"}
+                {savingAge ? t("Saving…") : t("Save")}
               </button>
             </div>
             {ageError && <p className="mt-3 text-[14px] text-status-dnd">{ageError}</p>}
-            {ageSaved && <p className="mt-3 text-[14px] text-status-online">Saved. Your age is not shown publicly.</p>}
+            {ageSaved && <p className="mt-3 text-[14px] text-status-online">{t("Saved. Your age is not shown publicly.")}</p>}
           </>
         )}
       </section>
@@ -289,9 +290,9 @@ export function MyAccountPanel({
 
       {/* Your data */}
       <section>
-        <h3 className={`${HEADING} mb-2`}>Your Data</h3>
+        <h3 className={`${HEADING} mb-2`}>{t("Your Data")}</h3>
         <p className="mb-4 text-[14px] leading-[18px] text-header-secondary">
-          Download a copy of your account data, or request deletion. Deletion schedules your account for removal and cancels any active subscription per our terms.
+          {t("Download a copy of your account data, or request deletion. Deletion schedules your account for removal and cancels any active subscription per our terms.")}
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -320,7 +321,7 @@ export function MyAccountPanel({
             }}
             className={`${classicBtn.grey} ${classicBtn.sm}`}
           >
-            Download My Data
+            {t("Download My Data")}
           </button>
         </div>
       </section>
@@ -329,11 +330,11 @@ export function MyAccountPanel({
 
       {/* Account removal */}
       <section>
-        <h3 className={`${HEADING} mb-2`}>Account Removal</h3>
+        <h3 className={`${HEADING} mb-2`}>{t("Account Removal")}</h3>
         {pendingDeletion ? (
           <>
             <p className="mb-4 text-[14px] leading-[18px] text-header-secondary">
-              Your account is scheduled for deletion on{" "}
+              {t("Your account is scheduled for deletion on")}{" "}
               <span className="font-medium text-header-primary">
                 {profile.deletion_purge_at ? new Date(profile.deletion_purge_at).toLocaleString() : "—"}
               </span>
@@ -352,18 +353,18 @@ export function MyAccountPanel({
               }}
               className={`${classicBtn.brand} ${classicBtn.sm}`}
             >
-              {cancelling ? "Cancelling…" : "Cancel Deletion"}
+              {cancelling ? t("Cancelling…") : t("Cancel Deletion")}
             </button>
           </>
         ) : (
           <>
             <p className="mb-4 text-[14px] leading-[18px] text-header-secondary">
               {isAnonymous
-                ? "Deleting removes your profile and everything tied to it straight away."
-                : "Deleting your account schedules it for removal in 14 days. For the first 24 hours you can log back in to cancel."}
+                ? t("Deleting removes your profile and everything tied to it straight away.")
+                : t("Deleting your account schedules it for removal in 14 days. For the first 24 hours you can log back in to cancel.")}
             </p>
             <button type="button" onClick={onDeleteAccount} className={`${classicBtn.dangerOutline} ${classicBtn.sm}`}>
-              Delete Account
+              {t("Delete Account")}
             </button>
           </>
         )}
@@ -378,6 +379,7 @@ export function MyAccountPanel({
 }
 
 function EmailModal({ open, current, onClose }: { open: boolean; current: string; onClose: () => void }) {
+  const { t } = useI18n();
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -395,7 +397,7 @@ function EmailModal({ open, current, onClose }: { open: boolean; current: string
     const next = value.trim();
     if (!next) return;
     if (next.toLowerCase() === current.toLowerCase()) {
-      setError("That's already your email.");
+      setError(t("That's already your email."));
       return;
     }
     setBusy(true);
@@ -410,24 +412,24 @@ function EmailModal({ open, current, onClose }: { open: boolean; current: string
     <ClassicModal
       open={open}
       onClose={close}
-      title={sent ? "Check your inbox" : "Enter an email address"}
+      title={sent ? t("Check your inbox") : t("Enter an email address")}
       subtitle={
         sent
-          ? `We sent a confirmation link to ${current}. Once you click it, we'll send one to your new address.`
-          : "Enter a new email address. Both your current and new email will need to confirm the change."
+          ? t("We sent a confirmation link to {current}. Once you click it, we'll send one to your new address.", { current })
+          : t("Enter a new email address. Both your current and new email will need to confirm the change.")
       }
       footer={
         sent ? (
           <button type="button" onClick={close} className={`${classicBtn.brand} ${classicBtn.md}`}>
-            Okay
+            {t("Okay")}
           </button>
         ) : (
           <>
             <button type="button" onClick={close} className={`${classicBtn.link} ${classicBtn.md}`}>
-              Cancel
+              {t("Cancel")}
             </button>
             <button type="submit" form="classic-email-form" disabled={busy || !value.trim()} className={`${classicBtn.brand} ${classicBtn.md}`}>
-              {busy ? "Sending…" : "Done"}
+              {busy ? t("Sending…") : t("Done")}
             </button>
           </>
         )
@@ -435,7 +437,7 @@ function EmailModal({ open, current, onClose }: { open: boolean; current: string
     >
       {!sent && (
         <form id="classic-email-form" onSubmit={submit}>
-          <ClassicLabel htmlFor="classic-email">Email</ClassicLabel>
+          <ClassicLabel htmlFor="classic-email">{t("Email")}</ClassicLabel>
           <input
             id="classic-email"
             type="email"
@@ -461,6 +463,7 @@ function PasswordModal({
   onClose: () => void;
   onSubmit: (password: string) => Promise<string | null>;
 }) {
+  const { t } = useI18n();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
@@ -478,11 +481,11 @@ function PasswordModal({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+      setError(t("Password must be at least 6 characters."));
       return;
     }
     if (password !== confirm) {
-      setError("Passwords do not match.");
+      setError(t("Passwords do not match."));
       return;
     }
     setBusy(true);
@@ -497,20 +500,20 @@ function PasswordModal({
     <ClassicModal
       open={open}
       onClose={close}
-      title={done ? "Password updated" : "Update your password"}
-      subtitle={done ? "Your new password is set." : "Enter a new password for your account."}
+      title={done ? t("Password updated") : t("Update your password")}
+      subtitle={done ? t("Your new password is set.") : t("Enter a new password for your account.")}
       footer={
         done ? (
           <button type="button" onClick={close} className={`${classicBtn.brand} ${classicBtn.md}`}>
-            Okay
+            {t("Okay")}
           </button>
         ) : (
           <>
             <button type="button" onClick={close} className={`${classicBtn.link} ${classicBtn.md}`}>
-              Cancel
+              {t("Cancel")}
             </button>
             <button type="submit" form="classic-password-form" disabled={busy} className={`${classicBtn.brand} ${classicBtn.md}`}>
-              {busy ? "Updating…" : "Done"}
+              {busy ? t("Updating…") : t("Done")}
             </button>
           </>
         )
@@ -519,7 +522,7 @@ function PasswordModal({
       {!done && (
         <form id="classic-password-form" onSubmit={submit} className="space-y-5">
           <div>
-            <ClassicLabel htmlFor="classic-new-password">New Password</ClassicLabel>
+            <ClassicLabel htmlFor="classic-new-password">{t("New Password")}</ClassicLabel>
             <input
               id="classic-new-password"
               type="password"
@@ -531,7 +534,7 @@ function PasswordModal({
             />
           </div>
           <div>
-            <ClassicLabel htmlFor="classic-confirm-password">Confirm New Password</ClassicLabel>
+            <ClassicLabel htmlFor="classic-confirm-password">{t("Confirm New Password")}</ClassicLabel>
             <input
               id="classic-confirm-password"
               type="password"

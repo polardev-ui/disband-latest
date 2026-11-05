@@ -20,6 +20,7 @@ import { IconHash, IconShield } from "@/components/icons";
 import { useTypingPresence } from "@/hooks/useTypingPresence";
 import { TypingIndicator } from "./TypingIndicator";
 import { useApp } from "@/contexts/AppContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { toReplyAuthor, type MessageSendOptions, type MessageContext, type MessageReaction, type ReplyPreview } from "@/lib/messages";
 import type { ChannelLite } from "@/lib/markdown";
@@ -37,14 +38,15 @@ import {
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 
 function NewMessagesDivider({ animate = true }: { animate?: boolean }) {
+  const { t } = useI18n();
   return (
     <div
       className={`${animate ? "divider-in " : ""}relative mx-4 mb-2 mt-6 flex h-0 items-center border-t border-status-dnd`}
       role="separator"
-      aria-label="New messages"
+      aria-label={t("New messages")}
     >
       <span className="absolute -top-[9px] right-0 rounded-[8px] rounded-l-none bg-status-dnd py-px pl-1 pr-1.5 text-[10px] font-bold uppercase leading-[13px] text-white before:absolute before:-left-[5px] before:top-0 before:h-full before:w-[6px] before:bg-status-dnd before:[clip-path:polygon(100%_0,100%_100%,0_50%)]">
-        New
+        {t("New")}
       </span>
     </div>
   );
@@ -68,8 +70,8 @@ function DayDivider({ label }: { label: string }) {
   );
 }
 
-function dayLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+function dayLabel(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" });
 }
 
 const REPLY_AUTHOR_COLUMNS = "id, username, display_name, avatar_url, accent_color, accent_color_2, avatar_crop, equipped_ring_effect";
@@ -226,6 +228,7 @@ interface MessageRowProps {
   members: Profile[];
   channels?: ChannelLite[];
   roles?: ServerRole[];
+  myRoleIds?: string[];
   customEmoji?: Record<string, string>;
   canReact: boolean;
   canForward: boolean;
@@ -267,6 +270,7 @@ const MessageRow = memo(function MessageRow({
   members,
   channels,
   roles,
+  myRoleIds,
   customEmoji,
   canReact,
   canForward,
@@ -338,6 +342,7 @@ const MessageRow = memo(function MessageRow({
         members={members}
         channels={channels}
         roles={roles}
+        myRoleIds={myRoleIds}
         customEmoji={customEmoji}
         onChannelClick={onChannelClick}
         highlight={highlight}
@@ -391,6 +396,8 @@ interface ChatCanvasProps {
   placeholder?: string;
 
   composerLockedReason?: string | null;
+  /** Shown just above the composer, e.g. the message request bar. */
+  composerNotice?: React.ReactNode;
   typingScope?: { kind: "channel" | "dm" | "group"; id: string; serverId?: string } | null;
 
   channels?: ChannelLite[];
@@ -435,6 +442,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     introText,
     placeholder,
     composerLockedReason,
+    composerNotice,
     typingScope = null,
     readCursorScope = null,
     channels,
@@ -493,6 +501,9 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const [activeActivityId, setActiveActivityId] = useState<string | null>(null);
   const openActivity = useCallback((activityId: string) => setActiveActivityId(activityId), []);
   const [newMessagesDividerId, setNewMessagesDividerId] = useState<string | null>(null);
+  const [showNewMessages, setShowNewMessages] = useState(false);
+  const [showScrollDown, setShowScrollDown] = useState(false);
+  const prevLenRef = useRef(messages.length);
   const [composerFocus, setComposerFocus] = useState(0);
   const readScopeRef = useRef<ReadCursorScope | null>(null);
   const messagesRef = useRef(messages);
@@ -537,7 +548,16 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     loadChannelContextWindow,
     loadDmContextWindow,
     loadGroupContextWindow,
+    members: spaceMembers,
   } = useApp();
+  // Your roles in the open space, so a role ping can colour your row.
+  const myRoleIds = useMemo(() => {
+    if (messageContext !== "channel" || !currentUserId) return undefined;
+    const me = spaceMembers.find((m) => m.user_id === currentUserId);
+    if (!me) return undefined;
+    return me.role_ids?.length ? me.role_ids : me.role_id ? [me.role_id] : undefined;
+  }, [messageContext, currentUserId, spaceMembers]);
+  const { t, language } = useI18n();
   const replyPreviews = useReplyPreviews(messages, messageContext, currentProfile);
   // Tether is a mentionable entity but never a real server member: append its
   // profile to the render list so "@tether" tokenizes as a blue mention chip
@@ -578,11 +598,11 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     let prev = "";
     for (let i = 0; i < enriched.length; i += 1) {
       const d = new Date(enriched[i].created_at).toDateString();
-      out[i] = d !== prev ? dayLabel(enriched[i].created_at) : null;
+      out[i] = d !== prev ? dayLabel(enriched[i].created_at, language) : null;
       prev = d;
     }
     return out;
-  }, [enriched]);
+  }, [enriched, language]);
 
   // Per-message reaction lookup. The old code ran `reactions.filter(...)`
   // per row (O(rows × reactions)) on every render; one grouped pass is O(n).
@@ -758,6 +778,17 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   }, [messages, readCursorScope]);
 
   useEffect(() => {
+    if (messages.length > prevLenRef.current) {
+      if (!stickToBottomRef.current) setShowNewMessages(true);
+    }
+    if (stickToBottomRef.current) {
+      setShowNewMessages(false);
+      setShowScrollDown(false);
+    }
+    prevLenRef.current = messages.length;
+  }, [messages.length]);
+
+  useEffect(() => {
     return () => {
       const scope = readScopeRef.current;
       if (scope && messagesRef.current.length > 0) {
@@ -783,6 +814,12 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
         // stop re-pinning to the bottom as late content loads.
         topAnchorRef.current = null;
         pinToBottomRef.current = false;
+        const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+        setShowScrollDown(distanceFromBottom > 1800);
+        if (stickToBottomRef.current) {
+          setShowNewMessages(false);
+          setShowScrollDown(false);
+        }
         if (el.scrollTop < 96) void requestLoadMore();
       });
     };
@@ -790,6 +827,48 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     onScroll();
     return () => el.removeEventListener("scroll", onScroll);
   }, [requestLoadMore]);
+
+  // A deliberate move up releases the bottom at once. The scroll handler
+  // ignores events for a moment after the app scrolls by itself, and while
+  // images or new messages kept resizing the chat, that window kept eating
+  // the reader's scroll and the next message yanked them back down.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const release = () => {
+      stickToBottomRef.current = false;
+      pinToBottomRef.current = false;
+      topAnchorRef.current = null;
+      programmaticScrollRef.current = 0;
+    };
+    const onWheel = (e: WheelEvent) => { if (e.deltaY < 0) release(); };
+    let touchY: number | null = null;
+    const onTouchStart = (e: TouchEvent) => { touchY = e.touches[0]?.clientY ?? null; };
+    const onTouchMove = (e: TouchEvent) => {
+      const y = e.touches[0]?.clientY;
+      // Finger moving down drags the history up into view.
+      if (touchY !== null && y !== undefined && y - touchY > 8) release();
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "PageUp" || e.key === "Home" || (e.key === "ArrowUp" && e.target === el)) release();
+    };
+    // Grabbing the scrollbar itself.
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.target === el && e.offsetX > el.clientWidth) release();
+    };
+    el.addEventListener("wheel", onWheel, { passive: true });
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: true });
+    el.addEventListener("keydown", onKeyDown);
+    el.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("keydown", onKeyDown);
+      el.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, []);
 
   // Mobile keyboards resize the visual viewport without scrolling the chat
   // container, which used to strand the view mid-history when the keyboard
@@ -811,8 +890,12 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   useEffect(() => {
     const onFocusIn = (e: FocusEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t?.tagName === "TEXTAREA" && stickToBottomRef.current) {
-        requestAnimationFrame(() => scrollToBottom("auto", true));
+      if (t?.tagName === "TEXTAREA") {
+        // On iOS the keyboard animation finishes after focus; wait before
+        // re-pinning so the newest message isn't hidden behind the composer.
+        window.setTimeout(() => {
+          if (stickToBottomRef.current) scrollToBottom("auto", true);
+        }, 320);
       }
     };
     window.addEventListener("focusin", onFocusIn);
@@ -960,8 +1043,8 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   }
 
   return (
-    <main className="view-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
-      <header className="relative z-[2] flex h-12 shrink-0 items-center gap-2 px-4 shadow-[var(--elevation-low)]">
+    <main className="view-enter relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
+      <header className="relative z-30 flex h-12 shrink-0 items-center gap-2 px-4 shadow-[var(--elevation-low)]">
         {headerLeading}
         <span className="flex shrink-0 items-center text-channels-default [&_svg]:h-6 [&_svg]:w-6">
           {channelIcon ?? (messageContext === "dm" ? <AtIcon /> : <IconHash size={24} />)}
@@ -986,7 +1069,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     onClick={() => void requestLoadMore()}
                     className="rounded-full bg-bg-accent px-4 py-1.5 text-xs font-medium text-text-muted hover:bg-interactive-hover hover:text-text-normal"
                   >
-                    Load earlier messages
+                    {t("Load earlier messages")}
                   </button>
                 </div>
               )}
@@ -998,14 +1081,14 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     {messageContext === "channel" ? <IconHash size={42} /> : (channelIcon ?? <IconHash size={42} />)}
                   </span>
                   <h3 className="my-2 text-[32px] font-bold leading-10 text-header-primary">
-                    {messageContext === "channel" ? `Welcome to #${channelName}!` : channelName}
+                    {messageContext === "channel" ? t("Welcome to #{channelName}!", { channelName }) : channelName}
                   </h3>
                   <p className="text-[16px] leading-5 text-header-secondary">
                     {introText ?? (messageContext === "channel"
-                      ? `This is the start of the #${channelName} channel.`
+                      ? t("This is the start of the #{channelName} channel.", { channelName })
                       : messageContext === "dm"
-                        ? `This is the beginning of your direct message history with ${channelName}.`
-                        : `Welcome to the beginning of ${channelName}.`)}
+                        ? t("This is the beginning of your direct message history with {channelName}.", { channelName })
+                        : t("Welcome to the beginning of {channelName}.", { channelName }))}
                   </p>
                 </div>
               )}
@@ -1031,6 +1114,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     members={renderMembers}
                     channels={channels}
                     roles={roles}
+                    myRoleIds={myRoleIds}
                     customEmoji={customEmoji}
                     canReact={canReact}
                     canForward={!!onForward}
@@ -1060,7 +1144,32 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
         onClose={() => setPicker(null)}
       />
 
+      {(showNewMessages || showScrollDown) && (
+        <div className="pointer-events-none absolute bottom-20 left-1/2 z-[200] flex -translate-x-1/2 flex-col items-center gap-2 md:left-auto md:right-4 md:translate-x-0">
+          {showNewMessages && (
+            <button
+              type="button"
+              onClick={() => { scrollToBottom("smooth", true); setShowNewMessages(false); setShowScrollDown(false); }}
+              className="pointer-events-auto rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105"
+            >
+              {t("New messages")}
+            </button>
+          )}
+          {showScrollDown && (
+            <button
+              type="button"
+              onClick={() => { scrollToBottom("smooth", true); setShowNewMessages(false); setShowScrollDown(false); }}
+              className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-bg-secondary text-text-normal shadow-lg transition-transform hover:scale-105"
+              aria-label={t("Scroll to bottom")}
+            >
+              ↓
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="shrink-0">
+        {composerNotice}
         {composerLockedReason ? (
           <div className="mx-4 flex min-h-[44px] items-center gap-2 rounded-lg bg-bg-composer px-4 py-2">
             <IconShield size={15} className="shrink-0 text-text-muted" />
@@ -1068,7 +1177,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           </div>
         ) : (
         <ChatInput
-          placeholder={placeholder ?? (messageContext === "dm" ? `Message @${channelName}` : messageContext === "channel" ? `Message #${channelName}` : `Message ${channelName}`)}
+          placeholder={placeholder ?? (messageContext === "dm" ? t("Message @{name}", { name: channelName }) : messageContext === "channel" ? t("Message #{name}", { name: channelName }) : t("Message {name}", { name: channelName }))}
           members={members}
           roles={roles}
           channels={channels}
