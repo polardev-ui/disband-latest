@@ -17,8 +17,12 @@ const UA = { "User-Agent": "Disband (https://www.disband.dev)" };
 
 let detectable: { at: number; byName: Map<string, { id: string; icon: string | null }> } | null = null;
 
+/**
+ * Spaces, case and punctuation ignored, so a process name ("CrosshairX",
+ * "wallpaper_engine") meets the store title ("Crosshair X", "Wallpaper Engine").
+ */
 function keyOf(name: string) {
-  return name.toLowerCase().replace(/[_\-]+/g, " ").replace(/[^\p{L}\p{N} ]+/gu, "").replace(/\s+/g, " ").trim();
+  return name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
 async function discordIcon(id: string): Promise<string | null> {
@@ -41,8 +45,10 @@ async function steamArt(name: string): Promise<string | null> {
     if (!res.ok) return null;
     const json = (await res.json()) as { items?: { id: number; name: string }[] };
     const want = keyOf(name);
-    // Only an exact (normalised) title match: a near miss is the wrong game.
-    const hit = json.items?.find((i) => keyOf(i.name) === want);
+    // Only an exact (normalised) title match: a near miss is the wrong game,
+    // and "ARK" matching three different ARK games is no match at all.
+    const matches = (json.items ?? []).filter((i) => keyOf(i.name) === want);
+    const hit = matches.length === 1 ? matches[0] : undefined;
     return hit ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${hit.id}/header.jpg` : null;
   } catch {
     return null;
@@ -54,9 +60,29 @@ async function detectableArt(name: string): Promise<string | null> {
     if (!detectable || Date.now() - detectable.at > TTL_MS) {
       const res = await fetch("https://discord.com/api/v10/applications/detectable", { headers: UA });
       if (!res.ok) return null;
-      const list = (await res.json()) as { id: string; name: string; icon_hash?: string | null; icon?: string | null }[];
+      const list = (await res.json()) as {
+        id: string; name: string; icon_hash?: string | null; icon?: string | null; aliases?: string[];
+        executables?: { name?: string }[];
+      }[];
       const byName = new Map<string, { id: string; icon: string | null }>();
-      for (const g of list) byName.set(keyOf(g.name), { id: g.id, icon: g.icon_hash ?? g.icon ?? null });
+      // Names and alternative names first, for every game; executable names
+      // (a bare process name like "wallpaper_engine" is often the .exe) only
+      // fill gaps, and generic ones ("game", "launcher") are skipped.
+      const GENERIC = new Set(["game", "launcher", "client", "app", "main", "start", "play", "setup", "unity", "win64", "x64", "shipping"]);
+      for (const g of list) {
+        const entry = { id: g.id, icon: g.icon_hash ?? g.icon ?? null };
+        for (const k of [g.name, ...(g.aliases ?? [])]) {
+          const key = keyOf(k ?? "");
+          if (key.length >= 2 && !byName.has(key)) byName.set(key, entry);
+        }
+      }
+      for (const g of list) {
+        const entry = { id: g.id, icon: g.icon_hash ?? g.icon ?? null };
+        for (const e of g.executables ?? []) {
+          const key = keyOf((e.name ?? "").split("/").pop()!.replace(/\.(exe|app)$/i, ""));
+          if (key.length >= 5 && !GENERIC.has(key) && !byName.has(key)) byName.set(key, entry);
+        }
+      }
       detectable = { at: Date.now(), byName };
     }
     const g = detectable.byName.get(keyOf(name));
