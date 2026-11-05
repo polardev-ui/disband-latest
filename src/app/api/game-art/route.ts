@@ -5,7 +5,8 @@ import { NextResponse } from "next/server";
  * Discord application id when the desktop app knows it), so every viewer sees
  * a picture even when the player's client had none.
  *
- * Order: the Discord application's icon, then a Steam store match, then
+ * Order: the Discord application's icon, then SteamGridDB's square art, then
+ * a Steam store match, then
  * Discord's detectable-games list by name. Results (including "none") are
  * cached per instance and at the CDN.
  */
@@ -31,6 +32,51 @@ async function discordIcon(id: string): Promise<string | null> {
     if (!res.ok) return null;
     const app = (await res.json()) as { icon?: string | null };
     return app.icon ? `https://cdn.discordapp.com/app-icons/${id}/${app.icon}.png?size=160` : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * SteamGridDB: community game art, including square covers that suit the
+ * activity card. Needs STEAMGRIDDB_API_KEY (server-only secret); skipped
+ * without it.
+ */
+async function steamGridArt(name: string): Promise<string | null> {
+  const key = process.env.STEAMGRIDDB_API_KEY;
+  if (!key) return null;
+  const headers = { ...UA, Authorization: `Bearer ${key}` };
+  try {
+    const search = await fetch(
+      `https://www.steamgriddb.com/api/v2/search/autocomplete/${encodeURIComponent(name)}`,
+      { headers },
+    );
+    if (!search.ok) return null;
+    const results = ((await search.json()) as { data?: { id: number; name: string }[] }).data ?? [];
+    const want = keyOf(name);
+    const matches = results.filter((g) => keyOf(g.name) === want);
+    // Exact (normalised) title only, and only when it's unambiguous.
+    const game = matches.length === 1 ? matches[0] : undefined;
+    if (!game) return null;
+
+    // A square cover first, then the game's icon.
+    const grids = await fetch(
+      `https://www.steamgriddb.com/api/v2/grids/game/${game.id}?dimensions=512x512,1024x1024&types=static&nsfw=false&humor=false`,
+      { headers },
+    );
+    if (grids.ok) {
+      const url = ((await grids.json()) as { data?: { url: string }[] }).data?.[0]?.url;
+      if (url) return url;
+    }
+    const icons = await fetch(
+      `https://www.steamgriddb.com/api/v2/icons/game/${game.id}?types=static&nsfw=false&humor=false`,
+      { headers },
+    );
+    if (icons.ok) {
+      const url = ((await icons.json()) as { data?: { url: string }[] }).data?.find((i) => /\.(png|jpe?g|webp)$/i.test(i.url))?.url;
+      if (url) return url;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -103,10 +149,11 @@ export async function GET(req: Request) {
 
   const key = `${app}|${keyOf(name)}`;
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) return reply(hit.art);
+  if (hit && Date.now() - hit.at < (hit.art.url ? TTL_MS : 3600_000)) return reply(hit.art);
 
   let found: string | null = null;
   if (app) found = await discordIcon(app);
+  if (!found && name) found = await steamGridArt(name.replace(/[_]+/g, " "));
   if (!found && name) found = await steamArt(name.replace(/[_]+/g, " "));
   if (!found && name) found = await detectableArt(name);
 
@@ -117,7 +164,9 @@ export async function GET(req: Request) {
 }
 
 function reply(art: Art) {
+  // A miss is cached briefly, so new sources (or new art) show up soon.
+  const age = art.url ? 86400 : 3600;
   return NextResponse.json(art, {
-    headers: { "Cache-Control": "public, max-age=86400, s-maxage=86400" },
+    headers: { "Cache-Control": `public, max-age=${age}, s-maxage=${age}` },
   });
 }
