@@ -42,6 +42,7 @@ import { StagePanel } from "./StagePanel";
 import { GroupMemberList } from "./GroupMemberList";
 import { InviteGroupModal } from "./InviteGroupModal";
 import { InviteSpaceModal } from "./InviteSpaceModal";
+import { SpaceNotificationsModal } from "./SpaceNotificationsModal";
 import { alertDialog, confirmDialog, promptDialog } from "@/lib/dialogs";
 const SettingsModal = dynamic(() => import("./SettingsModal").then(m => m.SettingsModal));
 import { CreateServerModal } from "@/components/modals/CreateServerModal";
@@ -52,6 +53,8 @@ import { UserProfileModal } from "@/components/modals/UserProfileModal";
 import { ReportModal, type ReportTarget } from "@/components/modals/ReportModal";
 import {
   IconCopy,
+  IconBell,
+  IconCheckAll,
   IconLink,
   IconUserPlus,
   IconClose,
@@ -166,6 +169,7 @@ export function DiscordApp() {
   }, []);
   const [inviteGroupOpen, setInviteGroupOpen] = useState(false);
   const [inviteSpace, setInviteSpace] = useState<Server | null>(null);
+  const [notifySpace, setNotifySpace] = useState<Server | null>(null);
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
@@ -632,7 +636,22 @@ export function DiscordApp() {
         app.serverListState.some((s) => s.server_id === server.id && s.folder_id === f.id),
       );
       const inviteCode = server.vanity_code || server.invite_code;
+      const hasUnread = app.serverUnreadIds.includes(server.id);
       const items: ContextMenuItem[] = [
+        {
+          id: "mark-read",
+          label: t("Mark as Read"),
+          icon: <IconCheckAll size={16} />,
+          disabled: !hasUnread,
+          onClick: () => void app.markServerRead(server.id),
+        },
+        {
+          id: "notifications",
+          label: t("Notification Settings"),
+          icon: <IconBell size={16} />,
+          onClick: () => setNotifySpace(server),
+        },
+        { id: "sep-notify", label: "", separator: true },
         // Inviting comes first, as it does on Discord: the short link, never the raw space ID.
         ...(inviteCode
           ? [
@@ -2684,6 +2703,7 @@ export function DiscordApp() {
         onClose={() => setChannelSettingsChannel(null)}
       />
       <InviteSpaceModal server={inviteSpace} onClose={() => setInviteSpace(null)} />
+      <SpaceNotificationsModal server={notifySpace} onClose={() => setNotifySpace(null)} />
       <InviteGroupModal
         open={inviteGroupOpen && !!inviteGroupId}
         groupId={inviteGroupId}

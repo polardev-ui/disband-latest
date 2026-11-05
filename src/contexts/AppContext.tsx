@@ -340,6 +340,8 @@ interface AppContextValue {
   closeDmThread: (friendId: string) => void;
   unhideDmFriend: (friendId: string) => void;
   channelUnreadMap: Map<string, number>;
+  /** Read every channel in a space and clear its mentions, on every device. */
+  markServerRead: (serverId: string) => Promise<void>;
   getChannelUnreadCount: (channelId: string) => number;
   getChannelMentionCount: (channelId: string) => number;
   serverMentionCounts: Map<string, number>;
@@ -1247,6 +1249,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }),
     );
   }, [userId]);
+
+  const markServerRead = useCallback(async (serverId: string) => {
+    // Clear here at once; the server call clears every other device.
+    const inServer = new Set(channelsRef.current.filter((c) => c.server_id === serverId).map((c) => c.id));
+    setChannelUnreadMap((prev) => {
+      const next = new Map(prev);
+      for (const id of prev.keys()) if (inServer.has(id)) next.delete(id);
+      return next;
+    });
+    setChannelMentionMap((prev) => {
+      const next = new Map(prev);
+      for (const id of prev.keys()) if (inServer.has(id)) next.delete(id);
+      return next;
+    });
+    setServerMentionCounts((prev) => {
+      if (!prev.has(serverId)) return prev;
+      const next = new Map(prev);
+      next.delete(serverId);
+      return next;
+    });
+    clearServerIndicator(serverId);
+    const { error } = await getSupabaseClient().rpc("mark_server_read", { p_server_id: serverId });
+    if (error) console.error("mark_server_read failed", error.message);
+    await refreshMentionUnread();
+  }, [clearServerIndicator, refreshMentionUnread]);
 
   const markChannelMentionsRead = useCallback(async (channelId: string) => {
     setChannelMentionMap((prev) => {
@@ -7154,6 +7181,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     closeDmThread,
     unhideDmFriend,
     channelUnreadMap,
+    markServerRead,
     getChannelUnreadCount,
     getChannelMentionCount,
     serverMentionCounts,
