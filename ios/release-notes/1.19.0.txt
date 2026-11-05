@@ -1,0 +1,10 @@
+What's new in Disband 1.19
+
+• Unread spaces and channels: a small white dot beside a space shows it has new messages, and unread channels stand out in bold.
+• Read once, read everywhere: catch up on your computer and your iPhone clears too, and the other way round.
+• New messages arrive live again after the app has been in the background.
+• Chats stay at the newest message as photos, GIFs and links load, and pictures keep their size instead of jumping when they appear.
+• Role pings now show in the role's own colour.
+• Your status follows you: set Online on your computer and you're Online here too the next time you open the app.
+• Game activity cards show the game's artwork.
+• Plus other fixes and improvements.
