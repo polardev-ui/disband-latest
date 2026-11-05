@@ -187,6 +187,29 @@ export default function TeamSupportPage() {
     created_at: string;
     actor?: { username: string | null; display_name: string | null } | null;
   }
+  // Users
+  interface UserRow { id: string; username: string | null; display_name: string | null; avatar_url: string | null; created_at: string }
+  const [userQuery, setUserQuery] = useState("");
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersSearched, setUsersSearched] = useState(false);
+  const searchUsers = useCallback(async (q: string) => {
+    if (!q.trim()) return;
+    setUsersLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/moderation/users/search?q=${encodeURIComponent(q.trim())}`);
+      const json = await res.json() as { users?: UserRow[]; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Could not search users.");
+      setUsers(json.users ?? []);
+      setUsersSearched(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not search users.");
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
   const [serverQuery, setServerQuery] = useState("");
   const [servers, setServers] = useState<ServerRow[]>([]);
   const [serversLoading, setServersLoading] = useState(false);
@@ -561,6 +584,7 @@ export default function TeamSupportPage() {
   const openFlags = flags.filter((f) => f.status !== "actioned" && f.status !== "dismissed").length;
   const nav: { id: TabId; label: string; icon: React.ReactNode; count: number; urgent: boolean; blurb: string }[] = [
     { id: "tickets", label: "Tickets", icon: <IconInbox size={20} />, count: counts.awaiting, urgent: counts.awaiting > 0, blurb: "Support requests that need a person" },
+    { id: "users", label: "Users", icon: <IconSearch size={20} />, count: 0, urgent: false, blurb: "Find an account by username, display name or user ID" },
     { id: "flags", label: "Reports", icon: <IconAlert size={20} />, count: openFlags, urgent: openFlags > 0, blurb: "Member reports and Sentinel matches" },
     { id: "appeals", label: "Appeals", icon: <IconMessage size={20} />, count: pendingAppeals, urgent: pendingAppeals > 0, blurb: "Requests to lift a platform ban" },
     { id: "bans", label: "Platform bans", icon: <IconShield size={20} />, count: bans.length, urgent: false, blurb: "Accounts banned from Disband" },
@@ -1022,6 +1046,62 @@ export default function TeamSupportPage() {
               </Page>
             )}
 
+            {activeTab === "users" && (
+              <Page>
+                <form
+                  className="mb-4 flex gap-2"
+                  onSubmit={(e) => { e.preventDefault(); void searchUsers(userQuery); }}
+                >
+                  <div className="relative flex-1">
+                    <IconSearch size={16} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                    <input
+                      value={userQuery}
+                      onChange={(e) => setUserQuery(e.target.value)}
+                      placeholder="Username, display name or user ID"
+                      aria-label="Search users"
+                      autoFocus
+                      className={`${ui.input} pl-8`}
+                    />
+                  </div>
+                  <button type="submit" disabled={!userQuery.trim() || usersLoading} className={`${ui.btnPrimary} h-9`}>Search</button>
+                </form>
+                {usersLoading && <ListSkeleton />}
+                {!usersLoading && !usersSearched && (
+                  <EmptyState icon={<IconSearch size={28} />} title="Find an account" body="Search by name, or paste a user ID to open it directly." />
+                )}
+                {!usersLoading && usersSearched && users.length === 0 && (
+                  <EmptyState icon={<IconSearch size={28} />} title="No accounts found" body="Check the spelling, or paste the full user ID." />
+                )}
+                {!usersLoading && users.length > 0 && (
+                  <div className={ui.card}>
+                    {users.map((u, i) => {
+                      const banned = bans.some((b) => b.user_id === u.id);
+                      const name = u.display_name || u.username || "Unknown";
+                      return (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => setViewingUserId(u.id)}
+                          className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-interactive-hover/50 ${i > 0 ? "border-t border-divider/60" : ""}`}
+                        >
+                          <Initial name={name} url={u.avatar_url} />
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-2">
+                              <span className="truncate text-[15px] font-medium text-header-primary">{name}</span>
+                              {banned && <Pill tone="danger">Banned</Pill>}
+                            </span>
+                            <span className="block truncate text-[12px] text-text-muted">
+                              {u.username ? `@${u.username} · ` : ""}<span className="font-mono">{u.id}</span>
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </Page>
+            )}
+
             {activeTab === "servers" && (
               <div className="flex h-full min-h-0">
                 <aside className="flex w-full shrink-0 flex-col border-r border-divider/60 lg:w-[340px]">
@@ -1282,7 +1362,7 @@ export default function TeamSupportPage() {
 
 /* ------------------------------------------------------------------------- */
 
-type TabId = "tickets" | "bans" | "appeals" | "flags" | "servers";
+type TabId = "tickets" | "users" | "bans" | "appeals" | "flags" | "servers";
 type Tone = "neutral" | "brand" | "warn" | "good" | "danger" | "purple";
 
 const btnBase =
