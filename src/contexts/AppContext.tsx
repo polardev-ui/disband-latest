@@ -1389,28 +1389,90 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!userId || !configured || !profile) return;
     const supabase = getSupabaseClient();
-    const channel = supabase.channel(PRESENCE_CHANNEL);
-    channel.on("presence", { event: "sync" }, () => {
-      const state = channel.presenceState() as Record<string, PresencePayload[]>;
-      setPresenceMap(flattenPresenceState(state));
-      setListeningMap(flattenPresenceListening(state));
-      setActivityMap(flattenPresenceActivity(state));
-    });
-    void channel.subscribe(async (status) => {
-      if (status === "SUBSCRIBED") {
-        presenceChannelRef.current = channel;
-        const preferred = profileRef.current?.preferred_status ?? "online";
-        const live = profileRef.current?.status ?? "online";
-        const effective = live === "offline" && preferred !== "offline" ? preferred : live;
-        // Paint our own row immediately. Waiting for the next presence sync
-        // made the signed-in member look offline in the roster for a moment.
-        setLocalPresence(effective);
-        await channel.track({ userId, status: effective, listening: listeningRef.current, activity: activityRef.current } satisfies PresencePayload);
+    /*
+     Self-healing presence (5 Nov 2026). Everyone else sees us through this one
+     channel, but a failed join (CHANNEL_ERROR / TIMED_OUT), a dropped socket
+     or Realtime's presence rate limit used to leave us silently untracked:
+     our own panel said Online (from the profile row) while everybody else saw
+     Offline until a full reload. Now a failed or closed channel is rejoined
+     with backoff, and a watchdog re-tracks us if our entry goes missing.
+    */
+    let disposed = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let retryTimer: number | undefined;
+    let attempt = 0;
+
+    const currentPayload = (): PresencePayload => {
+      const preferred = profileRef.current?.preferred_status ?? "online";
+      const live = profileRef.current?.status ?? "online";
+      const effective = live === "offline" && preferred !== "offline" ? preferred : live;
+      return { userId, status: effective, listening: listeningRef.current, activity: activityRef.current };
+    };
+
+    const scheduleRejoin = () => {
+      if (disposed || retryTimer !== undefined) return;
+      const delay = Math.min(30_000, 2_000 * 2 ** attempt) + Math.random() * 1_000;
+      attempt += 1;
+      retryTimer = window.setTimeout(() => {
+        retryTimer = undefined;
+        join();
+      }, delay);
+    };
+
+    const join = () => {
+      if (disposed) return;
+      if (channel) {
+        if (presenceChannelRef.current === channel) presenceChannelRef.current = null;
+        void supabase.removeChannel(channel);
       }
-    });
+      const ch = supabase.channel(PRESENCE_CHANNEL);
+      channel = ch;
+      ch.on("presence", { event: "sync" }, () => {
+        const state = ch.presenceState() as Record<string, PresencePayload[]>;
+        setPresenceMap(flattenPresenceState(state));
+        setListeningMap(flattenPresenceListening(state));
+        setActivityMap(flattenPresenceActivity(state));
+      });
+      void ch.subscribe(async (status) => {
+        if (disposed || channel !== ch) return;
+        if (status === "SUBSCRIBED") {
+          attempt = 0;
+          presenceChannelRef.current = ch;
+          const payload = currentPayload();
+          // Paint our own row immediately. Waiting for the next presence sync
+          // made the signed-in member look offline in the roster for a moment.
+          setLocalPresence(payload.status);
+          await ch.track(payload);
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          if (presenceChannelRef.current === ch) presenceChannelRef.current = null;
+          scheduleRejoin();
+        }
+      });
+    };
+
+    join();
+
+    // Watchdog: if we're joined but missing from what everyone else sees,
+    // track again (once a minute at most, well under the presence rate limit).
+    const watchdog = window.setInterval(() => {
+      const ch = presenceChannelRef.current;
+      if (!ch || ch !== channel) {
+        if (!channel || retryTimer === undefined) scheduleRejoin();
+        return;
+      }
+      const state = ch.presenceState() as Record<string, PresencePayload[]>;
+      const present = Object.values(state).some((metas) => metas.some((m) => m.userId === userId));
+      if (!present) void ch.track(currentPayload());
+    }, 60_000);
+
     return () => {
-      if (presenceChannelRef.current === channel) presenceChannelRef.current = null;
-      void supabase.removeChannel(channel);
+      disposed = true;
+      window.clearInterval(watchdog);
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      if (channel) {
+        if (presenceChannelRef.current === channel) presenceChannelRef.current = null;
+        void supabase.removeChannel(channel);
+      }
     };
   }, [userId, configured, profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -5909,13 +5971,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return "You do not have permission to mention roles.";
     }
     const mentionIds = [...new Set([...resolvedMentionIds, ...roleMemberIds])];
-    if (mentionIds.length > 10) {
-      return roleMemberIds.length > 0
-        ? "That role has too many members to mention (max 10)."
-        : "Too many mentions in one message (max 10).";
+    // Role pings need mention_everyone (checked above) and, like @everyone,
+    // have no size cap; the 10 cap is for hand-typed @user pings (0227).
+    if (roleMemberIds.length === 0 && mentionIds.length > 10) {
+      return "Too many mentions in one message (max 10).";
     }
     if (userId) {
-      const pingErr = checkMentionSend(userId, mentionIds, normalized);
+      const pingErr = checkMentionSend(userId, roleMemberIds.length > 0 ? resolvedMentionIds : mentionIds, normalized);
       if (pingErr) return pingErr;
     }
 
