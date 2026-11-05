@@ -49,6 +49,15 @@ function imageUrl(key: unknown, app: AppInfo | null): string | null {
   return app?.assets?.[key] ?? null;
 }
 
+/** Background launchers and services Discord's list counts as games. */
+const NOT_GAMES = new Set(["epic online services", "easyanticheat", "battleye", "steam", "epic games launcher"]);
+
+/** "wallpaper_engine" (a bare process name) reads as "Wallpaper Engine". */
+function prettyName(name: string): string {
+  if (/\s/.test(name) || !/[_-]/.test(name)) return name;
+  return name.split(/[_-]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+}
+
 /**
  * Desktop only: turns the Rust side's game detection and Rich Presence
  * socket into your published activity. A game's own Rich Presence beats a
@@ -87,10 +96,13 @@ export function useGameActivity() {
         ));
         return;
       }
-      if (game) {
+      if (game && !NOT_GAMES.has(game.name.toLowerCase())) {
+        // Discord's list often has no icon for a game; its application does.
+        const icon = game.icon ?? (game.app_id ? (await appInfo(game.app_id))?.icon_url ?? null : null);
+        if (!alive) return;
         setGameActivity(sanitizeActivity(
-          { started_at: game.started_at * 1000, large_image: game.icon ?? null },
-          { name: game.name, source: "process", applicationId: game.app_id ?? null },
+          { started_at: game.started_at * 1000, large_image: icon },
+          { name: prettyName(game.name), source: "process", applicationId: game.app_id ?? null },
         ));
         return;
       }

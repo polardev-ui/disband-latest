@@ -53,8 +53,12 @@ export const ACTIVITY_VERB: Record<ActivityKind, string> = {
   competing: "Competing in",
 };
 
+/** Launchers and background services that older desktop builds reported as games. */
+const NOT_GAMES = new Set(["epic online services", "easyanticheat", "battleye", "epic games launcher"]);
+
 export function isLive(activity: Activity | null | undefined, now = Date.now()): activity is Activity {
   if (!activity?.name) return false;
+  if (activity.kind === "playing" && NOT_GAMES.has(activity.name.toLowerCase())) return false;
   const expires = Date.parse(activity.expires_at);
   return Number.isFinite(expires) && expires > now;
 }
