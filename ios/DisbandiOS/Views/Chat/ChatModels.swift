@@ -114,6 +114,24 @@ struct RawMessageRow: Decodable, Sendable {
         case createdAt = "created_at"
         case editedAt = "edited_at"
     }
+
+    // Realtime rows went through `try?` decoding, so one embed or webhook
+    // shape this build didn't expect dropped the whole message and it never
+    // appeared live. Only the fields a message can't do without may fail.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        authorId = try c.decode(String.self, forKey: .authorId)
+        createdAt = try c.decode(String.self, forKey: .createdAt)
+        content = try? c.decodeIfPresent(String.self, forKey: .content)
+        attachmentUrl = try? c.decodeIfPresent(String.self, forKey: .attachmentUrl)
+        attachmentType = try? c.decodeIfPresent(AttachmentType.self, forKey: .attachmentType)
+        replyToId = try? c.decodeIfPresent(String.self, forKey: .replyToId)
+        editedAt = try? c.decodeIfPresent(String.self, forKey: .editedAt)
+        mentions = try? c.decodeIfPresent([String].self, forKey: .mentions)
+        embeds = try? c.decodeIfPresent([MessageEmbed].self, forKey: .embeds)
+        webhook = try? c.decodeIfPresent(MessageWebhook.self, forKey: .webhook)
+    }
 }
 
 /// Identifies which conversation a chat screen is bound to.

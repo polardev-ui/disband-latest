@@ -1017,6 +1017,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // Channel unread from the server (0229), so messages sent while this app
+  // was closed show, and a channel read on another device clears here.
+  // Live inserts still light channels up instantly in between.
+  useEffect(() => {
+    if (!user?.id) return;
+    const supabase = getSupabaseClient();
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const load = async () => {
+      const { data, error } = await supabase.rpc("my_channel_unreads");
+      if (cancelled || error || !Array.isArray(data)) return;
+      const rows = data as { channel_id: string; server_id: string }[];
+      const active = viewModeRef.current === "space" ? activeChannelRef.current : null;
+      const unread = rows.filter((r) => r.channel_id !== active);
+      setChannelUnreadMap((prev) => {
+        const next = new Map<string, number>();
+        for (const r of unread) next.set(r.channel_id, Math.max(prev.get(r.channel_id) ?? 0, 1));
+        return next;
+      });
+      setServerIndicators(new Set(unread.map((r) => r.server_id)));
+    };
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void load(), 300);
+    };
+    void load();
+    const sub = supabase
+      .channel(`channel-reads:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "channel_reads", filter: `user_id=eq.${user.id}` },
+        schedule,
+      )
+      .subscribe();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") schedule();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      void supabase.removeChannel(sub);
+    };
+  }, [user?.id]);
+
   const markDmReadNow = useCallback(async (threadId: string) => {
     const { error } = await getSupabaseClient().rpc("mark_dm_read", { p_thread_id: threadId });
     if (error) console.error("mark_dm_read failed", error.message);
@@ -4070,6 +4116,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
 
           if (msg.author_id === userId) return;
+          // Read in place: keep the shared read cursor level so phones and
+          // other tabs don't light this channel up.
+          if (viewingChannel && typeof document !== "undefined" && document.visibilityState === "visible") {
+            void supabase.rpc("mark_channel_read", { p_channel_id: msg.channel_id }).then(() => undefined);
+          }
           if (channel && !viewingChannel) {
             setChannelUnreadMap((prev) => {
               const next = new Map(prev);
@@ -4784,6 +4835,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     if (viewMode !== "space") setViewMode("space");
     const channel = channels.find((c) => c.id === channelId) ?? channelsRef.current.find((c) => c.id === channelId);
+    // Shared read state (0229): clears this channel on every other device.
+    // PostgREST builders are lazy, so the request needs a `then`.
+    void getSupabaseClient()
+      .rpc("mark_channel_read", { p_channel_id: channelId })
+      .then(({ error }) => {
+        if (error) console.error("mark_channel_read failed", error.message);
+      });
     if (channel) {
       clearServerIndicator(channel.server_id);
       setLastChannelId(channel.server_id, channelId);

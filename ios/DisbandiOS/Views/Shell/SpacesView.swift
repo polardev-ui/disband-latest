@@ -26,6 +26,9 @@ struct SpacesView: View {
             if sizeClass == .regular { splitLayout } else { stackLayout }
         }
         .task { await loadServers() }
+        .task(id: app.currentUserId) {
+            if app.currentUserId == nil { ChannelUnreadStore.shared.reset() } else { ChannelUnreadStore.shared.start() }
+        }
         // A tapped notification lands here: this view owns the navigation
         // path, so it is the only place that can actually open the thing the
         // notification was about.
@@ -119,6 +122,7 @@ struct SpacesView: View {
             inboxUnread: inboxUnread,
             unreadConversations: unreadConversations,
             voiceServerId: voiceServerId,
+            unreadServerIds: ChannelUnreadStore.shared.unreadServers,
             onJoin: { showJoin = true },
             onCreate: { showCreate = true },
             onDiscover: { showDiscover = true }

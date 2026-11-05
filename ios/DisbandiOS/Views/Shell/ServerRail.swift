@@ -25,6 +25,8 @@ struct ServerRail: View {
     var unreadConversations: [RailConversation] = []
     /// The server whose voice channel you're connected to, if any.
     var voiceServerId: String?
+    /// Servers with a channel you haven't read: the small white pill.
+    var unreadServerIds: Set<String> = []
     var onJoin: () -> Void
     var onCreate: () -> Void
     var onDiscover: () -> Void
@@ -75,7 +77,8 @@ struct ServerRail: View {
 
                 ForEach(servers) { server in
                     let isSelected = selection == .server(server.id)
-                    railButton(selected: isSelected, label: server.name) {
+                    railButton(selected: isSelected, unread: unreadServerIds.contains(server.id),
+                               label: unreadServerIds.contains(server.id) ? "\(server.name), unread messages" : server.name) {
                         selection = .server(server.id)
                     } icon: {
                         RemoteImage(url: server.iconUrl, contentMode: .fill) {
@@ -132,6 +135,7 @@ struct ServerRail: View {
 
     private func railButton<Icon: View, Badge: View>(
         selected: Bool,
+        unread: Bool = false,
         label: String,
         action: @escaping () -> Void,
         @ViewBuilder icon: () -> Icon,
@@ -151,10 +155,11 @@ struct ServerRail: View {
                 .overlay(alignment: .leading) {
                     Capsule()
                         .fill(Color.white)
-                        .frame(width: 4, height: selected ? 38 : 0)
+                        .frame(width: 4, height: selected ? 38 : (unread ? 8 : 0))
                         .offset(x: -2)
                 }
                 .animation(.snappy(duration: 0.25), value: selected)
+                .animation(.snappy(duration: 0.25), value: unread)
         }
         .buttonStyle(RailPressStyle())
         .accessibilityLabel(label)

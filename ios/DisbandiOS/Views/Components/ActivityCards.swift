@@ -16,11 +16,6 @@ struct ListeningCard: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             card(now: context.date)
         }
-        .task(id: activity.name) {
-            guard activity.largeImage == nil, (activity.kind ?? "playing") == "playing",
-                  let name = activity.name, !name.isEmpty else { return }
-            foundArt = await GameArt.lookup(name: name, appId: activity.applicationId)
-        }
     }
 
     private func card(now: Date) -> some View {
@@ -116,6 +111,11 @@ struct GameActivityCard: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             card(now: context.date)
+        }
+        .task(id: activity.name) {
+            guard activity.largeImage == nil, (activity.kind ?? "playing") == "playing",
+                  let name = activity.name, !name.isEmpty else { return }
+            foundArt = await GameArt.lookup(name: name, appId: activity.applicationId)
         }
     }
 

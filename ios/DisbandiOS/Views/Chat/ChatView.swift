@@ -37,6 +37,11 @@ struct ChatView: View {
     @State private var onlineCount: Int?
     @State private var draft = ""
     @State private var stickToBottom = true
+    /// When the reader last had a finger on the list. Only their own
+    /// scrolling may stop "follow the bottom": a picture or embed growing
+    /// the content also moves the bottom away, and that used to switch
+    /// following off, so the chat stopped short of the newest message.
+    @State private var lastUserScroll = Date.distantPast
     /// The first page has painted and the initial scroll-to-bottom has had a
     /// chance to land. Until then the lazy stack can report the history
     /// sentinel at the top of the viewport, which must not trigger paging.
@@ -228,8 +233,10 @@ struct ChatView: View {
             case .group(let groupId, _):
                 unreadStore.markGroupActive(groupId: groupId)
                 Task { try? await DatabaseService.markGroupRead(groupId: groupId) }
-            default:
-                break
+            case .channel(let channelId, _):
+                // Clears the channel's dot here and, through channel_reads,
+                // on every other device.
+                ChannelUnreadStore.shared.open(channelId: channelId)
             }
             // Silences push banners for this conversation while it is open.
             ActiveChat.shared.open(model.source.notificationSourceId)
@@ -241,8 +248,8 @@ struct ChatView: View {
                 unreadStore.clearActive()
             case .group:
                 unreadStore.clearGroupActive()
-            default:
-                break
+            case .channel(let channelId, _):
+                ChannelUnreadStore.shared.close(channelId: channelId)
             }
             ActiveChat.shared.close(model.source.notificationSourceId)
             model.stop()
@@ -293,6 +300,8 @@ struct ChatView: View {
             initialScrollSettled = true
         }
     }
+
+    private static let bottomId = "chat-bottom-anchor"
 
     // MARK: - Mentions
 
@@ -487,6 +496,12 @@ struct ChatView: View {
                             }
 
                             ForEach(Array(model.messages.enumerated()), id: \.element.id) { index, message in
+                              // One view per message, divider included. As a
+                              // separate sibling the "Today" divider had no
+                              // identity of its own, and the lazy stack lost
+                              // its place when the first message of a new day
+                              // arrived, so following the bottom stopped there.
+                              VStack(alignment: .leading, spacing: 2) {
                                 if startsNewDay(at: index) {
                                     ChatDayDivider(timestamp: message.createdAt)
                                 }
@@ -509,8 +524,14 @@ struct ChatView: View {
                                     },
                                     onHoldReactStarted: { frame in holdReactStarted(frame, message: message) }
                                 )
-                                .id(message.id)
+                              }
+                              .id(message.id)
                             }
+
+                            // The true end of the list, below the last row's
+                            // reactions and embeds, which scrolling to the
+                            // last row's id could leave just out of view.
+                            Color.clear.frame(height: 1).id(Self.bottomId)
                         }
                         .padding(.top, 8)
                         .padding(.bottom, 12)
@@ -531,15 +552,20 @@ struct ChatView: View {
                     }
                 }
                 .coordinateSpace(name: "chatScroll")
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 4)
+                        .onChanged { _ in lastUserScroll = Date() }
+                        .onEnded { _ in lastUserScroll = Date() }
+                )
                 .modifier(OpenAtBottom())
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
                 .overlay(alignment: .bottomTrailing) {
-                    if !stickToBottom, let last = model.messages.last {
+                    if !stickToBottom, model.messages.last != nil {
                         Button {
                             stickToBottom = true
                             withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-                                proxy.scrollTo(last.id, anchor: .bottom)
+                                proxy.scrollTo(Self.bottomId, anchor: .bottom)
                             }
                         } label: {
                             Image(systemName: "chevron.down")
@@ -568,13 +594,14 @@ struct ChatView: View {
                     // the "follow the bottom" state on until that happens;
                     // otherwise the top sentinel sees `!stickToBottom` and
                     // starts paging history on open.
-                    if initialScrollSettled {
+                    let userScrolling = Date().timeIntervalSince(lastUserScroll) < 1.2
+                    if initialScrollSettled && userScrolling {
                         if stickToBottom != nearBottom { stickToBottom = nearBottom }
                     } else if nearBottom {
                         stickToBottom = true
                     }
-                    if stickToBottom, let last = model.messages.last {
-                        proxy.scrollTo(last.id, anchor: .bottom)
+                    if stickToBottom, model.messages.last != nil {
+                        proxy.scrollTo(Self.bottomId, anchor: .bottom)
                     }
                 }
                 .onPreferenceChange(ChatContentTopKey.self) { minY in
@@ -595,8 +622,8 @@ struct ChatView: View {
                     Task { await loadOlder(using: proxy) }
                 }
                 .onChange(of: model.messages.count) {
-                    if stickToBottom, let last = model.messages.last {
-                        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(last.id, anchor: .bottom) }
+                    if stickToBottom, model.messages.last != nil {
+                        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomId, anchor: .bottom) }
                     }
                 }
                 /*
@@ -616,17 +643,17 @@ struct ChatView: View {
                  replying to.
                  */
                 .onChange(of: keyboardHeight) { _, height in
-                    guard height > 0, stickToBottom, let last = model.messages.last else { return }
+                    guard height > 0, stickToBottom, model.messages.last != nil else { return }
                     withAnimation(.easeOut(duration: 0.25)) {
-                        proxy.scrollTo(last.id, anchor: .bottom)
+                        proxy.scrollTo(Self.bottomId, anchor: .bottom)
                     }
                     // Again once the keyboard has finished moving: a scroll
                     // aimed into a frame that is still animating lands short,
                     // which left the newest message under the composer.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        guard stickToBottom, let last = model.messages.last else { return }
+                        guard stickToBottom, model.messages.last != nil else { return }
                         withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(last.id, anchor: .bottom)
+                            proxy.scrollTo(Self.bottomId, anchor: .bottom)
                         }
                     }
                 }

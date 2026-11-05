@@ -320,13 +320,7 @@ struct MessageRow: View {
             switch message.attachmentType {
             case .image, .gif:
                 Button { viewingMedia = ViewedMedia(url: url, kind: message.attachmentType == .gif ? .gif : .image) } label: {
-                    RemoteImage(url: urlString, contentMode: .fit) {
-                        RoundedRectangle(cornerRadius: 10).fill(Brand.elevated)
-                            .frame(height: 160)
-                            .overlay(ProgressView().tint(Brand.textMuted))
-                    }
-                    .frame(maxWidth: 260, maxHeight: 280)
-                    .clipShape(.rect(cornerRadius: 10))
+                    SizedChatImage(url: urlString)
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 4)
@@ -377,12 +371,7 @@ struct MessageRow: View {
                 .frame(maxWidth: 280)
             } else if let only = tiles.first, let url = URL(string: only.url) {
                 Button { viewingMedia = ViewedMedia(url: url, kind: only.type == .gif ? .gif : .image) } label: {
-                    RemoteImage(url: only.url, contentMode: .fit) {
-                        RoundedRectangle(cornerRadius: 10).fill(Brand.elevated)
-                            .frame(height: 160)
-                    }
-                    .frame(maxWidth: 260, maxHeight: 280)
-                    .clipShape(.rect(cornerRadius: 10))
+                    SizedChatImage(url: only.url)
                 }
                 .buttonStyle(.plain)
             }

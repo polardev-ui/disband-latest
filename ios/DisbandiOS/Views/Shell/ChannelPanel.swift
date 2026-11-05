@@ -334,17 +334,18 @@ struct ChannelPanel: View {
 
     private func textRow(_ channel: Channel) -> some View {
         let locked = lockedReason(for: channel)
+        let unread = ChannelUnreadStore.shared.isUnread(channelId: channel.id)
         return RouteLink(value: SpacesRoute.chat(.channel(id: channel.id, name: channel.name),
                                                       callPeer: nil, canModerate: canModerate,
                                                       lockedReason: locked)) {
             HStack(spacing: 10) {
                 Image(systemName: channel.readOnly == true ? "megaphone.fill" : "number")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Brand.textMuted)
+                    .foregroundStyle(unread ? Brand.textPrimary : Brand.textMuted)
                     .frame(width: 22)
                 Text(channel.name)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(Brand.textSecondary)
+                    .font(.body.weight(unread ? .bold : .medium))
+                    .foregroundStyle(unread ? Brand.textPrimary : Brand.textSecondary)
                     .lineLimit(1)
                 Spacer()
                 if locked != nil {
@@ -357,6 +358,12 @@ struct ChannelPanel: View {
             .padding(.horizontal, 10)
             .frame(height: 42)
             .contentShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(alignment: .leading) {
+                if unread {
+                    Capsule().fill(Color.white).frame(width: 4, height: 8).offset(x: -8)
+                        .accessibilityLabel("Unread")
+                }
+            }
         }
         .buttonStyle(ChannelRowStyle())
     }

@@ -74,6 +74,13 @@ final class ChatViewModel {
     }
 
     func reloadOnForeground() async {
+        // iOS drops the socket while the app is in the background, and the
+        // channels joined before that never came back, so new messages
+        // stopped arriving until the chat was reopened. Join again.
+        if listenTask != nil {
+            stop()
+            await subscribeAll()
+        }
         await load()
         await loadReactions()
     }
@@ -310,6 +317,9 @@ final class ChatViewModel {
                 // not that the cache should keep showing deleted history.
                 olderPages = []
             }
+            // Bring the newest pictures in before painting, so the page
+            // arrives at its final height instead of growing under the reader.
+            await MediaSize.prefetch(Self.imageUrls(in: loaded.suffix(30)))
             messages = olderPages + loaded + stillPending
             // If the newest page was full there is probably another one
             // above it. A cached older page also means more may exist above
@@ -850,8 +860,8 @@ final class ChatViewModel {
                 // message read in place still came back as unread after the
                 // next foreground reload.
                 Task { try? await DatabaseService.markGroupRead(groupId: groupId) }
-            case .channel:
-                break
+            case .channel(let channelId, _):
+                ChannelUnreadStore.shared.sawMessage(in: channelId)
             }
         }
 
@@ -892,8 +902,23 @@ final class ChatViewModel {
             cacheNow()
             return
         }
+        await MediaSize.prefetch(Self.imageUrls(in: [message]), timeout: .milliseconds(1200))
+        guard !messages.contains(where: { $0.id == message.id }) else { return }
         messages.append(message)
         cacheNow()
+    }
+
+    /// Image and GIF addresses in these messages, for `MediaSize.prefetch`.
+    static func imageUrls<S: Sequence>(in messages: S) -> [String] where S.Element == DisplayMessage {
+        var urls: [String] = []
+        for m in messages {
+            if m.attachments.count > 1 {
+                urls += m.attachments.filter { $0.type == .image || $0.type == .gif }.map(\.url)
+            } else if let url = m.attachmentUrl, m.attachmentType == .image || m.attachmentType == .gif {
+                urls.append(url)
+            }
+        }
+        return urls
     }
 
     private func resolveProfile(_ id: String) async -> Profile? {
