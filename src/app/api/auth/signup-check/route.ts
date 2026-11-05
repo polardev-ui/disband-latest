@@ -64,19 +64,35 @@ export async function POST(request: Request) {
     );
   }
 
-  // Turnstile is mandatory on web and desktop. It used to be checked only when
-  // a token was sent, so pressing "Create account" without touching the widget
-  // skipped it. Fails closed: no token, a rejected token, a token solved for
-  // another form, or no secret configured in production.
-  const turnstileFail = isMobile
-    ? null
-    : await requireTurnstile(body.turnstileToken, {
-        action: "signup",
+  // Turnstile. A token that is sent must verify. Without one (the widget
+  // failed to load or run for this browser, which making it mandatory showed
+  // happens to a lot of real people: Cloudflare error 300010, tracking
+  // prevention, blockers) sign-up still works, but under a much tighter
+  // per-network limit than verified sign-ups, so skipping the check doesn't
+  // buy an attacker volume.
+  if (!isMobile) {
+    const token = typeof body.turnstileToken === "string" ? body.turnstileToken : "";
+    if (token) {
+      const turnstileFail = await requireTurnstile(token, {
         ip: checkIp === "unknown" ? undefined : checkIp,
       });
-  if (turnstileFail) {
-    const json = (await turnstileFail.json()) as { error?: string; code?: string };
-    return NextResponse.json({ allowed: false, ...json }, { status: turnstileFail.status });
+      if (turnstileFail) {
+        const json = (await turnstileFail.json()) as { error?: string; code?: string };
+        return NextResponse.json({ allowed: false, ...json }, { status: turnstileFail.status });
+      }
+    } else if (checkIp !== "unknown") {
+      const unverifiedHit = await persistentRateLimitCheck(service, [
+        { key: `signup:nocaptcha:${ipHash}:hr`, max: 2, windowSeconds: 3600 },
+        { key: `signup:nocaptcha:${ipHash}:day`, max: 4, windowSeconds: 86400 },
+      ]);
+      if (unverifiedHit) {
+        await logGateEvent(service, "signup_rate_limited", ipHash, emailHash);
+        return NextResponse.json(
+          { allowed: false, code: "TURNSTILE_REQUIRED", error: "Complete the verification check to create another account from this network." },
+          { status: 429, headers: { "Retry-After": "3600" } },
+        );
+      }
+    }
   }
 
   if (ipHash) {
