@@ -1,5 +1,6 @@
 "use client";
 
+import { CreateChannelModal } from "./CreateChannelModal";
 import { useI18n } from "@/contexts/I18nContext";
 import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui/ServerBadge";
 import { useEffect, useRef, useState } from "react";
@@ -51,7 +52,7 @@ interface ChannelListProps {
   partner?: boolean;
   onMoveChannel?: (channelId: string, categoryId: string | null, index: number) => void;
   onMoveCategory?: (categoryId: string, index: number) => void | Promise<string | null>;
-  onCreateChannel?: (name: string, type: ChannelType | "stage", categoryId: string | null) => Promise<string | null>;
+  onCreateChannel?: (name: string, type: ChannelType | "stage" | "announcement", categoryId: string | null) => Promise<string | null>;
   onCreateCategory?: (name: string) => Promise<string | null>;
 
   getUnreadCount?: (channelId: string) => number;
@@ -145,8 +146,6 @@ export function ChannelList({
 
   const [addChannelTarget, setAddChannelTarget] =
     useState<{ categoryId: string | null } | null>(null);
-  const [addChannelName, setAddChannelName] = useState("");
-  const [addChannelType, setAddChannelType] = useState<ChannelType | "stage">("text");
   const [busy, setBusy] = useState(false);
 
   const suppressClickRef = useRef<HTMLElement | null>(null);
@@ -328,19 +327,6 @@ export function ChannelList({
   const startAddChannel = (catId: string | null) => {
     if (!canManageChannels) return;
     setAddChannelTarget({ categoryId: catId });
-    setAddChannelName("");
-    setAddChannelType("text");
-  };
-
-  const submitAddChannel = async () => {
-    const name = addChannelName.trim().slice(0, 100);
-    if (!onCreateChannel || !name || !addChannelTarget) return;
-    if (!canManageChannels) return;
-    setBusy(true);
-    await onCreateChannel(name, addChannelType, addChannelTarget.categoryId);
-    setBusy(false);
-    setAddChannelTarget(null);
-    setAddChannelName("");
   };
 
   const submitAddCategory = async () => {
@@ -351,50 +337,6 @@ export function ChannelList({
     setAddingCategory(false);
     setNewCategoryName("");
   };
-
-  const renderAddChannelComposer = () => (
-    <div className="mb-1 rounded-md bg-bg-accent/50 px-1.5 py-1.5">
-      <div className="mb-1 flex items-center gap-1">
-        {(["text", "voice", "stage"] as const).map((kind) => (
-          <button
-            key={kind}
-            type="button"
-            onClick={() => setAddChannelType(kind)}
-            title={kind === "text" ? t("Text channel") : kind === "stage" ? t("Stage channel") : t("Voice channel")}
-            className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors ${
-              addChannelType === kind
-                ? "bg-brand/15 text-text-normal"
-                : "text-text-muted hover:text-text-normal"
-            }`}
-          >
-            {kind === "text" ? <IconHash size={12} /> : kind === "stage" ? <IconStage size={12} /> : <IconSpeaker size={12} />}
-            {kind === "text" ? t("Text") : kind === "stage" ? t("Stage") : t("Voice")}
-          </button>
-        ))}
-      </div>
-      <div className="flex items-center gap-1">
-        <input
-          autoFocus
-          value={addChannelName}
-          onChange={(e) => setAddChannelName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void submitAddChannel();
-            if (e.key === "Escape") setAddChannelTarget(null);
-          }}
-          placeholder={addChannelType === "text" ? t("New channel") : addChannelType === "stage" ? t("New stage") : t("New voice channel")}
-          className="min-w-0 flex-1 rounded bg-bg-accent px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-brand"
-        />
-        <button
-          type="button"
-          onClick={() => void submitAddChannel()}
-          disabled={busy}
-          className="shrink-0 text-xs font-medium text-brand hover:underline"
-        >
-          {t("Create")}
-        </button>
-      </div>
-    </div>
-  );
 
   const sortedCategories = [...categories].sort((a, b) => a.position - b.position);
   const uncategorized = byCategory(null);
@@ -713,7 +655,6 @@ export function ChannelList({
             <div key={cat.id} className="mb-1">
               {renderCategoryHeader(cat)}
               {open && items.map((ch) => renderChannel(ch))}
-              {open && canManageChannels && addChannelTarget?.categoryId === cat.id && renderAddChannelComposer()}
             </div>
           );
         })}
@@ -755,14 +696,18 @@ export function ChannelList({
               )}
             </div>
             {!collapsed[UNCATEGORIZED_KEY] && uncategorized.map((ch) => renderChannel(ch))}
-            {!collapsed[UNCATEGORIZED_KEY]
-              && canManageChannels
-              && addChannelTarget !== null
-              && addChannelTarget.categoryId === null
-              && renderAddChannelComposer()}
           </div>
         )}
       </div>
+
+      <CreateChannelModal
+        target={addChannelTarget}
+        categories={categories}
+        onClose={() => setAddChannelTarget(null)}
+        onCreate={async (name, kind, categoryId) =>
+          onCreateChannel ? await onCreateChannel(name, kind, categoryId) : "You can't create channels here."
+        }
+      />
 
       {dragGhost && (
         <div

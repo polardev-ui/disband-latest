@@ -43,6 +43,7 @@ import { GroupMemberList } from "./GroupMemberList";
 import { InviteGroupModal } from "./InviteGroupModal";
 import { InviteSpaceModal } from "./InviteSpaceModal";
 import { SpaceNotificationsModal } from "./SpaceNotificationsModal";
+import { CreateChannelModal } from "./CreateChannelModal";
 import { alertDialog, confirmDialog, promptDialog } from "@/lib/dialogs";
 const SettingsModal = dynamic(() => import("./SettingsModal").then(m => m.SettingsModal));
 import { CreateServerModal } from "@/components/modals/CreateServerModal";
@@ -170,6 +171,7 @@ export function DiscordApp() {
   const [inviteGroupOpen, setInviteGroupOpen] = useState(false);
   const [inviteSpace, setInviteSpace] = useState<Server | null>(null);
   const [notifySpace, setNotifySpace] = useState<Server | null>(null);
+  const [createChannelTarget, setCreateChannelTarget] = useState<{ categoryId: string | null } | null>(null);
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
@@ -891,18 +893,7 @@ export function DiscordApp() {
             id: "add-channel",
             label: t("Create Channel"),
             icon: <IconPlus size={16} />,
-            onClick: () => {
-              void promptDialog({
-                title: t("Create Channel"),
-                body: `In ${category.name}`,
-                label: t("Channel name"),
-                placeholder: "new-channel",
-                confirmLabel: t("Create Channel"),
-              }).then((name) => {
-                const clean = name?.trim().slice(0, 100) ?? "";
-                if (clean) void app.createChannel({ name: clean, type: "text", categoryId: category.id });
-              });
-            },
+            onClick: () => setCreateChannelTarget({ categoryId: category.id }),
           },
           {
             id: "rename",
@@ -2704,6 +2695,12 @@ export function DiscordApp() {
       />
       <InviteSpaceModal server={inviteSpace} onClose={() => setInviteSpace(null)} />
       <SpaceNotificationsModal server={notifySpace} onClose={() => setNotifySpace(null)} />
+      <CreateChannelModal
+        target={createChannelTarget}
+        categories={app.categories}
+        onClose={() => setCreateChannelTarget(null)}
+        onCreate={(name, kind, categoryId) => app.createChannel({ name, type: kind, categoryId })}
+      />
       <InviteGroupModal
         open={inviteGroupOpen && !!inviteGroupId}
         groupId={inviteGroupId}

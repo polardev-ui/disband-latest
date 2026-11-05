@@ -267,7 +267,7 @@ interface AppContextValue {
   /** The member's highest role that has an icon (Catalyst Level 2 role icons). */
   getMemberIconRole: (member: ServerMember) => ServerRole | null;
   /** "stage" makes a voice channel that is a stage. */
-  createChannel: (data: { name: string; type?: ChannelType | "stage"; categoryId?: string | null }) => Promise<string | null>;
+  createChannel: (data: { name: string; type?: ChannelType | "stage" | "announcement"; categoryId?: string | null }) => Promise<string | null>;
   renameChannel: (channelId: string, name: string) => Promise<string | null>;
   setChannelReadOnly: (channelId: string, readOnly: boolean) => Promise<string | null>;
   deleteChannel: (channelId: string) => Promise<string | null>;
@@ -1062,6 +1062,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisible);
       void supabase.removeChannel(sub);
+    };
+  }, [user?.id]);
+
+  // This person's per-space notification settings, for the desktop
+  // notifications below. Refreshed when the settings dialog saves.
+  const spaceNotifyRef = useRef<Map<string, { level: string; muted_until: string | null }>>(new Map());
+  useEffect(() => {
+    if (!user?.id) {
+      spaceNotifyRef.current = new Map();
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      const { data } = await getSupabaseClient()
+        .from("server_notification_settings")
+        .select("server_id, level, muted_until");
+      if (cancelled || !data) return;
+      spaceNotifyRef.current = new Map(
+        (data as { server_id: string; level: string; muted_until: string | null }[]).map((r) => [
+          r.server_id,
+          { level: r.level, muted_until: r.muted_until },
+        ]),
+      );
+    };
+    void load();
+    const onChange = () => void load();
+    window.addEventListener("disband:space-notify-changed", onChange);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("disband:space-notify-changed", onChange);
     };
   }, [user?.id]);
 
@@ -4158,6 +4188,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
           if (msg.mentions?.includes(userId)) return;
           if (!channel) return;
+          // Per-space setting (0230/0231): only "Everything" notifies for
+          // every message; mentions come through the notifications feed.
+          const notify = spaceNotifyRef.current.get(channel.server_id);
+          if (!notify || notify.level !== "all") return;
+          if (notify.muted_until && new Date(notify.muted_until).getTime() > Date.now()) return;
           void resolveLiveAuthor(msg.author_id).then((author) => {
             if (!author) return;
             notifyUser(
@@ -5798,14 +5833,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [serverPermissions],
   );
 
-  const createChannel = useCallback(async (data: { name: string; type?: ChannelType | "stage"; categoryId?: string | null }) => {
+  const createChannel = useCallback(async (data: { name: string; type?: ChannelType | "stage" | "announcement"; categoryId?: string | null }) => {
     if (!activeServerId) return "No space selected";
     await ensureFreshSession();
     const stage = data.type === "stage";
+    const announcement = data.type === "announcement";
     const { data: id, error } = await getSupabaseClient().rpc("create_channel", {
       p_server_id: activeServerId,
       p_name: data.name.trim(),
-      p_type: stage ? "voice" : data.type ?? "text",
+      p_type: stage ? "voice" : announcement ? "text" : data.type ?? "text",
       p_category_id: data.categoryId ?? null,
     });
     if (error) return error.message;
@@ -5814,6 +5850,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (stage && typeof id === "string") {
       const { error: stageError } = await getSupabaseClient().from("channels").update({ is_stage: true }).eq("id", id);
       if (stageError) return stageError.message;
+    }
+    // An announcement channel is a text channel only moderators can post in.
+    if (announcement && typeof id === "string") {
+      const { error: roError } = await getSupabaseClient().from("channels").update({ read_only: true }).eq("id", id);
+      if (roError) return roError.message;
     }
     await loadServerDetails(activeServerId);
     if (typeof id === "string") selectChannel(id);

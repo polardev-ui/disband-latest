@@ -8,7 +8,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Server } from "@/lib/supabase/types";
 import { useI18n } from "@/contexts/I18nContext";
 
-type Level = "mentions" | "nothing";
+type Level = "all" | "mentions" | "nothing";
 
 interface Settings {
   level: Level;
@@ -62,6 +62,7 @@ export function SpaceNotificationsModal({ server, onClose }: { server: Server | 
       .then(({ data }) => {
         if (cancelled) return;
         setSettings(data ? (data as Settings) : DEFAULTS);
+        window.dispatchEvent(new CustomEvent("disband:space-notify-changed"));
         setLoaded(true);
       });
     return () => {
@@ -83,7 +84,10 @@ export function SpaceNotificationsModal({ server, onClose }: { server: Server | 
     if (err) {
       setSettings(previous);
       setError(t("Couldn’t save that. Try again."));
+      return;
     }
+    // Lets this tab's message notifications follow the new setting at once.
+    window.dispatchEvent(new CustomEvent("disband:space-notify-changed"));
   };
 
   if (!mounted || !shown) return null;
@@ -91,11 +95,11 @@ export function SpaceNotificationsModal({ server, onClose }: { server: Server | 
   const mutedForever = muted && settings.muted_until?.startsWith("9999");
 
   const radio = (value: Level, title: string, hint: string) => (
-    <label className="flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 hover:bg-bg-modifier-hover">
+    <label className="flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 hover:bg-interactive-hover">
       <input
         type="radio"
         name="space-notify-level"
-        className="mt-1 accent-[var(--brand-500,#5865f2)]"
+        className="mt-1 accent-brand"
         checked={settings.level === value}
         disabled={!loaded}
         onChange={() => void save({ ...settings, level: value })}
@@ -144,7 +148,7 @@ export function SpaceNotificationsModal({ server, onClose }: { server: Server | 
                 <button
                   type="button"
                   onClick={() => void save({ ...settings, muted_until: null })}
-                  className="rounded bg-brand-500 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-brand-560"
+                  className="rounded bg-brand px-3 py-1.5 text-[13px] font-medium text-white hover:bg-brand-hover"
                 >
                   {t("Unmute")}
                 </button>
@@ -179,19 +183,20 @@ export function SpaceNotificationsModal({ server, onClose }: { server: Server | 
 
           <section className={muted ? "pointer-events-none opacity-50" : undefined}>
             <p className="mb-1 text-[12px] font-bold uppercase text-header-secondary">{t("Notify me about")}</p>
+            {radio("all", t("Everything"), t("Every message in channels you can see, plus all pings."))}
             {radio("mentions", t("Only @mentions"), t("Pings for you, your roles and @everyone."))}
             {radio("nothing", t("Nothing"), t("No notifications from this space."))}
           </section>
 
           <section className={muted || settings.level === "nothing" ? "pointer-events-none opacity-50" : undefined}>
-            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2.5 hover:bg-bg-modifier-hover">
+            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2.5 hover:bg-interactive-hover">
               <span>
                 <span className="block text-[15px] font-medium text-text-normal">{t("Suppress @everyone")}</span>
                 <span className="block text-[13px] text-text-muted">{t("Ignore @everyone pings in this space.")}</span>
               </span>
               <input
                 type="checkbox"
-                className="h-4 w-4 accent-[var(--brand-500,#5865f2)]"
+                className="h-4 w-4 accent-brand"
                 checked={settings.suppress_everyone}
                 disabled={!loaded}
                 onChange={(e) => void save({ ...settings, suppress_everyone: e.target.checked })}
