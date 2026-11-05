@@ -8,6 +8,24 @@ import { isSupportStaffFromProfile } from "@/lib/support/staff";
 import { AccountViewerModal } from "@/components/modals/AccountViewerModal";
 import { ClassicModal } from "@/components/ui/ClassicModal";
 import { confirmDialog } from "@/lib/dialogs";
+import {
+  IconAlert,
+  IconBot,
+  IconCheck,
+  IconCheckAll,
+  IconChevronLeft,
+  IconClose,
+  IconGroup,
+  IconInbox,
+  IconLeave,
+  IconLock,
+  IconMessage,
+  IconSearch,
+  IconSend,
+  IconShield,
+  IconSparkle,
+  IconStaff,
+} from "@/components/icons";
 
 interface TeamTicket {
   id: string;
@@ -76,7 +94,7 @@ export default function TeamSupportPage() {
   // Open on what needs a person; "All" is a click away.
   const [filter, setFilter] = useState<Filter>("awaiting");
   const [ticketQuery, setTicketQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"tickets" | "bans" | "appeals" | "flags" | "servers">("tickets");
+  const [activeTab, setActiveTab] = useState<TabId>("tickets");
   const messagesRef = useRef<HTMLDivElement | null>(null);
 
   // Bans
@@ -305,35 +323,26 @@ export default function TeamSupportPage() {
     setServerMembers([]);
     setServerAudit([]);
     setServerUserResult(null);
-    try {
-      const [membersRes, auditRes] = await Promise.all([
-        apiFetch(`/api/moderation/servers/${id}/members`),
-        apiFetch(`/api/moderation/servers/${id}/audit`),
-      ]);
-      const membersJson = await membersRes.json() as { members?: ServerMemberRow[]; error?: string };
-      const auditJson = await auditRes.json() as { entries?: AuditEntry[]; error?: string };
-      if (!membersRes.ok) throw new Error(membersJson.error ?? "Could not load members.");
-      if (!auditRes.ok) throw new Error(auditJson.error ?? "Could not load audit log.");
-      setServerMembers(membersJson.members ?? []);
-      setServerAudit(auditJson.entries ?? []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load server details.");
-    } finally {
-      setServerDetailLoading(false);
-    }
+    // Loaded independently: a failing audit log used to blank the members too.
+    const [membersRes, auditRes] = await Promise.all([
+      apiFetch(`/api/moderation/servers/${id}/members`).catch(() => null),
+      apiFetch(`/api/moderation/servers/${id}/audit`).catch(() => null),
+    ]);
+    const membersJson = (await membersRes?.json().catch(() => null)) as { members?: ServerMemberRow[]; error?: string } | null;
+    const auditJson = (await auditRes?.json().catch(() => null)) as { entries?: AuditEntry[]; error?: string } | null;
+    setServerMembers(membersJson?.members ?? []);
+    setServerAudit(auditJson?.entries ?? []);
+    if (!membersRes?.ok) setError(membersJson?.error ?? "Could not load members.");
+    else if (!auditRes?.ok) setError(auditJson?.error ?? "Could not load the audit log.");
+    setServerDetailLoading(false);
   }, []);
 
   const checkServerUser = useCallback(async () => {
     if (!selectedServerId || !serverUserCheck.trim()) return;
     setServerUserResult(null);
     try {
-      // Resolve user id from username if needed
-      let userId = serverUserCheck.trim();
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
-        const res = await apiFetch(`/api/moderation/servers/search?q=${encodeURIComponent(userId)}`);
-        // not a server search; instead look up profile via a direct query is not available client-side.
-        // Fall back: try as username in members list.
-      }
+      // A user ID, or a username matched against this server's members.
+      const userId = serverUserCheck.trim();
       const member = serverMembers.find((m) => m.user_id === userId || m.profile?.username?.toLowerCase() === userId.toLowerCase());
       const auditRes = await apiFetch(`/api/moderation/servers/${selectedServerId}/audit?userId=${encodeURIComponent(member?.user_id ?? userId)}`);
       const auditJson = await auditRes.json() as { entries?: AuditEntry[] };
@@ -362,6 +371,15 @@ export default function TeamSupportPage() {
   useEffect(() => {
     if (phase === "ready") void loadTickets();
   }, [phase, loadTickets]);
+
+  // Bans and open reports feed the sidebar counts and the account card, so
+  // load them once up front rather than only when their tab opens.
+  useEffect(() => {
+    if (phase !== "ready") return;
+    void loadBans();
+    void loadAppeals();
+    void loadFlags();
+  }, [phase, loadBans, loadAppeals, loadFlags]);
 
   useEffect(() => {
     if (phase !== "ready") return;
@@ -461,9 +479,53 @@ export default function TeamSupportPage() {
     }
   };
 
+  const unban = async (userId: string) => {
+    const ok = await confirmDialog({
+      title: "Lift this platform ban?",
+      body: "They can sign in and use Disband again straight away.",
+      confirmLabel: "Unban",
+      tone: "danger",
+    });
+    if (!ok) return;
+    const res = await apiFetch("/api/moderation/platform-ban", {
+      method: "POST",
+      body: JSON.stringify({ action: "unban", userId }),
+    });
+    if (res.ok) {
+      void loadBans();
+      return;
+    }
+    const json = (await res.json().catch(() => null)) as { error?: string } | null;
+    setError(json?.error ?? "Could not lift the ban.");
+  };
+
+  const decideAppeal = async (id: string, approve: boolean) => {
+    const res = await apiFetch(`/api/moderation/ban-appeals/${id}/decide`, {
+      method: "POST",
+      body: JSON.stringify({ approve, decision: selectedAppealId === id ? appealDecision : "" }),
+    });
+    if (!res.ok) {
+      const json = (await res.json().catch(() => null)) as { error?: string } | null;
+      setError(json?.error ?? "Could not save the decision.");
+      return;
+    }
+    setAppealDecision("");
+    setSelectedAppealId(null);
+    void loadAppeals();
+    if (approve) void loadBans();
+  };
+
+  const dismissFlag = async (id: string) => {
+    const res = await apiFetch(`/api/moderation/message-reports/${id}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ action: "dismiss", decision: "Dismissed by staff." }),
+    });
+    if (res.ok) void loadFlags();
+  };
+
   if (phase === "checking") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg-primary text-text-muted">
+      <div className="flex min-h-screen items-center justify-center bg-bg-tertiary text-[14px] text-text-muted">
         Checking staff access…
       </div>
     );
@@ -471,517 +533,666 @@ export default function TeamSupportPage() {
 
   if (phase === "denied") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg-primary px-6 text-center">
-        <div className="max-w-md rounded-[3px] border border-divider bg-bg-secondary p-8 shadow-none">
-          <p className="font-mono text-[11px] uppercase tracking-[0.02em] text-text-muted">Access denied</p>
-          <h1 className="mt-3 text-2xl font-bold  text-text-normal">Support staff only</h1>
-          <p className="mt-3 text-sm leading-6 text-text-muted">
-            This account is signed in, but it is not on the Disband support staff list.
-          </p>
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="mt-6 rounded-[3px] border border-divider bg-bg-tertiary px-4 py-2.5 text-sm font-medium text-text-normal transition-colors hover:bg-interactive-hover"
-          >
-            Log out
-          </button>
+      <div className="flex min-h-screen items-center justify-center bg-bg-tertiary px-4">
+        <div className="classic-modal w-full max-w-[440px] overflow-hidden rounded-lg bg-bg-primary text-center shadow-[var(--elevation-high)]">
+          <div className="px-6 pb-6 pt-8">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-status-dnd/15 text-status-dnd">
+              <IconLock size={26} />
+            </div>
+            <h1 className="mt-4 text-[24px] font-bold leading-[30px] text-header-primary">Staff only</h1>
+            <p className="mt-2 text-[15px] leading-5 text-header-secondary">
+              You&apos;re signed in, but this account isn&apos;t on the Disband support team.
+            </p>
+          </div>
+          <div className="flex justify-center gap-2 bg-bg-secondary p-4">
+            <button type="button" onClick={() => router.replace("/app")} className={`${ui.btnSecondary} h-[38px]`}>
+              Back to Disband
+            </button>
+            <button type="button" onClick={() => void logout()} className={`${ui.btnGhost} h-[38px]`}>
+              Log out
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
+  const pendingAppeals = appeals.filter((a) => a.status === "pending").length;
+  const openFlags = flags.filter((f) => f.status !== "actioned" && f.status !== "dismissed").length;
+  const nav: { id: TabId; label: string; icon: React.ReactNode; count: number; urgent: boolean; blurb: string }[] = [
+    { id: "tickets", label: "Tickets", icon: <IconInbox size={20} />, count: counts.awaiting, urgent: counts.awaiting > 0, blurb: "Support requests that need a person" },
+    { id: "flags", label: "Reports", icon: <IconAlert size={20} />, count: openFlags, urgent: openFlags > 0, blurb: "Member reports and Sentinel matches" },
+    { id: "appeals", label: "Appeals", icon: <IconMessage size={20} />, count: pendingAppeals, urgent: pendingAppeals > 0, blurb: "Requests to lift a platform ban" },
+    { id: "bans", label: "Platform bans", icon: <IconShield size={20} />, count: bans.length, urgent: false, blurb: "Accounts banned from Disband" },
+    { id: "servers", label: "Spaces", icon: <IconGroup size={20} />, count: 0, urgent: false, blurb: "Look up a space, its members and audit log" },
+  ];
+  const current = nav.find((n) => n.id === activeTab)!;
+  const refresh = () => {
+    if (activeTab === "tickets") void loadTickets();
+    if (activeTab === "bans") void loadBans();
+    if (activeTab === "appeals") void loadAppeals();
+    if (activeTab === "flags") void loadFlags();
+    if (activeTab === "servers") void loadServers(serverQuery);
+  };
+  const selectedServer = servers.find((sv) => sv.id === selectedServerId) ?? null;
+
   return (
     <>
-      <div className="h-screen overflow-hidden bg-bg-primary text-text-normal">
-      <header className="sticky top-0 z-20 border-b border-divider bg-bg-primary">
-        <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-4 px-4 sm:px-6">
-          <div>
-            <p className="text-xs text-text-muted">Staff tools</p>
-            <h1 className="text-[22px] font-bold ">Team Support</h1>
+      <div className="flex h-dvh overflow-hidden bg-bg-primary text-text-normal">
+        {/* Sidebar: Discord's settings rail, icons only on narrow screens. */}
+        <nav aria-label="Staff tools" className="flex w-[72px] shrink-0 flex-col bg-bg-secondary md:w-[240px]">
+          <div className="flex h-12 shrink-0 items-center gap-2.5 px-4 shadow-[0_1px_0_rgb(0_0_0/0.2)]">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand text-white">
+              <IconStaff size={16} />
+            </span>
+            <span className="hidden truncate text-[15px] font-semibold text-header-primary md:block">Disband Staff</span>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void loadTickets()}
-              className="rounded-[4px] border border-divider bg-bg-secondary px-3 py-2 text-xs font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
-            >
+          <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
+            <p className={`${ui.eyebrow} hidden px-2.5 pb-1.5 md:block`}>Moderation</p>
+            {nav.map((item) => {
+              const active = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveTab(item.id)}
+                  aria-current={active ? "page" : undefined}
+                  title={item.label}
+                  className={`flex h-[38px] w-full items-center justify-center gap-3 rounded-[4px] px-2.5 text-[15px] font-medium transition-colors md:justify-start ${
+                    active
+                      ? "bg-interactive-hover text-header-primary"
+                      : "text-text-muted hover:bg-interactive-hover/60 hover:text-text-normal"
+                  }`}
+                >
+                  <span className="shrink-0">{item.icon}</span>
+                  <span className="hidden min-w-0 flex-1 truncate text-left md:block">{item.label}</span>
+                  {item.count > 0 && (
+                    <span
+                      className={`hidden h-4 min-w-4 items-center justify-center rounded-full px-1 text-[11px] font-bold tabular-nums md:flex ${
+                        item.urgent ? "bg-status-dnd text-white" : "bg-bg-tertiary text-text-muted"
+                      }`}
+                    >
+                      {item.count > 99 ? "99+" : item.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex shrink-0 flex-col gap-1 border-t border-divider/60 p-2 md:flex-row">
+            <button type="button" onClick={() => router.push("/app")} title="Back to Disband" className={`${ui.btnGhost} h-9 flex-1 justify-center md:justify-start`}>
+              <IconChevronLeft size={18} />
+              <span className="hidden md:inline">Back to Disband</span>
+            </button>
+            <button type="button" onClick={() => void logout()} title="Log out" className={`${ui.btnGhost} h-9 w-full justify-center px-2 hover:text-status-dnd md:w-9`}>
+              <IconLeave size={18} />
+            </button>
+          </div>
+        </nav>
+
+        <section className="flex min-w-0 flex-1 flex-col">
+          <header className="z-10 flex h-12 shrink-0 items-center gap-3 px-4 shadow-[0_1px_0_rgb(0_0_0/0.2),0_1.5px_0_rgb(0_0_0/0.05),0_2px_0_rgb(0_0_0/0.05)]">
+            <span className="text-text-muted">{current.icon}</span>
+            <h1 className="truncate text-[16px] font-semibold text-header-primary">{current.label}</h1>
+            <span className="hidden h-6 w-px bg-divider sm:block" />
+            <p className="hidden truncate text-[14px] text-text-muted sm:block">{current.blurb}</p>
+            <button type="button" onClick={refresh} className={`${ui.btnGhost} ml-auto h-8`}>
               Refresh
             </button>
-            <button
-              type="button"
-              onClick={() => void logout()}
-              className="rounded-[4px] border border-divider bg-bg-secondary px-3 py-2 text-xs font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
-            >
-              Log out
-            </button>
-          </div>
-        </div>
-        <div className="border-t border-divider bg-bg-secondary">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
-            {([
-              ["tickets", "Tickets", tickets.length],
-              ["bans", "Bans", bans.length],
-              ["appeals", "Appeals", appeals.filter((a) => a.status === "pending").length],
-              ["flags", "Flags", flags.filter((f) => f.status !== "actioned" && f.status !== "dismissed").length],
-              ["servers", "Servers", servers.length],
-            ] as const).map(([id, label, count]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setActiveTab(id)}
-                className={`rounded-lg px-4 py-2 text-[13px] font-semibold transition-all duration-150 ${
-                  activeTab === id
-                    ? "bg-brand text-white shadow-md shadow-brand/20"
-                    : "bg-bg-tertiary text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-                }`}
-              >
-                {label}
-                <span className={`ml-2 rounded-full px-2 py-0.5 text-[11px] tabular-nums ${activeTab === id ? "bg-white/20" : "bg-bg-secondary"}`}>
-                  {count}
-                </span>
+          </header>
+
+          {error && (
+            <div role="alert" className="mx-4 mt-3 flex items-start gap-3 rounded-lg border border-status-dnd/30 bg-status-dnd/10 px-3.5 py-2.5 text-[14px] text-text-normal">
+              <IconAlert size={18} className="mt-0.5 shrink-0 text-status-dnd" />
+              <p className="min-w-0 flex-1">{error}</p>
+              <button type="button" onClick={() => setError(null)} aria-label="Dismiss" className="shrink-0 text-text-muted hover:text-text-normal">
+                <IconClose size={16} />
               </button>
-            ))}
-          </div>
-          {activeTab === "tickets" && (
-            <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 pb-3 sm:px-6">
-              {([
-                ["all", "All", counts.all],
-                ["awaiting", "Awaiting human", counts.awaiting],
-                ["resolved", "Resolved", counts.resolved],
-              ] as const).map(([id, label, count]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setFilter(id)}
-                className={`rounded-[3px] px-3.5 py-1.5 text-[12px] font-medium transition-colors ${
-                  filter === id
-                    ? "bg-brand px-4 text-white"
-                    : "bg-bg-tertiary text-text-muted hover:bg-interactive-hover hover:text-text-normal"
-                }`}
-              >
-                {label} <span className="ml-1 tabular-nums">{count}</span>
-              </button>
-            ))}
-            <p className="ml-auto text-xs text-text-muted">Open requests sort above closed tickets automatically.</p>
-          </div>
+            </div>
           )}
-        </div>
-      </header>
 
-      {activeTab === "tickets" && (
-      <div className="mx-auto grid h-[calc(100vh-10.5rem)] max-w-7xl gap-4 p-4 sm:p-6 lg:grid-cols-[390px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col overflow-hidden rounded-[3px] border border-divider bg-bg-secondary shadow-none">
-          <div className="border-b border-divider px-5 py-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Requests</h2>
-              <span className="rounded-[3px] bg-bg-tertiary px-2.5 py-1 text-xs text-text-muted">{visibleTickets.length}</span>
-            </div>
-            <p className="mt-1 text-xs text-text-muted">Select a request to review, reply, and resolve. <kbd className="rounded bg-bg-tertiary px-1">J</kbd>/<kbd className="rounded bg-bg-tertiary px-1">K</kbd> to move.</p>
-            <input
-              value={ticketQuery}
-              onChange={(e) => setTicketQuery(e.target.value)}
-              placeholder="Search subject or email"
-              aria-label="Search requests"
-              className="mt-3 h-8 w-full rounded-[3px] bg-bg-tertiary px-2.5 text-[13px] text-text-normal outline-none placeholder:text-text-muted focus:ring-1 focus:ring-[#00a8fc]"
-            />
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-            {loading && <p className="px-2 py-4 text-sm text-text-muted">Loading tickets…</p>}
-            {!loading && visibleTickets.length === 0 && (
-              <p className="px-2 py-4 text-sm text-text-muted">
-                {filter === "resolved" ? "No resolved requests." : "No open human-review requests."}
-              </p>
-            )}
-            <div className="space-y-2">
-              {visibleTickets.map((item) => {
-                const selected = selectedId === item.id;
-                const pending = item.status === "pending";
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSelectedId(item.id)}
-                    className={`group w-full rounded-[3px] border p-4 text-left transition-colors ${
-                      selected
-                        ? "border-brand/60 bg-brand/10 shadow-none"
-                        : "border-transparent bg-bg-tertiary hover:border-divider hover:bg-bg-tertiary"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="min-w-0 truncate text-sm font-semibold text-text-normal">{item.subject || "(no subject)"}</p>
-                      <StatusBadge status={item.status} />
+          <div className="min-h-0 flex-1">
+            {activeTab === "tickets" && (
+              <div className="flex h-full min-h-0">
+                <aside className="flex w-full min-w-0 shrink-0 flex-col border-r border-divider/60 lg:w-[340px]">
+                  <div className="space-y-2.5 p-3">
+                    <div className="relative">
+                      <IconSearch size={16} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                      <input
+                        value={ticketQuery}
+                        onChange={(e) => setTicketQuery(e.target.value)}
+                        placeholder="Search subject or email"
+                        aria-label="Search requests"
+                        className={`${ui.input} pl-8`}
+                      />
                     </div>
-                    <p className="mt-1 truncate text-xs text-text-muted">{item.email}</p>
-                    <div className="mt-3 flex items-center justify-between text-[11px] text-text-muted">
-                      <span>{formatTime(item.updated_at)}</span>
-                      {pending && <span className="text-amber-300">Needs review</span>}
-                      {item.status === "human_reply" && <span className="text-brand">Waiting on user</span>}
-                      {item.status === "closed" && <span className="text-status-online">Closed</span>}
+                    <div role="tablist" className="flex rounded-[6px] bg-bg-tertiary p-0.5">
+                      {([
+                        ["awaiting", "Open", counts.awaiting],
+                        ["resolved", "Resolved", counts.resolved],
+                        ["all", "All", counts.all],
+                      ] as const).map(([id, label, count]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          role="tab"
+                          aria-selected={filter === id}
+                          onClick={() => setFilter(id)}
+                          className={`flex h-7 flex-1 items-center justify-center gap-1.5 rounded-[4px] text-[13px] font-medium transition-colors ${
+                            filter === id ? "bg-bg-primary text-header-primary shadow-sm" : "text-text-muted hover:text-text-normal"
+                          }`}
+                        >
+                          {label}
+                          <span className="tabular-nums text-text-muted">{count}</span>
+                        </button>
+                      ))}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </aside>
-
-        <main className="flex min-h-0 flex-col overflow-hidden rounded-[3px] border border-divider bg-bg-secondary shadow-none">
-          {ticket ? (
-            <>
-              <header className="border-b border-divider px-5 py-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <h2 className="truncate text-xl font-semibold ">{ticket.subject}</h2>
-                    <p className="mt-1 text-xs text-text-muted">
-                      {ticket.email} · opened {formatTime(ticket.created_at)} · updated {formatTime(ticket.updated_at)}
-                    </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void resolveTicket()}
-                    disabled={ticket.status === "closed" || replying}
-                    className="shrink-0 rounded-[3px] border border-divider bg-bg-tertiary px-4 py-2 text-sm font-medium transition-colors hover:bg-interactive-hover disabled:opacity-50"
-                  >
-                    Mark resolved
-                  </button>
-                </div>
-              </header>
+                  <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+                    {loading && tickets.length === 0 && <ListSkeleton />}
+                    {!loading && visibleTickets.length === 0 && (
+                      <EmptyState
+                        icon={<IconCheckAll size={28} />}
+                        title={filter === "resolved" ? "Nothing resolved yet" : "All caught up"}
+                        body={filter === "resolved" ? "Resolved requests show up here." : "No requests are waiting on a person."}
+                      />
+                    )}
+                    <div className="space-y-0.5">
+                      {visibleTickets.map((item) => {
+                        const selected = selectedId === item.id;
+                        const status = ticketStatus(item.status);
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setSelectedId(item.id)}
+                            aria-current={selected ? "true" : undefined}
+                            className={`group flex w-full items-start gap-3 rounded-[4px] px-2.5 py-2 text-left transition-colors ${
+                              selected ? "bg-interactive-hover" : "hover:bg-interactive-hover/50"
+                            }`}
+                          >
+                            <Initial name={item.email} />
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-baseline gap-2">
+                                <span className={`min-w-0 flex-1 truncate text-[15px] ${selected || item.status === "pending" ? "font-semibold text-header-primary" : "font-medium text-text-normal"}`}>
+                                  {item.subject || "(no subject)"}
+                                </span>
+                                <span className="shrink-0 text-[11px] text-text-muted">{formatTime(item.updated_at)}</span>
+                              </span>
+                              <span className="mt-0.5 flex items-center gap-2">
+                                <span className="min-w-0 flex-1 truncate text-[13px] text-text-muted">{item.email}</span>
+                                <Pill tone={status.tone}>{status.label}</Pill>
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <p className="hidden border-t border-divider/60 px-4 py-2 text-[12px] text-text-muted lg:block">
+                    <kbd className={ui.kbd}>J</kbd> <kbd className={ui.kbd}>K</kbd> to move between requests
+                  </p>
+                </aside>
 
-              <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-                <div className="space-y-3">
-                  {messages.map((message) => {
-                    const human = message.role === "staff";
-                    return (
-                      <article
-                        key={message.id}
-                        className={`rounded-[3px] border p-4 ${
-                          human ? "border-brand/25 bg-brand/[0.09] ml-6 sm:ml-12" : "border-divider bg-bg-tertiary mr-6 sm:mr-12"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.02em] text-text-muted">
-                          <strong className={human ? "text-brand" : "text-text-normal"}>
-                            {human ? "Human support" : message.role === "tether" ? "Tether" : "User"}
-                          </strong>
-                          <span>·</span>
-                          <time>{new Date(message.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time>
+                <main className="hidden min-w-0 flex-1 flex-col lg:flex">
+                  {ticket ? (
+                    <>
+                      <div className="flex shrink-0 items-start gap-3 border-b border-divider/60 px-5 py-4">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <h2 className="truncate text-[20px] font-semibold leading-6 text-header-primary">{ticket.subject || "(no subject)"}</h2>
+                            <Pill tone={ticketStatus(ticket.status).tone}>{ticketStatus(ticket.status).label}</Pill>
+                          </div>
+                          <p className="mt-1 truncate text-[13px] text-text-muted">
+                            {ticket.email} · opened {formatTime(ticket.created_at)} · updated {formatTime(ticket.updated_at)}
+                          </p>
                         </div>
-                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-text-normal">{message.content}</p>
-                      </article>
+                        <button
+                          type="button"
+                          onClick={() => void resolveTicket()}
+                          disabled={ticket.status === "closed" || replying}
+                          className={`${ui.btnSuccess} h-8 shrink-0`}
+                        >
+                          <IconCheck size={16} />
+                          {ticket.status === "closed" ? "Resolved" : "Mark resolved"}
+                        </button>
+                      </div>
+
+                      <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto py-4">
+                        {detailLoading && messages.length === 0 && <p className="px-5 text-[14px] text-text-muted">Loading messages…</p>}
+                        {messages.length === 0 && !detailLoading && (
+                          <EmptyState icon={<IconMessage size={28} />} title="No messages yet" body="This request has no conversation." />
+                        )}
+                        {messages.map((message, i) => {
+                          const prev = messages[i - 1];
+                          const grouped = !!prev && prev.role === message.role && new Date(message.created_at).getTime() - new Date(prev.created_at).getTime() < 7 * 60_000;
+                          return (
+                            <article key={message.id} className={`group flex gap-4 px-5 py-0.5 hover:bg-black/[0.06] ${grouped ? "" : "mt-[17px] first:mt-0"}`}>
+                              <div className="w-10 shrink-0">
+                                {!grouped && <RoleAvatar role={message.role} name={ticket.email} />}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                {!grouped && (
+                                  <p className="flex items-baseline gap-2">
+                                    <span className={`text-[16px] font-medium ${message.role === "staff" ? "text-brand" : message.role === "tether" ? "text-[#c79dff]" : "text-header-primary"}`}>
+                                      {threadLabel(message.role)}
+                                    </span>
+                                    <time className="text-[12px] text-text-muted">{formatTime(message.created_at)}</time>
+                                  </p>
+                                )}
+                                <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.375rem] text-text-normal">{message.content}</p>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+
+                      <div className="shrink-0 px-4 pb-4">
+                        {replyStatus && <p className="mb-2 px-1 text-[13px] text-text-muted">{replyStatus}</p>}
+                        {ticket.status === "closed" ? (
+                          <div className="flex items-center gap-3 rounded-lg bg-bg-secondary px-4 py-3 text-[14px] text-text-muted">
+                            <IconLock size={18} className="shrink-0" />
+                            This request is resolved, so the thread is read-only.
+                          </div>
+                        ) : (
+                          <div className="rounded-lg bg-bg-tertiary focus-within:ring-1 focus-within:ring-[#00a8fc]/60">
+                            <textarea
+                              value={reply}
+                              onChange={(e) => setReply(e.target.value)}
+                              rows={3}
+                              maxLength={4000}
+                              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submitReply(); } }}
+                              placeholder={`Reply to ${ticket.email}`}
+                              aria-label="Reply"
+                              className="block max-h-60 min-h-[76px] w-full resize-y bg-transparent px-4 pt-3 text-[15px] leading-[1.375rem] text-text-normal outline-none placeholder:text-text-muted"
+                            />
+                            <div className="flex items-center gap-3 px-3 pb-2.5">
+                              <p className="min-w-0 flex-1 truncate text-[12px] text-text-muted">
+                                Added to their thread and emailed to the account address · <kbd className={ui.kbd}>Ctrl</kbd>/<kbd className={ui.kbd}>⌘</kbd> <kbd className={ui.kbd}>Enter</kbd> to send
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => void submitReply()}
+                                disabled={replying || !reply.trim()}
+                                className={`${ui.btnPrimary} h-8 shrink-0`}
+                              >
+                                <IconSend size={16} />
+                                {replying ? "Sending…" : "Send"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <EmptyState icon={<IconInbox size={32} />} title="Pick a request" body="The conversation and reply box open here." />
+                  )}
+                </main>
+              </div>
+            )}
+
+            {activeTab === "bans" && (
+              <Page>
+                <SectionTitle title="Banned accounts" count={bans.length} />
+                {bansLoading && bans.length === 0 && <ListSkeleton />}
+                {!bansLoading && bans.length === 0 && (
+                  <EmptyState icon={<IconShield size={28} />} title="No platform bans" body="Banned accounts appear here." />
+                )}
+                {bans.length > 0 && (
+                  <div className={`${ui.card} divide-y divide-divider/60`}>
+                    {bans.map((ban) => {
+                      const name = ban.profile?.display_name || ban.profile?.username || ban.user_id;
+                      return (
+                        <div key={ban.user_id} className="flex items-center gap-3 px-4 py-3">
+                          <Initial name={name} tone="danger" />
+                          <div className="min-w-0 flex-1">
+                            <p className="flex items-baseline gap-2">
+                              <span className="truncate text-[15px] font-semibold text-header-primary">{name}</span>
+                              {ban.profile?.username && <span className="truncate text-[13px] text-text-muted">@{ban.profile.username}</span>}
+                            </p>
+                            <p className="truncate text-[13px] text-text-normal">{ban.reason || "No reason given"}</p>
+                            <p className="text-[12px] text-text-muted">Banned {formatTime(ban.created_at)}</p>
+                          </div>
+                          <div className="flex shrink-0 gap-2">
+                            <button type="button" onClick={() => setViewingUserId(ban.user_id)} className={`${ui.btnSecondary} h-8`}>
+                              View
+                            </button>
+                            <button type="button" onClick={() => void unban(ban.user_id)} className={`${ui.btnDangerOutline} h-8`}>
+                              Unban
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </Page>
+            )}
+
+            {activeTab === "appeals" && (
+              <Page>
+                <SectionTitle title="Ban appeals" count={appeals.length} hint={pendingAppeals ? `${pendingAppeals} waiting` : undefined} />
+                {appealsLoading && appeals.length === 0 && <ListSkeleton />}
+                {!appealsLoading && appeals.length === 0 && (
+                  <EmptyState icon={<IconMessage size={28} />} title="No appeals" body="Appeals from banned accounts appear here." />
+                )}
+                <div className="space-y-3">
+                  {appeals.map((appeal) => {
+                    const name = appeal.profile?.display_name || appeal.profile?.username || appeal.user_id;
+                    const pending = appeal.status === "pending";
+                    return (
+                      <div key={appeal.id} className={`${ui.card} p-4`}>
+                        <div className="flex items-start gap-3">
+                          <Initial name={name} />
+                          <div className="min-w-0 flex-1">
+                            <p className="flex items-center gap-2">
+                              <span className="truncate text-[15px] font-semibold text-header-primary">{name}</span>
+                              <Pill tone={pending ? "warn" : appeal.status === "approved" ? "good" : "neutral"}>{appeal.status}</Pill>
+                            </p>
+                            <p className="text-[12px] text-text-muted">Submitted {formatTime(appeal.created_at)}</p>
+                          </div>
+                          <button type="button" onClick={() => setViewingUserId(appeal.user_id)} className={`${ui.btnSecondary} h-8 shrink-0`}>
+                            View account
+                          </button>
+                        </div>
+                        <blockquote className="mt-3 whitespace-pre-wrap break-words border-l-4 border-divider pl-3 text-[15px] leading-[1.375rem] text-text-normal">
+                          {appeal.reason}
+                        </blockquote>
+                        {pending && (
+                          <div className="mt-4 space-y-2">
+                            <textarea
+                              value={selectedAppealId === appeal.id ? appealDecision : ""}
+                              onChange={(e) => { setSelectedAppealId(appeal.id); setAppealDecision(e.target.value); }}
+                              rows={2}
+                              placeholder="Note to include with the decision (optional)"
+                              aria-label="Decision note"
+                              className={`${ui.input} h-auto resize-y py-2`}
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button type="button" onClick={() => void decideAppeal(appeal.id, false)} className={`${ui.btnDanger} h-8`}>
+                                Deny
+                              </button>
+                              <button type="button" onClick={() => void decideAppeal(appeal.id, true)} className={`${ui.btnSuccess} h-8`}>
+                                Approve and unban
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {appeal.decision && (
+                          <p className="mt-3 rounded-[4px] bg-bg-tertiary px-3 py-2 text-[13px] text-text-muted">
+                            <span className="font-semibold text-text-normal">Decision:</span> {appeal.decision}
+                          </p>
+                        )}
+                      </div>
                     );
                   })}
-                  {detailLoading && <p className="text-sm text-text-muted">Loading messages…</p>}
-                  {messages.length === 0 && !detailLoading && (
-                    <p className="text-sm text-text-muted">No messages yet for this ticket.</p>
-                  )}
                 </div>
-              </div>
+              </Page>
+            )}
 
-              <footer className="border-t border-divider bg-bg-secondary p-4">
-                {replyStatus && (
-                  <p className="mb-3 rounded-[4px] border border-divider bg-bg-tertiary px-3 py-2 text-xs text-text-muted">
-                    {replyStatus}
-                  </p>
+            {activeTab === "flags" && (
+              <Page>
+                <SectionTitle title="Member reports" count={flags.length} hint={openFlags ? `${openFlags} open` : undefined} />
+                {flagsLoading && flags.length === 0 && <ListSkeleton />}
+                {!flagsLoading && flags.length === 0 && (
+                  <EmptyState icon={<IconAlert size={28} />} title="No reports" body="Reports from members appear here." />
                 )}
-                {ticket.status === "closed" ? (
-                  <div className="rounded-[3px] border border-status-online/20 bg-status-online/8 p-4 text-sm text-text-muted">
-                    This request is resolved and read-only. Use the conversation history above for follow-up context.
-                  </div>
-                ) : (
-                  <div className="flex gap-3">
-                    <textarea
-                      value={reply}
-                      onChange={(e) => setReply(e.target.value)}
-                      rows={3}
-                      maxLength={4000}
-                      onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submitReply(); } }}
-                      placeholder="Reply as human support… (Ctrl/⌘+Enter to send)"
-                      className="min-h-[84px] flex-1 resize-y rounded-[3px] border border-divider bg-bg-tertiary p-4 text-sm outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc] "
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void submitReply()}
-                      disabled={replying || !reply.trim()}
-                      className="self-end rounded-[3px] bg-brand px-5 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
-                    >
-                      {replying ? "Sending…" : "Reply"}
-                    </button>
-                  </div>
-                )}
-                <p className="mt-2 text-xs text-text-muted">
-                  Replies are added to the user&apos;s thread and attempt delivery to their account email.
-                </p>
-              </footer>
-            </>
-          ) : (
-            <div className="flex h-full items-center justify-center p-8 text-center">
-              <div>
-                <p className="text-sm font-medium text-text-muted">Select a request to review</p>
-                <p className="mt-1 text-xs text-text-muted/70">The full conversation and reply controls will appear here.</p>
-              </div>
-            </div>
-          )}
-        </main>
-      </div>
-      )}
-
-      {activeTab === "bans" && (
-        <div className="mx-auto h-[calc(100vh-10.5rem)] max-w-7xl overflow-y-auto p-4 sm:p-6">
-          <div className="rounded-[3px] border border-divider bg-bg-secondary p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Platform bans</h2>
-            {error && <p className="mt-3 rounded-[3px] border border-status-dnd/30 bg-status-dnd/10 px-3 py-2 text-sm text-status-dnd">{error}</p>}
-            {bansLoading && <p className="mt-4 text-sm text-text-muted">Loading bans…</p>}
-            {!bansLoading && bans.length === 0 && !error && <p className="mt-4 text-sm text-text-muted">No bans found.</p>}
-            <div className="mt-4 space-y-3">
-              {bans.map((ban) => (
-                <div key={ban.user_id} className="flex items-center justify-between rounded-lg border border-divider bg-bg-tertiary p-4 transition-colors hover:bg-interactive-hover">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-status-dnd/20 text-sm font-bold text-status-dnd">
-                      {(ban.profile?.display_name || ban.profile?.username || "?").charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-text-normal">{ban.profile?.display_name || ban.profile?.username || ban.user_id}</p>
-                      <p className="mt-0.5 text-xs text-text-muted">{ban.reason || "No reason provided"}</p>
-                      <p className="mt-0.5 text-[11px] text-text-muted/70">{new Date(ban.created_at).toLocaleString()}{ban.email ? ` · ${ban.email}` : ""}</p>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setViewingUserId(ban.user_id)}
-                      className="rounded-md border border-divider bg-bg-tertiary px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
-                    >
-                      View account
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const res = await apiFetch("/api/moderation/platform-ban", {
-                          method: "POST",
-                          body: JSON.stringify({ action: "unban", userId: ban.user_id }),
-                        });
-                        if (res.ok) void loadBans();
-                      }}
-                      className="rounded-md border border-status-dnd/40 bg-status-dnd/10 px-3 py-1.5 text-xs font-semibold text-status-dnd transition-colors hover:bg-status-dnd/20"
-                    >
-                      Unban
-                    </button>
-                  </div>
+                <div className="space-y-3">
+                  {flags.map((flag) => {
+                    const open = flag.status !== "actioned" && flag.status !== "dismissed";
+                    return (
+                      <div key={flag.id} className={`${ui.card} p-4`}>
+                        <div className="flex items-start gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="flex flex-wrap items-center gap-2">
+                              <span className="text-[15px] font-semibold capitalize text-header-primary">{flag.reason.replace(/_/g, " ")}</span>
+                              <Pill tone="neutral">{flag.target_type}</Pill>
+                              <Pill tone="neutral">{flag.target_surface}</Pill>
+                            </p>
+                            <p className="mt-0.5 text-[13px] text-text-muted">
+                              {flag.reporter_id ? <>Reported by <span className="text-text-normal">{flag.reporter?.display_name || flag.reporter?.username || flag.reporter_id}</span></> : "Found by Sentinel"}
+                              {flag.reported && <> · about <span className="text-text-normal">{flag.reported.display_name || flag.reported.username || flag.reported_user_id}</span></>}
+                              {" · "}{formatTime(flag.created_at)}
+                            </p>
+                          </div>
+                          <Pill tone={open ? "warn" : flag.status === "actioned" ? "danger" : "neutral"}>{flag.status.replace(/_/g, " ")}</Pill>
+                        </div>
+                        {flag.details && (
+                          <blockquote className="mt-3 whitespace-pre-wrap break-words border-l-4 border-divider pl-3 text-[14px] text-text-normal">{flag.details}</blockquote>
+                        )}
+                        {flag.action && (
+                          <p className="mt-3 text-[13px] text-text-muted">
+                            <span className="font-semibold text-text-normal">{flag.action}</span>
+                            {flag.reviewed_at ? ` · ${formatTime(flag.reviewed_at)}` : ""}
+                          </p>
+                        )}
+                        {flag.last_error && <p className="mt-2 rounded-[4px] bg-status-dnd/10 px-3 py-2 text-[13px] text-status-dnd">{flag.last_error}</p>}
+                        {flag.snapshot && (
+                          <details className="mt-3">
+                            <summary className="cursor-pointer text-[13px] font-medium text-text-link hover:underline">Show snapshot</summary>
+                            <pre className="mt-2 max-h-48 overflow-auto rounded-[4px] bg-bg-tertiary p-3 font-mono text-[12px] text-text-muted">{JSON.stringify(flag.snapshot, null, 2)}</pre>
+                          </details>
+                        )}
+                        {open && (
+                          <div className="mt-4 flex flex-wrap justify-end gap-2">
+                            {flag.reported_user_id && (
+                              <button type="button" onClick={() => setViewingUserId(flag.reported_user_id!)} className={`${ui.btnSecondary} h-8`}>
+                                View account
+                              </button>
+                            )}
+                            <button type="button" onClick={() => void dismissFlag(flag.id)} className={`${ui.btnSecondary} h-8`}>
+                              Dismiss
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setActioningFlag(flag); setActionType("actioned"); setActionDecision(""); }}
+                              className={`${ui.btnDanger} h-8`}
+                            >
+                              Take action
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {activeTab === "appeals" && (
-        <div className="mx-auto h-[calc(100vh-10.5rem)] max-w-7xl overflow-y-auto p-4 sm:p-6">
-          <div className="rounded-[3px] border border-divider bg-bg-secondary p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Ban appeals</h2>
-            {appealsLoading && <p className="mt-4 text-sm text-text-muted">Loading appeals…</p>}
-            {!appealsLoading && appeals.length === 0 && <p className="mt-4 text-sm text-text-muted">No appeals found.</p>}
-            <div className="mt-4 space-y-3">
-              {appeals.map((appeal) => (
-                <div key={appeal.id} className="rounded-[3px] border border-divider bg-bg-tertiary p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-text-normal">{appeal.profile?.display_name || appeal.profile?.username || appeal.user_id}</p>
-                      <p className="mt-1 text-xs text-text-muted">Submitted {new Date(appeal.created_at).toLocaleString()} · {appeal.status}</p>
-                    </div>
-                    <div className="flex shrink-0 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setViewingUserId(appeal.user_id)}
-                        className="rounded-md border border-divider bg-bg-tertiary px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
-                      >
-                        View account
-                      </button>
-                      <span className="shrink-0 rounded-[3px] bg-bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-text-muted">{appeal.status}</span>
-                    </div>
+                <SectionTitle title="Sentinel matches" count={contentFlags.length} className="mt-8" />
+                {!flagsLoading && contentFlags.length === 0 && (
+                  <EmptyState icon={<IconSparkle size={28} />} title="No Sentinel matches" body="Automatic content matches appear here with Tether's verdict." />
+                )}
+                {contentFlags.length > 0 && (
+                  <div className={`${ui.card} divide-y divide-divider/60`}>
+                    {contentFlags.map((cf) => (
+                      <div key={cf.id} className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate text-[14px] font-semibold capitalize text-header-primary">
+                            {cf.category.replace(/_/g, " ")} <span className="font-normal text-text-muted">· {cf.rule_id}</span>
+                          </span>
+                          <Pill tone={cf.state === "resolved" ? "good" : "neutral"}>{cf.state}</Pill>
+                        </div>
+                        <p className="mt-0.5 truncate font-mono text-[12px] text-text-muted">
+                          {cf.src_table}.{cf.src_column} · {formatTime(cf.created_at)}
+                        </p>
+                        <p className="mt-1.5 text-[13px] text-text-normal">{cf.resolution ?? "Waiting for Tether's next pass."}</p>
+                      </div>
+                    ))}
                   </div>
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-normal">{appeal.reason}</p>
-                  {appeal.status === "pending" && (
-                    <div className="mt-4 space-y-2">
-                      <textarea
-                        value={selectedAppealId === appeal.id ? appealDecision : ""}
-                        onChange={(e) => { setSelectedAppealId(appeal.id); setAppealDecision(e.target.value); }}
-                        rows={3}
-                        placeholder="Decision note (optional)…"
-                        className="w-full resize-y rounded-[3px] border border-divider bg-bg-primary p-3 text-sm outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc]"
+                )}
+              </Page>
+            )}
+
+            {activeTab === "servers" && (
+              <div className="flex h-full min-h-0">
+                <aside className="flex w-full shrink-0 flex-col border-r border-divider/60 lg:w-[340px]">
+                  <form
+                    className="p-3"
+                    onSubmit={(e) => { e.preventDefault(); void loadServers(serverQuery); }}
+                  >
+                    <div className="relative">
+                      <IconSearch size={16} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                      <input
+                        value={serverQuery}
+                        onChange={(e) => setServerQuery(e.target.value)}
+                        placeholder="Space name or ID"
+                        aria-label="Search spaces"
+                        className={`${ui.input} pl-8`}
                       />
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const res = await apiFetch(`/api/moderation/ban-appeals/${appeal.id}/decide`, {
-                              method: "POST",
-                              body: JSON.stringify({ approve: true, decision: appealDecision }),
-                            });
-                            if (res.ok) { setAppealDecision(""); setSelectedAppealId(null); void loadAppeals(); void loadBans(); }
-                          }}
-                          className="rounded-[3px] bg-status-online px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-status-online/80"
-                        >
-                          Approve (unban)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const res = await apiFetch(`/api/moderation/ban-appeals/${appeal.id}/decide`, {
-                              method: "POST",
-                              body: JSON.stringify({ approve: false, decision: appealDecision }),
-                            });
-                            if (res.ok) { setAppealDecision(""); setSelectedAppealId(null); void loadAppeals(); }
-                          }}
-                          className="rounded-[3px] bg-status-dnd px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-status-dnd/80"
-                        >
-                          Deny
-                        </button>
+                    </div>
+                  </form>
+                  <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
+                    {serversLoading && servers.length === 0 && <ListSkeleton />}
+                    {!serversLoading && servers.length === 0 && (
+                      <EmptyState icon={<IconGroup size={28} />} title="No spaces found" body="Try another name, or paste a space ID." />
+                    )}
+                    {servers.map((sv) => (
+                      <button
+                        key={sv.id}
+                        type="button"
+                        onClick={() => void loadServerDetail(sv.id)}
+                        className={`flex w-full items-center gap-3 rounded-[4px] px-2.5 py-2 text-left transition-colors ${
+                          selectedServerId === sv.id ? "bg-interactive-hover" : "hover:bg-interactive-hover/50"
+                        }`}
+                      >
+                        <ServerIcon name={sv.name} url={sv.icon_url} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[15px] font-medium text-header-primary">{sv.name}</span>
+                          <span className="block truncate text-[12px] text-text-muted">
+                            {sv.member_count.toLocaleString()} {sv.member_count === 1 ? "member" : "members"} · since {new Date(sv.created_at).toLocaleDateString()}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </aside>
+
+                <main className="hidden min-w-0 flex-1 overflow-y-auto lg:block">
+                  {!selectedServerId ? (
+                    <EmptyState icon={<IconGroup size={32} />} title="Pick a space" body="Its members, a user check and the audit log open here." />
+                  ) : serverDetailLoading ? (
+                    <div className="p-6"><ListSkeleton /></div>
+                  ) : (
+                    <div className="mx-auto max-w-[860px] space-y-8 p-6">
+                      {selectedServer && (
+                        <div className="flex items-center gap-4">
+                          <ServerIcon name={selectedServer.name} url={selectedServer.icon_url} size={64} />
+                          <div className="min-w-0">
+                            <h2 className="truncate text-[20px] font-semibold text-header-primary">{selectedServer.name}</h2>
+                            <p className="text-[13px] text-text-muted">
+                              {selectedServer.member_count.toLocaleString()} {selectedServer.member_count === 1 ? "member" : "members"} · created {new Date(selectedServer.created_at).toLocaleDateString()}
+                            </p>
+                            <p className="truncate font-mono text-[12px] text-text-muted">{selectedServer.id}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <SectionTitle title="Check a user" />
+                        <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void checkServerUser(); }}>
+                          <input
+                            value={serverUserCheck}
+                            onChange={(e) => setServerUserCheck(e.target.value)}
+                            placeholder="Username or user ID"
+                            aria-label="Username or user ID"
+                            className={ui.input}
+                          />
+                          <button type="submit" className={`${ui.btnPrimary} h-9 shrink-0`}>Check</button>
+                        </form>
+                        {serverUserResult && (
+                          <div className={`${ui.card} mt-3 p-4 text-[14px]`}>
+                            {serverUserResult.member ? (
+                              <p className="text-text-normal">
+                                <strong className="text-header-primary">{serverUserResult.member.profile?.display_name || serverUserResult.member.profile?.username || serverUserResult.member.user_id}</strong>
+                                {" "}is a <RolePill role={serverUserResult.member.role} /> here, since {new Date(serverUserResult.member.joined_at).toLocaleDateString()}.
+                              </p>
+                            ) : (
+                              <p className="text-text-muted">They aren&apos;t a member of this space.</p>
+                            )}
+                            <p className="mt-2 text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">
+                              Audit entries · {serverUserResult.audit.length}
+                            </p>
+                            {serverUserResult.audit.length > 0 && (
+                              <ul className="mt-1.5 space-y-1 text-[13px] text-text-muted">
+                                {serverUserResult.audit.slice(0, 10).map((a: AuditEntry) => (
+                                  <li key={a.id}><span className="text-text-normal">{a.action.replace(/_/g, " ")}</span> · {formatTime(a.created_at)}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <SectionTitle title="Members" count={serverMembers.length} />
+                        {serverMembers.length === 0 ? (
+                          <p className="text-[14px] text-text-muted">No members found.</p>
+                        ) : (
+                          <div className={`${ui.card} max-h-[420px] divide-y divide-divider/60 overflow-y-auto`}>
+                            {serverMembers.map((m) => {
+                              const name = m.profile?.display_name || m.profile?.username || m.user_id;
+                              return (
+                                <div key={m.user_id} className="flex items-center gap-3 px-4 py-2.5">
+                                  <Initial name={name} url={m.profile?.avatar_url} size={32} />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-[14px] font-medium text-header-primary">{name}</p>
+                                    <p className="truncate text-[12px] text-text-muted">@{m.profile?.username || "—"} · joined {new Date(m.joined_at).toLocaleDateString()}</p>
+                                  </div>
+                                  <RolePill role={m.role} />
+                                  <button type="button" onClick={() => setViewingUserId(m.user_id)} className={`${ui.btnSecondary} h-7 px-2.5 text-[12px]`}>
+                                    View
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <SectionTitle title="Audit log" count={serverAudit.length} />
+                        {serverAudit.length === 0 ? (
+                          <p className="text-[14px] text-text-muted">No audit entries.</p>
+                        ) : (
+                          <div className={`${ui.card} max-h-[420px] divide-y divide-divider/60 overflow-y-auto`}>
+                            {serverAudit.map((entry) => (
+                              <div key={entry.id} className="px-4 py-2.5">
+                                <p className="flex items-baseline gap-2 text-[14px]">
+                                  <span className="font-semibold text-header-primary">{entry.actor?.display_name || entry.actor?.username || entry.actor_id || "System"}</span>
+                                  <span className="min-w-0 flex-1 truncate text-text-normal">{entry.action.replace(/_/g, " ")}</span>
+                                  <span className="shrink-0 text-[12px] text-text-muted">{formatTime(entry.created_at)}</span>
+                                </p>
+                                {(entry.target_type || entry.target_id) && (
+                                  <p className="truncate text-[12px] text-text-muted">
+                                    {entry.target_type}{entry.target_id ? ` · ${entry.target_id}` : ""}
+                                  </p>
+                                )}
+                                {entry.details && (
+                                  <pre className="mt-1 max-h-20 overflow-auto font-mono text-[11px] text-text-muted">{JSON.stringify(entry.details)}</pre>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
-                  {appeal.decision && (
-                    <p className="mt-3 text-xs text-text-muted">Decision: {appeal.decision}</p>
-                  )}
-                </div>
-              ))}
-            </div>
+                </main>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        </section>
+      </div>
 
-      {activeTab === "flags" && (
-        <div className="mx-auto h-[calc(100vh-10.5rem)] max-w-7xl overflow-y-auto p-4 sm:p-6">
-          <div className="rounded-[3px] border border-divider bg-bg-secondary p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Reports</h2>
-            {error && <p className="mt-3 rounded-[3px] border border-status-dnd/30 bg-status-dnd/10 px-3 py-2 text-sm text-status-dnd">{error}</p>}
-            {flagsLoading && <p className="mt-4 text-sm text-text-muted">Loading flags…</p>}
-            {!flagsLoading && flags.length === 0 && <p className="mt-4 text-sm text-text-muted">No flags found.</p>}
-            <div className="mt-4 space-y-3">
-              {flags.map((flag) => (
-                <div key={flag.id} className="rounded-[3px] border border-divider bg-bg-tertiary p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-text-normal">
-                        {flag.target_type} · {flag.target_surface} · {flag.reason}
-                      </p>
-                      <p className="mt-1 text-xs text-text-muted">
-                        {flag.reporter_id ? <>Reported by {flag.reporter?.display_name || flag.reporter?.username || flag.reporter_id}</> : "Found by Sentinel"} · {new Date(flag.created_at).toLocaleString()}
-                      </p>
-                      {flag.reported && (
-                        <p className="mt-1 text-xs text-text-muted">
-                          Reported user: {flag.reported.display_name || flag.reported.username || flag.reported_user_id}
-                        </p>
-                      )}
-                    </div>
-                    <span className="shrink-0 rounded-[3px] bg-bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-text-muted">{flag.status.replace("_", " ")}</span>
-                  </div>
-                  {flag.details && <p className="mt-2 text-sm text-text-muted">{flag.details}</p>}
-                  {flag.action && <p className="mt-2 text-xs font-medium text-text-normal">{flag.action}{flag.reviewed_at ? ` · ${new Date(flag.reviewed_at).toLocaleString()}` : ""}</p>}
-                  {flag.last_error && <p className="mt-2 rounded-[3px] bg-bg-secondary px-3 py-2 text-xs text-text-muted">{flag.last_error}</p>}
-                  {flag.snapshot && (
-                    <details className="mt-3">
-                      <summary className="cursor-pointer text-xs text-text-muted hover:text-text-normal">View snapshot</summary>
-                      <pre className="mt-2 max-h-40 overflow-auto rounded-[3px] bg-bg-primary p-3 text-xs text-text-muted">{JSON.stringify(flag.snapshot, null, 2)}</pre>
-                    </details>
-                  )}
-                  {flag.status !== "actioned" && flag.status !== "dismissed" && (
-                    <div className="mt-3 flex gap-2">
-                      {flag.reported_user_id && (
-                        <button
-                          type="button"
-                          onClick={() => setViewingUserId(flag.reported_user_id!)}
-                          className="rounded-[3px] border border-divider bg-bg-tertiary px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-interactive-hover"
-                        >
-                          View account
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const res = await apiFetch(`/api/moderation/message-reports/${flag.id}/resolve`, {
-                            method: "POST",
-                            body: JSON.stringify({ action: "dismiss", decision: "Dismissed by staff." }),
-                          });
-                          if (res.ok) void loadFlags();
-                        }}
-                        className="rounded-[3px] border border-divider bg-bg-tertiary px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-interactive-hover"
-                      >
-                        Dismiss
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setActioningFlag(flag); setActionType("actioned"); setActionDecision(""); }}
-                        className="rounded-[3px] bg-status-dnd px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-status-dnd/80"
-                        title="Take action on this report"
-                      >
-                        Take action
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="mt-4 rounded-[3px] border border-divider bg-bg-secondary p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Sentinel flags</h2>
-            {!flagsLoading && contentFlags.length === 0 && <p className="mt-4 text-sm text-text-muted">No flags found.</p>}
-            <div className="mt-4 space-y-3">
-              {contentFlags.map((cf) => (
-                <div key={cf.id} className="rounded-[3px] border border-divider bg-bg-tertiary p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-text-normal">{cf.category} · {cf.rule_id}</p>
-                      <p className="mt-1 truncate text-xs text-text-muted">
-                        {cf.src_table}.{cf.src_column} · {new Date(cf.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                    <span className="shrink-0 rounded-[3px] bg-bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-text-muted">{cf.state}</span>
-                  </div>
-                  <p className="mt-2 rounded-[3px] bg-bg-secondary px-3 py-2 text-xs text-text-muted">
-                    {cf.resolution ?? "Waiting for Tether's next pass."}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
       {actioningFlag && (
-        <ClassicModal open={true} title="Take action on report" onClose={() => { if (!actioning) setActioningFlag(null); }}>
-          <div className="space-y-4">
-            <p className="text-sm text-text-muted">
-              Choose how to handle this {actioningFlag.target_type} report and add a decision note.
-            </p>
-            <label className="block">
-              <span className="mb-1.5 block text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">Action</span>
-              <select
-                value={actionType}
-                onChange={(e) => setActionType(e.target.value as "actioned" | "dismissed")}
-                className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 py-2.5 text-[15px] text-text-normal outline-none transition-colors focus:border-[#00a8fc]"
-              >
-                <option value="actioned">Take action (remove/restrict content)</option>
-                <option value="dismissed">Dismiss (no action)</option>
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">Decision note</span>
-              <textarea
-                value={actionDecision}
-                onChange={(e) => setActionDecision(e.target.value)}
-                rows={3}
-                maxLength={1000}
-                placeholder="What action was taken and why…"
-                className="w-full resize-y rounded-[3px] border border-transparent bg-bg-tertiary p-3 text-sm text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc]"
-              />
-            </label>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                disabled={actioning}
-                onClick={() => setActioningFlag(null)}
-                className="rounded-[3px] border border-divider bg-bg-tertiary px-4 py-2 text-sm font-medium text-text-normal transition-colors hover:bg-interactive-hover"
-              >
+        <ClassicModal
+          open
+          centered={false}
+          title="Take action on this report"
+          subtitle={`${actioningFlag.reason.replace(/_/g, " ")} · ${actioningFlag.target_type}`}
+          onClose={() => { if (!actioning) setActioningFlag(null); }}
+          footer={
+            <>
+              <button type="button" disabled={actioning} onClick={() => setActioningFlag(null)} className={`${ui.btnGhost} h-[38px]`}>
                 Cancel
               </button>
               <button
@@ -1000,162 +1211,229 @@ export default function TeamSupportPage() {
                     void loadFlags();
                   }
                 }}
-                className={`rounded-[3px] px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${actionType === "actioned" ? "bg-status-dnd hover:bg-status-dnd/80" : "bg-bg-tertiary hover:bg-interactive-hover text-text-normal"}`}
+                className={`${actionType === "actioned" ? ui.btnDanger : ui.btnPrimary} h-[38px] min-w-[96px]`}
               >
-                {actioning ? "Saving…" : "Confirm"}
+                {actioning ? "Saving…" : actionType === "actioned" ? "Take action" : "Dismiss"}
               </button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <p className={`${ui.eyebrow} mb-2`}>Outcome</p>
+              <div className="space-y-2">
+                {([
+                  ["actioned", "Take action", "Remove or restrict the reported content."],
+                  ["dismissed", "Dismiss", "Nothing breaks the rules here."],
+                ] as const).map(([id, label, body]) => (
+                  <label
+                    key={id}
+                    className={`flex cursor-pointer items-start gap-3 rounded-[4px] px-3 py-2.5 transition-colors ${
+                      actionType === id ? "bg-interactive-hover" : "bg-bg-secondary hover:bg-interactive-hover/60"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="flag-outcome"
+                      checked={actionType === id}
+                      onChange={() => setActionType(id)}
+                      className="mt-1 accent-[var(--brand,#5865f2)]"
+                    />
+                    <span>
+                      <span className="block text-[15px] font-medium text-header-primary">{label}</span>
+                      <span className="block text-[13px] text-text-muted">{body}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
+            <label className="block">
+              <span className={`${ui.eyebrow} mb-2 block`}>Decision note</span>
+              <textarea
+                value={actionDecision}
+                onChange={(e) => setActionDecision(e.target.value)}
+                rows={3}
+                maxLength={1000}
+                placeholder="What was done and why"
+                className={`${ui.input} h-auto resize-y py-2`}
+              />
+            </label>
           </div>
         </ClassicModal>
       )}
 
-
-      {activeTab === "servers" && (
-        <div className="mx-auto h-[calc(100vh-10.5rem)] max-w-7xl overflow-y-auto p-4 sm:p-6">
-          <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
-            <div className="rounded-[3px] border border-divider bg-bg-secondary p-4">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Search servers</h2>
-              <div className="mt-3 flex gap-2">
-                <input
-                  value={serverQuery}
-                  onChange={(e) => setServerQuery(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") void loadServers(serverQuery); }}
-                  placeholder="Server name or ID…"
-                  className="flex-1 rounded-[3px] border border-divider bg-bg-tertiary px-3 py-2 text-sm text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc]"
-                />
-                <button
-                  type="button"
-                  onClick={() => void loadServers(serverQuery)}
-                  className="rounded-[3px] bg-brand px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-hover"
-                >
-                  Search
-                </button>
-              </div>
-              {serversLoading && <p className="mt-4 text-sm text-text-muted">Loading servers…</p>}
-              {!serversLoading && servers.length === 0 && <p className="mt-4 text-sm text-text-muted">No servers found.</p>}
-              <div className="mt-4 space-y-2">
-                {servers.map((sv) => (
-                  <button
-                    key={sv.id}
-                    type="button"
-                    onClick={() => void loadServerDetail(sv.id)}
-                    className={`w-full rounded-[3px] border p-3 text-left transition-colors ${selectedServerId === sv.id ? "border-brand/60 bg-brand/10" : "border-transparent bg-bg-tertiary hover:border-divider hover:bg-bg-tertiary"}`}
-                  >
-                    <p className="text-sm font-semibold text-text-normal">{sv.name}</p>
-                    <p className="mt-1 text-xs text-text-muted">{sv.member_count} members · {new Date(sv.created_at).toLocaleDateString()}</p>
-                    <p className="mt-1 font-mono text-[10px] text-text-muted/70">{sv.id}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-[3px] border border-divider bg-bg-secondary p-4">
-              {!selectedServerId ? (
-                <p className="text-sm text-text-muted">Select a server to view members and audit log.</p>
-              ) : serverDetailLoading ? (
-                <p className="text-sm text-text-muted">Loading details…</p>
-              ) : (
-                <div className="space-y-6">
-                  <div>
-                    <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Members ({serverMembers.length})</h2>
-                    <div className="mt-3 space-y-2">
-                      {serverMembers.map((m) => (
-                        <div key={m.user_id} className="flex items-center justify-between rounded-[3px] border border-divider bg-bg-tertiary p-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-text-normal">{m.profile?.display_name || m.profile?.username || m.user_id}</p>
-                            <p className="mt-0.5 text-xs text-text-muted">@{m.profile?.username || "—"} · joined {new Date(m.joined_at).toLocaleDateString()}</p>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            <span className={`rounded-[3px] px-2 py-0.5 text-[11px] font-medium ${m.role === "owner" ? "bg-amber-400/12 text-amber-300" : m.role === "admin" ? "bg-brand/12 text-brand" : m.role === "moderator" ? "bg-purple-400/12 text-purple-300" : "bg-bg-secondary text-text-muted"}`}>
-                              {m.role}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setViewingUserId(m.user_id)}
-                              className="rounded-md border border-divider bg-bg-tertiary px-2 py-1 text-[11px] font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
-                            >
-                              View
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                      {serverMembers.length === 0 && <p className="text-sm text-text-muted">No members found.</p>}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Check a user</h2>
-                    <div className="mt-3 flex gap-2">
-                      <input
-                        value={serverUserCheck}
-                        onChange={(e) => setServerUserCheck(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") void checkServerUser(); }}
-                        placeholder="Username or user ID…"
-                        className="flex-1 rounded-[3px] border border-divider bg-bg-tertiary px-3 py-2 text-sm text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void checkServerUser()}
-                        className="rounded-[3px] bg-brand px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-hover"
-                      >
-                        Check
-                      </button>
-                    </div>
-                    {serverUserResult && (
-                      <div className="mt-3 rounded-[3px] border border-divider bg-bg-tertiary p-3 text-sm">
-                        {serverUserResult.member ? (
-                          <p className="text-text-normal">
-                            <strong>{serverUserResult.member.profile?.display_name || serverUserResult.member.profile?.username || serverUserResult.member.user_id}</strong>
-                            {" "}is currently a <strong>{serverUserResult.member.role}</strong> (joined {new Date(serverUserResult.member.joined_at).toLocaleDateString()}).
-                          </p>
-                        ) : (
-                          <p className="text-text-muted">User not found in this server.</p>
-                        )}
-                        <p className="mt-2 text-xs text-text-muted">
-                          Audit entries: {serverUserResult.audit.length}
-                        </p>
-                        {serverUserResult.audit.length > 0 && (
-                          <ul className="mt-2 space-y-1 text-xs text-text-muted">
-                            {serverUserResult.audit.slice(0, 10).map((a: any) => (
-                              <li key={a.id}>{a.action} · {new Date(a.created_at).toLocaleString()}</li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <h2 className="text-sm font-semibold uppercase tracking-[0.02em] text-text-muted">Audit log ({serverAudit.length})</h2>
-                    <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
-                      {serverAudit.map((entry) => (
-                        <div key={entry.id} className="rounded-[3px] border border-divider bg-bg-tertiary p-3 text-xs">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-semibold text-text-normal">{entry.action}</span>
-                            <span className="text-text-muted">{new Date(entry.created_at).toLocaleString()}</span>
-                          </div>
-                          <p className="mt-1 text-text-muted">
-                            Actor: {entry.actor?.display_name || entry.actor?.username || entry.actor_id || "—"}
-                            {entry.target_type ? ` · Target: ${entry.target_type}` : ""}
-                            {entry.target_id ? ` (${entry.target_id})` : ""}
-                          </p>
-                          {entry.details && (
-                            <pre className="mt-1 max-h-20 overflow-auto text-[10px] text-text-muted/70">{JSON.stringify(entry.details)}</pre>
-                          )}
-                        </div>
-                      ))}
-                      {serverAudit.length === 0 && <p className="text-sm text-text-muted">No audit entries.</p>}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      {viewingUserId && (
+        <AccountViewerModal
+          userId={viewingUserId}
+          onClose={() => setViewingUserId(null)}
+          ban={(() => {
+            const b = bans.find((x) => x.user_id === viewingUserId);
+            return b ? { reason: b.reason, created_at: b.created_at } : null;
+          })()}
+          onBanChange={() => {
+            setViewingUserId(null);
+            void loadBans();
+          }}
+        />
       )}
-
-
-      {viewingUserId && <AccountViewerModal userId={viewingUserId} onClose={() => setViewingUserId(null)} />}
     </>
+  );
+}
+
+/* ------------------------------------------------------------------------- */
+
+type TabId = "tickets" | "bans" | "appeals" | "flags" | "servers";
+type Tone = "neutral" | "brand" | "warn" | "good" | "danger" | "purple";
+
+const btnBase =
+  "inline-flex items-center justify-center gap-1.5 rounded-[4px] px-3.5 text-[14px] font-medium leading-4 transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+
+const ui = {
+  btnPrimary: `${btnBase} bg-brand text-white hover:bg-brand-hover`,
+  btnSecondary: `${btnBase} bg-button-secondary text-white hover:bg-button-secondary-hover`,
+  btnDanger: `${btnBase} bg-button-danger text-white hover:bg-button-danger-hover`,
+  btnDangerOutline: `${btnBase} border border-button-danger text-text-normal hover:bg-button-danger hover:text-white`,
+  btnSuccess: `${btnBase} bg-[#248046] text-white hover:bg-[#1a6334]`,
+  btnGhost: `${btnBase} text-text-muted hover:bg-interactive-hover hover:text-text-normal`,
+  input:
+    "h-9 w-full rounded-[4px] border border-transparent bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc]",
+  card: "overflow-hidden rounded-lg border border-divider/60 bg-bg-secondary",
+  eyebrow: "text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary",
+  kbd: "rounded-[3px] border border-divider bg-bg-tertiary px-1 font-sans text-[11px] text-text-normal",
+};
+
+const toneClass: Record<Tone, string> = {
+  neutral: "bg-bg-tertiary text-text-muted",
+  brand: "bg-brand/15 text-brand",
+  warn: "bg-[#f0b232]/15 text-[#f0b232]",
+  good: "bg-status-online/15 text-status-online",
+  danger: "bg-status-dnd/15 text-status-dnd",
+  purple: "bg-[#c79dff]/15 text-[#c79dff]",
+};
+
+function Pill({ tone = "neutral", children }: { tone?: Tone; children: React.ReactNode }) {
+  return (
+    <span className={`inline-flex h-[18px] shrink-0 items-center rounded-[4px] px-1.5 text-[11px] font-semibold capitalize leading-none ${toneClass[tone]}`}>
+      {children}
+    </span>
+  );
+}
+
+function ticketStatus(status: string): { label: string; tone: Tone } {
+  if (status === "pending") return { label: "Needs reply", tone: "warn" };
+  if (status === "human_reply") return { label: "Waiting on user", tone: "brand" };
+  if (status === "closed") return { label: "Resolved", tone: "good" };
+  return { label: status.replace(/_/g, " "), tone: "neutral" };
+}
+
+function RolePill({ role }: { role: string }) {
+  const tone: Tone = role === "owner" ? "warn" : role === "admin" ? "brand" : role === "moderator" ? "purple" : "neutral";
+  return <Pill tone={tone}>{role}</Pill>;
+}
+
+const AVATAR_COLOURS = ["#5865f2", "#3ba55c", "#faa61a", "#ed4245", "#eb459e", "#747f8d"];
+
+function colourFor(seed: string) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  return AVATAR_COLOURS[Math.abs(h) % AVATAR_COLOURS.length];
+}
+
+function Initial({ name, url, size = 40, tone }: { name: string; url?: string | null; size?: number; tone?: "danger" }) {
+  const style = { width: size, height: size, fontSize: Math.round(size * 0.4) };
+  if (url) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt="" style={style} className="shrink-0 rounded-full object-cover" />;
+  }
+  return (
+    <span
+      aria-hidden
+      style={{ ...style, background: tone === "danger" ? "var(--status-dnd, #ed4245)" : colourFor(name) }}
+      className="flex shrink-0 items-center justify-center rounded-full font-semibold text-white"
+    >
+      {(name.replace(/^@/, "").charAt(0) || "?").toUpperCase()}
+    </span>
+  );
+}
+
+function RoleAvatar({ role, name }: { role: string; name: string }) {
+  if (role === "staff") {
+    return (
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand text-white">
+        <IconStaff size={20} />
+      </span>
+    );
+  }
+  if (role === "tether") {
+    return (
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7b5bd6] text-white">
+        <IconBot size={20} />
+      </span>
+    );
+  }
+  return <Initial name={name} />;
+}
+
+function ServerIcon({ name, url, size = 40 }: { name: string; url: string | null; size?: number }) {
+  const style = { width: size, height: size };
+  if (url) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt="" style={style} className="shrink-0 rounded-[30%] object-cover" />;
+  }
+  const initials = name.split(/\s+/).map((w) => w.charAt(0)).join("").slice(0, 3) || "?";
+  return (
+    <span
+      aria-hidden
+      style={{ ...style, fontSize: Math.round(size * 0.32) }}
+      className="flex shrink-0 items-center justify-center rounded-[30%] bg-bg-tertiary font-semibold text-header-primary"
+    >
+      {initials}
+    </span>
+  );
+}
+
+function Page({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-[900px] px-4 py-6 sm:px-8">{children}</div>
+    </div>
+  );
+}
+
+function SectionTitle({ title, count, hint, className = "" }: { title: string; count?: number; hint?: string; className?: string }) {
+  return (
+    <div className={`mb-3 flex items-baseline gap-2 ${className}`}>
+      <h2 className={ui.eyebrow}>
+        {title}
+        {count !== undefined && <span className="ml-1.5 tabular-nums">— {count}</span>}
+      </h2>
+      {hint && <span className="text-[12px] font-semibold text-[#f0b232]">{hint}</span>}
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
+  return (
+    <div className="flex h-full min-h-[200px] flex-col items-center justify-center px-6 py-10 text-center">
+      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-bg-secondary text-text-muted">{icon}</span>
+      <p className="mt-3 text-[16px] font-semibold text-header-primary">{title}</p>
+      <p className="mt-1 max-w-[280px] text-[14px] text-text-muted">{body}</p>
+    </div>
+  );
+}
+
+function ListSkeleton() {
+  return (
+    <div className="space-y-1 p-1" aria-hidden>
+      {Array.from({ length: 5 }, (_, i) => (
+        <div key={i} className="flex items-center gap-3 rounded-[4px] px-2.5 py-2">
+          <span className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-bg-tertiary" />
+          <span className="flex-1 space-y-2">
+            <span className="block h-3 w-2/3 animate-pulse rounded bg-bg-tertiary" />
+            <span className="block h-2.5 w-1/3 animate-pulse rounded bg-bg-tertiary" />
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
