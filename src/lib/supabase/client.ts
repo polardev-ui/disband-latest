@@ -106,6 +106,77 @@ export async function refreshSessionOnce(): Promise<RefreshResult> {
   }
 }
 
+/*
+ Refresh-loop guard (5 Nov 2026).
+
+ A few accounts were each sending ~560 token refreshes a minute for hours from
+ ordinary browser tabs (supabase-js, real Edge/Chrome), all on a browser with
+ ~30 saved accounts. Several paths can refresh outside refreshSessionOnce's
+ cooldown (auth-js refreshes inside getSession() when it thinks the token is
+ expired, setSession, ice-servers, mfa), so the cap lives at the network layer
+ instead: within REFRESH_REPLAY_MS of a successful refresh, a request that
+ presents the same refresh token, or the one that refresh returned, gets that
+ same response back instead of hitting Supabase. A different account's token
+ always goes through, so switching is unaffected.
+*/
+const REFRESH_REPLAY_MS = 10_000;
+let lastRefresh: { at: number; tokens: Set<string>; body: string; headers: [string, string][] } | null = null;
+let inflightRefresh: { token: string; promise: Promise<Response> } | null = null;
+
+function refreshTokenOf(input: RequestInfo | URL, init?: RequestInit): string | null {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  if (!url.includes("/auth/v1/token") || !url.includes("grant_type=refresh_token")) return null;
+  if (typeof init?.body !== "string") return null;
+  try {
+    const token = (JSON.parse(init.body) as { refresh_token?: unknown }).refresh_token;
+    return typeof token === "string" ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+function replay(entry: { body: string; headers: [string, string][] }): Response {
+  return new Response(entry.body, { status: 200, headers: entry.headers });
+}
+
+const refreshGuardFetch: typeof fetch = async (input, init) => {
+  const token = refreshTokenOf(input, init);
+  if (!token) return trackedFetch(input, init);
+
+  if (lastRefresh && Date.now() - lastRefresh.at < REFRESH_REPLAY_MS && lastRefresh.tokens.has(token)) {
+    return replay(lastRefresh);
+  }
+  if (inflightRefresh?.token === token) {
+    return (await inflightRefresh.promise).clone();
+  }
+
+  const promise = trackedFetch(input, init);
+  inflightRefresh = { token, promise };
+  try {
+    const res = await promise;
+    if (res.ok) {
+      const body = await res.clone().text();
+      let next: string | null = null;
+      try {
+        const rt = (JSON.parse(body) as { refresh_token?: unknown }).refresh_token;
+        next = typeof rt === "string" ? rt : null;
+      } catch {
+
+      }
+      lastRefresh = {
+        at: Date.now(),
+        tokens: new Set(next ? [token, next] : [token]),
+        body,
+        // The body is already decoded, so drop encoding/length headers.
+        headers: [...res.headers.entries()].filter(([k]) => !/^content-(encoding|length)$/i.test(k)),
+      };
+    }
+    return res.clone();
+  } finally {
+    if (inflightRefresh?.promise === promise) inflightRefresh = null;
+  }
+};
+
 function createBrowserSupabaseClient(url: string, anonKey: string): SupabaseClient {
   if (typeof document !== "undefined") {
     for (const cookie of document.cookie.split(";")) {
@@ -124,7 +195,7 @@ function createBrowserSupabaseClient(url: string, anonKey: string): SupabaseClie
       storage: typeof window !== "undefined" ? window.localStorage : undefined,
     },
     // Lets the "Disband is restarting" / "You're offline" screen notice outages.
-    global: { fetch: trackedFetch },
+    global: { fetch: refreshGuardFetch },
   });
   /*
    Keep each account's saved refresh token current, whoever caused the refresh.
