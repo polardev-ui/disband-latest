@@ -3959,10 +3959,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (channel) void supabase.removeChannel(channel);
       const ch = supabase.channel(`watched-profiles:${userId}:${Date.now()}`);
       channel = ch;
-      for (let i = 0; i < ids.length; i += 100) {
+      // Realtime indexes each filter, and Postgres caps an index row at
+      // 2704 bytes. 100 ids (~3.7 KB) failed every subscription, and the
+      // rejoin loop retried it forever; 50 ids is about 1.9 KB.
+      const CHUNK = 50;
+      for (let i = 0; i < ids.length; i += CHUNK) {
         ch.on(
           "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "profiles", filter: `id=in.(${ids.slice(i, i + 100).join(",")})` },
+          { event: "UPDATE", schema: "public", table: "profiles", filter: `id=in.(${ids.slice(i, i + CHUNK).join(",")})` },
           (payload) => patchProfileInState(payload.new as Profile),
         );
       }
