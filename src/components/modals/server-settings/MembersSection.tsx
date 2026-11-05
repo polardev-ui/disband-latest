@@ -126,7 +126,7 @@ export function MembersSection({ isOwner }: SectionProps) {
                       )}
                     </div>
                   </div>
-                  {!isOwnerRow && canModerateTarget(m.user_id) && (
+                  {((!isOwnerRow && canModerateTarget(m.user_id)) || (isSelf && canEditRoles)) && (
                     <div className="flex shrink-0 items-center gap-1">
                       {canEditRoles && assignable.length > 0 && (
                         <RolePicker
@@ -149,7 +149,7 @@ export function MembersSection({ isOwner }: SectionProps) {
                           <IconCrown size={15} />
                         </button>
                       )}
-                      {canKick && (
+                      {canKick && !isSelf && (
                         <button
                           type="button"
                           onClick={() => setPending({ kind: "kick", userId: m.user_id, name })}
@@ -160,7 +160,7 @@ export function MembersSection({ isOwner }: SectionProps) {
                           <IconLeave size={16} />
                         </button>
                       )}
-                      {canBan && (
+                      {canBan && !isSelf && (
                         <button
                           type="button"
                           onClick={() => setPending({ kind: "ban", userId: m.user_id, name })}

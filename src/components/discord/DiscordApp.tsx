@@ -529,6 +529,7 @@ export function DiscordApp() {
   // Prefer a freshly fetched row (it reflects the latest role edit), then the
   // loaded roster, which on big spaces holds only part of the members.
   const profileServerMember = fetchedProfileMember ?? loadedProfileMember;
+  const profileIsSelf = !!profileTarget && profileTarget.id === app.user?.id;
   const profileCanManageRoles =
     app.viewMode === "space" &&
     !!profileTarget &&
@@ -536,10 +537,10 @@ export function DiscordApp() {
       isServerOwner ||
       (app.serverPermissions.manage_roles &&
         app.serverPermissions.manage_server &&
-        app.canModerateMember(profileTarget.id))
+        (profileIsSelf || app.canModerateMember(profileTarget.id)))
     )
-    // The server refuses role edits on the owner, so don't offer them.
-    && profileTarget.id !== app.activeServer?.owner_id;
+    // Only the owner can change the owner's roles (0228).
+    && (profileIsSelf || profileTarget.id !== app.activeServer?.owner_id);
   const assignableServerRoles = useMemo(
     () => app.serverRoles.filter((role) => !role.is_default && (isServerOwner || role.position < app.myTopRolePosition)),
     [app.serverRoles, app.myTopRolePosition, isServerOwner],

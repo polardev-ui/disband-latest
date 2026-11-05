@@ -143,14 +143,22 @@ final class PresenceService {
         if changed { rebuildStatuses() }
     }
 
+    private static func rank(_ status: UserStatus) -> Int {
+        switch status {
+        case .dnd: return 4
+        case .online: return 3
+        case .idle: return 2
+        case .offline: return 0
+        }
+    }
+
     private func rebuildStatuses() {
         var next: [String: UserStatus] = [:]
         for payload in presenceRefs.values {
-            let current = next[payload.userId]
-            // Invisible/offline must never mask another live session.
-            if current == nil || current == .offline || payload.status != .offline {
-                next[payload.userId] = payload.status
-            }
+            // Several live sessions (phone + desktop): the most present one
+            // wins, whatever order they synced in, same as the web.
+            if let current = next[payload.userId], Self.rank(current) >= Self.rank(payload.status) { continue }
+            next[payload.userId] = payload.status
         }
         // Our own entry can arrive without a decodable state payload, so keep
         // the status this client knows it published.

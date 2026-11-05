@@ -5,10 +5,10 @@ import { AttachmentGrid } from "@/components/discord/AttachmentGrid";
 import { readAttachments } from "@/lib/message-attachments";
 import {
   formatMessageTime, displayName, extractInviteCodes, normalizeMessageContent,
-  mentionsEveryone, mentionsUsername,
+  mentionsEveryone, mentionsUsername, roleMentionSlug,
 } from "@/lib/utils";
 import { extractGiftCodes } from "@/lib/gifts";
-import { renderMarkdown } from "@/lib/markdown";
+import { renderMarkdown, roleMentionColour } from "@/lib/markdown";
 import { embedColorHex, type Embed } from "@/lib/embeds";
 import { safeImageUrl } from "@/lib/safe-url";
 import {
@@ -70,6 +70,8 @@ export interface ChatMessageData {
 }
 
 interface ChatMessageProps {
+  /** The viewer's role ids in this space; a ping through one colours the row. */
+  myRoleIds?: string[];
   message: ChatMessageData;
   showHeader: boolean;
   compact: boolean;
@@ -540,6 +542,7 @@ function ChatMessageImpl({
   onChannelClick,
   customEmoji,
   roles,
+  myRoleIds,
 }: ChatMessageProps & { members?: Profile[] }) {
   const { t } = useI18n();
   const author = message.author;
@@ -696,9 +699,33 @@ function ChatMessageImpl({
     && message.author_id !== currentUserId
   );
   const pingedYou = mentionedYou || repliedToYou;
-  const rowBgClass = pingedYou
-    ? "bg-[var(--ping-bg)] hover:bg-[var(--ping-bg-hover)] shadow-[inset_2px_0_0_0_var(--ping-bar)]"
-    : "hover:bg-bg-message-hover";
+  // Pinged through a coloured role you hold (and not by name): the row takes
+  // that role's colour, as on Discord. The highest such role wins.
+  const pingRoleColour = (() => {
+    if (!pingedYou || !roles?.length || !myRoleIds?.length) return null;
+    if (mentionsUsername(body, currentUserName)) return null;
+    const mine = new Set(myRoleIds);
+    const slugs = new Set([...body.matchAll(/@&([a-zA-Z0-9_-]{1,64})/g)].map((m) => m[1].toLowerCase()));
+    if (slugs.size === 0) return null;
+    const hit = roles
+      .filter((r) => mine.has(r.id) && slugs.has(roleMentionSlug(r.name).toLowerCase()))
+      .sort((a, b) => b.position - a.position)
+      .map((r) => roleMentionColour(r))
+      .find((c): c is string => !!c);
+    return hit ?? null;
+  })();
+  const rowBgClass = pingRoleColour
+    ? "bg-[var(--ping-role-bg)] hover:bg-[var(--ping-role-bg-hover)] shadow-[inset_2px_0_0_0_var(--ping-role)]"
+    : pingedYou
+      ? "bg-[var(--ping-bg)] hover:bg-[var(--ping-bg-hover)] shadow-[inset_2px_0_0_0_var(--ping-bar)]"
+      : "hover:bg-bg-message-hover";
+  const rowStyle = pingRoleColour
+    ? ({
+        "--ping-role": pingRoleColour,
+        "--ping-role-bg": `color-mix(in srgb, ${pingRoleColour} 10%, transparent)`,
+        "--ping-role-bg-hover": `color-mix(in srgb, ${pingRoleColour} 14%, transparent)`,
+      } as React.CSSProperties)
+    : undefined;
 
   if (isSystem) {
     const sysText = normalizeMessageContent(message.content);

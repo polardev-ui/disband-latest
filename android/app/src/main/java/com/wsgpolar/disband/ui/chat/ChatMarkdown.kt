@@ -137,7 +137,36 @@ object ChatMarkdown {
         Rule("_", SpanStyle(fontStyle = FontStyle.Italic)),
     )
 
-    private val MENTION = Regex("(?<![\\w.])@[A-Za-z0-9_.]{1,32}")
+    /** `@&Role-Name` (role pings, as the web writes them) or `@username`. */
+    private val MENTION = Regex("(?<![\\w.])@(&[A-Za-z0-9_-]{1,64}|[A-Za-z0-9_.]{1,32})")
+
+    private data class RoleInfo(val name: String, val color: Color?)
+
+    /** The open space's roles by slug, so role pings show in their colour (as on web and iOS). */
+    @Volatile private var roles: Map<String, RoleInfo> = emptyMap()
+
+    fun setRoles(list: List<Pair<String, String>>) {
+        roles = list.mapNotNull { (name, hex) ->
+            val slug = roleSlug(name).lowercase()
+            if (slug.isEmpty()) null else slug to RoleInfo(name, roleColour(hex))
+        }.toMap()
+    }
+
+    /** `roleMentionSlug` in `src/lib/utils.ts`. */
+    private fun roleSlug(name: String): String =
+        name.trim()
+            .replace(Regex("\\s+"), "-")
+            .replace(Regex("[^a-zA-Z0-9_-]"), "")
+            .replace(Regex("-+"), "-")
+            .trim('-')
+
+    /** Grey (a new role's default) keeps the usual accent chip. */
+    private fun roleColour(hex: String): Color? {
+        val c = hex.trim().lowercase()
+        if (c.length != 7 || !c.startsWith("#") || c in setOf("#949ba4", "#99aab5", "#000000")) return null
+        val v = c.drop(1).toLongOrNull(16) ?: return null
+        return Color(0xFF000000 or v)
+    }
 
     /**
      * Inline markers, resolved left to right.
@@ -220,14 +249,22 @@ object ChatMarkdown {
         var cursor = 0
         for (mention in MENTION.findAll(text)) {
             append(text.substring(cursor, mention.range.first))
+            val role = if (mention.value.startsWith("@&")) roles[mention.value.drop(2).lowercase()] else null
+            val tint = role?.color ?: palette.accent
             pushStyle(
                 SpanStyle(
-                    color = palette.accent,
-                    background = palette.accent.copy(alpha = 0.15f),
+                    color = tint,
+                    background = tint.copy(alpha = if (role?.color != null) 0.18f else 0.15f),
                     fontWeight = FontWeight.Medium,
                 )
             )
-            append(mention.value)
+            append(
+                when {
+                    role != null -> "@${role.name}"
+                    mention.value.startsWith("@&") -> "@" + mention.value.drop(2).replace('-', ' ')
+                    else -> mention.value
+                }
+            )
             pop()
             cursor = mention.range.last + 1
         }

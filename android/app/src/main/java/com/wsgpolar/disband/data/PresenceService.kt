@@ -60,12 +60,19 @@ class PresenceService(private val scope: CoroutineScope) {
         return userId to status
     }
 
-    /** An offline entry never masks another of the same person's sessions that is online. */
+    /** Several live sessions: the most present one wins (DND, Online, Idle, Offline), as on web and iOS. */
+    private fun rank(status: UserStatus): Int = when (status) {
+        UserStatus.Dnd -> 4
+        UserStatus.Online -> 3
+        UserStatus.Idle -> 2
+        UserStatus.Offline -> 0
+    }
+
     private fun publish() {
         val map = mutableMapOf<String, UserStatus>()
         for ((userId, status) in sessions.values) {
             val current = map[userId]
-            if (current == null || current == UserStatus.Offline || status != UserStatus.Offline) map[userId] = status
+            if (current == null || rank(status) > rank(current)) map[userId] = status
         }
         val own = ownUserId
         val mine = ownStatus

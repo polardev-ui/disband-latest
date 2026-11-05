@@ -111,9 +111,20 @@ struct DisbandiOSApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     // iOS suspends the app in the background anyway; stopping
                     // first means no half-finished poll lands after it wakes.
-                    if phase == .background { music.stop() }
+                    if phase == .background {
+                        music.stop()
+                        // Closing or backgrounding the app takes us offline
+                        // straight away; the chosen status stays saved.
+                        presence.stop()
+                    }
                     guard phase == .active, let uid = appState.currentUserId else { return }
-                    music.start(userId: uid, presence: presence)
+                    // Coming back: re-read the status chosen on any device
+                    // (Online set on desktop shows here too), then rejoin.
+                    Task {
+                        await appState.loadProfile()
+                        await presence.start(userId: uid, status: appState.profile?.chosenStatus ?? .online)
+                        music.start(userId: uid, presence: presence)
+                    }
                     Task { await refreshMentionBadge(uid) }
                     // Review prompt: recorded on every activation, shown only
                     // when every gate in ReviewPrompter passes (signed in,

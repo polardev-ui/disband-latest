@@ -228,6 +228,7 @@ interface MessageRowProps {
   members: Profile[];
   channels?: ChannelLite[];
   roles?: ServerRole[];
+  myRoleIds?: string[];
   customEmoji?: Record<string, string>;
   canReact: boolean;
   canForward: boolean;
@@ -269,6 +270,7 @@ const MessageRow = memo(function MessageRow({
   members,
   channels,
   roles,
+  myRoleIds,
   customEmoji,
   canReact,
   canForward,
@@ -340,6 +342,7 @@ const MessageRow = memo(function MessageRow({
         members={members}
         channels={channels}
         roles={roles}
+        myRoleIds={myRoleIds}
         customEmoji={customEmoji}
         onChannelClick={onChannelClick}
         highlight={highlight}
@@ -545,7 +548,15 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     loadChannelContextWindow,
     loadDmContextWindow,
     loadGroupContextWindow,
+    members: spaceMembers,
   } = useApp();
+  // Your roles in the open space, so a role ping can colour your row.
+  const myRoleIds = useMemo(() => {
+    if (messageContext !== "channel" || !currentUserId) return undefined;
+    const me = spaceMembers.find((m) => m.user_id === currentUserId);
+    if (!me) return undefined;
+    return me.role_ids?.length ? me.role_ids : me.role_id ? [me.role_id] : undefined;
+  }, [messageContext, currentUserId, spaceMembers]);
   const { t, language } = useI18n();
   const replyPreviews = useReplyPreviews(messages, messageContext, currentProfile);
   // Tether is a mentionable entity but never a real server member: append its
@@ -1103,6 +1114,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     members={renderMembers}
                     channels={channels}
                     roles={roles}
+                    myRoleIds={myRoleIds}
                     customEmoji={customEmoji}
                     canReact={canReact}
                     canForward={!!onForward}

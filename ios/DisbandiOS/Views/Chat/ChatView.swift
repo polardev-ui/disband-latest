@@ -272,6 +272,14 @@ struct ChatView: View {
         }
         // Re-counted whenever the set of visible people changes.
         .task(id: onlinePresenceKey) { await refreshOnlineCount() }
+        // The space's roles, so role pings show in their colour.
+        .task(id: model.source) {
+            guard case .channel(let id, _) = model.source else { return }
+            if channelServerId == nil { channelServerId = await ServerOnlineCount.serverId(forChannel: id) }
+            guard let serverId = channelServerId,
+                  let roles = try? await ServerAdmin.roles(serverId: serverId) else { return }
+            ChatMarkdown.setRoles(roles.map { (name: $0.name, color: $0.color) })
+        }
         // Runs on appear as well as when loading changes. A conversation
         // painted from the cache never shows a loading state, so watching
         // only for the change left it unsettled for good: "follow the

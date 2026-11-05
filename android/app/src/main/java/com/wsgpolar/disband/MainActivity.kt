@@ -44,12 +44,14 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         (application as DisbandApp).container.music.setForeground(true)
+        (application as DisbandApp).container.appState.onAppForeground()
     }
 
     override fun onStop() {
         super.onStop()
         // Spotify is only shared while Disband is on screen, as on iOS.
         (application as DisbandApp).container.music.setForeground(false)
+        (application as DisbandApp).container.appState.onAppBackground()
     }
 
     override fun onNewIntent(intent: Intent) {

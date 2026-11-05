@@ -178,13 +178,35 @@ class AppState(
 
         loadProfile()
         _phase.value = AuthPhase.SignedIn
-        presence.start(currentUserId, _profile.value?.status ?: UserStatus.Offline)
+        presence.start(currentUserId, chosenStatus())
         music.setUser(currentUserId)
         themeManager.adopt(_profile.value?.theme)
         registerPush()
         startCallListeners()
         subscriptions.start(currentUserId)
         loadServers()
+    }
+
+    /** The status the person picked on any device; the live column can read offline. */
+    private fun chosenStatus(): UserStatus =
+        _profile.value?.preferredStatus ?: _profile.value?.status ?: UserStatus.Online
+
+    /**
+     * App back on screen: re-read the status chosen on any device (Online set on
+     * desktop shows here too) and rejoin presence, which the OS may have dropped.
+     */
+    fun onAppForeground() {
+        if (_phase.value != AuthPhase.SignedIn) return
+        scope.launch {
+            loadProfile()
+            presence.start(currentUserId, chosenStatus())
+        }
+    }
+
+    /** App closed or sent to the background: offline straight away. The choice stays saved. */
+    fun onAppBackground() {
+        if (_phase.value != AuthPhase.SignedIn) return
+        presence.stop()
     }
 
     private suspend fun mfaChallengeRequired(): Boolean = try {
@@ -198,7 +220,7 @@ class AppState(
     private suspend fun completeSignedIn() {
         loadProfile()
         _phase.value = AuthPhase.SignedIn
-        presence.start(currentUserId, _profile.value?.status ?: UserStatus.Offline)
+        presence.start(currentUserId, chosenStatus())
         music.setUser(currentUserId)
         themeManager.adopt(_profile.value?.theme)
         registerPush()

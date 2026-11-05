@@ -3811,11 +3811,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const updated = payload.new as Profile;
           patchProfileInState(updated);
           setCache(`profile:${userId}`, updated);
+          // Status picked on another device (phone, desktop): show it here too.
+          const chosen = updated.preferred_status;
+          if (chosen && chosen !== preferredStatusRef.current) {
+            preferredStatusRef.current = chosen;
+            autoAwayRef.current = false;
+            void trackPresence(chosen);
+          }
         },
       )
       .subscribe();
     return () => { void sub.unsubscribe(); };
-  }, [userId, configured, patchProfileInState]);
+  }, [userId, configured, patchProfileInState, trackPresence]);
 
   // Everyone whose profile is on screen: friends, the open space's members and
   // group-chat members. One `id=eq` binding per person used to cost Realtime a
@@ -3826,23 +3833,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
     for (const f of friends) ids.add(f.id);
     for (const m of members) ids.add(m.user_id);
     for (const g of groupChats) for (const m of g.members ?? []) ids.add(m.id);
+    // DM partners who aren't friends, and anyone with a message on screen,
+    // so their name, avatar, banner and bio update live too.
+    for (const t of dmThreads) if (t.friend?.id) ids.add(t.friend.id);
+    for (const m of messages) if (m.author_id) ids.add(m.author_id);
+    for (const m of dmMessages) if (m.author_id) ids.add(m.author_id);
+    for (const m of groupMessages) if (m.author_id) ids.add(m.author_id);
     if (userId) ids.delete(userId);
     return [...ids].sort().join(",");
   })();
   useEffect(() => {
     if (!userId || !configured || watchedProfileIdsKey === "") return;
-    const channel = getSupabaseClient().channel(`watched-profiles:${userId}`);
+    const supabase = getSupabaseClient();
     // Realtime rejects an `in` filter over 100 values.
     const ids = watchedProfileIdsKey.split(",");
-    for (let i = 0; i < ids.length; i += 100) {
-      channel.on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=in.(${ids.slice(i, i + 100).join(",")})` },
-        (payload) => patchProfileInState(payload.new as Profile),
-      );
-    }
-    channel.subscribe();
-    return () => { void channel.unsubscribe(); };
+    let disposed = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let retryTimer: number | undefined;
+    let attempt = 0;
+    const join = () => {
+      if (disposed) return;
+      if (channel) void supabase.removeChannel(channel);
+      const ch = supabase.channel(`watched-profiles:${userId}:${Date.now()}`);
+      channel = ch;
+      for (let i = 0; i < ids.length; i += 100) {
+        ch.on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "profiles", filter: `id=in.(${ids.slice(i, i + 100).join(",")})` },
+          (payload) => patchProfileInState(payload.new as Profile),
+        );
+      }
+      ch.subscribe((status) => {
+        if (disposed || channel !== ch) return;
+        if (status === "SUBSCRIBED") {
+          attempt = 0;
+        } else if ((status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") && retryTimer === undefined) {
+          // Rejoin rather than silently going stale until a reload.
+          const delay = Math.min(30_000, 2_000 * 2 ** attempt) + Math.random() * 1_000;
+          attempt += 1;
+          retryTimer = window.setTimeout(() => { retryTimer = undefined; join(); }, delay);
+        }
+      });
+    };
+    // Debounce: the id set changes as messages load; don't churn the channel.
+    const start = window.setTimeout(join, 500);
+    return () => {
+      disposed = true;
+      window.clearTimeout(start);
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      if (channel) void supabase.removeChannel(channel);
+    };
   }, [userId, configured, watchedProfileIdsKey, patchProfileInState]);
 
   useEffect(() => {

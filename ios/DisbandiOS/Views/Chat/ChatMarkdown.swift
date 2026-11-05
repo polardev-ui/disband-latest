@@ -13,6 +13,47 @@ import UIKit
 /// one character short.
 enum ChatMarkdown {
 
+    // MARK: Role colours
+    //
+    // Role pings take their role's colour, as on the web and Discord. The open
+    // space's roles are registered here (slug -> name + colour); grey, the
+    // default for a new role, keeps the usual blue chip.
+    private static let roleLock = NSLock()
+    nonisolated(unsafe) private static var roleInfo: [String: (name: String, color: UIColor?)] = [:]
+    nonisolated(unsafe) private static var roleVersion = 0
+
+    static func setRoles(_ roles: [(name: String, color: String)]) {
+        var next: [String: (name: String, color: UIColor?)] = [:]
+        for role in roles {
+            let slug = roleSlug(role.name).lowercased()
+            guard !slug.isEmpty else { continue }
+            next[slug] = (role.name, roleColour(role.color))
+        }
+        roleLock.lock(); roleInfo = next; roleVersion += 1; roleLock.unlock()
+    }
+
+    /// `roleMentionSlug` in `src/lib/utils.ts` (and `MentionSearch.roleSlug`).
+    private static func roleSlug(_ name: String) -> String {
+        var s = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        s = s.replacingOccurrences(of: "\\s+", with: "-", options: .regularExpression)
+        s = s.replacingOccurrences(of: "[^a-zA-Z0-9_-]", with: "", options: .regularExpression)
+        s = s.replacingOccurrences(of: "-+", with: "-", options: .regularExpression)
+        return s.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+    }
+
+    private static func roleLookup(_ slug: String) -> (name: String, color: UIColor?)? {
+        roleLock.lock(); defer { roleLock.unlock() }
+        return roleInfo[slug.lowercased()]
+    }
+
+    private static func roleColour(_ hex: String) -> UIColor? {
+        let c = hex.trimmingCharacters(in: .whitespaces).lowercased()
+        guard c.count == 7, c.hasPrefix("#"), !["#949ba4", "#99aab5", "#000000"].contains(c),
+              let v = UInt32(c.dropFirst(), radix: 16) else { return nil }
+        return UIColor(red: CGFloat((v >> 16) & 0xff) / 255, green: CGFloat((v >> 8) & 0xff) / 255,
+                       blue: CGFloat(v & 0xff) / 255, alpha: 1)
+    }
+
     /// `mentionColor` is passed in rather than read from `Brand`, whose
     /// properties are main-actor isolated while this renderer is not.
     /// Rendered messages, so a row re-drawn while scrolling or typing does
@@ -33,7 +74,8 @@ enum ChatMarkdown {
         mentionColor: UIColor,
         revealSpoilers: Bool = false
     ) -> AttributedString {
-        let key = "\(baseFont.pointSize)|\(baseColor.hashValue)|\(mentionColor.hashValue)|\(revealSpoilers)|\(raw)" as NSString
+        roleLock.lock(); let rv = roleVersion; roleLock.unlock()
+        let key = "\(rv)|\(baseFont.pointSize)|\(baseColor.hashValue)|\(mentionColor.hashValue)|\(revealSpoilers)|\(raw)" as NSString
         if let hit = cache.object(forKey: key) { return hit.value }
         let result = renderUncached(raw, baseFont: baseFont, baseColor: baseColor, mentionColor: mentionColor,
                                     revealSpoilers: revealSpoilers)
@@ -145,10 +187,12 @@ enum ChatMarkdown {
             for match in roleRegex.matches(in: current, range: NSRange(location: 0, length: (current as NSString).length)).reversed() {
                 if ns.attribute(.link, at: match.range.location, effectiveRange: nil) != nil { continue }
                 let slug = (current as NSString).substring(with: match.range(at: 1))
-                let label = "@" + slug.replacingOccurrences(of: "-", with: " ")
+                let known = roleLookup(slug)
+                let label = "@" + (known?.name ?? slug.replacingOccurrences(of: "-", with: " "))
+                let roleColour = known?.color
                 ns.replaceCharacters(in: match.range, with: NSAttributedString(string: label, attributes: [
-                    .foregroundColor: mentionText(tint: tint, text: body),
-                    .backgroundColor: tint.withAlphaComponent(0.3),
+                    .foregroundColor: roleColour ?? mentionText(tint: tint, text: body),
+                    .backgroundColor: (roleColour ?? tint).withAlphaComponent(roleColour == nil ? 0.3 : 0.18),
                     .font: UIFont.systemFont(ofSize: baseFont.pointSize, weight: .medium),
                     roleKey: true,
                 ]))

@@ -144,6 +144,17 @@ export function presetForExpiresAt(expiresAt: string | null | undefined, now = D
   return "never";
 }
 
+/** dnd is a deliberate choice, so it outranks online; idle and offline are what's left over. */
+function presenceRank(status: string): number {
+  switch (status) {
+    case "dnd": return 4;
+    case "online": return 3;
+    case "idle": return 2;
+    case "offline": return 0;
+    default: return 1;
+  }
+}
+
 export function flattenPresenceState(
   state: Record<string, Partial<PresencePayload>[] | undefined>,
 ): PresenceMap {
@@ -154,10 +165,10 @@ export function flattenPresenceState(
         const next = entry.status ?? "online";
         const current = map.get(entry.userId);
         // A person can have more than one live client (two tabs, web + phone).
-        // An invisible/offline entry must never mask another session that is
-        // actually online. Otherwise the roster can drop someone who is right
-        // there, depending on which presence key happened to sync last.
-        if (current === undefined || current === "offline" || next !== "offline") {
+        // The most present one wins, whatever order the keys synced in: an
+        // idle phone must not hide an active desktop, and an offline entry
+        // must never mask a session that is right there.
+        if (current === undefined || presenceRank(next) > presenceRank(current)) {
           map.set(entry.userId, next);
         }
       }

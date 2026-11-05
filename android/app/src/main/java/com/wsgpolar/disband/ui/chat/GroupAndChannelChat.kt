@@ -256,6 +256,11 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
     // channels. This locked it for everyone, so a space's own owner was told
     // only moderators could post. my_server_permissions reports everything
     // as allowed for the owner.
+    // The space's roles, so role pings show in their colour.
+    LaunchedEffect(channel.serverId) {
+        runCatching { com.wsgpolar.disband.data.ServerAdmin.roles(channel.serverId) }
+            .onSuccess { list -> ChatMarkdown.setRoles(list.map { it.name to it.color }) }
+    }
     val permissions by androidx.compose.runtime.produceState<Map<String, Boolean>?>(null, channel.serverId) {
         value = com.wsgpolar.disband.data.ServerAdmin.permissions(channel.serverId)
     }
