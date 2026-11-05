@@ -8,6 +8,7 @@ import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.flow.merge
 import kotlinx.serialization.KSerializer
@@ -55,11 +56,16 @@ object RealtimeService {
         val inserts = channel.postgresChangeFlow<PostgresAction.Insert>("public") {
             this.table = table
             this.filter = filter
-        }.map { MessageChange.Upsert(json.decodeFromJsonElement(serializer, it.record)) }
+        }.mapNotNull { action ->
+            // One row this build can't read used to end the whole feed.
+            runCatching { MessageChange.Upsert(json.decodeFromJsonElement(serializer, action.record)) }.getOrNull()
+        }
         val updates = channel.postgresChangeFlow<PostgresAction.Update>("public") {
             this.table = table
             this.filter = filter
-        }.map { MessageChange.Upsert(json.decodeFromJsonElement(serializer, it.record)) }
+        }.mapNotNull { action ->
+            runCatching { MessageChange.Upsert(json.decodeFromJsonElement(serializer, action.record)) }.getOrNull()
+        }
         val deletes = channel.postgresChangeFlow<PostgresAction.Delete>("public") {
             this.table = table
         }.map { MessageChange.Removed(it.oldRecord["id"]?.jsonPrimitive?.content.orEmpty()) }

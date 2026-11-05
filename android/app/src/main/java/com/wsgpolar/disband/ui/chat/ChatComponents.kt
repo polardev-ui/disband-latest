@@ -240,8 +240,8 @@ fun ChatScaffold(
         val last = rows.lastOrNull() ?: return@LaunchedEffect
         val firstLoad = previousLastId == null
         if (firstLoad || followLatest || (last.id != previousLastId && last.authorId == ownUserId)) {
-            if (firstLoad) listState.scrollToItem(rows.lastIndex + 1)
-            else listState.animateScrollToItem(rows.lastIndex + 1)
+            if (firstLoad) listState.scrollToItem(rows.size + 1)
+            else listState.animateScrollToItem(rows.size + 1)
             followLatest = true
         }
         previousLastId = last.id
@@ -249,7 +249,20 @@ fun ChatScaffold(
 
     val keyboardBottom = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)
     LaunchedEffect(keyboardBottom) {
-        if (followLatest && rows.isNotEmpty()) listState.scrollToItem(rows.size)
+        if (followLatest && rows.isNotEmpty()) listState.scrollToItem(rows.size + 1)
+    }
+    // Pictures, embeds and the "Today" divider grow the list after it has
+    // been pinned, which left the newest message below the fold with
+    // following still on. Only a reader's own scroll turns it off, so pull
+    // the end back into view whenever content grows underneath.
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.canScrollForward }
+            .collect { canScroll ->
+                if (canScroll && followLatest && !listState.isScrollInProgress) {
+                    val end = listState.layoutInfo.totalItemsCount - 1
+                    if (end >= 0) listState.scrollToItem(end)
+                }
+            }
     }
 
     Column(
@@ -330,7 +343,7 @@ fun ChatScaffold(
                 androidx.compose.material3.FloatingActionButton(
                     onClick = {
                         followLatest = true
-                        scope.launch { listState.animateScrollToItem(rows.size) }
+                        scope.launch { listState.animateScrollToItem(rows.size + 1) }
                     },
                     modifier = Modifier.size(44.dp),
                     shape = CircleShape,
@@ -494,6 +507,8 @@ private fun MessageList(
             )
             }
         }
+        // The true end, below the last row's reactions and embeds.
+        item(key = "bottom", contentType = "bottom") { Spacer(Modifier.height(1.dp)) }
     }
 }
 

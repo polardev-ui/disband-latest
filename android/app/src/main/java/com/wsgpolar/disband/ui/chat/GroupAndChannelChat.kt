@@ -213,6 +213,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         key = "channel:${channel.id}", table = "messages", filter = "channel_id=eq.${channel.id}",
         serializer = Message.serializer(), toRow = { it.toRow(uid) },
         fetch = { before -> Database.messages(channel.id, before = before).map { it.toRow(uid) } },
+        onIncoming = { row -> if (row.authorId != uid) com.wsgpolar.disband.data.ChannelUnreads.sawMessage(channel.id) },
     )
     val rows = timeline.rows
 
@@ -243,10 +244,13 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             try {
                 ActiveChat.show(channel.id)
+                // Clears this channel here and on every other device.
+                com.wsgpolar.disband.data.ChannelUnreads.open(channel.id)
                 typing.start(uid) { id -> runCatching { Database.profile(id) }.getOrNull() }
                 awaitCancellation()
             } finally {
                 typing.stop()
+                com.wsgpolar.disband.data.ChannelUnreads.close(channel.id)
                 if (ActiveChat.isShowing(channel.id)) ActiveChat.clear()
             }
         }

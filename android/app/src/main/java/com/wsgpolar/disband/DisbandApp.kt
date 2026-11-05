@@ -47,6 +47,7 @@ class DisbandApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.wsgpolar.disband.ui.chat.MediaAspects.init(this)
         container = AppContainer(this)
         container.begin()
     }

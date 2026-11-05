@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -334,6 +335,8 @@ private fun ChannelRow(
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val unreadChannels by com.wsgpolar.disband.data.ChannelUnreads.channels.collectAsState()
+    val unread = !isSelected && channel.type != ChannelType.Voice && channel.id in unreadChannels
 
     // Voice takes the speaker, read-only announcement channels the lock, the
     // rest the hash — the same three iOS uses. The glyph carries the "#", so
@@ -379,15 +382,15 @@ private fun ChannelRow(
         Icon(
             icon,
             contentDescription = iconDescription,
-            tint = if (isSelected) palette.accent else if (liveTopic != null) Brand.online else palette.textSecondary,
+            tint = if (isSelected) palette.accent else if (liveTopic != null) Brand.online else if (unread) palette.textPrimary else palette.textSecondary,
             modifier = Modifier.size(18.dp),
         )
         Column(Modifier.weight(1f, fill = false)) {
             Text(
                 channel.name,
-                color = if (isSelected) palette.textPrimary else palette.textSecondary,
+                color = if (isSelected || unread) palette.textPrimary else palette.textSecondary,
                 fontSize = 15.sp,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                fontWeight = if (unread) FontWeight.Bold else if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

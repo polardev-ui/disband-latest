@@ -197,6 +197,7 @@ class AppState(
      */
     fun onAppForeground() {
         if (_phase.value != AuthPhase.SignedIn) return
+        com.wsgpolar.disband.data.ChannelUnreads.start()
         scope.launch {
             loadProfile()
             presence.start(currentUserId, chosenStatus())
@@ -394,6 +395,7 @@ class AppState(
         // Otherwise the old account keeps receiving pushes on this phone and
         // the next account is skipped because the FCM token has not changed.
         PushRegistrar.unregisterCurrentDevice(context)
+        com.wsgpolar.disband.data.ChannelUnreads.reset()
         runCatching { client.auth.signOut() }
     }
 

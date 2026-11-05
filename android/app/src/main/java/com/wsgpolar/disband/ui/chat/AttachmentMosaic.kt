@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -146,15 +147,49 @@ fun SingleImage(
     modifier: Modifier = Modifier,
     onOpen: (StoredAttachment) -> Unit = {},
 ) {
+    // A box already the picture's final size, so loading it never pushes
+    // the conversation down. The shape is remembered once measured.
+    val (w, h) = MediaAspects.box(MediaAspects.aspect(attachment.url))
     AsyncImage(
         model = attachment.url,
         contentDescription = attachment.name ?: "Image",
-        contentScale = ContentScale.Fit,
+        contentScale = ContentScale.Crop,
+        onSuccess = { state ->
+            val d = state.painter.intrinsicSize
+            if (d.width > 0f && d.height > 0f) MediaAspects.record(attachment.url, d.width / d.height)
+        },
         modifier = modifier
-            .widthIn(max = 280.dp)
-            .heightIn(max = 300.dp)
+            .size(w.dp, h.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(palette.elevated)
             .clickable { onOpen(attachment) },
     )
+}
+
+/** Remembered image shapes (width / height), kept across launches. */
+object MediaAspects {
+    private var prefs: android.content.SharedPreferences? = null
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, Float>()
+
+    fun init(context: android.content.Context) {
+        val p = context.getSharedPreferences("chat_media_aspects", android.content.Context.MODE_PRIVATE)
+        prefs = p
+        p.all.forEach { (k, v) -> (v as? Float)?.let { cache[k] = it } }
+    }
+
+    fun aspect(url: String): Float? = cache[url]
+
+    fun record(url: String, aspect: Float) {
+        if (cache[url] == aspect) return
+        if (cache.size > 3000) { cache.clear(); prefs?.edit()?.clear()?.apply() }
+        cache[url] = aspect
+        prefs?.edit()?.putFloat(url, aspect)?.apply()
+    }
+
+    /** The box in dp: up to 280 wide and 300 tall, 4:3 until measured. */
+    fun box(aspect: Float?): Pair<Float, Float> {
+        val a = aspect?.takeIf { it > 0f } ?: return 280f to 210f
+        val w = minOf(280f, 300f * a).coerceAtLeast(80f)
+        return w to minOf(300f, w / a)
+    }
 }

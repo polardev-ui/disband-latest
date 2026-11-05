@@ -32,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -145,11 +146,16 @@ fun ServerRail(
         }
         var expanded by remember { mutableStateOf(setOf<String>()) }
 
+        // Shared read state (0229): the small white pill for a space with
+        // a channel you haven't read, as on desktop and iOS.
+        LaunchedEffect(Unit) { com.wsgpolar.disband.data.ChannelUnreads.start() }
+        val unreadServers by com.wsgpolar.disband.data.ChannelUnreads.servers.collectAsState()
         val spaceButton: @Composable (Server) -> Unit = { server ->
             RailButton(
                 selected = server.id == selectedServerId,
-                label = server.name,
+                label = if (server.id in unreadServers) "${server.name}, unread messages" else server.name,
                 badge = unreadForServer(server.id),
+                unread = server.id in unreadServers,
                 onClick = { onServerSelected(server) },
             ) {
                 ServerIcon(server, ICON_SIZE)
@@ -172,6 +178,7 @@ fun ServerRail(
                     selected = !open && members.any { it.id == selectedServerId },
                     label = if (open) "Close ${folder.name}" else "Open ${folder.name}",
                     badge = if (open) 0 else members.sumOf { unreadForServer(it.id) },
+                    unread = !open && members.any { it.id in unreadServers },
                     onClick = { expanded = if (open) expanded - folder.id else expanded + folder.id },
                 ) {
                     Box(
@@ -230,6 +237,7 @@ private fun RailButton(
     label: String,
     onClick: () -> Unit,
     badge: Int = 0,
+    unread: Boolean = false,
     icon: @Composable () -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -237,7 +245,7 @@ private fun RailButton(
         if (selected) Radii.railSquircle else ICON_SIZE / 2,
         label = "railCorner",
     )
-    val pillHeight by animateDpAsState(if (selected) 38.dp else 0.dp, label = "railPill")
+    val pillHeight by animateDpAsState(if (selected) 38.dp else if (unread) 8.dp else 0.dp, label = "railPill")
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.92f else 1f, label = "railScale")
