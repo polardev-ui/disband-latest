@@ -8,7 +8,7 @@ import { ResendResetLink } from "@/components/auth/ResendResetLink";
 import { EMAIL_NOT_CONFIRMED, TURNSTILE_REQUIRED } from "@/lib/authErrors";
 import { isTauri } from "@/lib/platform";
 import { PUBLIC_ENV } from "@/lib/public-env";
-import { openLegalPage } from "@/lib/legal";
+import { openLegalPage, type LegalPath } from "@/lib/legal";
 import { Toggle } from "@/components/discord/settings/SettingsPrimitives";
 import { Logo } from "@/components/ui/Logo";
 import { Turnstile } from "@/components/ui/Turnstile";
@@ -510,7 +510,8 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                   {/* The words toggle the switch too; the two links open the documents instead. */}
                   <label htmlFor="signup-agree-terms" className="cursor-pointer select-none text-[13px] leading-snug text-text-muted">
                     {t("I agree to the")}{" "}
-                    <LegalLink path="/terms">{t("Terms of Service")}</LegalLink> and{" "}
+                    <LegalLink path="/terms">{t("Terms of Service")}</LegalLink>,{" "}
+                    <LegalLink path="/eula">{t("EULA")}</LegalLink> and{" "}
                     <LegalLink path="/privacy">{t("Privacy Policy")}</LegalLink>
                   </label>
                 </div>
@@ -638,7 +639,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
   );
 }
 
-function LegalLink({ path, children }: { path: "/terms" | "/privacy"; children: React.ReactNode }) {
+function LegalLink({ path, children }: { path: LegalPath; children: React.ReactNode }) {
   return (
     <a
       href={path}

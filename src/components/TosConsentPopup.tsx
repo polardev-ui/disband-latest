@@ -52,6 +52,13 @@ export function TosConsentPopup() {
         >
           Privacy
         </button>
+        <button
+          type="button"
+          onClick={() => void openLegalPage("/eula")}
+          className="text-brand hover:underline"
+        >
+          EULA
+        </button>
       </div>
       <div className="mt-4 flex justify-end">
         <button

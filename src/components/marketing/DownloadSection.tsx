@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { PlatformIcon } from "@/components/marketing/PlatformIcon";
 import {
   detectClientPlatform,
@@ -322,6 +323,18 @@ export function DownloadSection() {
             </a>
           </div>
         )}
+
+        <p className="mt-10 max-w-xl text-[13px] leading-relaxed text-[#6e727a]">
+          By downloading, installing or using Disband, you agree to the{" "}
+          <Link href="/eula" className="text-[#9aa0a8] underline underline-offset-2 hover:text-white">
+            End User License Agreement
+          </Link>{" "}
+          and the{" "}
+          <Link href="/terms" className="text-[#9aa0a8] underline underline-offset-2 hover:text-white">
+            Terms of Service
+          </Link>
+          .
+        </p>
       </div>
     </section>
   );

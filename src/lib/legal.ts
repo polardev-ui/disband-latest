@@ -10,14 +10,16 @@ import { PUBLIC_ENV } from "@/lib/public-env";
  */
 export const TOS_VERSION = "2026-10-28";
 
+export type LegalPath = "/terms" | "/privacy" | "/eula";
+
 /** A legal page on the website. The desktop app's own origin is local, so it links to the site. */
-export function legalUrl(path: "/terms" | "/privacy"): string {
+export function legalUrl(path: LegalPath): string {
   const origin = isTauri() ? PUBLIC_ENV.webAppUrl.replace(/\/$/, "") : window.location.origin;
   return `${origin}${path}`;
 }
 
 /** Open a legal page in a new tab, or the system browser on desktop. */
-export async function openLegalPage(path: "/terms" | "/privacy") {
+export async function openLegalPage(path: LegalPath) {
   const url = legalUrl(path);
   if (isTauri()) {
     try {

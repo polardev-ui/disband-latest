@@ -15,7 +15,7 @@ export default function LegalPage() {
       <MarketingNav />
       <main className="mx-auto max-w-3xl px-6 pb-20 pt-24 sm:pt-28">
         <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">
-          Last updated October 28, 2026
+          Last updated November 6, 2026
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-white sm:text-4xl">
           Legal Information
@@ -59,6 +59,13 @@ export default function LegalPage() {
               Usernames, space names, messages, media, and other user-created content remain owned by
               the users or other rights holders who own them. User content is subject to the license
               described in the Terms of Service.
+            </p>
+            <p>
+              Your license to install and use the Disband apps is set out in the{" "}
+              <Link href="/eula" className="text-brand hover:underline">
+                End User License Agreement
+              </Link>
+              .
             </p>
           </section>
 
