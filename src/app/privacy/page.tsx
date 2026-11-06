@@ -360,7 +360,11 @@ export default function PrivacyPage() {
           </ul>
           <p>
             These providers may process information on our behalf or independently under their own
-            policies and contractual obligations.
+            policies and contractual obligations. Supabase, Vercel, Cloudflare, Stripe, Resend, and
+            Hive process personal data for us under data processing agreements that limit how they
+            may use it and require them to keep it secure. DeepSeek does not offer a data processing
+            agreement, so we only send it what is needed for moderation and Tether, and we are
+            working to replace it with a provider that does.
           </p>
 
           <h3 className="text-base font-semibold text-white">Services you connect</h3>
@@ -400,8 +404,9 @@ export default function PrivacyPage() {
           <p>
             When we transfer personal data from the EEA, the UK, or Switzerland to a country without an
             adequacy decision, we use appropriate safeguards, such as the European Commission’s
-            Standard Contractual Clauses (with the UK Addendum where relevant), or rely on the EU–U.S.
-            Data Privacy Framework where a provider is certified under it. You can ask for more
+            Standard Contractual Clauses (with the UK Addendum where relevant), which are built into
+            our data processing agreements with our main providers, or rely on the EU–U.S. Data
+            Privacy Framework where a provider is certified under it. You can ask for more
             information about these safeguards at privacy@disband.dev.
           </p>
 
