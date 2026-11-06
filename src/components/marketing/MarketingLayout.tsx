@@ -85,34 +85,55 @@ export function MarketingNav() {
   );
 }
 
+const FOOTER_COLUMNS: { title: string; links: [string, string][] }[] = [
+  {
+    title: "Product",
+    links: [["Downloads", "/downloads"], ["Badges", "/badges"], ["Reviews", "/review"], ["Log in", "/login"]],
+  },
+  {
+    title: "Support",
+    links: [["Bug Report", "/bug-report"], ["Copyright", "/copyright"], ["EU & UK", "/legal/eu-uk"]],
+  },
+  {
+    title: "Legal",
+    links: [["Legal Information", "/legal"], ["Privacy Policy", "/privacy"], ["Terms of Service", "/terms"], ["EULA", "/eula"]],
+  },
+];
+
 export function MarketingFooter() {
   return (
-    <footer className="border-t border-white/5 bg-[#1e1f22] px-6 py-10">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2.5">
-          <Logo size={28} className="h-7 w-7" />
-          <div>
-            <p className="font-semibold text-white">Disband</p>
-            <p className="mt-1 text-sm text-[#949ba4]">Chat, voice, and communities — built for privacy.</p>
+    <footer className="border-t border-white/5 bg-[#1e1f22] px-6 pb-8 pt-14">
+      <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-[1.4fr_repeat(3,1fr)]">
+        <div className="max-w-xs">
+          <div className="flex items-center gap-2.5">
+            <Logo size={28} className="h-7 w-7" />
+            <p className="text-lg font-semibold text-white">Disband</p>
           </div>
+          <p className="mt-3 text-sm leading-relaxed text-[#949ba4]">
+            Chat, voice, and communities — built for privacy.
+          </p>
         </div>
-        <div className="flex flex-wrap gap-4 text-sm text-[#b5bac1]">
-          <Link href="/bug-report" className="hover:text-white">Bug Report</Link>
-          <Link href="/downloads" className="hover:text-white">Downloads</Link>
-          <Link href="/badges" className="hover:text-white">Badges</Link>
-          <Link href="/review" className="hover:text-white">Reviews</Link>
-          <Link href="/legal" className="hover:text-white">Legal</Link>
-          <Link href="/privacy" className="hover:text-white">Privacy Policy</Link>
-          <Link href="/terms" className="hover:text-white">Terms of Service</Link>
-          <Link href="/eula" className="hover:text-white">EULA</Link>
-          <Link href="/copyright" className="hover:text-white">Copyright</Link>
-          <Link href="/legal/eu-uk" className="hover:text-white">EU &amp; UK</Link>
-          <Link href="/login" className="hover:text-white">Log in</Link>
+        <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 md:contents">
+          {FOOTER_COLUMNS.map((col) => (
+            <nav key={col.title} aria-label={col.title}>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#6e727a]">{col.title}</p>
+              <ul className="mt-4 space-y-2.5 text-sm">
+                {col.links.map(([label, href]) => (
+                  <li key={href}>
+                    <Link href={href} className="text-[#b5bac1] transition-colors hover:text-white">
+                      {label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          ))}
         </div>
       </div>
-      <p className="mx-auto mt-8 max-w-6xl text-xs text-[#72767d]">
-        © {new Date().getFullYear()} Disband. All rights reserved.
-      </p>
+      <div className="mx-auto mt-12 flex max-w-6xl flex-col gap-2 border-t border-white/5 pt-6 text-xs text-[#72767d] sm:flex-row sm:justify-between">
+        <p>© {new Date().getFullYear()} Genysis IQ LLC. All rights reserved.</p>
+        <p>Disband is operated by Genysis IQ LLC, Orlando, Florida.</p>
+      </div>
     </footer>
   );
 }
