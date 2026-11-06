@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { ArrowLeft, ArrowUp, Check, Copy, LoaderCircle, LockKeyhole, MessageCircle, X } from "lucide-react";
 import { renderMarkdown } from "@/lib/markdown";
+import { apiFetch } from "@/lib/api";
+import { getSupabaseClient } from "@/lib/supabase/client";
+import { hasEmailFixForm, stripSupportMarkers } from "@/lib/support/markers";
 import { lockBodyScroll } from "@/lib/overlay";
 import styles from "./support.module.css";
 
@@ -44,6 +47,78 @@ function CopyReply({ content }: { content: string }) {
     try { await navigator.clipboard.writeText(content); setStatus("copied"); }
     catch { setStatus("failed"); }
   }}>{status === "copied" ? <Check size={13} /> : <Copy size={13} />}<span aria-live="polite">{status === "copied" ? "Copied" : status === "failed" ? "Couldn’t copy" : "Copy reply"}</span></button>;
+}
+
+/**
+ * The wrong-email fix, shown when Tether offers it. The password goes straight
+ * to our server, never into the chat or to Tether.
+ */
+function EmailFixForm() {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [doneEmail, setDoneEmail] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await apiFetch("/api/account/email/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; email?: string; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error ?? "Couldn't change the email. Try again.");
+      setPassword("");
+      setDoneEmail(json.email ?? "");
+      // This chat's sign-in was only for support; the real account is next.
+      await getSupabaseClient().auth.signOut().catch(() => {});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't change the email. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const box = "mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-[14px]";
+  const input = "mt-1 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-[14px] outline-none focus:border-[#00a8fc]/60";
+
+  if (doneEmail !== null) {
+    return (
+      <div className={box} role="status">
+        <p className="font-semibold">Email changed</p>
+        <p className="mt-1 opacity-80">
+          Your account&apos;s email is now {doneEmail}. Log in with it and your usual password.
+        </p>
+        <a href="/login" className="mt-2 inline-block font-semibold text-[#00a8fc] hover:underline">Log in</a>
+      </div>
+    );
+  }
+
+  return (
+    <form className={box} onSubmit={(e) => void submit(e)}>
+      <p className="flex items-center gap-1.5 font-semibold"><LockKeyhole size={14} aria-hidden="true" />Fix your account&apos;s email</p>
+      <p className="mt-1 opacity-80">
+        Enter your Disband username and password. Your account&apos;s email will change to the one you
+        verified for this chat. Your password goes straight to Disband, not to Tether.
+      </p>
+      <label className="mt-2 block">
+        <span className="text-[12px] font-semibold opacity-80">Username</span>
+        <input className={input} value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={64} required />
+      </label>
+      <label className="mt-2 block">
+        <span className="text-[12px] font-semibold opacity-80">Password</span>
+        <input className={input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" maxLength={200} required />
+      </label>
+      {error && <p role="alert" className="mt-2 text-[#f23f43]">{error}</p>}
+      <button type="submit" disabled={busy || !username.trim() || !password} className="mt-3 rounded-md bg-[#5865f2] px-4 py-2 font-semibold text-white hover:bg-[#4752c4] disabled:opacity-50">
+        {busy ? "Changing…" : "Change email"}
+      </button>
+    </form>
+  );
 }
 
 export function SupportConversation({ subject, messages, draft, sending, loading, error, onDraftChange, onSend, onRetry, onBack, readOnly = false }: SupportConversationProps) {
@@ -103,14 +178,19 @@ export function SupportConversation({ subject, messages, draft, sending, loading
         <div className={styles.conversationDivider}><span>Your conversation with Tether</span></div>
         {loading && <div role="status" className={styles.loadingMessages}><LoaderCircle size={17} className={styles.spinner} />Loading your conversation…</div>}
         <div role="log" aria-label="Support conversation" aria-live="polite" aria-relevant="additions text">
-          {messages.map(m => {
+          {messages.map((m, i) => {
             const mine = m.role === "user";
+            const text = mine ? m.content : stripSupportMarkers(m.content);
+            // Only the newest offer gets a live form; older ones are history.
+            const showFixForm = !mine && !readOnly && hasEmailFixForm(m.content)
+              && !messages.slice(i + 1).some((later) => later.role !== "user" && hasEmailFixForm(later.content));
             return <article key={m.id} className={`${styles.message} ${mine ? styles.userMessage : styles.tetherMessage}`}>
               {!mine && <span className={styles.messageAvatar} aria-hidden="true"><TetherPortrait /></span>}
               <div className={styles.messageBody}>
                 <div className={styles.messageMeta}><strong>{mine ? "You" : m.role === "staff" ? "Disband support" : "Tether"}</strong><time dateTime={m.created_at}>{new Date(m.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time></div>
-                <div data-selectable className={styles.messageContent}>{mine ? m.content : renderMarkdown(m.content)}</div>
-                {!mine && <CopyReply content={m.content} />}
+                <div data-selectable className={styles.messageContent}>{mine ? text : renderMarkdown(text)}</div>
+                {showFixForm && <EmailFixForm />}
+                {!mine && <CopyReply content={text} />}
               </div>
             </article>;
           })}

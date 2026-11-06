@@ -109,7 +109,8 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
     try {
       const { error: err } = await getSupabaseClient().auth.signInWithOtp({
         email: clean,
-        options: { shouldCreateUser: true },
+        // Marks a login made only to reach Support (see isSupportOnlyAccount).
+        options: { shouldCreateUser: true, data: { support_only: true } },
       });
       if (err) throw err;
       setSent(true);

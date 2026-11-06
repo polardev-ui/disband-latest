@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DeepSeekChatMessage, DeepSeekTool } from "@/lib/deepseek";
 import { deepseekChat } from "@/lib/deepseek";
+import { EMAIL_FIX_FORM_MARKER, stripSupportMarkers } from "@/lib/support/markers";
+import { isSupportOnlyAccount } from "@/lib/support/support-only-account";
 
 /**
  * Support Tether: account help desk with a deliberately tiny toolset.
@@ -18,7 +20,14 @@ import { deepseekChat } from "@/lib/deepseek";
  * - The only writes are emails TO THE CALLER'S OWN INBOX (password reset,
  *   confirmation resend). Nothing here changes credentials, email
  *   addresses, or anyone's data, and nothing reveals tokens or secrets.
+ * - The one exception is the wrong-email fix, and Tether can't perform it:
+ *   open_email_fix_form only shows the person a form. The change happens in
+ *   /api/account/email/fix, which proves ownership itself (the account's
+ *   password, plus the verified email of this session) and only touches an
+ *   account whose email was never confirmed and that has never signed in.
  */
+
+
 
 type ServiceClient = NonNullable<ReturnType<typeof import("@/lib/supabase/server").getServiceSupabase>>;
 
@@ -30,7 +39,15 @@ export const SUPPORT_SYSTEM_PROMPT =
   "you only ever discuss or touch the account of the person talking to you — " +
   "if they ask about another user, email, or account (theirs, a friend's, " +
   "anyone's), refuse plainly and do not look anything up for it. " +
-  "You cannot change passwords, change email addresses, delete accounts, " +
+  "Wrong email: if someone signed up with a mistyped email, never got the " +
+  "confirmation and can't log in, call open_email_fix_form. It shows them a " +
+  "secure form under your reply where they enter their username and " +
+  "password; the account's email then becomes the email they verified for " +
+  "this chat. Say that is what the form does. It only works for accounts " +
+  "whose email was never confirmed. People who can log in change their " +
+  "email in Settings > My Account instead. You never see or ask for their " +
+  "password in the chat: if they type it, tell them to use the form instead. " +
+  "You cannot change passwords, delete accounts, " +
   "or reveal tokens, secrets, or other people's data — say so when asked. " +
   "Never invent account details: if a tool call fails or returns nothing, " +
   "say what you could and couldn't check. " +
@@ -72,6 +89,15 @@ export const SUPPORT_TOOLS: DeepSeekTool[] = [
       name: "send_password_reset",
       description:
         "Email a password-reset link to the current user's own inbox. Use when they can't log in. The link goes to their verified email address only — never anywhere else.",
+      parameters: { type: "object", properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "open_email_fix_form",
+      description:
+        "Show the secure wrong-email form to someone who signed up with a mistyped email and can't log in. They fill it in themselves; you never handle their password.",
       parameters: { type: "object", properties: {}, additionalProperties: false },
     },
   },
@@ -169,6 +195,18 @@ async function resendConfirmation(
   return { ok: true, message: "Confirmation email re-sent to your inbox." };
 }
 
+async function openEmailFixForm(service: ServiceClient, userId: string): Promise<ToolResult> {
+  // The form is for someone who verified their real email just to reach
+  // support, not for a working account.
+  if (!(await isSupportOnlyAccount(service, userId))) {
+    return {
+      ok: false,
+      error: "This person is signed in to a working account. They can change their email in Settings > My Account.",
+    };
+  }
+  return { ok: true, message: "The form is now showing under your reply." };
+}
+
 export async function executeSupportTool(
   service: ServiceClient,
   name: string,
@@ -183,6 +221,8 @@ export async function executeSupportTool(
       return sendPasswordReset(service, userId);
     case "resend_confirmation_email":
       return resendConfirmation(service, userId);
+    case "open_email_fix_form":
+      return openEmailFixForm(service, userId);
     default:
       return { ok: false, error: `Unknown tool "${name}".` };
   }
@@ -200,7 +240,11 @@ export async function chatWithSupportTether(opts: {
   history: DeepSeekChatMessage[];
 }): Promise<string> {
   const { service, userId, history } = opts;
-  const messages: DeepSeekChatMessage[] = [...history];
+  const messages: DeepSeekChatMessage[] = history.map((m) =>
+    typeof m.content === "string" ? { ...m, content: stripSupportMarkers(m.content) } : m,
+  );
+  let showEmailFixForm = false;
+  const withForm = (text: string) => (showEmailFixForm ? `${text}\n\n${EMAIL_FIX_FORM_MARKER}` : text);
 
   for (let round = 0; round < 4; round += 1) {
     const res = await deepseekChat({
@@ -209,7 +253,7 @@ export async function chatWithSupportTether(opts: {
       tools: SUPPORT_TOOLS,
     });
     if (res.toolCalls.length === 0) {
-      return res.content || "Done.";
+      return withForm(stripSupportMarkers(res.content || "Done."));
     }
 
     messages.push({
@@ -230,9 +274,10 @@ export async function chatWithSupportTether(opts: {
       const result = allowed
         ? await executeSupportTool(service, tc.name, userId)
         : { ok: false as const, error: `Tool "${tc.name}" is not available in support.` };
+      if (tc.name === "open_email_fix_form" && result.ok) showEmailFixForm = true;
       messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
     }
   }
 
-  return "That took a few tries — let's start over.";
+  return withForm("That took a few tries — let's start over.");
 }
