@@ -105,6 +105,8 @@ export function MarketingFooter() {
           <Link href="/privacy" className="hover:text-white">Privacy Policy</Link>
           <Link href="/terms" className="hover:text-white">Terms of Service</Link>
           <Link href="/eula" className="hover:text-white">EULA</Link>
+          <Link href="/copyright" className="hover:text-white">Copyright</Link>
+          <Link href="/legal/eu-uk" className="hover:text-white">EU &amp; UK</Link>
           <Link href="/login" className="hover:text-white">Log in</Link>
         </div>
       </div>

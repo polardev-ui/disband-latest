@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { MarketingNav, MarketingFooter } from "@/components/marketing/MarketingLayout";
 
 export const metadata: Metadata = {
-  title: "Legal — Disband",
+  title: "Legal Information",
   description:
     "Legal information for Disband: ownership, intellectual property, privacy, security, and third-party providers.",
   alternates: { canonical: "/legal" },
@@ -27,10 +27,37 @@ export default function LegalPage() {
 
         <div className="mt-12 space-y-12 text-[15px] leading-relaxed text-[#9aa0a8]">
           <section>
+            <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">Legal Documents</h2>
+            <ul className="mt-3 list-disc space-y-1.5 pl-5">
+              <li>
+                <Link href="/terms" className="text-brand hover:underline">Terms of Service</Link> — the
+                rules for using Disband.
+              </li>
+              <li>
+                <Link href="/privacy" className="text-brand hover:underline">Privacy Policy</Link> — what
+                we collect, how we use it, and your rights.
+              </li>
+              <li>
+                <Link href="/eula" className="text-brand hover:underline">End User License Agreement</Link>{" "}
+                — your license to the Disband apps.
+              </li>
+              <li>
+                <Link href="/copyright" className="text-brand hover:underline">Copyright Policy</Link> —
+                reporting infringement, counter-notices, and repeat infringers.
+              </li>
+              <li>
+                <Link href="/legal/eu-uk" className="text-brand hover:underline">EU and UK Information</Link>{" "}
+                — Digital Services Act and Online Safety Act contacts, reporting, and appeals.
+              </li>
+            </ul>
+          </section>
+
+          <section>
             <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">1. Operator</h2>
             <p>
-              Disband is owned and operated by <strong>Genysis IQ LLC</strong>, 10524 Moss Park Rd,
-              Suite 204-653, Orlando, Florida 32832, United States.
+              Disband is owned and operated by <strong>Genysis IQ LLC</strong>, a Florida limited
+              liability company, 10524 Moss Park Rd, Suite 204-653, Orlando, Florida 32832, United
+              States. Email: legal@disband.dev.
             </p>
             <p>
               Genysis IQ LLC is the entity responsible for the Service, its operation, and its legal
@@ -67,6 +94,13 @@ export default function LegalPage() {
               </Link>
               .
             </p>
+            <p>
+              To report material on Disband that infringes your copyright, see our{" "}
+              <Link href="/copyright" className="text-brand hover:underline">
+                Copyright Policy
+              </Link>
+              .
+            </p>
           </section>
 
           <section>
@@ -95,7 +129,11 @@ export default function LegalPage() {
             <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">4. Third-Party Services</h2>
             <p>
               Disband uses third-party providers, including Supabase, Vercel, Cloudflare, Stripe,
-              Resend, Apple, and Google.
+              Resend, Apple, Google, Hive, DeepSeek, and GIPHY. Our{" "}
+              <Link href="/privacy" className="text-brand hover:underline">
+                Privacy Policy
+              </Link>{" "}
+              explains what each one does.
             </p>
             <p>
               Those providers may have their own terms, privacy policies, service limitations, and
@@ -105,7 +143,42 @@ export default function LegalPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">5. No Professional or Emergency Service</h2>
+            <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">5. Credits and Open-Source Licenses</h2>
+            <p>
+              Emoji graphics are from Twemoji, copyright Twitter, Inc. and other contributors, licensed
+              under{" "}
+              <a
+                href="https://creativecommons.org/licenses/by/4.0/"
+                className="text-brand hover:underline"
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                CC BY 4.0
+              </a>
+              .
+            </p>
+            <p>
+              The Geist (Vercel), Noto Sans (Google), Press Start 2P (CodeMan38), and Oswald (Vernon
+              Adams and contributors) typefaces are used under the{" "}
+              <a
+                href="https://openfontlicense.org"
+                className="text-brand hover:underline"
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                SIL Open Font License 1.1
+              </a>
+              .
+            </p>
+            <p>
+              Disband is built with open-source software. Each open-source component is used under the
+              terms of its own license, and nothing in our terms restricts the rights those licenses
+              give you.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">6. No Professional or Emergency Service</h2>
             <p>
               Disband is a communications and community platform. It is not an emergency service and
               should not be relied upon for emergency communications, medical advice, legal advice,
@@ -114,7 +187,7 @@ export default function LegalPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">6. Contact</h2>
+            <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">7. Contact</h2>
             <p>Legal questions may be sent to <strong>legal@disband.dev</strong>.</p>
           </section>
         </div>

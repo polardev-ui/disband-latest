@@ -15,7 +15,7 @@ export default function TermsPage() {
       <MarketingNav />
       <main className="mx-auto max-w-3xl px-6 pb-16 pt-24">
         <h1 className="text-3xl font-bold text-white">Terms of Service</h1>
-        <p className="mt-2 text-sm text-[#949ba4]">Last updated: October 28, 2026</p>
+        <p className="mt-2 text-sm text-[#949ba4]">Last updated: November 6, 2026</p>
 
         <div className="mt-8 space-y-6 text-[15px] leading-relaxed text-[#b5bac1]">
           <p>
@@ -78,6 +78,9 @@ export default function TermsPage() {
             <li>Harass, threaten, stalk, or bully others;</li>
             <li>Promote hate or violent threats;</li>
             <li>Exploit or endanger children;</li>
+            <li>Share sexually explicit content;</li>
+            <li>Share graphic violence or gore;</li>
+            <li>Promote or encourage suicide, self-harm, or eating disorders;</li>
             <li>Distribute malware, viruses, or harmful code;</li>
             <li>Send spam, scams, phishing links, or deceptive content;</li>
             <li>Impersonate another person or organization;</li>
@@ -142,6 +145,13 @@ export default function TermsPage() {
             lawfully retained by other users.
           </p>
 
+          <h3 className="text-base font-semibold text-white">Copyright</h3>
+          <p>
+            We respond to notices of alleged copyright infringement and, in appropriate circumstances,
+            terminate the accounts of repeat infringers, as described in our{" "}
+            <Link href="/copyright" className="text-brand hover:underline">Copyright Policy</Link>.
+          </p>
+
           <h2 className="text-lg font-semibold text-white">7. Moderation</h2>
           <p>Space owners and moderators may establish additional rules for their communities.</p>
           <p>We may, but are not required to:</p>
@@ -155,6 +165,68 @@ export default function TermsPage() {
             <li>Report conduct to law enforcement.</li>
           </ul>
           <p>We do not guarantee that all unlawful, harmful, or rule-breaking content will be detected or removed.</p>
+
+          <h3 className="text-base font-semibold text-white">How we enforce these Terms</h3>
+          <p>We use a combination of automated tools and human review:</p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>
+              <strong>Hash matching:</strong> uploaded media is compared with digital fingerprints of
+              known prohibited media, such as child sexual abuse material;
+            </li>
+            <li>
+              <strong>Image classification:</strong> images, including images sent in direct messages
+              and group chats, are checked by an automated classifier, provided by Hive, for categories
+              such as sexual content and graphic violence;
+            </li>
+            <li>
+              <strong>AI review:</strong> AI language models provided by DeepSeek, including Tether, our
+              AI reviewer, review flagged content and reports and decide what action to take; and
+            </li>
+            <li>
+              <strong>Human review:</strong> Disband staff decide appeals and may review any decision.
+            </li>
+          </ul>
+          <p>
+            These tools check media when it is uploaded, scan profiles, spaces, channels, and messages
+            on a regular schedule, and assess reports as they arrive. They can remove content or
+            restrict accounts without a person reviewing the decision first, and they can make
+            mistakes. You can ask for a person to review any decision.
+          </p>
+          <p>
+            Depending on how serious a violation is and an account’s history, we may remove content,
+            add a strike, limit features for a period, hold an account while we review it, or suspend
+            an account temporarily or permanently. Strikes expire over time. You can see your strikes
+            and any active limits in Settings → Account Standing.
+          </p>
+          <p>
+            We apply and enforce these Terms with due regard to the rights and legitimate interests of
+            everyone involved, including freedom of expression.
+          </p>
+
+          <h3 className="text-base font-semibold text-white">Reporting</h3>
+          <p>
+            You can report messages, profiles, and spaces in the app. Anyone, including people without
+            an account, can report illegal content by email to legal@disband.dev. See our{" "}
+            <Link href="/legal/eu-uk" className="text-brand hover:underline">EU and UK Information</Link>{" "}
+            page for what to include, and our{" "}
+            <Link href="/copyright" className="text-brand hover:underline">Copyright Policy</Link> for
+            copyright complaints.
+          </p>
+
+          <h3 className="text-base font-semibold text-white">Notice of decisions</h3>
+          <p>
+            When we act on your content or account, we tell you what we did and why, whether automated
+            means were involved, and how to appeal, unless we cannot contact you or the law prevents
+            it.
+          </p>
+
+          <h3 className="text-base font-semibold text-white">Appeals and complaints</h3>
+          <p>
+            You can appeal a suspension from the screen you see when you sign in. To appeal any other
+            decision, or a decision on something you reported, email legal@disband.dev with the
+            subject line “Appeal” within six months of the decision. A person reviews every appeal.
+            People in the UK can also make the complaints described on our EU and UK Information page.
+          </p>
 
           <h2 className="text-lg font-semibold text-white">8. Suspension and Termination</h2>
           <p>We may suspend or terminate accounts, spaces, or content when we reasonably believe that:</p>
@@ -221,6 +293,66 @@ export default function TermsPage() {
             <li>May not have cash value outside the Service.</li>
           </ul>
 
+          <h3 className="text-base font-semibold text-white">Consumers in the EU, the EEA, and the UK</h3>
+          <p>
+            If you are a consumer in the European Union, the European Economic Area, or the United
+            Kingdom, the following applies in addition to the rest of this Section.
+          </p>
+          <p>
+            <strong>Right of withdrawal.</strong> You may withdraw from a purchase made directly from us
+            within 14 days without giving any reason. The withdrawal period ends 14 days after the day
+            the purchase was made.
+          </p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>
+              <strong>Subscriptions.</strong> If you asked us to start your subscription during the
+              withdrawal period and then withdraw, we will refund what you paid, minus an amount
+              proportionate to the part of the subscription provided before you told us you were
+              withdrawing.
+            </li>
+            <li>
+              <strong>Digital content supplied immediately</strong>, such as Server Catalysts. If, when
+              you buy, you expressly agree that we begin supplying it immediately and acknowledge that
+              you will lose your right of withdrawal, you lose that right once supply begins.
+            </li>
+          </ul>
+          <p>
+            To withdraw, tell us clearly before the withdrawal period ends, for example by emailing
+            legal@disband.dev. You may use the model withdrawal form below, but you do not have to. We
+            will refund you without undue delay, and no later than 14 days after we are told of your
+            withdrawal, using the payment method you used, unless you expressly agree otherwise. You
+            will not be charged any fees for the refund.
+          </p>
+          <p>
+            For purchases made through Apple or Google, the store’s own withdrawal and refund process
+            applies. Contact us if you need help.
+          </p>
+          <p>
+            <strong>Model withdrawal form.</strong> Complete and return this form only if you wish to
+            withdraw from the contract.
+          </p>
+          <div className="space-y-1.5 rounded-lg border border-white/10 p-4 text-[14px]">
+            <p>
+              To: Genysis IQ LLC, 10524 Moss Park Rd, Suite 204-653, Orlando, Florida 32832, United
+              States; legal@disband.dev
+            </p>
+            <p>
+              I/We (*) hereby give notice that I/We (*) withdraw from my/our (*) contract for the supply
+              of the following digital content (*) / for the provision of the following service (*):
+            </p>
+            <p>Ordered on (*) / received on (*):</p>
+            <p>Name of consumer(s):</p>
+            <p>Address of consumer(s):</p>
+            <p>Signature of consumer(s) (only if this form is notified on paper):</p>
+            <p>Date:</p>
+            <p>(*) Delete as appropriate.</p>
+          </div>
+          <p>
+            <strong>Faulty digital content and services.</strong> If digital content or a digital
+            service we supply is faulty or not as described, you have legal rights, such as having it
+            fixed or receiving a price reduction or refund. These Terms do not limit those rights.
+          </p>
+
           <h2 className="text-lg font-semibold text-white">10. Availability and Changes</h2>
           <p>
             The Service is provided on an “as available” basis. We do not guarantee uninterrupted,
@@ -272,6 +404,13 @@ export default function TermsPage() {
             certain liability for fraud, intentional misconduct, personal injury, or non-waivable
             consumer rights.
           </p>
+          <p>
+            If you are a consumer in the EU, the EEA, the UK, or Switzerland, nothing in these Terms
+            limits or excludes our liability for death or personal injury caused by our negligence, for
+            fraud or fraudulent misrepresentation, for gross negligence or intentional misconduct, or
+            for anything else that cannot be limited or excluded under the law of the country where you
+            live.
+          </p>
 
           <h2 className="text-lg font-semibold text-white">13. Indemnification</h2>
           <p>
@@ -298,6 +437,13 @@ export default function TermsPage() {
             courts’ jurisdiction and venue.
           </p>
           <p>Nothing in this section prevents a consumer from asserting rights that cannot legally be waived.</p>
+          <p>
+            If you are a consumer living in the EU, the EEA, the UK, or Switzerland, the choice of
+            Florida law does not take away the protection of the mandatory laws of the country where
+            you live. You may bring proceedings relating to these Terms in the courts of the country
+            where you live, as well as in the courts listed above, and we may bring proceedings against
+            you only in the courts of the country where you live.
+          </p>
 
           <h2 className="text-lg font-semibold text-white">15. Changes to These Terms</h2>
           <p>
@@ -307,6 +453,11 @@ export default function TermsPage() {
           <p>
             Your continued use of the Service after the effective date of revised Terms means you
             accept them. If you do not agree, stop using the Service and delete your account.
+          </p>
+          <p>
+            If you are a consumer in the EU, the EEA, or the UK, we will give you reasonable notice of
+            material changes before they take effect, and you may end your agreement and delete your
+            account before then.
           </p>
 
           <h2 className="text-lg font-semibold text-white">16. General Provisions</h2>
@@ -318,6 +469,15 @@ export default function TermsPage() {
           <p>
             These Terms, together with applicable policies and written agreements, constitute the
             agreement between you and Genysis IQ concerning the Service.
+          </p>
+          <p>
+            Your use of the Disband apps is also governed by our{" "}
+            <Link href="/eula" className="text-brand hover:underline">End User License Agreement</Link>.
+            Our <Link href="/privacy" className="text-brand hover:underline">Privacy Policy</Link>,{" "}
+            <Link href="/copyright" className="text-brand hover:underline">Copyright Policy</Link>, and{" "}
+            <Link href="/legal/eu-uk" className="text-brand hover:underline">EU and UK Information</Link>{" "}
+            page explain how we handle personal data, copyright complaints, and EU and UK legal
+            requirements.
           </p>
 
           <h2 className="text-lg font-semibold text-white">17. Contact</h2>

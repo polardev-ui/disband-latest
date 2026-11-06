@@ -139,6 +139,11 @@ export default function EulaPage() {
             your device settings, though related features may then stop working.
           </p>
           <p>
+            On desktop, the App checks which programs are running so it can recognize games, and it can
+            receive status updates from games that support Rich Presence. The list of running programs
+            stays on your device, and your activity settings control what is shared.
+          </p>
+          <p>
             We handle information from the App as described in our{" "}
             <Link href="/privacy" className={link}>Privacy Policy</Link>.
           </p>

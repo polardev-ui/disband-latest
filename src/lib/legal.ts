@@ -8,7 +8,7 @@ import { PUBLIC_ENV } from "@/lib/public-env";
  * their auth metadata. Sign-up records it; bump it when the documents change
  * and TosConsentPopup asks everyone again.
  */
-export const TOS_VERSION = "2026-10-28";
+export const TOS_VERSION = "2026-11-06";
 
 export type LegalPath = "/terms" | "/privacy" | "/eula";
 
