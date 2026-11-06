@@ -55,7 +55,7 @@ const FAQ = [
   },
   {
     q: "Do I get anything for donating?",
-    a: "No. A donation doesn’t unlock features, badges or a subscription. It simply helps Disband stay running. If you’d like perks, have a look at Aero and Lite.",
+    a: "If you’re logged in and show your name, you get the Donor badge on your profile, with the total you’ve given. Anonymous donations don’t add the badge, so they stay anonymous. Beyond that, a donation doesn’t unlock features or a subscription. If you’d like those, have a look at Aero and Lite.",
   },
   {
     q: "What shows on the wall?",

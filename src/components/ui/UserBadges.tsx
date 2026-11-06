@@ -11,6 +11,7 @@ import { SubscriptionMedallion, tierForMonths, type TierDef } from "@/components
 import { SubscriptionBadgeModal } from "@/components/subscription/SubscriptionBadgeModal";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import { useI18n } from "@/contexts/I18nContext";
+import { formatUsd } from "@/lib/donations";
 
 const IDENTITY_BADGES = new Set(["owner", "staff", "moderator", "manager", "partner", "og"]);
 
@@ -168,6 +169,9 @@ function BadgePip({ badge, size }: { badge: AwardedBadge; size: number }) {
 function badgeDetail(badge: AwardedBadge): string | null {
   const m = badge.metadata ?? {};
   const n = (k: string) => (typeof m[k] === "number" ? (m[k] as number) : null);
+  // Donor badge: the total of the donations they gave with their name shown.
+  const donated = n("donated_cents");
+  if (donated) return `${formatUsd(donated)} donated`;
   const followers = n("followers");
   if (followers) {
     // Creator badge: the biggest connected account, then any others.

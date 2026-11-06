@@ -158,7 +158,9 @@ export default function PrivacyPage() {
             If you make a donation on our donate page, we keep a record of the amount, the time, any
             message you add, and your account if you were logged in. The amount, the time and your
             message appear publicly on the donor wall. Your display name and avatar appear only if
-            you choose to show them; otherwise the donation is listed as anonymous. If you delete your
+            you choose to show them; otherwise the donation is listed as anonymous. If you show your
+            name, your profile also gets a Donor badge showing the total of those donations, which you
+            can hide in your settings. Anonymous donations are not counted toward the badge. If you delete your
             account, your donations stay in our payment records but are shown as anonymous.
           </p>
           <p>

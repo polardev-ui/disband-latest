@@ -30,6 +30,10 @@ export const BADGE_GUIDE: Record<string, BadgeGuide> = {
     howTo: "Subscribe to Aero or Lite, or receive either as a gift, before the end of 2026. You keep it after that, even if your plan ends.",
     availability: UNTIL_2027,
   },
+  donor: {
+    howTo: "Donate to Disband while logged in, with your name shown on the donor wall. The badge shows how much you've given in total. Anonymous donations don't count, so they stay anonymous.",
+    availability: { kind: "open" },
+  },
   anniv: { howTo: "Have your account for a full year.", availability: { kind: "open" } },
   bot_dev: { howTo: "Register a bot in the Developer Portal.", availability: { kind: "open" } },
   bot_ver: { howTo: "Have one of your bots added to 50 or more spaces.", availability: { kind: "open" } },

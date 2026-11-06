@@ -186,7 +186,7 @@ export function DonateClient() {
         {thanks && (
           <div role="status" className="mb-6 rounded-xl border border-[#3ba55c]/30 bg-[#3ba55c]/10 p-4 text-[14px] leading-relaxed text-[#b9e8c7]">
             <p className="font-semibold text-white">Thank you. Really.</p>
-            <p className="mt-1">Your donation went through. It can take a few seconds to appear on the wall.</p>
+            <p className="mt-1">Your donation went through. It can take a few seconds to appear on the wall and on your profile.</p>
           </div>
         )}
 
@@ -259,7 +259,9 @@ export function DonateClient() {
                   {showName ? <>Show as <strong>{viewer.name}</strong></> : <>Show as <strong>Anonymous</strong></>}
                 </span>
                 <span className="block text-[12px] text-[#949ba4]">
-                  {showName ? "Your name, avatar, amount and message appear on the wall." : "Only the amount and your message appear."}
+                  {showName
+                    ? "Your name, avatar, amount and message appear on the wall, and you get the Donor badge."
+                    : "Only the amount and your message appear. No badge, so it stays anonymous."}
                 </span>
               </span>
               <input
@@ -279,7 +281,7 @@ export function DonateClient() {
             <div className="text-[14px] leading-relaxed text-[#b5bac1]">
               <p>
                 You&rsquo;re not logged in, so your donation will show as <strong className="text-white">Anonymous</strong>.{" "}
-                <Link href="/login" className="text-brand hover:underline">Log in</Link> if you&rsquo;d like your name on the wall.
+                <Link href="/login" className="text-brand hover:underline">Log in</Link> if you&rsquo;d like your name on the wall and the Donor badge.
               </p>
               <Turnstile
                 siteKey={PUBLIC_ENV.turnstileSiteKey}
@@ -303,7 +305,7 @@ export function DonateClient() {
           {submitting ? "Opening checkout…" : amountCents ? `Donate ${formatUsd(amountCents)}` : "Donate"}
         </button>
         <p className="mt-3 text-center text-[12px] leading-relaxed text-[#6d6f78]">
-          You&rsquo;ll finish on Stripe&rsquo;s secure checkout. Donations aren&rsquo;t tax-deductible and don&rsquo;t buy any perks.
+          You&rsquo;ll finish on Stripe&rsquo;s secure checkout. Donations aren&rsquo;t tax-deductible, and apart from the Donor badge they don&rsquo;t unlock anything.
         </p>
       </form>
 

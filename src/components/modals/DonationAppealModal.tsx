@@ -85,7 +85,7 @@ export function DonationAppealModal() {
           {t("We don’t sell your data, and we want to keep Disband free for everyone. If Disband matters to you, a donation of any size helps keep it online.")}
         </p>
         <p className="text-[13px] leading-[18px] text-text-muted">
-          {t("Donations go to Genysis IQ LLC, the company that runs Disband. They aren’t tax-deductible and don’t unlock any perks.")}
+          {t("Donations go to Genysis IQ LLC, the company that runs Disband. They aren’t tax-deductible, and apart from a Donor badge on your profile they don’t unlock anything.")}
         </p>
       </div>
     </ClassicModal>
