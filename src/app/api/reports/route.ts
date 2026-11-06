@@ -1,3 +1,4 @@
+import { notifyReportReceived } from "@/lib/report-notices";
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { getUserFromRequest } from "@/lib/server-auth";
@@ -383,6 +384,10 @@ export async function POST(request: NextRequest) {
     console.error("[reports] insert", insertError.message);
     return NextResponse.json({ error: "Could not file the report." }, { status: 500 });
   }
+
+  // Confirmation from @disband, in the app and by email; the outcome follows
+  // once the report is decided (see /api/cron/report-outcomes).
+  await notifyReportReceived(user.id, targetType);
 
   // Keep the response deliberately small: the reporter does not need a copy of
   // the moderation snapshot, and it may contain content they should not see
