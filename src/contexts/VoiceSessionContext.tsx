@@ -193,12 +193,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             el.srcObject = stream;
             el.muted = deafened;
             audioRefs.current.set(uid, el);
-            // Per-listener per-user volume lives in local storage; apply
-            // it immediately so a muted/quieter remote does not get reset
-            // when the audio element is recreated.
-            import("@/lib/call-participant-settings").then((mod) => {
-              mod.applyParticipantAudioControls(el, uid);
-            });
+            applyParticipantAudioControls(el, uid);
             void el.play().catch(() => {});
           }}
           autoPlay

@@ -13,6 +13,7 @@ import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 import type { GroupCallParticipant } from "@/hooks/useGroupCallManager";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
+import { applyParticipantAudioControls } from "@/lib/call-participant-settings";
 import { useI18n } from "@/contexts/I18nContext";
 
 interface GroupCallStageProps {
@@ -190,9 +191,7 @@ export function GroupCallStage({
                 el.srcObject = stream;
                 el.muted = deafened;
                 void applyAudioOutputToElement(el, getPreferredAudioOutputId());
-                import("@/lib/call-participant-settings").then((m) =>
-                  m.applyParticipantAudioControls(el, uid),
-                );
+                applyParticipantAudioControls(el, uid);
                 void el.play().catch(() => {});
               }
             }}
