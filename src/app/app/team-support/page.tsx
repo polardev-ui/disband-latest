@@ -296,7 +296,9 @@ export default function TeamSupportPage() {
   const loadAppeals = useCallback(async () => {
     setAppealsLoading(true);
     try {
-      const res = await apiFetch("/api/moderation/ban-appeals");
+      // Every appeal, not just pending ones: with none waiting the tab used to
+      // look empty, as if appeals weren't arriving at all.
+      const res = await apiFetch("/api/moderation/ban-appeals?status=all");
       const json = await res.json() as { appeals?: AppealRow[]; error?: string };
       if (!res.ok) throw new Error(json.error ?? "Could not load appeals.");
       setAppeals(json.appeals ?? []);
@@ -915,7 +917,7 @@ export default function TeamSupportPage() {
                   <EmptyState icon={<IconMessage size={28} />} title="No appeals" body="Appeals from banned accounts appear here." />
                 )}
                 <div className="space-y-3">
-                  {appeals.map((appeal) => {
+                  {[...appeals].sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending")).map((appeal) => {
                     const name = appeal.profile?.display_name || appeal.profile?.username || appeal.user_id;
                     const pending = appeal.status === "pending";
                     return (
