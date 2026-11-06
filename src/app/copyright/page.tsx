@@ -63,6 +63,7 @@ export default function CopyrightPage() {
             10524 Moss Park Rd, Suite 204-653{"\n"}
             Orlando, Florida 32832{"\n"}
             United States{"\n\n"}
+            Phone: +1 (321) 351-9810{"\n"}
             Email: legal@disband.dev (subject line: “Copyright Notice”)
           </p>
           <p>Your notice must include:</p>
