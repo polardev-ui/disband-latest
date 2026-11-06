@@ -47,7 +47,7 @@ import { CreateChannelModal } from "./CreateChannelModal";
 import { alertDialog, confirmDialog, promptDialog } from "@/lib/dialogs";
 const SettingsModal = dynamic(() => import("./SettingsModal").then(m => m.SettingsModal));
 import { CreateServerModal } from "@/components/modals/CreateServerModal";
-import { WhatsNewModal } from "@/components/modals/WhatsNewModal";
+import { DonationAppealModal } from "@/components/modals/DonationAppealModal";
 const ServerSettingsModal = dynamic(() => import("@/components/modals/ServerSettingsModal").then(m => m.ServerSettingsModal));
 const ChannelSettingsModal = dynamic(() => import("@/components/modals/ChannelSettingsModal").then(m => m.ChannelSettingsModal));
 import { UserProfileModal } from "@/components/modals/UserProfileModal";
@@ -2676,7 +2676,7 @@ export function DiscordApp() {
       <ReportModal target={reportTarget} onClose={() => setReportTarget(null)} />
 
       <CreateServerModal open={createServerOpen} onClose={() => setCreateServerOpen(false)} />
-      <WhatsNewModal />
+      <DonationAppealModal />
       <QuickSwitcher open={quickSwitcherOpen} onClose={() => setQuickSwitcherOpen(false)} />
       {folderDialogMounted && shownFolderDialog && (
         <ServerFolderDialog
