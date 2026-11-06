@@ -332,22 +332,45 @@ export function ConfirmDialog({
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Callers pass a fresh onCancel every render. This effect used to depend on
+  // it, so any re-render behind the dialog (presence updates arrive all the
+  // time) re-ran it and wiped what had been typed, like a ban reason. Fields
+  // now reset only when the dialog opens.
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
   useEffect(() => {
     if (!open) return;
     setTyped("");
     setValue("");
     setBusy(false);
-    const release = pushEscapeHandler(onCancel);
+    const release = pushEscapeHandler(() => onCancelRef.current());
     const onKey = (e: KeyboardEvent) => handleTopmostEscape(e);
     document.addEventListener("keydown", onKey);
     return () => {
       release();
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, onCancel]);
+  }, [open]);
 
   if (!open || typeof document === "undefined") return null;
   const blocked = !!requireText && typed.trim() !== requireText;
+
+  const confirm = async () => {
+    if (blocked || busy) return;
+    setBusy(true);
+    try {
+      await onConfirm(value.trim());
+    } finally {
+      setBusy(false);
+    }
+  };
+  // Enter in a field confirms, like the button.
+  const onFieldKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void confirm();
+  };
 
   return createPortal(
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
@@ -369,6 +392,7 @@ export function ConfirmDialog({
                 autoFocus
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
+                onKeyDown={onFieldKey}
                 placeholder={input.placeholder}
                 maxLength={200}
                 className="w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 py-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-[#00a8fc]"
@@ -385,6 +409,7 @@ export function ConfirmDialog({
                 autoFocus
                 value={typed}
                 onChange={(e) => setTyped(e.target.value)}
+                onKeyDown={onFieldKey}
                 className="w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 py-2.5 text-[14px] text-text-normal outline-none focus:border-status-dnd"
               />
             </div>
@@ -397,14 +422,7 @@ export function ConfirmDialog({
           <button
             type="button"
             disabled={blocked || busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await onConfirm(value.trim());
-              } finally {
-                setBusy(false);
-              }
-            }}
+            onClick={() => void confirm()}
             className={tone === "danger" ? btn.danger : btn.primary}
           >
             {busy ? t("Working…") : confirmLabel}
