@@ -79,11 +79,10 @@ export async function createCheckoutSession(
     return await stripe.checkout.sessions.create({ ...params, ...WITHDRAWAL_CONSENT });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    if (!/terms of service/i.test(message)) throw err;
-    console.error(
-      "[stripe] Checkout consent checkbox is off: set a Terms of Service URL in Stripe → Settings → Public details.",
-      message,
-    );
+    // Any refusal of the consent fields (no Terms URL set, or a ui_mode that
+    // doesn't take custom_text/consent_collection) must not block payment.
+    if (!/terms of service|consent_collection|custom_text/i.test(message)) throw err;
+    console.error("[stripe] Checkout consent checkbox refused; creating the session without it.", message);
     return stripe.checkout.sessions.create(params);
   }
 }
