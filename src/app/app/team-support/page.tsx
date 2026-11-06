@@ -8,6 +8,7 @@ import { isSupportStaffFromProfile } from "@/lib/support/staff";
 import { AccountViewerModal } from "@/components/modals/AccountViewerModal";
 import { ClassicModal } from "@/components/ui/ClassicModal";
 import { confirmDialog } from "@/lib/dialogs";
+import { stripSupportMarkers } from "@/lib/support/markers";
 import {
   IconAlert,
   IconBot,
@@ -95,6 +96,8 @@ export default function TeamSupportPage() {
   const [filter, setFilter] = useState<Filter>("awaiting");
   const [ticketQuery, setTicketQuery] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("tickets");
+  const [bugCounts, setBugCounts] = useState<Record<string, number>>({});
+  const [bugsVersion, setBugsVersion] = useState(0);
   const messagesRef = useRef<HTMLDivElement | null>(null);
 
   // Bans
@@ -402,6 +405,10 @@ export default function TeamSupportPage() {
     void loadBans();
     void loadAppeals();
     void loadFlags();
+    void apiFetch("/api/support/team/bug-reports?status=open")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json: { counts?: Record<string, number> } | null) => { if (json?.counts) setBugCounts(json.counts); })
+      .catch(() => {});
   }, [phase, loadBans, loadAppeals, loadFlags]);
 
   useEffect(() => {
@@ -582,10 +589,12 @@ export default function TeamSupportPage() {
 
   const pendingAppeals = appeals.filter((a) => a.status === "pending").length;
   const openFlags = flags.filter((f) => f.status !== "actioned" && f.status !== "dismissed").length;
+  const openBugs = bugCounts.open ?? 0;
   const nav: { id: TabId; label: string; icon: React.ReactNode; count: number; urgent: boolean; blurb: string }[] = [
     { id: "tickets", label: "Tickets", icon: <IconInbox size={20} />, count: counts.awaiting, urgent: counts.awaiting > 0, blurb: "Support requests that need a person" },
     { id: "users", label: "Users", icon: <IconSearch size={20} />, count: 0, urgent: false, blurb: "Find an account by username, display name or user ID" },
     { id: "flags", label: "Reports", icon: <IconAlert size={20} />, count: openFlags, urgent: openFlags > 0, blurb: "Member reports and Sentinel matches" },
+    { id: "bugs", label: "Bug reports", icon: <IconAlert size={20} />, count: openBugs, urgent: false, blurb: "Bugs people reported from Settings" },
     { id: "appeals", label: "Appeals", icon: <IconMessage size={20} />, count: pendingAppeals, urgent: pendingAppeals > 0, blurb: "Requests to lift a platform ban" },
     { id: "bans", label: "Platform bans", icon: <IconShield size={20} />, count: bans.length, urgent: false, blurb: "Accounts banned from Disband" },
     { id: "servers", label: "Spaces", icon: <IconGroup size={20} />, count: 0, urgent: false, blurb: "Look up a space, its members and audit log" },
@@ -597,6 +606,7 @@ export default function TeamSupportPage() {
     if (activeTab === "appeals") void loadAppeals();
     if (activeTab === "flags") void loadFlags();
     if (activeTab === "servers") void loadServers(serverQuery);
+    if (activeTab === "bugs") setBugsVersion((v) => v + 1);
   };
   const selectedServer = servers.find((sv) => sv.id === selectedServerId) ?? null;
 
@@ -804,7 +814,7 @@ export default function TeamSupportPage() {
                                     <time className="text-[12px] text-text-muted">{formatTime(message.created_at)}</time>
                                   </p>
                                 )}
-                                <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.375rem] text-text-normal">{message.content}</p>
+                                <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.375rem] text-text-normal">{stripSupportMarkers(message.content)}</p>
                               </div>
                             </article>
                           );
@@ -891,6 +901,10 @@ export default function TeamSupportPage() {
                   </div>
                 )}
               </Page>
+            )}
+
+            {activeTab === "bugs" && (
+              <BugReportsTab key={bugsVersion} onCounts={setBugCounts} onViewAccount={setViewingUserId} />
             )}
 
             {activeTab === "appeals" && (
@@ -1362,7 +1376,7 @@ export default function TeamSupportPage() {
 
 /* ------------------------------------------------------------------------- */
 
-type TabId = "tickets" | "users" | "bans" | "appeals" | "flags" | "servers";
+type TabId = "tickets" | "users" | "bans" | "appeals" | "flags" | "bugs" | "servers";
 type Tone = "neutral" | "brand" | "warn" | "good" | "danger" | "purple";
 
 const btnBase =
@@ -1515,5 +1529,176 @@ function ListSkeleton() {
         </div>
       ))}
     </div>
+  );
+}
+
+interface BugReportRow {
+  id: string;
+  reporter_user_id: string | null;
+  reporter_email: string | null;
+  reporter_name: string | null;
+  title: string;
+  description: string;
+  steps: string | null;
+  attachments: { url: string; name?: string; type?: string }[] | null;
+  status: "open" | "resolved" | "dismissed";
+  resolved_at: string | null;
+  created_at: string;
+  profile: { id: string; username: string | null; display_name: string | null; avatar_url: string | null } | null;
+}
+
+function BugReportsTab({
+  onCounts,
+  onViewAccount,
+}: {
+  onCounts: (counts: Record<string, number>) => void;
+  onViewAccount: (userId: string) => void;
+}) {
+  const [filter, setFilter] = useState<BugReportRow["status"]>("open");
+  const [reports, setReports] = useState<BugReportRow[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = useCallback(async (status: BugReportRow["status"]) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/support/team/bug-reports?status=${status}`);
+      const json = await res.json() as { reports?: BugReportRow[]; counts?: Record<string, number>; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Couldn't load bug reports.");
+      setReports(json.reports ?? []);
+      setCounts(json.counts ?? {});
+      onCounts(json.counts ?? {});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't load bug reports.");
+    } finally {
+      setLoading(false);
+    }
+  }, [onCounts]);
+
+  useEffect(() => { void load(filter); }, [filter, load]);
+
+  async function setStatus(id: string, status: BugReportRow["status"]) {
+    setBusy(id);
+    setError(null);
+    try {
+      const res = await apiFetch("/api/support/team/bug-reports", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status, note: notes[id] ?? "" }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Couldn't update the report.");
+      await load(filter);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't update the report.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const tabs: { id: BugReportRow["status"]; label: string }[] = [
+    { id: "open", label: "Open" },
+    { id: "resolved", label: "Fixed" },
+    { id: "dismissed", label: "Dismissed" },
+  ];
+
+  return (
+    <Page>
+      <SectionTitle title="Bug reports" count={counts[filter] ?? reports.length} />
+      <div className="mb-4 flex gap-2">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setFilter(t.id)}
+            className={`${filter === t.id ? ui.btnPrimary : ui.btnSecondary} h-8`}
+          >
+            {t.label}
+            <span className="opacity-70">{counts[t.id] ?? 0}</span>
+          </button>
+        ))}
+      </div>
+      {error && <p className="mb-3 text-[14px] text-status-dnd">{error}</p>}
+      {loading && reports.length === 0 && <ListSkeleton />}
+      {!loading && reports.length === 0 && (
+        <EmptyState icon={<IconAlert size={28} />} title="Nothing here" body="Bug reports from Settings → Report a Bug appear here." />
+      )}
+      <div className="space-y-3">
+        {reports.map((r) => {
+          const name = r.profile?.display_name || r.profile?.username || r.reporter_name || r.reporter_email || "Unknown";
+          return (
+            <div key={r.id} className={`${ui.card} p-4`}>
+              <div className="flex items-start gap-3">
+                <Initial name={name} url={r.profile?.avatar_url} />
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2">
+                    <span className="truncate text-[15px] font-semibold text-header-primary">{r.title}</span>
+                    <Pill tone={r.status === "open" ? "warn" : r.status === "resolved" ? "good" : "neutral"}>
+                      {r.status === "resolved" ? "fixed" : r.status}
+                    </Pill>
+                  </p>
+                  <p className="text-[12px] text-text-muted">
+                    {name}{r.profile?.username ? ` (@${r.profile.username})` : ""} · {formatTime(r.created_at)}
+                  </p>
+                </div>
+                {r.reporter_user_id && (
+                  <button type="button" onClick={() => onViewAccount(r.reporter_user_id!)} className={`${ui.btnSecondary} h-8 shrink-0`}>
+                    View account
+                  </button>
+                )}
+              </div>
+              <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-[1.375rem] text-text-normal">{r.description}</p>
+              {r.steps && (
+                <div className="mt-3">
+                  <p className={ui.eyebrow}>Steps and device</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-[14px] text-text-muted">{r.steps}</p>
+                </div>
+              )}
+              {!!r.attachments?.length && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {r.attachments.map((a, i) => (
+                    <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" className="text-[13px] text-text-link hover:underline">
+                      {a.name || `Attachment ${i + 1}`}
+                    </a>
+                  ))}
+                </div>
+              )}
+              <div className="mt-4 space-y-2">
+                {r.status === "open" && (
+                  <textarea
+                    value={notes[r.id] ?? ""}
+                    onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
+                    rows={2}
+                    placeholder="Note for the reporter when it's fixed (optional)"
+                    aria-label="Note for the reporter"
+                    className={`${ui.input} h-auto resize-y py-2`}
+                  />
+                )}
+                <div className="flex justify-end gap-2">
+                  {r.status === "open" ? (
+                    <>
+                      <button type="button" disabled={busy === r.id} onClick={() => void setStatus(r.id, "dismissed")} className={`${ui.btnSecondary} h-8`}>
+                        Dismiss
+                      </button>
+                      <button type="button" disabled={busy === r.id} onClick={() => void setStatus(r.id, "resolved")} className={`${ui.btnSuccess} h-8`}>
+                        Mark fixed and tell them
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" disabled={busy === r.id} onClick={() => void setStatus(r.id, "open")} className={`${ui.btnSecondary} h-8`}>
+                      Reopen
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Page>
   );
 }

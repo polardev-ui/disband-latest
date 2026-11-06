@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { uploadMedia } from "@/lib/media/uploadMedia";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { BUG_REPORT_EMAIL, BUG_REPORT_LIMITS } from "@/lib/bug-reports";
+import { BUG_REPORT_LIMITS } from "@/lib/bug-reports";
 import { IconBounty, IconClose, IconUpload } from "@/components/icons";
 import { apiFetch } from "@/lib/api";
 
@@ -24,8 +24,6 @@ const labelClass = "mb-1.5 block text-[13px] font-semibold text-[#b5bac1]";
 let nextId = 0;
 
 export function BugReportForm() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [steps, setSteps] = useState("");
@@ -35,25 +33,15 @@ export function BugReportForm() {
   const [done, setDone] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Reports need an account: the old open form drew thousands of anonymous
+  // reports nobody could follow up on.
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      try {
-        const { data } = await getSupabaseClient().auth.getUser();
-        if (cancelled || !data.user) return;
-        if (data.user.email) setEmail(data.user.email);
-        const { data: profile } = await getSupabaseClient()
-          .from("profiles")
-          .select("display_name, username")
-          .eq("id", data.user.id)
-          .maybeSingle();
-        if (cancelled) return;
-        const p = profile as { display_name?: string | null; username?: string | null } | null;
-        if (p?.display_name || p?.username) setName(p.display_name || p.username || "");
-      } catch {
-
-      }
-    })();
+    void getSupabaseClient().auth.getSession().then(
+      ({ data }) => { if (!cancelled) setSignedIn(!!data.session); },
+      () => { if (!cancelled) setSignedIn(false); },
+    );
     return () => {
       cancelled = true;
     };
@@ -92,8 +80,11 @@ export function BugReportForm() {
     setSubmitting(true);
     try {
       const payload = {
-        reporterName: name.trim() || null,
-        reporterEmail: email.trim() || null,
+        environment: [
+          navigator.userAgent,
+          `${window.screen.width}x${window.screen.height}`,
+          navigator.language,
+        ].join(" · "),
         title: title.trim(),
         description: description.trim(),
         steps: steps.trim(),
@@ -127,9 +118,8 @@ export function BugReportForm() {
         </span>
         <h2 className="text-xl font-bold text-white">Bug report sent</h2>
         <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[#b5bac1]">
-          Thanks for helping make Disband better. Our team has been emailed the details.
-          If we fix your bug, your account gets the{" "}
-          <span className="font-semibold text-[#23a55a]">Bug Bounty Hunter</span> badge.
+          Thanks for helping make Disband better. Our team will look into it, and you can
+          follow its status from Settings.
         </p>
         <button
           type="button"
@@ -150,8 +140,26 @@ export function BugReportForm() {
 
   const ready =
     title.trim().length >= BUG_REPORT_LIMITS.titleMin &&
-    description.trim().length >= BUG_REPORT_LIMITS.descriptionMin &&
-    email.trim().length > 0;
+    description.trim().length >= BUG_REPORT_LIMITS.descriptionMin;
+
+  if (signedIn === null) {
+    return <p className="text-center text-sm text-[#949ba4]">Loading…</p>;
+  }
+  if (!signedIn) {
+    return (
+      <div className="mx-auto max-w-2xl rounded-[8px] border border-white/10 bg-[#2b2d31] p-8 text-center">
+        <h2 className="text-xl font-bold text-white">Log in to report a bug</h2>
+        <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[#b5bac1]">
+          Bug reports are tied to your account so we can follow up with you. Can&apos;t log in?
+          Contact Support instead.
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <a href="/login?next=/bug-report" className="rounded-lg bg-[#5865f2] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#4752c4]">Log in</a>
+          <a href="/support" className="rounded-lg border border-white/15 px-5 py-2.5 text-sm font-medium text-[#e6e7eb] hover:border-white/30">Open Support</a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={(e) => void submit(e)} className="mx-auto max-w-2xl space-y-5">
@@ -160,28 +168,14 @@ export function BugReportForm() {
           <IconBounty size={20} />
         </span>
         <div>
-          <p className="text-[14px] font-semibold text-[#23a55a]">Bug Bounty</p>
+          <p className="text-[14px] font-semibold text-[#23a55a]">Found a bug?</p>
           <p className="mt-0.5 text-[13px] leading-relaxed text-[#b5bac1]">
-            Find a bug, tell us how to reproduce it, and if we fix it you&apos;ll earn the
-            Bug Bounty Hunter badge on your profile. Reports go straight to{" "}
-            <a href={`mailto:${BUG_REPORT_EMAIL}`} className="text-[#00a8fc] hover:underline">
-              {BUG_REPORT_EMAIL}
-            </a>
-            .
+            Tell us what happened and how to make it happen again. One bug per report, please:
+            a clear report with steps gets fixed fastest.
           </p>
         </div>
       </div>
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <label className="block">
-          <span className={labelClass}>Your name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} className={inputClass} placeholder="Optional" />
-        </label>
-        <label className="block">
-          <span className={labelClass}>Email</span>
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} placeholder="you@example.com" />
-        </label>
-      </div>
 
       <label className="block">
         <span className={labelClass}>Title</span>
@@ -267,7 +261,7 @@ export function BugReportForm() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[12px] text-[#72767d]">
-          We only use your email to follow up about this report.
+          Sent from your account, with your browser and device details.
         </p>
         <button
           type="submit"

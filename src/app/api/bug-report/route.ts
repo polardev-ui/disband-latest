@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-import { getServiceSupabase } from "@/lib/supabase/server";
-import { PUBLIC_ENV } from "@/lib/public-env";
+import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 import { sendResendEmail } from "@/lib/resend";
-import { getClientIp } from "@/lib/request-ip";
-import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import {
   BUG_REPORT_EMAIL,
   buildBugReportEmailHtml,
@@ -14,85 +9,77 @@ import {
   type BugReportInput,
 } from "@/lib/bug-reports";
 
+/*
+ Bug reports (brought back 6 Nov 2026). The old form took anonymous reports
+ with an in-memory limit and drew 3,200+ that couldn't be triaged, so it was
+ retired. Now a report needs a signed-in account, limits are durable and per
+ account (platform_rate_limit), and the same title twice in a day is refused.
+*/
 export async function POST(request: Request) {
-  const ip = getClientIp(request) || "unknown";
-  const limit = rateLimit(`bug-report:${ip}`, 3, 60_000);
-  if (!limit.allowed) return tooManyRequests(limit.retryAfterSeconds);
+  const user = await getRouteUser(request);
+  if (!user) return NextResponse.json({ error: "Log in to report a bug." }, { status: 401 });
 
-  let userId: string | null = null;
-  let userEmail: string | null = null;
-  let userName: string | null = null;
-  try {
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      PUBLIC_ENV.supabaseUrl,
-      PUBLIC_ENV.supabaseAnonKey,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll(); },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
-          },
-        },
-      },
-    );
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      userId = user.id;
-      userEmail = user.email ?? null;
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("display_name, username")
-        .eq("id", user.id)
-        .maybeSingle();
-      userName =
-        (profile as { display_name?: string | null; username?: string | null } | null)
-          ?.display_name
-        ?? (profile as { display_name?: string | null; username?: string | null } | null)
-          ?.username
-        ?? user.user_metadata?.full_name
-        ?? null;
-    }
-  } catch {
-
+  const supabase = getServiceSupabase();
+  if (!supabase) {
+    return NextResponse.json({ error: "Bug reporting isn't available right now. Try again later." }, { status: 503 });
   }
 
-  let body: Partial<BugReportInput>;
+  let body: Partial<BugReportInput> & { environment?: unknown };
   try {
-    body = (await request.json()) as Partial<BugReportInput>;
+    body = (await request.json()) as Partial<BugReportInput> & { environment?: unknown };
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_name, username")
+    .eq("id", user.id)
+    .maybeSingle();
+  const p = profile as { display_name?: string | null; username?: string | null } | null;
+
+  const environment = typeof body.environment === "string" ? body.environment.slice(0, 400) : "";
+  const steps = body.steps?.trim() ?? "";
   const report: BugReportInput = {
-    reporterName: body.reporterName?.trim() || userName || null,
-    reporterEmail: (body.reporterEmail?.trim() || userEmail || "").toLowerCase() || null,
-    reporterUserId: userId,
+    reporterName: p?.display_name || p?.username || null,
+    reporterEmail: user.email?.toLowerCase() ?? null,
+    reporterUserId: user.id,
     title: body.title?.trim() ?? "",
     description: body.description?.trim() ?? "",
-    steps: body.steps?.trim() ?? "",
+    steps: environment ? `${steps}${steps ? "\n\n" : ""}Device: ${environment}` : steps,
     attachments: Array.isArray(body.attachments)
       ? (body.attachments as BugReportAttachment[]).slice(0, 6)
       : [],
   };
 
   const validationError = validateBugReport(report);
-  if (validationError) {
-    return NextResponse.json({ error: validationError }, { status: 400 });
-  }
-  if (!report.reporterEmail) {
-    return NextResponse.json(
-      { error: "Enter an email so we can reach you about the report." },
-      { status: 400 },
-    );
+  if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
+
+  // Durable limits: 3 an hour, 10 a day per account.
+  for (const [key, max, windowSeconds] of [
+    [`bug-report:h:${user.id}`, 3, 3600],
+    [`bug-report:d:${user.id}`, 10, 86400],
+  ] as const) {
+    const { error } = await supabase.rpc("platform_rate_limit", { p_key: key, p_max: max, p_window_seconds: windowSeconds });
+    if (error) {
+      return NextResponse.json(
+        { error: "You've sent a lot of reports recently. Try again later." },
+        { status: 429 },
+      );
+    }
   }
 
-  const supabase = getServiceSupabase();
-  if (!supabase) {
-    return NextResponse.json(
-      { error: "Bug reporting is not configured yet. Try again later." },
-      { status: 503 },
-    );
+  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const { data: duplicate } = await supabase
+    .from("bug_reports")
+    .select("id")
+    .eq("reporter_user_id", user.id)
+    .ilike("title", report.title.replace(/[\\%_]/g, (c) => `\\${c}`))
+    .gte("created_at", since)
+    .limit(1)
+    .maybeSingle();
+  if (duplicate) {
+    return NextResponse.json({ error: "You've already reported this today. We've got it." }, { status: 409 });
   }
 
   const { error: insertError } = await supabase.from("bug_reports").insert({
@@ -104,29 +91,21 @@ export async function POST(request: Request) {
     steps: report.steps,
     attachments: report.attachments,
   });
-
   if (insertError) {
     console.error("[bug-report] insert error:", insertError);
-    return NextResponse.json(
-      { error: "Could not save your report. Please try again in a moment." },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Couldn't save your report. Please try again in a moment." }, { status: 500 });
   }
 
   try {
     await sendResendEmail({
       to: BUG_REPORT_EMAIL,
-      subject: `🐛 Bug report: ${report.title.slice(0, 80)}`,
+      subject: `Bug report: ${report.title.slice(0, 80)}`,
       html: buildBugReportEmailHtml(report),
       from: process.env.RESEND_FROM_EMAIL_BUG ?? "Disband <onboarding@resend.dev>",
     });
   } catch (err) {
     console.error("[bug-report] email error:", err);
-
   }
 
-  return NextResponse.json({
-    ok: true,
-    message: "Bug report submitted. If we fix it, you'll get the Bug Bounty Hunter badge.",
-  });
+  return NextResponse.json({ ok: true, message: "Bug report sent. Thanks!" });
 }
