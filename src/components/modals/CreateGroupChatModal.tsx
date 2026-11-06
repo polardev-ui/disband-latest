@@ -18,10 +18,9 @@ interface CreateGroupChatModalProps {
   onClose: () => void;
 }
 
-/** Group DMs hold ten people: you and nine friends. Discord still needs a
- *  real group, so creation starts at three friends (four people including
- *  you). Once the group exists the owner can remove people freely. */
-const MAX_PICKS = 19;
+/** Group chats hold ten people: you and nine friends (create_group_chat
+ *  enforces the same). Creation starts at three friends. */
+const MAX_PICKS = 9;
 const MIN_PICKS = 3;
 
 /*
@@ -98,9 +97,9 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
               <h2 className="text-[20px] font-semibold leading-6 text-header-primary">{t("Select Friends")}</h2>
               <p className="mt-1 text-[12px] text-header-secondary">
                 {left === 0
-                  ? t("This group has a 20 member limit.")
+                  ? t("This group has a 10 member limit.")
                   : need > 0
-                    ? t(need === 1 ? "Add {count} more friend to start — 20 members max." : "Add {count} more friends to start — 20 members max.", { count: need })
+                    ? t(need === 1 ? "Add {count} more friend to start — 10 members max." : "Add {count} more friends to start — 10 members max.", { count: need })
                     : t(left === 1 ? "You can add {count} more friend." : "You can add {count} more friends.", { count: left })}
               </p>
             </div>

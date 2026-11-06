@@ -14,6 +14,7 @@ import { Tooltip } from "./Tooltip";
 import { CartIcon } from "@/components/icons/CartIcon";
 import { SolidFriendsIcon, SolidNotesIcon } from "@/components/icons/SolidIcons";
 import { AeroIcon } from "@/components/icons/AeroIcon";
+import { GroupAvatar } from "@/components/ui/GroupAvatar";
 import { IconChevronLeft, IconClose, IconFriends, IconGroup, IconInbox, IconPlus, IconCrown, IconSparkle } from "@/components/icons";
 import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
 import type { GroupChatWithMembers } from "@/lib/supabase/types";
@@ -381,8 +382,8 @@ export function HomePanel({
                       active ? "bg-interactive-selected text-interactive-active" : unreadCount > 0 ? "text-interactive-active hover:bg-interactive-hover" : "text-channels-default hover:bg-interactive-hover hover:text-text-normal"
                     }`}
                   >
-                    <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white" style={{ background: `hsl(${(g.id.charCodeAt(0) * 37) % 360} 55% 45%)` }}>
-                      <IconGroup size={18} />
+                    <div className="relative h-8 w-8 shrink-0">
+                      <GroupAvatar group={g} size={32} />
                       {inCallCount > 0 && (
                         <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary bg-status-online" />
                       )}

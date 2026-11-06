@@ -449,6 +449,15 @@ export function DiscordApp() {
       return app.friends.find((f) => f.id === peerId);
     })();
   const activeGroup = app.groupChats.find((g) => g.id === app.activeGroupChatId);
+  // Group chats with unread messages get a picture in the rail, like DMs.
+  const groupRailUnreads = useMemo(
+    () =>
+      app.groupChats
+        .map((group) => ({ group, count: app.groupUnreadMap.get(group.id) ?? 0 }))
+        .filter((e) => e.count > 0)
+        .sort((a, b) => (b.group.last_message_at ?? "").localeCompare(a.group.last_message_at ?? "")),
+    [app.groupChats, app.groupUnreadMap],
+  );
 
   // Stable member lists for ChatCanvas. Built inline in JSX these arrays got a
   // fresh identity on every DiscordApp render, which re-ran the canvas's member
@@ -1865,6 +1874,9 @@ export function DiscordApp() {
                 viewMode={app.viewMode}
                 dmUnreads={app.dmUnreads}
                 activeDmThreadId={app.activeDmThreadId}
+                groupUnreads={groupRailUnreads}
+                activeGroupChatId={app.activeGroupChatId}
+                onSelectGroupChat={(id) => void app.selectGroupChat(id)}
                 serverUnreadIds={app.serverUnreadIds}
                 serverMentionCounts={app.serverMentionCounts}
                 folders={app.serverFolders}
@@ -1954,6 +1966,9 @@ export function DiscordApp() {
                 viewMode={app.viewMode}
                 dmUnreads={app.dmUnreads}
                 activeDmThreadId={app.activeDmThreadId}
+                groupUnreads={groupRailUnreads}
+                activeGroupChatId={app.activeGroupChatId}
+                onSelectGroupChat={(id) => void app.selectGroupChat(id)}
                 serverUnreadIds={app.serverUnreadIds}
                 serverMentionCounts={app.serverMentionCounts}
                 folders={app.serverFolders}
@@ -2206,10 +2221,24 @@ export function DiscordApp() {
                           membersVisible={membersVisible}
                           onToggleMembers={() => persistMembersVisible(!membersVisible)}
 	                      leading={
-	                        <HeaderCallButton
-	                          disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
-	                          onClick={startGroupVoiceCall}
-	                        />
+	                        <>
+	                          <HeaderCallButton
+	                            disabled={call.phase !== "idle" || groupCall.phase !== "idle"}
+	                            onClick={startGroupVoiceCall}
+	                          />
+	                          <button
+	                            type="button"
+	                            onClick={() => {
+	                              setInviteGroupId(activeGroup.id);
+	                              setInviteGroupOpen(true);
+	                            }}
+	                            title={t("Add friends to group")}
+	                            aria-label={t("Add friends to group")}
+	                            className="flex h-6 w-6 shrink-0 items-center justify-center text-interactive-normal transition-colors hover:text-interactive-active"
+	                          >
+	                            <IconUserPlus size={22} />
+	                          </button>
+	                        </>
 	                      }
 	                    />
                 }
@@ -2245,6 +2274,10 @@ export function DiscordApp() {
                 currentUserId={app.user?.id}
                 onMemberClick={(p) => openProfile(p)}
                 onMemberContext={handleGroupMemberContext}
+                onInvite={() => {
+                  setInviteGroupId(activeGroup.id);
+                  setInviteGroupOpen(true);
+                }}
               />
             </div>
           ) : null)}

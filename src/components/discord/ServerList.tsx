@@ -8,13 +8,19 @@ import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui
 import { IconPlus, IconCompass } from "@/components/icons";
 import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
+import { GroupAvatar } from "@/components/ui/GroupAvatar";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useLiveOnlineCount } from "@/hooks/useLiveOnlineCount";
-import type { Profile, Server, ServerFolder, ServerListState, ViewMode } from "@/lib/supabase/types";
+import type { GroupChat, Profile, Server, ServerFolder, ServerListState, ViewMode } from "@/lib/supabase/types";
 
 export interface DmRailUnread {
   threadId: string;
   friend: Profile;
+  count: number;
+}
+
+export interface GroupRailUnread {
+  group: GroupChat;
   count: number;
 }
 
@@ -116,6 +122,9 @@ interface ServerListProps {
   viewMode: ViewMode;
   dmUnreads: DmRailUnread[];
   activeDmThreadId: string | null;
+  groupUnreads?: GroupRailUnread[];
+  activeGroupChatId?: string | null;
+  onSelectGroupChat?: (groupId: string) => void;
   serverUnreadIds: string[];
   serverMentionCounts?: Map<string, number>;
   folders: ServerFolder[];
@@ -337,6 +346,9 @@ export function ServerList({
   viewMode,
   dmUnreads,
   activeDmThreadId,
+  groupUnreads = [],
+  activeGroupChatId = null,
+  onSelectGroupChat,
   serverUnreadIds,
   serverMentionCounts,
   folders,
@@ -356,6 +368,9 @@ export function ServerList({
     viewMode === "home" || viewMode === "dm" || viewMode === "group" || viewMode === "notes";
   const visibleDmUnreads = dmUnreads.filter(
     (entry) => !(viewMode === "dm" && activeDmThreadId === entry.threadId),
+  );
+  const visibleGroupUnreads = groupUnreads.filter(
+    (entry) => !(viewMode === "group" && activeGroupChatId === entry.group.id),
   );
   const serverUnreadSet = new Set(serverUnreadIds);
   const layout = useMemo(() => computeRailLayout(servers, folders, listState), [servers, folders, listState]);
@@ -493,6 +508,25 @@ export function ServerList({
           </div>
         );
       })}
+
+      {visibleGroupUnreads.map((entry) => (
+        <div key={entry.group.id} className="rail-item rail-enter group relative flex w-full justify-center">
+          <RailPill state="unread" />
+          <Tooltip label={entry.group.name} side="right">
+            <button
+              type="button"
+              aria-label={t("{count} unread messages in {name}", { count: entry.count, name: entry.group.name })}
+              onClick={() => onSelectGroupChat?.(entry.group.id)}
+              className="relative flex h-12 w-12 items-center justify-center"
+            >
+              <span className="rail-icon h-12 w-12 overflow-hidden">
+                <GroupAvatar group={entry.group} size={48} />
+              </span>
+              <UnreadCountBadge count={entry.count} />
+            </button>
+          </Tooltip>
+        </div>
+      ))}
 
       <RailSeparator />
 
