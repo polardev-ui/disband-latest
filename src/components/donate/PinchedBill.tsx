@@ -1,122 +1,166 @@
+import { HAND, PINCH, type HandLayer } from "./pinched-bill-paths";
+
 /*
- A hand-drawn hand pinching a dollar bill and lifting it. Everything is
- inline SVG: the lines draw themselves in once, then the hand bobs and the
- bill sways from the pinch. A turbulence filter wobbles the strokes so it
- reads as ink, not vector art. Reduced motion gets the finished drawing.
+ A hand reaching down from the top right and lifting a dollar bill by its
+ corner. The hand is drawn from a posed skeleton (see pinched-bill-paths.ts)
+ with flat skin tones, a shadow tone for volume, nails, knuckle creases and
+ tendons. No background: it sits straight on the page, and the sleeve fades
+ in from the top edge. After dropping in, the hand lifts and lowers while the
+ bill sways from the pinch. Reduced motion gets the still picture.
+
+ Outlines use paint-order="stroke" with a doubled width so only the outer
+ half shows. The palm, knuckles and index finger share one silhouette
+ (stroke pass, then fill pass) so there's no seam between them.
 */
 
-const INK = "#f2f3f5";
-const BILL_INK = "#86dca3";
-const BILL_FILL = "#1d3a28";
-const PAGE = "#1e1f22";
+const INK = "#1f1a17";
+const SKIN = "#f5e1d1";
+const SHADOW = "#ebcfbb";
+const NAIL = "#fbeee5";
+const CLAY = "#d97757";
+const BILL = "#bfcaa3";
+const BILL_FACE = "#faf9f5";
+const MARK = "#b5bac1";
 
-// The pinch: the bill's corner sits here, under the fingertips.
-const PX = 184;
-const PY = 108;
+const S = 2.2; // visible outline width in the picture
+const K = 1.45; // hand scale
+const PX = 192; // where the pinch lands
+const PY = 236;
+const HAND_TRANSFORM = `translate(${PX} ${PY}) rotate(30) scale(${-K} ${K}) translate(${-PINCH[0]} ${-PINCH[1]})`;
+const w = (n: number) => n / K; // stroke widths inside the scaled hand
+
+function layerProps(kind: HandLayer[0]) {
+  switch (kind) {
+    case "outline":
+      return { fill: SKIN, stroke: INK, strokeWidth: w(S * 2), strokeLinejoin: "round" as const, paintOrder: "stroke" };
+    case "shadow":
+      return { fill: SHADOW };
+    case "nail":
+      return { fill: NAIL, stroke: INK, strokeWidth: w(S * 0.55), strokeLinejoin: "round" as const };
+    case "line":
+      return { fill: "none", stroke: INK, strokeWidth: w(S * 0.55), strokeLinecap: "round" as const };
+    case "faint":
+      return { fill: "none", stroke: INK, strokeWidth: w(S * 0.5), strokeLinecap: "round" as const, opacity: 0.28 };
+    case "sleeve":
+      return { fill: CLAY, stroke: INK, strokeWidth: w(S * 2), strokeLinejoin: "round" as const, paintOrder: "stroke" };
+  }
+}
+
+function Layers({ items }: { items: readonly HandLayer[] }) {
+  return (
+    <>
+      {items.map(([kind, d], i) => (
+        <path key={i} d={d} {...layerProps(kind)} />
+      ))}
+    </>
+  );
+}
+
+const silhouette = { fill: INK, stroke: INK, strokeWidth: w(S * 2), strokeLinejoin: "round" as const };
 
 export function PinchedBill({ className = "" }: { className?: string }) {
   return (
     <div className={className}>
       <style>{`
-        .dn-ink { stroke-dasharray: 1; stroke-dashoffset: 1; animation: dn-draw 1.3s cubic-bezier(.6,.1,.3,1) forwards; }
-        .dn-fill { opacity: 0; animation: dn-fade .5s ease-out forwards; }
-        .dn-lift { animation: dn-lift 3.4s ease-in-out 1.9s infinite; }
-        .dn-sway { transform-box: view-box; transform-origin: ${PX}px ${PY}px; animation: dn-sway 3.4s ease-in-out 1.9s infinite; }
-        .dn-spark { transform-box: fill-box; transform-origin: center; opacity: 0; animation: dn-spark 3.4s ease-in-out 2.2s infinite; }
-        .dn-motion { opacity: 0; animation: dn-motion 3.4s ease-in-out 1.9s infinite; }
-        @keyframes dn-draw { to { stroke-dashoffset: 0; } }
-        @keyframes dn-fade { to { opacity: 1; } }
-        @keyframes dn-lift { 0%, 100% { transform: translateY(0); } 45% { transform: translateY(-14px); } 60% { transform: translateY(-12px); } }
-        @keyframes dn-sway { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(4deg); } 65% { transform: rotate(-3deg); } }
-        @keyframes dn-spark { 0%, 20%, 100% { opacity: 0; transform: scale(.4) rotate(0deg); } 45% { opacity: 1; transform: scale(1) rotate(25deg); } 70% { opacity: 0; transform: scale(.6) rotate(45deg); } }
-        @keyframes dn-motion { 0%, 25%, 100% { opacity: 0; } 45% { opacity: .7; } 65% { opacity: 0; } }
+        .pb-enter { animation: pb-enter 1.1s cubic-bezier(.2,.8,.2,1) both; }
+        .pb-lift { animation: pb-lift 3.8s ease-in-out 1.1s infinite; }
+        .pb-sway { transform-box: view-box; transform-origin: ${PX}px ${PY}px; animation: pb-sway 3.8s ease-in-out 1.1s infinite; }
+        .pb-dash { opacity: 0; animation: pb-dash 3.8s ease-in-out 1.1s infinite; }
+        .pb-spark { transform-box: fill-box; transform-origin: center; opacity: 0; animation: pb-spark 3.8s ease-in-out 1.4s infinite; }
+        @keyframes pb-enter { from { opacity: 0; transform: translateY(-40px); } to { opacity: 1; transform: none; } }
+        @keyframes pb-lift { 0%, 100% { transform: translateY(0); } 45%, 55% { transform: translateY(-16px); } }
+        @keyframes pb-sway { 0%, 100% { transform: rotate(0deg); } 28% { transform: rotate(3.5deg); } 62% { transform: rotate(-3deg); } }
+        @keyframes pb-dash { 0%, 22%, 100% { opacity: 0; } 45% { opacity: .55; } 68% { opacity: 0; } }
+        @keyframes pb-spark { 0%, 20%, 100% { opacity: 0; transform: scale(.3) rotate(0deg); } 45% { opacity: .7; transform: scale(1) rotate(20deg); } 70% { opacity: 0; transform: scale(.5) rotate(40deg); } }
         @media (prefers-reduced-motion: reduce) {
-          .dn-ink { animation: none; stroke-dashoffset: 0; }
-          .dn-fill { animation: none; opacity: 1; }
-          .dn-lift, .dn-sway, .dn-motion, .dn-spark { animation: none; }
+          .pb-enter, .pb-lift, .pb-sway, .pb-dash, .pb-spark { animation: none; }
+          .pb-dash, .pb-spark { opacity: 0; }
         }
       `}</style>
       <svg
-        viewBox="0 0 360 330"
+        viewBox="0 0 400 440"
         role="img"
-        aria-label="A hand-drawn hand pinching a dollar bill and lifting it up"
-        className="h-auto w-full"
+        aria-label="Illustration of a hand lifting a dollar bill by its corner"
+        className="h-auto w-full overflow-visible"
       >
         <defs>
-          <filter id="dn-rough" x="-10%" y="-10%" width="120%" height="120%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="7" result="noise" />
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="3.2" xChannelSelector="R" yChannelSelector="G" />
-          </filter>
+          {/* The arm comes in from off the page rather than stopping at a hard edge. */}
+          <linearGradient id="pb-fade" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="70">
+            <stop offset="0" stopColor="#fff" stopOpacity="0" />
+            <stop offset="1" stopColor="#fff" stopOpacity="1" />
+          </linearGradient>
+          <mask id="pb-top" maskUnits="userSpaceOnUse" x="-100" y="-100" width="600" height="640">
+            <rect x="-100" y="-100" width="600" height="640" fill="url(#pb-fade)" />
+          </mask>
+          {/* Hides the base of the thumb inside the palm. */}
+          <mask id="pb-thumb" maskUnits="userSpaceOnUse" x="-600" y="-600" width="1400" height="1400">
+            <rect x="-600" y="-600" width="1400" height="1400" fill="#fff" />
+            <path d={HAND.palm} fill="#000" />
+          </mask>
         </defs>
 
-        {/* Ground scribble, so the lift has something to lift away from. */}
-        <g filter="url(#dn-rough)" stroke={INK} strokeOpacity={0.25} strokeWidth={2.4} fill="none" strokeLinecap="round">
-          <path className="dn-ink" pathLength={1} style={{ animationDelay: "1.1s" }} d="M40 318 C 100 314, 170 320, 240 315 S 310 317, 330 314" />
-        </g>
-
-        {/* Speed lines and sparkles that show on each lift. */}
-        <g filter="url(#dn-rough)" stroke={BILL_INK} strokeWidth={2.6} fill="none" strokeLinecap="round">
-          <g className="dn-motion">
-            <path d="M28 214 l -16 8" />
-            <path d="M40 240 l -18 6" />
-            <path d="M62 262 l -14 10" />
+        {/* Little marks that flash as the bill goes up. */}
+        <g stroke={MARK} strokeWidth={S} strokeLinecap="round" fill="none">
+          <g className="pb-dash">
+            <path d="M84 318 l -18 -8" />
+            <path d="M76 348 l -22 -2" />
+            <path d="M90 378 l -16 8" />
           </g>
-          <path className="dn-spark" d="M286 150 v 18 M277 159 h 18" />
-          <path className="dn-spark" style={{ animationDelay: "2.5s" }} d="M70 120 v 12 M64 126 h 12" />
-          <path className="dn-spark" style={{ animationDelay: "2.8s" }} d="M300 214 v 10 M295 219 h 10" />
+          <path className="pb-spark" d="M322 300 v 22 M311 311 h 22" />
+          <path className="pb-spark" style={{ animationDelay: "1.8s" }} d="M70 220 v 14 M63 227 h 14" />
         </g>
 
-        <g className="dn-lift">
-          {/* The bill, hanging from its corner. */}
-          <g className="dn-sway">
-            <g transform={`rotate(-46 ${PX} ${PY})`} filter="url(#dn-rough)" strokeLinecap="round" strokeLinejoin="round">
-              <rect className="dn-fill" style={{ animationDelay: ".9s" }} x={PX - 190} y={PY} width={190} height={84} rx={5} fill={BILL_FILL} />
-              <rect className="dn-ink" pathLength={1} x={PX - 190} y={PY} width={190} height={84} rx={5} fill="none" stroke={BILL_INK} strokeWidth={3} />
-              <rect className="dn-ink" pathLength={1} style={{ animationDelay: ".35s" }} x={PX - 181} y={PY + 9} width={172} height={66} rx={3} fill="none" stroke={BILL_INK} strokeWidth={1.8} strokeOpacity={0.8} />
-              {/* Portrait oval and a few lines of "engraving". */}
-              <ellipse className="dn-ink" pathLength={1} style={{ animationDelay: ".55s" }} cx={PX - 95} cy={PY + 42} rx={18} ry={24} fill="none" stroke={BILL_INK} strokeWidth={2.2} />
-              <path className="dn-ink" pathLength={1} style={{ animationDelay: ".75s" }} d={`M${PX - 89} ${PY + 35} a 6 6 0 1 1 -12 0 a 6 6 0 1 1 12 0 M${PX - 106} ${PY + 58} c 2 -11, 20 -11, 22 0`} fill="none" stroke={BILL_INK} strokeWidth={1.8} />
-              <path className="dn-ink" pathLength={1} style={{ animationDelay: ".8s" }} d={`M${PX - 66} ${PY + 30} h 44 M${PX - 66} ${PY + 42} h 36 M${PX - 66} ${PY + 54} h 40`} fill="none" stroke={BILL_INK} strokeWidth={1.6} strokeOpacity={0.7} />
-              {/* The dollar sign. */}
-              <path
-                className="dn-ink"
-                pathLength={1}
-                style={{ animationDelay: ".65s" }}
-                d={`M${PX - 150} ${PY + 30} c -4 -6, -18 -6, -18 2 c 0 8, 18 6, 18 15 c 0 9, -15 9, -19 2 M${PX - 159} ${PY + 22} v 34`}
-                fill="none"
-                stroke={BILL_INK}
-                strokeWidth={2.6}
-              />
-              {/* Corner numerals. */}
-              <path className="dn-ink" pathLength={1} style={{ animationDelay: ".9s" }} d={`M${PX - 176} ${PY + 20} l 4 -4 v 12 M${PX - 22} ${PY + 66} l 4 -4 v 12`} fill="none" stroke={BILL_INK} strokeWidth={1.8} />
+        <g mask="url(#pb-top)">
+          <g className="pb-enter">
+            <g className="pb-lift">
+              {/* Back fingers, curled behind the index. */}
+              <g transform={HAND_TRANSFORM}>
+                <Layers items={HAND.back} />
+                <path d={HAND.fist} {...silhouette} />
+                <path d={HAND.palm} {...silhouette} />
+                <path d={HAND.index} {...silhouette} />
+                <path d={HAND.fist} fill={SKIN} />
+                <path d={HAND.palm} fill={SKIN} />
+                <path d={HAND.index} fill={SKIN} />
+                <Layers items={HAND.mid} />
+              </g>
+
+              {/* The bill hangs from the pinch, between index finger and thumb. */}
+              <g className="pb-sway">
+                <g transform={`translate(${PX} ${PY}) rotate(-56) scale(.8)`} strokeLinejoin="round" strokeLinecap="round">
+                  <path
+                    d="M6 -4 C -60 4 -140 -6 -204 4 L -200 96 C -138 88 -62 98 4 90 Z"
+                    fill={BILL}
+                    stroke={INK}
+                    strokeWidth={S * 2}
+                    paintOrder="stroke"
+                  />
+                  <path
+                    d="M-10 9 C -70 15 -134 7 -190 14 L -187 82 C -132 76 -70 84 -9 78 Z"
+                    fill="none"
+                    stroke={INK}
+                    strokeWidth={S * 0.7}
+                  />
+                  <ellipse cx="-99" cy="46" rx="22" ry="27" fill={BILL_FACE} stroke={INK} strokeWidth={S} />
+                  <path
+                    d="M-91 35 C -94 29 -106 29 -106 37 C -106 45 -91 44 -91 53 C -91 61 -105 61 -108 55 M-99 24 L -99 67"
+                    fill="none"
+                    stroke={INK}
+                    strokeWidth={S}
+                  />
+                  <circle cx="-172" cy="31" r="7" fill="none" stroke={INK} strokeWidth={S * 0.8} />
+                  <circle cx="-27" cy="62" r="7" fill="none" stroke={INK} strokeWidth={S * 0.8} />
+                </g>
+              </g>
+
+              {/* Thumb in front of the bill, then the sleeve over the wrist. */}
+              <g transform={HAND_TRANSFORM}>
+                <g mask="url(#pb-thumb)">
+                  <Layers items={HAND.thumb} />
+                </g>
+                <Layers items={HAND.sleeve} />
+              </g>
             </g>
-          </g>
-
-          {/* The hand, coming down from the top right. Filled with the page
-              colour so it sits in front of the bill's pinched corner. */}
-          <g filter="url(#dn-rough)" stroke={INK} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
-            <path
-              className="dn-fill"
-              style={{ animationDelay: ".2s" }}
-              fill={PAGE}
-              stroke="none"
-              d="M214 -10 L214 -4 C 212 18, 208 40, 198 56 C 186 72, 172 88, 166 102 C 162 112, 167 120, 178 118 C 189 116, 195 108, 198 98 C 203 86, 210 78, 222 74 C 234 76, 240 86, 238 96 C 236 104, 244 108, 250 102 C 258 96, 260 86, 256 78 C 264 80, 270 74, 268 64 C 266 52, 272 30, 276 -4 L276 -10 Z"
-            />
-            <path
-              className="dn-ink"
-              pathLength={1}
-              fill="none"
-              d="M214 -4 C 212 18, 208 40, 198 56 C 186 72, 172 88, 166 102 C 162 112, 167 120, 178 118 C 189 116, 195 108, 198 98 C 203 86, 210 78, 222 74 C 234 76, 240 86, 238 96 C 236 104, 244 108, 250 102 C 258 96, 260 86, 256 78 C 264 80, 270 74, 268 64 C 266 52, 272 30, 276 -4"
-            />
-            {/* Sleeve cuff. */}
-            <path className="dn-ink" pathLength={1} style={{ animationDelay: ".5s" }} fill="none" d="M207 20 C 230 26, 254 26, 278 18" />
-            <path className="dn-ink" pathLength={1} style={{ animationDelay: ".6s" }} fill="none" strokeWidth={2} d="M206 30 C 230 35, 254 35, 277 28" />
-            {/* Thumbnail, thumb crease, knuckle and finger lines. */}
-            <path className="dn-ink" pathLength={1} style={{ animationDelay: ".8s" }} fill="none" strokeWidth={2} d="M168 106 C 170 111, 175 113, 179 112" />
-            <path className="dn-ink" pathLength={1} style={{ animationDelay: ".9s" }} fill="none" strokeWidth={2} d="M200 62 C 196 74, 192 84, 186 92" />
-            <path className="dn-ink" pathLength={1} style={{ animationDelay: "1s" }} fill="none" strokeWidth={2} d="M206 94 C 210 98, 214 98, 217 94" />
-            <path className="dn-ink" pathLength={1} style={{ animationDelay: "1.05s" }} fill="none" strokeWidth={1.8} d="M238 96 C 234 90, 230 86, 224 86" />
-            <path className="dn-ink" pathLength={1} style={{ animationDelay: "1.1s" }} fill="none" strokeWidth={1.8} d="M256 78 C 252 74, 248 72, 244 73" />
           </g>
         </g>
       </svg>
