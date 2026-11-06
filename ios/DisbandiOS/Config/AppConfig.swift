@@ -66,7 +66,15 @@ enum SupabaseManager {
             options: SupabaseClientOptions(
                 auth: SupabaseClientOptions.AuthOptions(
                     storage: authStorage,
-                    redirectToURL: AppConfig.emailVerificationURL
+                    redirectToURL: AppConfig.emailVerificationURL,
+                    // Without this the SDK refreshes an expired stored session
+                    // *before* reporting it, and reports "no session" if that
+                    // refresh fails. A launch with no signal (a background wake,
+                    // a lift, a dead spot) then showed the sign-in screen while
+                    // a perfectly good session sat in storage. Now the stored
+                    // session is always reported and refreshed afterwards; only
+                    // a server that rejects it signs the user out.
+                    emitLocalSessionAsInitialSession: true
                 )
             )
         )

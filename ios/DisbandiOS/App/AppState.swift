@@ -158,8 +158,21 @@ final class AppState {
             return
         }
 
-        if (try? await client.auth.refreshSession()) != nil {
+        do {
+            _ = try await client.auth.refreshSession()
             await loadProfile()
+            return
+        } catch AuthError.sessionMissing {
+            // The server no longer recognises this session: signed out
+            // elsewhere, revoked, or the account is gone. Only this is a
+            // reason to sign out here.
+        } catch {
+            // No signal, a timeout or a server hiccup says nothing about
+            // whether the session is still good. Signing out on these is what
+            // logged people out at random. Keep the session and let them retry;
+            // the SDK refreshes again by itself once the network is back.
+            profileError = "Couldn't reach Disband. Check your connection and pull to retry."
+            print("loadProfile: refresh failed, keeping the session — \(error)")
             return
         }
 
