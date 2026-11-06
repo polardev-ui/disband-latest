@@ -4,7 +4,13 @@ import { devilsDemise } from "./devilsDemise";
 import { graphite } from "./graphite";
 import { loveYouForever } from "./loveYouForever";
 import { onGuard } from "./onGuard";
+import { onRepeat } from "./onRepeat";
 import { roundTheWorld } from "./roundTheWorld";
+import { slurp } from "./slurp";
+import { snowedIn } from "./snowedIn";
+import { spellbound } from "./spellbound";
+import { sunseeker } from "./sunseeker";
+import { tangledUp } from "./tangledUp";
 import { treatNoTrick } from "./treatNoTrick";
 
 export type DecorationDesign =
@@ -14,7 +20,13 @@ export type DecorationDesign =
   | "treat-no-trick"
   | "devils-demise"
   | "love-you-forever"
-  | "on-guard";
+  | "on-guard"
+  | "snowed-in"
+  | "on-repeat"
+  | "spellbound"
+  | "tangled-up"
+  | "slurp"
+  | "sunseeker";
 
 export const DESIGNS: Record<DecorationDesign, DesignSpec> = {
   graphite,
@@ -24,4 +36,10 @@ export const DESIGNS: Record<DecorationDesign, DesignSpec> = {
   "devils-demise": devilsDemise,
   "love-you-forever": loveYouForever,
   "on-guard": onGuard,
+  "snowed-in": snowedIn,
+  "on-repeat": onRepeat,
+  spellbound,
+  "tangled-up": tangledUp,
+  slurp,
+  sunseeker,
 };

@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowUpRight, Check, Moon, Pause, Play, Sun } from "lucide-r
 import { CosmeticAvatar, CosmeticProfile } from "@/components/shop/CosmeticPreview";
 import { ShopModal } from "@/components/shop/ShopModal";
 import { CosmeticMotionContext } from "@/components/shop/AnimatedCosmetic";
-import { ART_COLLECTIONS, formatPrice, shopItem, decorationItems } from "@/lib/shop";
+import { formatPrice, shopItem, decorationItems, skinItems } from "@/lib/shop";
 import "./gallery.css";
 
 export default function ShopGalleryPage() {
@@ -21,12 +21,22 @@ export default function ShopGalleryPage() {
     name: item.name,
     line: item.description,
     description: item.description,
-    ringId: item.id,
+    ringId: item.id as string | null,
     profileId: null as string | null,
     color: "#5865f2",
     surface: "#1e1f22",
   }));
-  const collections = category === "ring" ? ringCollections : ART_COLLECTIONS.filter((set) => set.profileId);
+  const skinCollections = skinItems().map((item) => ({
+    id: item.id,
+    name: item.name,
+    line: item.description,
+    description: item.description,
+    ringId: null as string | null,
+    profileId: item.id as string | null,
+    color: "#5865f2",
+    surface: "#1e1f22",
+  }));
+  const collections = category === "ring" ? ringCollections : skinCollections;
   const collection = collections[selected] ?? collections[0];
   const item = shopItem(category === "ring" ? collection.ringId : collection.profileId)!;
   const self = { name };
@@ -44,7 +54,7 @@ export default function ShopGalleryPage() {
       </nav>
 
       <header className="studio-intro">
-        <p className="studio-eyebrow">NEW IN THE SHOP / SKETCHBOOK & FLIGHT</p>
+        <p className="studio-eyebrow">NEW IN THE SHOP / DECORATIONS & SKINS</p>
         <h1>A profile with personality<span>.</span></h1>
         <p>Little details. A whole different feeling. Find a frame and a world to go with it.</p>
       </header>
@@ -54,7 +64,7 @@ export default function ShopGalleryPage() {
           <div className="studio-catalogue-header">
             <div className="studio-tabs" role="group" aria-label="Cosmetic type">
               <button type="button" aria-pressed={category === "ring"} onClick={() => { setCategory("ring"); setSelected(0); }}>Avatar decorations <span>{String(decorationItems().length).padStart(2, "0")}</span></button>
-              <button type="button" aria-pressed={category === "overlay"} onClick={() => { setCategory("overlay"); setSelected(0); }}>Profile skins <span>{String(ART_COLLECTIONS.filter((set) => set.profileId).length).padStart(2, "0")}</span></button>
+              <button type="button" aria-pressed={category === "overlay"} onClick={() => { setCategory("overlay"); setSelected(0); }}>Profile skins <span>{String(skinItems().length).padStart(2, "0")}</span></button>
             </div>
           </div>
           <div className={`studio-products ${category === "overlay" ? "studio-products-profiles" : ""}`}>
@@ -78,7 +88,7 @@ export default function ShopGalleryPage() {
             <div className="studio-detail-heading"><p className="studio-eyebrow">{category === "ring" ? "AVATAR DECORATION" : "PROFILE SKIN"}</p><span className="studio-loop-label"><span /> Animated</span></div>
             <h2>{collection.name}</h2>
             <p className="studio-tagline">{collection.line}</p>
-            <p className="studio-description">{collection.description}</p>
+            {collection.description !== collection.line && <p className="studio-description">{collection.description}</p>}
             <div className="studio-purchase"><button type="button" className="studio-primary" onClick={() => setShopOpen(true)}>Open shop <ArrowUpRight size={17} /></button><span>{formatPrice(item.priceCents)}<small>One-time purchase</small></span></div>
           </div>
 
@@ -92,7 +102,7 @@ export default function ShopGalleryPage() {
         <aside className="studio-fitting-room" aria-label="Live profile preview">
           <div className="studio-preview-heading"><span>Your profile, dressed up</span><div role="group" aria-label="Preview appearance"><button type="button" aria-label="Dark preview" aria-pressed={!light} onClick={() => setLight(false)}><Moon size={14} /></button><button type="button" aria-label="Light preview" aria-pressed={light} onClick={() => setLight(true)}><Sun size={14} /></button></div></div>
           <div className="studio-profile-stage"><CosmeticProfile ringId={collection.ringId} overlayId={collection.profileId} self={self} playing={playing} light={light} /></div>
-          <div className="studio-preview-bottom"><span>{collection.profileId ? "Matching set preview" : "Avatar decoration preview"}</span><span>{collection.name}</span></div>
+          <div className="studio-preview-bottom"><span>{collection.profileId ? "Profile skin preview" : "Avatar decoration preview"}</span><span>{collection.name}</span></div>
           <label className="studio-name-input">Try your name<input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder="Your name" /></label>
         </aside>
       </div>

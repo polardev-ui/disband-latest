@@ -5,15 +5,20 @@ import { LottieEffect } from "@/components/shop/effects/LottieEffect";
 import { effectClass, lottieSrc, shopItem } from "@/lib/shop";
 import { AnimatedCosmetic } from "./AnimatedCosmetic";
 import { FlightCosmetic } from "./FlightCosmetic";
+import { Skin } from "./skins/Skin";
 
 /**
  * The equipped profile effect, over a profile card.
  *
- * Animated raster artwork takes priority. Lottie, SVG, and CSS renderers remain
- * for older owned items. Keep profile content above this non-interactive layer.
+ * Drawn skins (components/shop/skins) take priority. Raster, Lottie, SVG, and
+ * CSS renderers remain for older owned items. Keep profile content above this
+ * non-interactive layer.
  */
 export function ProfileOverlay({ itemId, playing = true }: { itemId: string | null | undefined; playing?: boolean }) {
   if (!itemId) return null;
+
+  const skin = shopItem(itemId)?.skin;
+  if (skin) return <div className="fx-overlay fx-overlay-art" aria-hidden><Skin design={skin} playing={playing} /></div>;
 
   const flight = shopItem(itemId)?.flight;
   if (flight) return <div className="fx-overlay fx-overlay-art" aria-hidden><FlightCosmetic design={flight} profile playing={playing} /></div>;

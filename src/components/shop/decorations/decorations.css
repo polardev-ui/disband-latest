@@ -336,6 +336,274 @@
 @keyframes rtw-trail { 0% { transform: translateX(2px); opacity: .4; } 50% { opacity: 1; } 100% { transform: translateX(-3px); opacity: .4; } }
 @keyframes rtw-flame { 0% { opacity: .6; } 50% { opacity: 1; } }
 
+/* --------------------------------------------------------------- snowed in */
+
+.sg-rock { transform-origin: 100px 100px; }
+.sg-fall { animation: sg-fall calc(7600ms * var(--deco-slow, 1)) linear infinite; animation-delay: calc(var(--i) * -630ms * var(--deco-slow, 1)); }
+@keyframes sg-fall {
+  0% { transform: translate(0, -9px); opacity: 0; }
+  14% { opacity: 1; }
+  50% { transform: translate(1.6px, 0); }
+  86% { opacity: 1; }
+  100% { transform: translate(-.8px, 9px); opacity: 0; }
+}
+/* Picked up and shaken: rocks about the photo's centre, each swing smaller. */
+.sg-play .sg-rock { animation: sg-rock calc(2600ms * var(--deco-slow, 1)) both; }
+@keyframes sg-rock {
+  0% { transform: translateY(0) rotate(0deg); animation-timing-function: cubic-bezier(.3, 0, .4, 1); }
+  7% { transform: translateY(-2px) rotate(-9deg); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  17% { transform: translateY(-2px) rotate(8deg); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  27% { transform: translateY(-1.5px) rotate(-6.5deg); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  37% { transform: translateY(-1px) rotate(4.5deg); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  47% { transform: translateY(-.5px) rotate(-2.5deg); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  56% { transform: translateY(0) rotate(1deg); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  64%, 100% { transform: translateY(0) rotate(0deg); }
+}
+.sg-burst { opacity: 0; }
+.sg-play .sg-burst { animation: sg-burst calc(2450ms * var(--deco-slow, 1)) both; }
+@keyframes sg-burst {
+  0% { opacity: 0; transform: translate(0, 0); animation-timing-function: cubic-bezier(.1, .7, .3, 1); }
+  4% { opacity: 1; }
+  26% { transform: translate(var(--x1), var(--y1)); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  50% { transform: translate(var(--x2), var(--y2)); animation-timing-function: cubic-bezier(.3, 0, .7, 1); }
+  86% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--x3), var(--y3)); }
+}
+.sg-sparkle { opacity: .2; transform-box: fill-box; transform-origin: center; animation: sg-sparkle calc(3800ms * var(--deco-slow, 1)) ease-in-out infinite; animation-delay: calc(var(--i) * -950ms * var(--deco-slow, 1)); }
+@keyframes sg-sparkle { 0%, 70%, 100% { opacity: .2; transform: scale(.5); } 82% { opacity: 1; transform: scale(1.1); } }
+.sg-key { transform-origin: 0 0; }
+.sg-play .sg-key { animation: sg-key calc(2600ms * var(--deco-slow, 1)) linear both; }
+/* Flat-on, edge-on, flat again: a key turning, seen from the front. */
+@keyframes sg-key {
+  0% { transform: scaleY(1); }
+  12% { transform: scaleY(-1); }
+  24% { transform: scaleY(1); }
+  36% { transform: scaleY(-1); }
+  48%, 100% { transform: scaleY(1); }
+}
+.sg-gleam { transition: opacity calc(500ms * var(--deco-slow, 1)); }
+.deco-snowed-in[data-hover="true"] .sg-gleam { opacity: 1; }
+
+/* --------------------------------------------------------------- on repeat */
+
+.hp-band { transform-origin: 100px 108px; }
+.hp-cup-l { transform-origin: 42px 116px; }
+.hp-cup-r { transform-origin: 158px 116px; }
+.hp-eq { transform-box: fill-box; transform-origin: 50% 100%; animation: hp-eq calc(900ms * var(--deco-slow, 1)) ease-in-out infinite alternate; }
+.hp-eq-0 { --lo: .3; --hi: .75; transform: scaleY(.55); animation-delay: calc(-300ms * var(--deco-slow, 1)); }
+.hp-eq-1 { --lo: .45; --hi: 1; transform: scaleY(.9); animation-duration: calc(700ms * var(--deco-slow, 1)); }
+.hp-eq-2 { --lo: .25; --hi: .7; transform: scaleY(.4); animation-duration: calc(1100ms * var(--deco-slow, 1)); animation-delay: calc(-500ms * var(--deco-slow, 1)); }
+@keyframes hp-eq { from { transform: scaleY(var(--lo)); } to { transform: scaleY(var(--hi)); } }
+.deco-on-repeat[data-phase="play"] .hp-eq, .deco-on-repeat[data-phase="rest"] .hp-eq { animation-duration: calc(200ms * var(--deco-slow, 1)); }
+/* Four beats: each cup kicks out and decays, the band bobs with it. */
+.hp-play .hp-cup { animation: hp-pump calc(1600ms * var(--deco-slow, 1)) both; }
+@keyframes hp-pump {
+  0%, 25%, 50%, 75% { transform: scale(1); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
+  4%, 29%, 54%, 79% { transform: scale(1.09, 1.06); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  16%, 41%, 66%, 91%, 100% { transform: scale(1); }
+}
+.hp-play .hp-band { animation: hp-bob calc(1600ms * var(--deco-slow, 1)) both; }
+@keyframes hp-bob {
+  0%, 25%, 50%, 75% { transform: translateY(0); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
+  5%, 30%, 55%, 80% { transform: translateY(-2.2px); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  17%, 42%, 67%, 92%, 100% { transform: translateY(0); }
+}
+.hp-cord { transform-origin: 32px 138px; }
+.hp-play .hp-cord { animation: hp-cord calc(400ms * var(--deco-slow, 1)) ease-in-out 4 both; }
+@keyframes hp-cord { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(3deg); } 65% { transform: rotate(-1.5deg); } }
+.hp-wave { opacity: 0; transform-origin: 17px 116px; }
+.hp-play .hp-wave { animation: hp-wave calc(400ms * var(--deco-slow, 1)) ease-out 4 both; }
+.hp-play .hp-wave-1 { animation-delay: calc(110ms * var(--deco-slow, 1)); animation-iteration-count: 3; }
+@keyframes hp-wave { 0% { opacity: .95; transform: translateX(0) scale(.7); } 100% { opacity: 0; transform: translateX(-10px) scale(1.15); } }
+.hp-note { opacity: 0; transform-origin: 0 0; }
+.hp-play .hp-note { animation: hp-note calc(650ms * var(--deco-slow, 1)) cubic-bezier(.2, .7, .4, 1) both; }
+@keyframes hp-note {
+  0% { opacity: 0; transform: translate(0, 0) scale(.4) rotate(0deg); }
+  20% { opacity: 1; transform: translate(calc(var(--dx) * .2), calc(var(--dy) * .2)) scale(1) rotate(calc(var(--r) * .3)); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(.9) rotate(var(--r)); }
+}
+
+/* -------------------------------------------------------------- spellbound */
+
+/* Hat parts are in the hat's own frame: origin at the brim's centre. */
+.sb-hop { transform-origin: 0 6px; }
+.sb-flop, .sb-flick { transform-origin: 14px -54px; }
+.sb-flop { animation: sb-sway calc(3800ms * var(--deco-slow, 1)) ease-in-out infinite; }
+@keyframes sb-sway { 0%, 100% { transform: rotate(-2.5deg); } 50% { transform: rotate(3.5deg); } }
+.sb-dangle, .sb-charm { transform-origin: 0 0; animation: sb-dangle calc(2600ms * var(--deco-slow, 1)) ease-in-out infinite; }
+.sb-charm { animation-duration: calc(3100ms * var(--deco-slow, 1)); animation-delay: calc(-1200ms * var(--deco-slow, 1)); }
+@keyframes sb-dangle { 0%, 100% { transform: rotate(-9deg); } 50% { transform: rotate(9deg); } }
+.sb-tipglow { opacity: .55; transform-box: fill-box; transform-origin: center; animation: sb-glow calc(2400ms * var(--deco-slow, 1)) ease-in-out infinite; }
+@keyframes sb-glow { 0%, 100% { opacity: .35; transform: scale(.85); } 50% { opacity: .85; transform: scale(1.1); } }
+.sb-twinkle { transform-box: fill-box; transform-origin: center; animation: sb-twinkle calc(3600ms * var(--deco-slow, 1)) ease-in-out infinite; }
+.sb-twinkle-1 { animation-delay: calc(-1200ms * var(--deco-slow, 1)); }
+.sb-twinkle-2 { animation-delay: calc(-2400ms * var(--deco-slow, 1)); }
+@keyframes sb-twinkle { 0%, 78%, 100% { transform: scale(1) rotate(0deg); filter: none; } 86% { transform: scale(1.3) rotate(18deg); } 93% { transform: scale(.9) rotate(0deg); } }
+/* Crouch, hop, flick the tip at the top, land with a squash. */
+.sb-play .sb-hop { animation: sb-hop calc(2200ms * var(--deco-slow, 1)) both; }
+@keyframes sb-hop {
+  0% { transform: translateY(0) scale(1, 1) rotate(0deg); animation-timing-function: cubic-bezier(.3, 0, .5, 1); }
+  8% { transform: translateY(1.5px) scale(1.07, .9) rotate(0deg); animation-timing-function: cubic-bezier(.2, .7, .4, 1); }
+  20% { transform: translateY(-8px) scale(.95, 1.07) rotate(-5deg); animation-timing-function: cubic-bezier(.3, 0, .6, 1); }
+  28% { transform: translateY(-9.5px) scale(1, 1) rotate(-2deg); animation-timing-function: cubic-bezier(.5, 0, .9, .5); }
+  38% { transform: translateY(0) scale(1.08, .9) rotate(2deg); animation-timing-function: cubic-bezier(.2, .7, .4, 1); }
+  46% { transform: translateY(-2.5px) scale(.98, 1.03) rotate(-1deg); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  54% { transform: translateY(0) scale(1.02, .98) rotate(0deg); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  62%, 100% { transform: translateY(0) scale(1, 1) rotate(0deg); }
+}
+.sb-play .sb-flick { animation: sb-flick calc(2200ms * var(--deco-slow, 1)) both; }
+@keyframes sb-flick {
+  0%, 12% { transform: rotate(0deg); animation-timing-function: cubic-bezier(.3, 0, .6, 1); }
+  20% { transform: rotate(14deg); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
+  26% { transform: rotate(-24deg); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  36% { transform: rotate(9deg); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  46% { transform: rotate(-4deg); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  56%, 100% { transform: rotate(0deg); }
+}
+/* Stars leave the tip and spiral in to circle the picture once. */
+.sb-spark { opacity: 0; transform-origin: 0 0; }
+.sb-play .sb-spark { animation: sb-spiral calc(1250ms * var(--deco-slow, 1)) cubic-bezier(.25, .1, .3, 1) both; }
+@keyframes sb-spiral {
+  0% { opacity: 0; transform: rotate(-61deg) translateX(92px) scale(.4); }
+  6% { opacity: 1; transform: rotate(-49deg) translateX(89px) scale(1); }
+  72% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(252deg) translateX(63px) scale(.7); }
+}
+
+/* -------------------------------------------------------------- tangled up */
+
+.tu-head, .tu-breathe { transform-origin: 100px 60px; }
+.tu-breathe { animation: tu-breathe calc(3200ms * var(--deco-slow, 1)) ease-in-out infinite; }
+@keyframes tu-breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.02, 1.035); } }
+.tu-blink { transform-origin: 0 0; animation: tu-blink calc(4600ms * var(--deco-slow, 1)) infinite; }
+@keyframes tu-blink { 0%, 91%, 100% { transform: scaleY(1); } 93.5% { transform: scaleY(.08); } 96% { transform: scaleY(1); } }
+.tu-happy { opacity: 0; }
+.tu-cheek { opacity: .5; }
+.tu-sway-l, .tu-wave-l { transform-origin: 74px 48px; }
+.tu-sway-r, .tu-wave-r { transform-origin: 126px 48px; }
+.tu-dangle-l { transform-origin: 88px 136px; }
+.tu-dangle-r { transform-origin: 112px 136px; }
+.tu-sway-l { animation: tu-sway calc(3400ms * var(--deco-slow, 1)) ease-in-out infinite; }
+.tu-sway-r { animation: tu-sway-back calc(3700ms * var(--deco-slow, 1)) ease-in-out infinite; }
+.tu-dangle-l { animation: tu-sway-back calc(4100ms * var(--deco-slow, 1)) ease-in-out infinite; }
+.tu-dangle-r { animation: tu-sway calc(3900ms * var(--deco-slow, 1)) ease-in-out infinite; animation-delay: calc(-1300ms * var(--deco-slow, 1)); }
+@keyframes tu-sway { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(4deg); } }
+@keyframes tu-sway-back { 0%, 100% { transform: rotate(3deg); } 50% { transform: rotate(-4deg); } }
+/* A hug, twice: the head squashes down as the arms pull in. */
+.tu-play .tu-head { animation: tu-squash calc(1900ms * var(--deco-slow, 1)) both; }
+@keyframes tu-squash {
+  0% { transform: translateY(0) scale(1, 1); animation-timing-function: cubic-bezier(.3, 0, .5, 1); }
+  10% { transform: translateY(3px) scale(1.08, .88); animation-timing-function: cubic-bezier(.3, 0, .4, 1); }
+  22% { transform: translateY(-3px) scale(.96, 1.06); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  32% { transform: translateY(0) scale(1, 1); animation-timing-function: cubic-bezier(.3, 0, .5, 1); }
+  44% { transform: translateY(3px) scale(1.08, .88); animation-timing-function: cubic-bezier(.3, 0, .4, 1); }
+  56% { transform: translateY(-3px) scale(.96, 1.06); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  68% { transform: translateY(.5px) scale(1.01, .99); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  78%, 100% { transform: translateY(0) scale(1, 1); }
+}
+.tu-hug { transform-origin: 100px 100px; }
+.tu-play .tu-hug { animation: tu-hug calc(1900ms * var(--deco-slow, 1)) both; }
+@keyframes tu-hug {
+  0% { transform: scale(1); animation-timing-function: cubic-bezier(.3, 0, .4, 1); }
+  10% { transform: scale(.935, .95); animation-timing-function: cubic-bezier(.3, 0, .5, 1); }
+  30% { transform: scale(1.01); animation-timing-function: cubic-bezier(.3, 0, .4, 1); }
+  44% { transform: scale(.935, .95); animation-timing-function: cubic-bezier(.3, 0, .5, 1); }
+  64% { transform: scale(1.01); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  76%, 100% { transform: scale(1); }
+}
+.tu-play .tu-eyes { animation: tu-eyes calc(1900ms * var(--deco-slow, 1)) both; }
+@keyframes tu-eyes { 0%, 100% { opacity: 1; } 6%, 86% { opacity: 0; } }
+.tu-play .tu-happy { animation: tu-happy calc(1900ms * var(--deco-slow, 1)) both; }
+@keyframes tu-happy { 0%, 100% { opacity: 0; } 6%, 86% { opacity: 1; } }
+.tu-play .tu-cheek { animation: tu-cheek calc(1900ms * var(--deco-slow, 1)) both; }
+@keyframes tu-cheek { 0%, 100% { opacity: .5; } 10%, 80% { opacity: .95; } }
+.tu-play .tu-wave-l { animation: tu-wave calc(1900ms * var(--deco-slow, 1)) ease-in-out both; }
+.tu-play .tu-wave-r { animation: tu-wave-back calc(1900ms * var(--deco-slow, 1)) ease-in-out both; }
+@keyframes tu-wave { 0%, 100% { transform: rotate(0deg); } 18% { transform: rotate(14deg); } 40% { transform: rotate(-8deg); } 60% { transform: rotate(10deg); } 80% { transform: rotate(-3deg); } }
+@keyframes tu-wave-back { 0%, 100% { transform: rotate(0deg); } 18% { transform: rotate(-14deg); } 40% { transform: rotate(8deg); } 60% { transform: rotate(-10deg); } 80% { transform: rotate(3deg); } }
+.tu-bubble { opacity: 0; }
+.tu-play .tu-bubble { animation: tu-bubble calc(900ms * var(--deco-slow, 1)) cubic-bezier(.3, .6, .5, 1) both; }
+@keyframes tu-bubble { 0% { opacity: 0; transform: translate(0, 0) scale(.3); } 15%, 80% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1.1); } }
+
+/* ------------------------------------------------------------------- slurp */
+
+.rm-steam { opacity: .4; transform-box: fill-box; transform-origin: 50% 100%; animation: rm-steam calc(3400ms * var(--deco-slow, 1)) ease-out infinite; animation-delay: calc(var(--i) * -850ms * var(--deco-slow, 1)); }
+@keyframes rm-steam {
+  0% { opacity: 0; transform: translateY(5px) scale(.7, .8); }
+  30% { opacity: .55; }
+  100% { opacity: 0; transform: translateY(-12px) scale(1.25, 1.1); }
+}
+/* Dip, lift a tangle of noodles, wiggle them, drop them back with a splash. */
+.rm-sticks { transform-origin: 190px 104px; }
+.rm-play .rm-sticks { animation: rm-sticks calc(2400ms * var(--deco-slow, 1)) both; }
+@keyframes rm-sticks {
+  0% { transform: translate(0, 0) rotate(0deg); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  10% { transform: translate(-1px, 3px) rotate(1.5deg); animation-timing-function: cubic-bezier(.3, 0, .2, 1); }
+  34% { transform: translate(5px, -31px) rotate(-3deg); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  44% { transform: translate(3px, -29px) rotate(-1.5deg); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  54% { transform: translate(6px, -32px) rotate(-4deg); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  64% { transform: translate(4px, -30px) rotate(-2.5deg); animation-timing-function: cubic-bezier(.5, 0, .9, .6); }
+  76% { transform: translate(0, 2.5px) rotate(.6deg); animation-timing-function: cubic-bezier(.2, .6, .4, 1); }
+  86%, 100% { transform: translate(0, 0) rotate(0deg); }
+}
+.rm-noodles { opacity: 0; transform-origin: 150px 151px; transform: scaleY(0); }
+.rm-play .rm-noodles { animation: rm-noodles calc(2400ms * var(--deco-slow, 1)) both; }
+@keyframes rm-noodles {
+  0%, 10% { opacity: 0; transform: scaleY(0); animation-timing-function: cubic-bezier(.3, 0, .2, 1); }
+  12% { opacity: 1; }
+  34% { transform: scaleY(1); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  44% { transform: scaleY(.95); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  54% { transform: scaleY(1.03); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  64% { opacity: 1; transform: scaleY(1); animation-timing-function: cubic-bezier(.5, 0, .9, .6); }
+  76% { opacity: 1; transform: scaleY(.04); }
+  77%, 100% { opacity: 0; transform: scaleY(0); }
+}
+.rm-wiggle { transform-origin: 150px 151px; }
+.rm-play .rm-wiggle { animation: rm-wiggle calc(2400ms * var(--deco-slow, 1)) both; }
+@keyframes rm-wiggle { 0%, 34% { transform: skewX(0deg); } 40% { transform: skewX(-8deg); } 47% { transform: skewX(7deg); } 54% { transform: skewX(-5deg); } 61% { transform: skewX(3deg); } 68%, 100% { transform: skewX(0deg); } }
+.rm-drop { opacity: 0; }
+.rm-play .rm-drop { animation: rm-drop calc(520ms * var(--deco-slow, 1)) both; }
+@keyframes rm-drop {
+  0% { opacity: 1; transform: translate(0, 0) scale(.6); animation-timing-function: cubic-bezier(.2, .7, .4, 1); }
+  45% { opacity: 1; transform: translate(calc(var(--dx) * .6), var(--dy)) scale(1); animation-timing-function: cubic-bezier(.6, 0, .9, .5); }
+  100% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) * -.1)) scale(.8); }
+}
+
+/* --------------------------------------------------------------- sunseeker */
+
+.sf-flight { transform: rotate(-46deg) translateX(86px) rotate(46deg) scaleX(1); }
+.sf-hover { animation: sf-hover calc(1300ms * var(--deco-slow, 1)) ease-in-out infinite alternate; }
+@keyframes sf-hover { from { transform: translateY(-1.2px); } to { transform: translateY(1.4px); } }
+.sf-wing { transform-origin: 0 -2px; animation: sf-flap calc(90ms * var(--deco-slow, 1)) linear infinite alternate; }
+.sf-wing-b { animation-delay: calc(-45ms * var(--deco-slow, 1)); }
+@keyframes sf-flap { from { transform: scaleY(1); } to { transform: scaleY(.35); } }
+/* A ripple runs round the petals while the bee loops the flower. */
+.sf-play .sf-petal { animation: sf-ripple calc(700ms * var(--deco-slow, 1)) both; animation-delay: calc(var(--i) * 50ms * var(--deco-slow, 1)); }
+@keyframes sf-ripple {
+  0% { transform: scale(1) rotate(0deg); animation-timing-function: cubic-bezier(.2, .7, .4, 1); }
+  30% { transform: scale(1.14, 1.1) rotate(6deg); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  62% { transform: scale(.97) rotate(-2.5deg); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.sf-play .sf-flight { animation: sf-loop calc(2400ms * var(--deco-slow, 1)) both; }
+@keyframes sf-loop {
+  0% { transform: rotate(-46deg) translateX(86px) rotate(46deg) scaleX(1); animation-timing-function: cubic-bezier(.5, 0, .5, 1); }
+  8% { transform: rotate(-40deg) translateX(88px) rotate(40deg) scaleX(1); animation-timing-function: cubic-bezier(.45, 0, .7, .6); }
+  30% { transform: rotate(-150deg) translateX(86px) rotate(150deg) scaleX(1); }
+  38% { transform: rotate(-190deg) translateX(85px) rotate(190deg) scaleX(-1); }
+  58% { transform: rotate(-300deg) translateX(86px) rotate(300deg) scaleX(-1); }
+  66% { transform: rotate(-340deg) translateX(87px) rotate(340deg) scaleX(1); animation-timing-function: cubic-bezier(.3, .4, .3, 1); }
+  80% { transform: rotate(-406deg) translateX(86px) rotate(406deg) scaleX(1); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  89% { transform: rotate(-409deg) translateX(84px) rotate(409deg) scaleX(1); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  100% { transform: rotate(-406deg) translateX(86px) rotate(406deg) scaleX(1); }
+}
+.sf-trail { opacity: 0; }
+.sf-play .sf-trail { animation: sf-trail calc(2400ms * var(--deco-slow, 1)) both; }
+@keyframes sf-trail { 0%, 8% { opacity: .95; } 78% { opacity: .95; } 100% { opacity: 0; } }
+.sf-reveal { stroke-dashoffset: 100; }
+.sf-play .sf-reveal { animation: sf-reveal calc(2400ms * var(--deco-slow, 1)) linear both; }
+@keyframes sf-reveal { 0%, 8% { stroke-dashoffset: 100; } 80%, 100% { stroke-dashoffset: 0; } }
+
 /* ------------------------------------------------------------ reduced motion */
 
 [data-motion="reduced"] .deco *, [data-motion="reduced"] .deco { animation: none !important; transition: none !important; }

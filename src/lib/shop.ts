@@ -6,6 +6,7 @@
  */
 
 import type { DecorationDesign } from "@/components/shop/decorations/designs";
+import type { SkinDesign } from "@/components/shop/skins/designs";
 
 export type ShopCategory = "name" | "ring" | "overlay";
 
@@ -54,6 +55,8 @@ export interface ShopItem {
   sketch?: SketchDesign;
   /** Drawn, layered avatar decoration (components/shop/decorations). */
   decoration?: DecorationDesign;
+  /** Drawn, animated profile skin (components/shop/skins). */
+  skin?: SkinDesign;
   /**
    * Built and previewable (the decoration lab), but not on sale yet: it has
    * no shop_items row, so checkout would refuse it.
@@ -150,7 +153,6 @@ const PROFILE_EFFECTS: ShopItem[] = [
   { id: "fx-aurora", name: "Aurora veil", description: "Curtains of light across the top.", priceCents: 700, className: "fx-overlay-aurora", category: "overlay" },
   { id: "fx-confetti", name: "Confetti", description: "Paper falling and tumbling.", priceCents: 550, className: "fx-overlay-confetti", category: "overlay" },
   { id: "fx-scanline", name: "Scanlines", description: "A CRT roll passing down the card.", priceCents: 450, className: "fx-overlay-scanline", category: "overlay" },
-  { id: "fx-sakura-night", name: "Night bloom", description: "Petals and fireflies together, after dark.", priceCents: 800, className: "fx-overlay-sakura-night", category: "overlay" },
 ];
 
 export const FLIGHT_COLLECTIONS = [
@@ -171,8 +173,6 @@ export const SKETCH_COLLECTIONS = [
   { id: "margins", name: "Margins", line: "A small mark of your own.", description: "Four imperfect chalk brackets. Tiny registration marks appear one at a time around your picture.", ringId: "ring-margins", profileId: null, color: "#d9d5be", surface: "#2e2d28", price: 249 },
   { id: "red-thread", name: "Red Thread", line: "One line. A little connection.", description: "A thin red sketch loop with a hand-tied knot. A short highlight slowly follows the thread.", ringId: "ring-red-thread", profileId: null, color: "#eaa1a0", surface: "#342627", price: 299 },
 ] as const;
-
-export const ART_COLLECTIONS = [...SKETCH_COLLECTIONS, ...FLIGHT_COLLECTIONS, ...ILLUSTRATED_COLLECTIONS];
 
 const SKETCH_ITEMS: ShopItem[] = SKETCH_COLLECTIONS.map((collection) => ({
   id: collection.ringId, name: collection.name, description: collection.description,
@@ -214,28 +214,57 @@ const DECORATION_ITEMS: ShopItem[] = ([
   { id: "ring-devils-demise", name: "Devil's Demise", description: "Two red horns. Hover and they catch fire.", priceCents: 399, decoration: "devils-demise" },
   { id: "ring-love-you-forever", name: "Love You Forever", description: "Three hearts up the side of your picture that beat in turn on hover.", priceCents: 349, decoration: "love-you-forever" },
   { id: "ring-on-guard", name: "On Guard!", description: "Crossed cutlasses that rise and duel when someone hovers.", priceCents: 549, decoration: "on-guard" },
+  { id: "ring-snowed-in", name: "Snowed In", description: "Your picture sealed in a snow globe. Hover and someone gives it a good shake.", priceCents: 499, decoration: "snowed-in" },
+  { id: "ring-on-repeat", name: "On Repeat", description: "Big mint headphones with a little equaliser. Hover and the beat drops.", priceCents: 449, decoration: "on-repeat" },
+  { id: "ring-spellbound", name: "Spellbound", description: "A patched, starry wizard's hat. Hover and it hops, flinging stars round your picture.", priceCents: 499, decoration: "spellbound" },
+  { id: "ring-tangled-up", name: "Tangled Up", description: "A coral octopus hugging your head. Hover and it squeezes, twice.", priceCents: 549, decoration: "tangled-up" },
+  { id: "ring-slurp", name: "Slurp!", description: "Your picture in a steaming bowl of ramen. Hover and the chopsticks go in for noodles.", priceCents: 449, decoration: "slurp" },
+  { id: "ring-sunseeker", name: "Sunseeker", description: "Your face in a sunflower, with a bumblebee close by. Hover and the bee takes a lap.", priceCents: 399, decoration: "sunseeker" },
 ] satisfies Omit<ShopItem, "category" | "className">[]).map((item) => ({ ...item, category: "ring" as const, className: "fx-ring-art", overAvatar: true }));
 
 const DECORATION_UPGRADES = new Map<string, Partial<ShopItem>>([
   ["ring-graphite", { decoration: "graphite", description: "Pencil circles that won't sit still. Hover and they draw another." }],
 ]);
 
+/*
+ Profile skins, November 2026. Drawn SVG scenes around the card, each with
+ an intro and a loop (components/shop/skins). Night Bloom keeps the old
+ "Night bloom" id (it has an owner) and trades its painted loop for the new
+ artwork; the rest are new. Skins are complete as listed here: no artwork
+ upgrades apply to them.
+*/
+const SKIN_ITEMS: ShopItem[] = ([
+  { id: "fx-sakura-night", name: "Night Bloom", description: "Cherry blossom after dark. Paper lanterns sway from a flowering branch while petals tumble past the moon.", priceCents: 800, skin: "night-bloom" },
+  { id: "fx-snowbound", name: "Snowbound", description: "Icicles and fairy lights along the top, a snowman waving from the drifts and snow that never quite stops.", priceCents: 599, skin: "snowbound" },
+  { id: "fx-event-horizon", name: "Event Horizon", description: "A black hole turning in the corner, a ringed planet with a moon of its own, and the odd shooting star.", priceCents: 649, skin: "event-horizon" },
+  { id: "fx-sugar-rush", name: "Sugar Rush", description: "Pink icing dripping from the top, a sprinkled doughnut, a swirly lollipop and a shower of sprinkles.", priceCents: 549, skin: "sugar-rush" },
+  { id: "fx-deep-end", name: "Deep End", description: "Sunlight through the waves, kelp swaying either side, a drifting jellyfish and a clam that keeps its pearl.", priceCents: 649, skin: "deep-end" },
+  { id: "fx-afterglow", name: "Afterglow", description: "A striped sun setting between neon mountains, a grid floor that runs on forever, and palms in the breeze.", priceCents: 599, skin: "afterglow" },
+] satisfies Omit<ShopItem, "category" | "className">[]).map((item) => ({ ...item, category: "overlay" as const, className: "fx-overlay-art" }));
+
 // Stable IDs preserve previous purchases. Older effects remain wearable but
-// are no longer offered to new buyers until they receive finished artwork.
-export const SHOP_ITEMS: ShopItem[] = [...SKETCH_ITEMS, ...DECORATION_ITEMS, ...FLIGHT_ITEMS, ...NAME_EFFECTS, ...AVATAR_RINGS, ...PROFILE_EFFECTS]
-  .map((item) => ({ ...item, ...ART_UPGRADES.get(item.id), ...DECORATION_UPGRADES.get(item.id) }));
+// are no longer offered to new buyers.
+export const SHOP_ITEMS: ShopItem[] = [...SKETCH_ITEMS, ...DECORATION_ITEMS, ...SKIN_ITEMS, ...FLIGHT_ITEMS, ...NAME_EFFECTS, ...AVATAR_RINGS, ...PROFILE_EFFECTS]
+  .map((item) => (item.skin ? item : { ...item, ...ART_UPGRADES.get(item.id), ...DECORATION_UPGRADES.get(item.id) }));
 
 export function isShopItemAvailable(item: ShopItem): boolean {
   // Avatar decorations are the drawn set only; the older sketch, flight and
   // illustrated frames are retired (no one owns them) and unreleased ones wait
-  // for their shop_items row.
+  // for their shop_items row. Profile skins likewise: only the drawn scenes
+  // are sold, and the older effects stay wearable for anyone who owns one.
   if (item.category === "ring") return !!item.decoration && !item.unreleased;
-  return item.category === "name" || !!item.art || !!item.flight || !!item.sketch;
+  if (item.category === "overlay") return !!item.skin && !item.unreleased;
+  return item.category === "name";
 }
 
 /** Every drawn decoration, released or not, in catalogue order. */
 export function decorationItems(): ShopItem[] {
   return SHOP_ITEMS.filter((item) => item.decoration);
+}
+
+/** Every drawn profile skin, released or not, in catalogue order. */
+export function skinItems(): ShopItem[] {
+  return SHOP_ITEMS.filter((item) => item.skin);
 }
 
 const BY_ID = new Map(SHOP_ITEMS.map((i) => [i.id, i]));
