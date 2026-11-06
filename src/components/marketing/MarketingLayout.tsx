@@ -11,6 +11,7 @@ const links = [
   { href: "/review", label: "Reviews" },
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
+  { href: "/donate", label: "Donate" },
 ];
 
 export function MarketingNav() {
@@ -92,7 +93,7 @@ const FOOTER_COLUMNS: { title: string; links: [string, string][] }[] = [
   },
   {
     title: "Support",
-    links: [["Bug Report", "/bug-report"], ["Copyright", "/copyright"], ["EU & UK", "/legal/eu-uk"]],
+    links: [["Donate", "/donate"], ["Bug Report", "/bug-report"], ["Copyright", "/copyright"], ["EU & UK", "/legal/eu-uk"]],
   },
   {
     title: "Legal",

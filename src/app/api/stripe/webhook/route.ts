@@ -127,6 +127,26 @@ export async function POST(req: Request) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
 
+        if (session.metadata?.kind === "donation") {
+          const donationId = session.metadata.donation_id;
+          const supabase = getServiceSupabase();
+          if (donationId && supabase && session.payment_status === "paid") {
+            // Only a pending row moves to paid, so a redelivered event is a no-op.
+            const { error } = await supabase
+              .from("donations")
+              .update({
+                status: "paid",
+                paid_at: new Date().toISOString(),
+                stripe_session_id: session.id,
+                ...(typeof session.amount_total === "number" ? { amount_cents: session.amount_total } : {}),
+              })
+              .eq("id", donationId)
+              .eq("status", "pending");
+            if (error) throw new Error(error.message);
+          }
+          break;
+        }
+
         if (session.metadata?.kind === "gift") {          const giftId = session.metadata.gift_id;
           const supabase = getServiceSupabase();
           if (giftId && supabase && session.payment_status === "paid") {
@@ -342,6 +362,17 @@ export async function POST(req: Request) {
         // A refund invalidates a gift nobody has claimed yet. A claimed gift
         // keeps its entitlement — clawing back months after the fact is a
         // judgement call for a human, not something to guess at here.
+        // A fully refunded donation comes off the wall and out of the total.
+        if (refundMeta.kind === "donation" && refundMeta.donation_id && charge.refunded) {
+          const supabase = getServiceSupabase();
+          if (supabase) {
+            const { error } = await supabase
+              .from("donations")
+              .update({ status: "refunded" })
+              .eq("id", refundMeta.donation_id);
+            if (error) throw new Error(error.message);
+          }
+        }
         if (refundMeta.kind === "gift" && refundMeta.gift_id) {
           const supabase = getServiceSupabase();
           if (supabase) {

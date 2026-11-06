@@ -155,6 +155,13 @@ export default function PrivacyPage() {
           <h3 className="text-base font-semibold text-white">F. Payment information</h3>
           <p>Paid services may be purchased through Stripe, Apple, or Google.</p>
           <p>
+            If you make a donation on our donate page, we keep a record of the amount, the time, any
+            message you add, and your account if you were logged in. The amount, the time and your
+            message appear publicly on the donor wall. Your display name and avatar appear only if
+            you choose to show them; otherwise the donation is listed as anonymous. If you delete your
+            account, your donations stay in our payment records but are shown as anonymous.
+          </p>
+          <p>
             Disband does not store full payment card numbers. Payment providers process payment
             information under their own privacy policies and terms. We may receive limited
             information such as:
