@@ -4,7 +4,7 @@ import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ProfileOverlay } from "@/components/shop/ProfileOverlay";
+import { ProfileOverlay, SkinFloor } from "@/components/shop/ProfileOverlay";
 import { useApp } from "@/contexts/AppContext";
 import { IconClose, IconMessage, IconMore, IconPhone, IconSettings } from "@/components/icons";
 import { Avatar } from "@/components/ui/Avatar";
@@ -436,12 +436,12 @@ export function UserProfileModal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`fx-overlay-host modal-pop${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100vh-3rem)] w-full max-w-[600px] overflow-y-auto rounded-lg ${theme ? "" : "bg-bg-secondary-alt"} text-text-normal shadow-[var(--elevation-high)]`}
+        className={`fx-overlay-host modal-pop${exiting ? " modal-pop-out" : ""} relative isolate flex max-h-[calc(100vh-3rem)] w-full max-w-[600px] flex-col overflow-hidden rounded-lg ${theme ? "" : "bg-bg-secondary-alt"} text-text-normal shadow-[var(--elevation-high)]`}
         style={theme?.style}
       >
-        {/* Artwork sits above the banner and below the readable profile content. */}
+        {/* Artwork sits above the banner and below the readable profile content,
+            and holds still while the profile scrolls beneath it. */}
         <ProfileOverlay itemId={profile?.equipped_overlay_effect} />
-        <ProfileBanner profile={profile} />
 
         <button
           type="button"
@@ -452,270 +452,275 @@ export function UserProfileModal({
           <IconClose size={16} />
         </button>
 
-        <div className="relative z-10 px-6 pb-6">
-          {/* Avatar overlaps the banner; actions sit level with its lower half. */}
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div
-              className={`relative -mt-[68px] shrink-0 rounded-full p-[7px] ${theme ? "" : "bg-bg-secondary-alt"}`}
-              style={theme ? { backgroundColor: theme.avatarRing } : undefined}
-            >
-              <Avatar profile={profile} size="xl" className="!h-[120px] !w-[120px] !text-4xl" />
-              <StatusDot
-                status={live}
-                size={22}
-                ring={theme?.avatarRing ?? "var(--bg-secondary-alt)"}
-                className="absolute bottom-1.5 right-1.5"
-              />
+        <div className="channel-scroll relative min-h-0 overflow-y-auto">
+          <ProfileBanner profile={profile} />
+
+          <div className="relative z-10 px-6 pb-6">
+            {/* Avatar overlaps the banner; actions sit level with its lower half. */}
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div
+                className={`relative -mt-[68px] shrink-0 rounded-full p-[7px] ${theme ? "" : "bg-bg-secondary-alt"}`}
+                style={theme ? { backgroundColor: theme.avatarRing } : undefined}
+              >
+                <Avatar profile={profile} size="xl" className="!h-[120px] !w-[120px] !text-4xl" />
+                <StatusDot
+                  status={live}
+                  size={22}
+                  ring={theme?.avatarRing ?? "var(--bg-secondary-alt)"}
+                  className="absolute bottom-1.5 right-1.5"
+                />
+              </div>
+              {actions && <div className="flex flex-wrap items-center justify-end gap-2 pb-1">{actions}</div>}
             </div>
-            {actions && <div className="flex flex-wrap items-center justify-end gap-2 pb-1">{actions}</div>}
-          </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-            <h2 className="min-w-0 break-words text-[24px] font-semibold leading-[30px] text-header-primary">
-              <DisplayName profile={{ ...profile, display_name: title }} />
-            </h2>
-            <GuildTag userId={profile.id} size="md" />
-            <UserBadges userId={profile.id} plan={plan ?? "free"} size={18} variant="full" />
-          </div>
+            <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+              <h2 className="min-w-0 break-words text-[24px] font-semibold leading-[30px] text-header-primary">
+                <DisplayName profile={{ ...profile, display_name: title }} />
+              </h2>
+              <GuildTag userId={profile.id} size="md" />
+              <UserBadges userId={profile.id} plan={plan ?? "free"} size={18} variant="full" />
+            </div>
 
-          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[14px] text-text-muted">
-            {profile.username && <span>@{profile.username}</span>}
-            {profile.pronouns?.trim() && (
-              <>
-                <span aria-hidden>·</span>
-                <span>{profile.pronouns.trim()}</span>
-              </>
-            )}
-            {isSelf && (
-              <span className="ml-1 rounded-md border border-divider px-1.5 py-px text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
-                {t("You")}
-              </span>
-            )}
-            {isBot && (
-              <span className="ml-1 rounded-md bg-brand/15 px-1.5 py-px text-[10.5px] font-semibold uppercase tracking-wide text-brand">
-                {t("Assistant")}
-              </span>
-            )}
-          </p>
+            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[14px] text-text-muted">
+              {profile.username && <span>@{profile.username}</span>}
+              {profile.pronouns?.trim() && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>{profile.pronouns.trim()}</span>
+                </>
+              )}
+              {isSelf && (
+                <span className="ml-1 rounded-md border border-divider px-1.5 py-px text-[10.5px] font-semibold uppercase tracking-wide text-text-muted">
+                  {t("You")}
+                </span>
+              )}
+              {isBot && (
+                <span className="ml-1 rounded-md bg-brand/15 px-1.5 py-px text-[10.5px] font-semibold uppercase tracking-wide text-brand">
+                  {t("Assistant")}
+                </span>
+              )}
+            </p>
 
-          {statusNote && (
-            // A speech bubble whose notch points back up at the name.
-            <div className="group/status relative mt-3.5 w-fit max-w-full">
-              <span
-                aria-hidden
-                className="absolute -top-[5px] left-5 h-2.5 w-2.5 rotate-45 bg-bg-floating"
-              />
-              <div className="rounded-lg bg-bg-floating px-3.5 py-2">
-                {!isSelf && (
-                  <button
-                    type="button"
-                    onClick={() => setStatusReplyOpen((v) => !v)}
-                    aria-label={t("Reply to status")}
-                    title={t("Reply to status")}
-                    className="absolute -top-2 right-1 flex h-6 w-6 items-center justify-center rounded-full border border-divider bg-bg-secondary text-text-muted opacity-0 shadow transition-all hover:text-text-normal focus-visible:opacity-100 group-hover/status:opacity-100 [@media(hover:none)]:opacity-100"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="9 17 4 12 9 7" />
-                      <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
-                    </svg>
-                  </button>
-                )}
-                <p className="break-words text-[14px] leading-snug">{statusNote}</p>
-                {profile.status_expires_at && (
-                  <p className="mt-0.5 text-[11px] text-text-muted">{statusExpiryLabel(profile.status_expires_at)}</p>
-                )}
-                {!isSelf && statusReplyOpen && (
-                  <div className="mt-2 flex items-center gap-1.5">
-                    <input
-                      autoFocus
-                      value={statusReplyText}
-                      onChange={(e) => setStatusReplyText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          void submitStatusReply();
-                        }
-                        if (e.key === "Escape") {
-                          setStatusReplyOpen(false);
-                          setStatusReplyText("");
-                        }
-                      }}
-                      placeholder={t("Reply to {title}…", { title })}
-                      maxLength={500}
-                      disabled={statusReplySending}
-                      className="min-w-0 flex-1 rounded-lg bg-bg-primary px-2.5 py-1.5 text-[13px] text-text-normal placeholder:text-text-muted outline-none focus:ring-1 focus:ring-brand"
-                    />
+            {statusNote && (
+              // A speech bubble whose notch points back up at the name.
+              <div className="group/status relative mt-3.5 w-fit max-w-full">
+                <span
+                  aria-hidden
+                  className="absolute -top-[5px] left-5 h-2.5 w-2.5 rotate-45 bg-bg-floating"
+                />
+                <div className="rounded-lg bg-bg-floating px-3.5 py-2">
+                  {!isSelf && (
                     <button
                       type="button"
-                      onClick={() => void submitStatusReply()}
-                      disabled={!statusReplyText.trim() || statusReplySending}
-                      aria-label={t("Send status reply")}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand text-white transition-all hover:bg-brand-hover active:scale-95 disabled:opacity-40"
+                      onClick={() => setStatusReplyOpen((v) => !v)}
+                      aria-label={t("Reply to status")}
+                      title={t("Reply to status")}
+                      className="absolute -top-2 right-1 flex h-6 w-6 items-center justify-center rounded-full border border-divider bg-bg-secondary text-text-muted opacity-0 shadow transition-all hover:text-text-normal focus-visible:opacity-100 group-hover/status:opacity-100 [@media(hover:none)]:opacity-100"
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="22" y1="2" x2="11" y2="13" />
-                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 17 4 12 9 7" />
+                        <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
                       </svg>
                     </button>
-                  </div>
-                )}
+                  )}
+                  <p className="break-words text-[14px] leading-snug">{statusNote}</p>
+                  {profile.status_expires_at && (
+                    <p className="mt-0.5 text-[11px] text-text-muted">{statusExpiryLabel(profile.status_expires_at)}</p>
+                  )}
+                  {!isSelf && statusReplyOpen && (
+                    <div className="mt-2 flex items-center gap-1.5">
+                      <input
+                        autoFocus
+                        value={statusReplyText}
+                        onChange={(e) => setStatusReplyText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            void submitStatusReply();
+                          }
+                          if (e.key === "Escape") {
+                            setStatusReplyOpen(false);
+                            setStatusReplyText("");
+                          }
+                        }}
+                        placeholder={t("Reply to {title}…", { title })}
+                        maxLength={500}
+                        disabled={statusReplySending}
+                        className="min-w-0 flex-1 rounded-lg bg-bg-primary px-2.5 py-1.5 text-[13px] text-text-normal placeholder:text-text-muted outline-none focus:ring-1 focus:ring-brand"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void submitStatusReply()}
+                        disabled={!statusReplyText.trim() || statusReplySending}
+                        aria-label={t("Send status reply")}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand text-white transition-all hover:bg-brand-hover active:scale-95 disabled:opacity-40"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="22" y1="2" x2="11" y2="13" />
+                          <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-
-          {tabs.length > 1 ? (
-            <UnderlineTabs idPrefix="profile" tabs={tabs} value={tab} onChange={setTab} className="mt-5" />
-          ) : (
-            <div className="mt-5 border-b border-divider" />
-          )}
-
-          <div role="tabpanel" id={`profile-panel-${tab}`} aria-labelledby={`profile-tab-${tab}`} className="pt-4">
-            {tab === "about" && (
-              <>
-                {isBot && (
-                  <Section label={t("About")}>
-                    <p className="text-[14px] leading-relaxed text-text-muted">
-                      {t("This is Disband’s assistant — it can’t be messaged, friended, called, or blocked.")}
-                    </p>
-                  </Section>
-                )}
-
-                {profile.bio && (
-                  <Section label={t("About me")}>
-                    <p className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-[14px] leading-relaxed">
-                      {profile.bio}
-                    </p>
-                  </Section>
-                )}
-
-                {listening && (
-                  <Section label={t("Listening")}>
-                    <ListeningCard listening={listening} />
-                  </Section>
-                )}
-
-                {joined && (
-                  <Section label={t("Disband member since")}>
-                    <p className="text-[14px]">
-                      {joined.date}
-                      <span className="text-text-muted"> · {joined.age}</span>
-                    </p>
-                  </Section>
-                )}
-
-                {isServerMember && (
-                  <Section label={t("Roles")}>
-                    {memberIsOwner ? (
-                      <>
-                        <p className="text-[14px] font-medium">{t("Space owner")}</p>
-                        {selfRolePicker}
-                      </>
-                    ) : (
-                      <>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {memberRoles.map((role) => (
-                          <span
-                            key={role.id}
-                            className={`inline-flex items-center gap-1.5 rounded-[3px] border border-divider py-0.5 pl-2 ${canManageRoles && onSetRoles ? "pr-1" : "pr-2"} text-[12px] font-medium ${roleIsGradientAnimated(role) ? "animate-role-gradient" : ""}`}
-                            style={
-                              role.gradient_to?.trim()
-                                ? {
-                                    backgroundImage: `linear-gradient(90deg, ${role.color}24, ${role.gradient_to.trim()}24)`,
-                                    backgroundSize: role.gradient_animated ? "200% 100%" : undefined,
-                                  }
-                                : { backgroundColor: `${role.color}1c` }
-                            }
-                          >
-                            {role.icon && <RoleIcon icon={role.icon} name={role.name} size={14} />}
-                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: role.color }} />
-                            {role.name}
-                            {canManageRoles && onSetRoles && (
-                              <button
-                                type="button"
-                                onClick={() => toggleRole(role.id)}
-                                aria-label={t("Remove the {name} role", { name: role.name })}
-                                title={t("Remove {name}", { name: role.name })}
-                                className="-mr-0.5 ml-0.5 flex h-5 w-5 items-center justify-center rounded-[2px] text-text-muted transition-colors hover:bg-black/20 hover:text-text-normal"
-                              >
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-                                  <path d="M18 6 6 18M6 6l12 12" />
-                                </svg>
-                              </button>
-                            )}
-                          </span>
-                        ))}
-                        {memberRoles.length === 0 && (
-                          <p className="text-[13px] text-text-muted">{t("No roles assigned.")}</p>
-                        )}
-                        {canManageRoles && onSetRoles && (
-                          <RolePicker roles={assignableRoles} selected={memberRoleIds} onToggle={toggleRole} compact />
-                        )}
-                      </div>
-                      {selfRolePicker}
-                      </>
-                    )}
-                  </Section>
-                )}
-
-                {!isSelf && !isBot && note.state !== "unavailable" && (
-                  <Section label={t("Note (only you can see it)")}>
-                    <textarea
-                      value={note.note}
-                      onChange={(e) => note.setNote(e.target.value.slice(0, USER_NOTE_MAX))}
-                      onBlur={() => void note.save()}
-                      disabled={note.state === "loading"}
-                      rows={2}
-                      maxLength={USER_NOTE_MAX}
-                      placeholder={t("Click to add a note")}
-                      aria-label={t("Private note about {title}", { title })}
-                      className="block w-full resize-none rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 py-2.5 text-[14px] leading-relaxed text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand disabled:opacity-60"
-                    />
-                  </Section>
-                )}
-              </>
             )}
 
-            {tab === "spaces" &&
-              (mutualServers.length === 0 ? (
-                <EmptyTab>{t("No spaces in common.")}</EmptyTab>
-              ) : (
-                <ul className="-mx-2 space-y-0.5">
-                  {mutualServers.map((s) => {
-                    const icon = safeImageUrl(s.icon_url);
-                    return (
-                      <li key={s.id} className="flex items-center gap-3 rounded-[4px] px-2 py-2">
-                        {icon ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={icon} alt="" className="h-9 w-9 shrink-0 rounded-[4px] object-cover" />
-                        ) : (
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] bg-bg-accent text-[12px] font-semibold">
-                            {serverInitials(s.name)}
-                          </span>
-                        )}
-                        <span className="truncate text-[14px] font-medium">{s.name}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ))}
+            {tabs.length > 1 ? (
+              <UnderlineTabs idPrefix="profile" tabs={tabs} value={tab} onChange={setTab} className="mt-5" />
+            ) : (
+              <div className="mt-5 border-b border-divider" />
+            )}
 
-            {tab === "friends" &&
-              (mutualFriends.length === 0 ? (
-                <EmptyTab>{t("No friends in common.")}</EmptyTab>
-              ) : (
-                <ul className="-mx-2 space-y-0.5">
-                  {mutualFriends.map((f) => (
-                    <li key={f.id} className="flex items-center gap-3 rounded-[4px] px-2 py-2">
-                      <Avatar profile={f} size="sm" className="h-9 w-9" />
-                      <span className="min-w-0">
-                        <span className="block truncate text-[14px] font-medium">{displayName(f)}</span>
-                        {f.username && <span className="block truncate text-[12px] text-text-muted">@{f.username}</span>}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ))}
+            <div role="tabpanel" id={`profile-panel-${tab}`} aria-labelledby={`profile-tab-${tab}`} className="pt-4">
+              {tab === "about" && (
+                <>
+                  {isBot && (
+                    <Section label={t("About")}>
+                      <p className="text-[14px] leading-relaxed text-text-muted">
+                        {t("This is Disband’s assistant — it can’t be messaged, friended, called, or blocked.")}
+                      </p>
+                    </Section>
+                  )}
+
+                  {profile.bio && (
+                    <Section label={t("About me")}>
+                      <p className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-[14px] leading-relaxed">
+                        {profile.bio}
+                      </p>
+                    </Section>
+                  )}
+
+                  {listening && (
+                    <Section label={t("Listening")}>
+                      <ListeningCard listening={listening} />
+                    </Section>
+                  )}
+
+                  {joined && (
+                    <Section label={t("Disband member since")}>
+                      <p className="text-[14px]">
+                        {joined.date}
+                        <span className="text-text-muted"> · {joined.age}</span>
+                      </p>
+                    </Section>
+                  )}
+
+                  {isServerMember && (
+                    <Section label={t("Roles")}>
+                      {memberIsOwner ? (
+                        <>
+                          <p className="text-[14px] font-medium">{t("Space owner")}</p>
+                          {selfRolePicker}
+                        </>
+                      ) : (
+                        <>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {memberRoles.map((role) => (
+                            <span
+                              key={role.id}
+                              className={`inline-flex items-center gap-1.5 rounded-[3px] border border-divider py-0.5 pl-2 ${canManageRoles && onSetRoles ? "pr-1" : "pr-2"} text-[12px] font-medium ${roleIsGradientAnimated(role) ? "animate-role-gradient" : ""}`}
+                              style={
+                                role.gradient_to?.trim()
+                                  ? {
+                                      backgroundImage: `linear-gradient(90deg, ${role.color}24, ${role.gradient_to.trim()}24)`,
+                                      backgroundSize: role.gradient_animated ? "200% 100%" : undefined,
+                                    }
+                                  : { backgroundColor: `${role.color}1c` }
+                              }
+                            >
+                              {role.icon && <RoleIcon icon={role.icon} name={role.name} size={14} />}
+                              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: role.color }} />
+                              {role.name}
+                              {canManageRoles && onSetRoles && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleRole(role.id)}
+                                  aria-label={t("Remove the {name} role", { name: role.name })}
+                                  title={t("Remove {name}", { name: role.name })}
+                                  className="-mr-0.5 ml-0.5 flex h-5 w-5 items-center justify-center rounded-[2px] text-text-muted transition-colors hover:bg-black/20 hover:text-text-normal"
+                                >
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                                    <path d="M18 6 6 18M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              )}
+                            </span>
+                          ))}
+                          {memberRoles.length === 0 && (
+                            <p className="text-[13px] text-text-muted">{t("No roles assigned.")}</p>
+                          )}
+                          {canManageRoles && onSetRoles && (
+                            <RolePicker roles={assignableRoles} selected={memberRoleIds} onToggle={toggleRole} compact />
+                          )}
+                        </div>
+                        {selfRolePicker}
+                        </>
+                      )}
+                    </Section>
+                  )}
+
+                  {!isSelf && !isBot && note.state !== "unavailable" && (
+                    <Section label={t("Note (only you can see it)")}>
+                      <textarea
+                        value={note.note}
+                        onChange={(e) => note.setNote(e.target.value.slice(0, USER_NOTE_MAX))}
+                        onBlur={() => void note.save()}
+                        disabled={note.state === "loading"}
+                        rows={2}
+                        maxLength={USER_NOTE_MAX}
+                        placeholder={t("Click to add a note")}
+                        aria-label={t("Private note about {title}", { title })}
+                        className="block w-full resize-none rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 py-2.5 text-[14px] leading-relaxed text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand disabled:opacity-60"
+                      />
+                    </Section>
+                  )}
+                </>
+              )}
+
+              {tab === "spaces" &&
+                (mutualServers.length === 0 ? (
+                  <EmptyTab>{t("No spaces in common.")}</EmptyTab>
+                ) : (
+                  <ul className="-mx-2 space-y-0.5">
+                    {mutualServers.map((s) => {
+                      const icon = safeImageUrl(s.icon_url);
+                      return (
+                        <li key={s.id} className="flex items-center gap-3 rounded-[4px] px-2 py-2">
+                          {icon ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={icon} alt="" className="h-9 w-9 shrink-0 rounded-[4px] object-cover" />
+                          ) : (
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] bg-bg-accent text-[12px] font-semibold">
+                              {serverInitials(s.name)}
+                            </span>
+                          )}
+                          <span className="truncate text-[14px] font-medium">{s.name}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ))}
+
+              {tab === "friends" &&
+                (mutualFriends.length === 0 ? (
+                  <EmptyTab>{t("No friends in common.")}</EmptyTab>
+                ) : (
+                  <ul className="-mx-2 space-y-0.5">
+                    {mutualFriends.map((f) => (
+                      <li key={f.id} className="flex items-center gap-3 rounded-[4px] px-2 py-2">
+                        <Avatar profile={f} size="sm" className="h-9 w-9" />
+                        <span className="min-w-0">
+                          <span className="block truncate text-[14px] font-medium">{displayName(f)}</span>
+                          {f.username && <span className="block truncate text-[12px] text-text-muted">@{f.username}</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ))}
+            </div>
           </div>
+          <SkinFloor itemId={profile?.equipped_overlay_effect} />
         </div>
       </div>
     </div>

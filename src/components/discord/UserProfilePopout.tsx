@@ -24,6 +24,7 @@ import { safeImageUrl } from "@/lib/safe-url";
 import { getAccentBackground, getProfileCardTheme, usesCustomAccent } from "@/lib/profileColor";
 import { activeStatusNote, listeningFor, presenceStatusFor } from "@/lib/presence";
 import { OVERLAY_Z } from "@/lib/overlay";
+import { ArtPanel, ProfileOverlay, SkinFloor } from "@/components/shop/ProfileOverlay";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import { useI18n } from "@/contexts/I18nContext";
@@ -172,6 +173,7 @@ export function UserProfilePopout({
   const banner = safeImageUrl(p.banner_url);
   const bannerBg = usesCustomAccent(p) ? getAccentBackground(p) : p.accent_color ?? "#5865f2";
   const theme = getProfileCardTheme(p);
+  const art = !!p.equipped_overlay_effect;
   const roles = serverRoles.filter((r) => !r.is_default && memberRoleIds.includes(r.id)).sort((a, b) => b.position - a.position);
   const selfRoles = selfAssignableRoles.filter((r) => !r.is_default);
   const selfRoleIds = memberRoleIds.filter((id) => selfRoles.some((r) => r.id === id));
@@ -201,218 +203,224 @@ export function UserProfilePopout({
         role="dialog"
         aria-label={t("{name}'s profile", { name: displayName(p) })}
         data-side={pos?.side ?? "right"}
-        className={`profile-popout${exiting ? " profile-popout-out" : ""} absolute max-h-[calc(100dvh-80px)] w-[340px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg ${theme ? "" : "bg-bg-secondary-alt"} text-text-normal shadow-[0_8px_16px_rgba(0,0,0,0.24),0_0_0_1px_rgba(0,0,0,0.2)]`}
+        className={`profile-popout${exiting ? " profile-popout-out" : ""} fx-overlay-host absolute isolate flex max-h-[calc(100dvh-80px)] w-[340px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-lg ${theme ? "" : "bg-bg-secondary-alt"} text-text-normal shadow-[0_8px_16px_rgba(0,0,0,0.24),0_0_0_1px_rgba(0,0,0,0.2)]`}
         style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? "visible" : "hidden", ...theme?.style }}
       >
-        {/* Banner */}
-        <div className={`relative overflow-hidden ${banner ? "h-[120px]" : "h-[60px]"}`} style={{ background: bannerBg }}>
-          {banner && (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={banner} alt="" className="absolute inset-0 h-full w-full object-cover" />
-              {theme && <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: theme.bannerTint }} />}
-            </>
-          )}
-        </div>
-
-        {/* Avatar, cut into the banner */}
-        <button
-          type="button"
-          onClick={onOpenFullProfile}
-          aria-label={t("View full profile")}
-          className={`group/avatar absolute left-4 rounded-full p-1.5 ${theme ? "" : "bg-bg-secondary-alt"}`}
-          style={{ top: banner ? 76 : 16, backgroundColor: theme?.avatarRing }}
-        >
-          <span className="relative block">
-            <Avatar profile={p} size="xl" className="!h-20 !w-20 !text-2xl" />
-            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-[10px] font-bold uppercase text-white opacity-0 transition-opacity group-hover/avatar:opacity-100">
-              {t("View Profile")}
-            </span>
-            <StatusDot
-              status={live}
-              size={16}
-              ring={theme?.avatarRing ?? "var(--bg-secondary-alt)"}
-              className="absolute -bottom-0.5 -right-0.5"
-            />
-          </span>
-        </button>
-
-        {/* Badges, top right under the banner */}
-        <div className="flex min-h-[44px] justify-end pl-[116px] pr-4 pt-3">
-          {badgeCount > 0 && badgeCount <= HEADER_BADGE_LIMIT && (
-            <span className="rounded-lg bg-bg-floating p-1">
-              <UserBadges userId={p.id} plan={isSelf ? plan : undefined} size={22} variant="full" className="justify-end" />
-            </span>
-          )}
-        </div>
-
-        {/* Inner card */}
-        <div className={`mx-4 mb-4 mt-7 rounded-lg p-3 ${theme ? "bg-black/10" : "bg-bg-floating"}`}>
-          <div className="flex items-center gap-1">
-            <h2
-              className={`min-w-0 truncate text-[20px] font-semibold leading-6 text-header-primary ${NAME_FONT_CLASS[(p.name_font as NameFontId) ?? "default"] ?? ""}`}
-              style={p.name_color ? (p.name_color_2 ? { backgroundImage: `linear-gradient(135deg, ${p.name_color}, ${p.name_color_2})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" } : { color: p.name_color }) : undefined}
-            >
-              {displayName(p)}
-            </h2>
-            <GuildTag userId={p.id} size="sm" />
-            <BotTag profile={p} size="sm" />
+        {/* The equipped profile effect: over the banner, under the profile,
+            and holding still while the card scrolls beneath it. */}
+        <ProfileOverlay itemId={p.equipped_overlay_effect} />
+        <div className="relative min-h-0 overflow-y-auto">
+          {/* Banner */}
+          <div className={`relative overflow-hidden ${banner ? "h-[120px]" : "h-[60px]"}`} style={{ background: bannerBg }}>
+            {banner && (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={banner} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                {theme && <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: theme.bannerTint }} />}
+              </>
+            )}
           </div>
-          <p className="text-[14px] leading-[18px] text-header-primary">
-            {p.username ?? ""}
-            {p.pronouns?.trim() && <span className="text-header-secondary"> • {p.pronouns.trim()}</span>}
-          </p>
-          {badgeCount > HEADER_BADGE_LIMIT && (
-            <UserBadges userId={p.id} plan={isSelf ? plan : undefined} size={22} variant="full" className="mt-2" />
-          )}
-          {statusNote && <p className="mt-1.5 text-[14px] leading-[18px] text-text-normal">{statusNote}</p>}
 
-          <div className={`my-3 h-px ${theme ? "bg-white/15" : "bg-[#2e2f34]"}`} />
+          {/* Avatar, cut into the banner */}
+          <button
+            type="button"
+            onClick={onOpenFullProfile}
+            aria-label={t("View full profile")}
+            className={`group/avatar absolute left-4 z-10 rounded-full p-1.5 ${theme ? "" : "bg-bg-secondary-alt"}`}
+            style={{ top: banner ? 76 : 16, backgroundColor: theme?.avatarRing }}
+          >
+            <span className="relative block">
+              <Avatar profile={p} size="xl" className="!h-20 !w-20 !text-2xl" />
+              <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-[10px] font-bold uppercase text-white opacity-0 transition-opacity group-hover/avatar:opacity-100">
+                {t("View Profile")}
+              </span>
+              <StatusDot
+                status={live}
+                size={16}
+                ring={theme?.avatarRing ?? "var(--bg-secondary-alt)"}
+                className="absolute -bottom-0.5 -right-0.5"
+              />
+            </span>
+          </button>
 
-          {p.bio?.trim() && (
-            <Section title={t("About Me")}>
-              <p className="line-clamp-6 whitespace-pre-wrap break-words text-[14px] leading-[18px] text-text-normal">{p.bio.trim()}</p>
-            </Section>
-          )}
+          {/* Badges, top right under the banner */}
+          <div className="relative z-10 flex min-h-[44px] justify-end pl-[116px] pr-4 pt-3">
+            {badgeCount > 0 && badgeCount <= HEADER_BADGE_LIMIT && (
+              <span className="rounded-lg bg-bg-floating p-1">
+                <UserBadges userId={p.id} plan={isSelf ? plan : undefined} size={22} variant="full" className="justify-end" />
+              </span>
+            )}
+          </div>
 
-          <Section title={t("Member Since")}>
-            <div className="flex items-center gap-2 text-[14px] leading-[18px] text-text-normal">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="" className="h-4 w-4 object-contain opacity-80" title="Disband" />
-              <span>{formatDate(p.created_at)}</span>
-              {isServerMember && memberJoinedAt && (
-                <>
-                  <span className="h-1 w-1 rounded-full bg-[#4e5058]" />
-                  {serverIcon && safeImageUrl(serverIcon) ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={safeImageUrl(serverIcon)!} alt="" className="h-4 w-4 rounded-full object-cover" title={serverName ?? undefined} />
-                  ) : (
-                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-bg-secondary text-[7px] font-bold" title={serverName ?? undefined}>
-                      {(serverName ?? "?").slice(0, 1)}
-                    </span>
-                  )}
-                  <span>{formatDate(memberJoinedAt)}</span>
-                </>
-              )}
+          {/* Inner card */}
+          <ArtPanel art={art} className="mx-4 mb-4 mt-7 rounded-lg p-3" background={theme ? "bg-black/10" : "bg-bg-floating"}>
+            <div className="flex items-center gap-1">
+              <h2
+                className={`min-w-0 truncate text-[20px] font-semibold leading-6 text-header-primary ${NAME_FONT_CLASS[(p.name_font as NameFontId) ?? "default"] ?? ""}`}
+                style={p.name_color ? (p.name_color_2 ? { backgroundImage: `linear-gradient(135deg, ${p.name_color}, ${p.name_color_2})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" } : { color: p.name_color }) : undefined}
+              >
+                {displayName(p)}
+              </h2>
+              <GuildTag userId={p.id} size="sm" />
+              <BotTag profile={p} size="sm" />
             </div>
-          </Section>
+            <p className="text-[14px] leading-[18px] text-header-primary">
+              {p.username ?? ""}
+              {p.pronouns?.trim() && <span className="text-header-secondary"> • {p.pronouns.trim()}</span>}
+            </p>
+            {badgeCount > HEADER_BADGE_LIMIT && (
+              <UserBadges userId={p.id} plan={isSelf ? plan : undefined} size={22} variant="full" className="mt-2" />
+            )}
+            {statusNote && <p className="mt-1.5 text-[14px] leading-[18px] text-text-normal">{statusNote}</p>}
 
-          {activity && <div className="mb-3"><ActivityCard activity={activity} /></div>}
-          {listening && <div className="mb-3"><ListeningCard listening={listening} /></div>}
+            <div className={`my-3 h-px ${theme ? "bg-white/15" : "bg-[#2e2f34]"}`} />
 
-          {isServerMember && (roles.length > 0 || canManageRoles || canPickSelfRoles) && (
-            <Section title={roles.length === 1 ? t("Role") : t("Roles")}>
-              <div className="flex flex-wrap gap-1">
-                {roles.map((r) => (
-                  <span key={r.id} className="group/role inline-flex h-[22px] items-center gap-1 rounded-[4px] bg-bg-secondary px-1.5 text-[12px] font-medium text-text-normal">
-                    {canManageRoles && onSetRoles ? (
-                      <button
-                        type="button"
-                        aria-label={t("Remove {name}", { name: r.name })}
-                        onClick={() => onSetRoles(memberRoleIds.filter((id) => id !== r.id))}
-                        className="relative flex h-3 w-3 items-center justify-center rounded-full"
-                        style={{ backgroundColor: r.color }}
-                      >
-                        <IconClose size={8} className="text-black/70 opacity-0 group-hover/role:opacity-100" />
-                      </button>
+            {p.bio?.trim() && (
+              <Section title={t("About Me")}>
+                <p className="line-clamp-6 whitespace-pre-wrap break-words text-[14px] leading-[18px] text-text-normal">{p.bio.trim()}</p>
+              </Section>
+            )}
+
+            <Section title={t("Member Since")}>
+              <div className="flex items-center gap-2 text-[14px] leading-[18px] text-text-normal">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo.png" alt="" className="h-4 w-4 object-contain opacity-80" title="Disband" />
+                <span>{formatDate(p.created_at)}</span>
+                {isServerMember && memberJoinedAt && (
+                  <>
+                    <span className="h-1 w-1 rounded-full bg-[#4e5058]" />
+                    {serverIcon && safeImageUrl(serverIcon) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={safeImageUrl(serverIcon)!} alt="" className="h-4 w-4 rounded-full object-cover" title={serverName ?? undefined} />
                     ) : (
-                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: r.color }} />
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-bg-secondary text-[7px] font-bold" title={serverName ?? undefined}>
+                        {(serverName ?? "?").slice(0, 1)}
+                      </span>
                     )}
-                    {r.icon && <RoleIcon icon={r.icon} name={r.name} size={14} />}
-                    {r.name}
-                  </span>
-                ))}
-                {canManageRoles && onSetRoles && (
-                  <RolePicker
-                    roles={(assignableRoles ?? serverRoles).filter((r) => !r.is_default)}
-                    selected={memberRoleIds}
-                    onToggle={(id) =>
-                      onSetRoles(memberRoleIds.includes(id) ? memberRoleIds.filter((x) => x !== id) : [...memberRoleIds, id])
-                    }
-                    compact
-                  />
-                )}
-                {canPickSelfRoles && onSetSelfRoles && (
-                  <RolePicker
-                    roles={selfRoles}
-                    selected={selfRoleIds}
-                    onToggle={(id) =>
-                      onSetSelfRoles(
-                        selfRoleIds.includes(id)
-                          ? selfRoleIds.filter((x) => x !== id)
-                          : [...selfRoleIds, id],
-                      )
-                    }
-                    compact
-                  />
+                    <span>{formatDate(memberJoinedAt)}</span>
+                  </>
                 )}
               </div>
             </Section>
-          )}
 
-          {!isSelf && note.state !== "unavailable" && (
-            <Section title={t("Note")}>
-              <textarea
-                value={note.note}
-                onChange={(e) => note.setNote(e.target.value.slice(0, USER_NOTE_MAX))}
-                onBlur={() => void note.save()}
-                disabled={note.state === "loading"}
-                rows={1}
-                placeholder={t("Click to add a note")}
-                className="-mx-1 block min-h-[30px] w-[calc(100%+8px)] resize-none rounded-[3px] bg-transparent px-1 py-1.5 text-[12px] leading-4 text-text-normal outline-none placeholder:text-text-muted focus:bg-bg-tertiary"
-              />
-            </Section>
-          )}
+            {activity && <div className="mb-3"><ActivityCard activity={activity} /></div>}
+            {listening && <div className="mb-3"><ListeningCard listening={listening} /></div>}
 
-          {isSelf ? (
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onOpenSettings?.();
-              }}
-              className={`mt-1 flex h-8 w-full items-center justify-center gap-1.5 rounded-[3px] text-[14px] font-medium text-white transition-[filter] ${
-                theme ? "hover:brightness-110" : "bg-button-secondary hover:bg-button-secondary-hover"
-              }`}
-              style={theme ? { backgroundColor: theme.primary, color: theme.primaryText } : undefined}
-            >
-              <IconEdit size={16} /> {t("Edit Profile")}
-            </button>
-          ) : friendsOnly ? (
-            <div className="mt-1">
-              <p className="mb-1.5 text-[12px] leading-4 text-text-muted">
-                {t("Add {name} as a friend to message them.", { name: displayName(p) })}
-              </p>
+            {isServerMember && (roles.length > 0 || canManageRoles || canPickSelfRoles) && (
+              <Section title={roles.length === 1 ? t("Role") : t("Roles")}>
+                <div className="flex flex-wrap gap-1">
+                  {roles.map((r) => (
+                    <span key={r.id} className="group/role inline-flex h-[22px] items-center gap-1 rounded-[4px] bg-bg-secondary px-1.5 text-[12px] font-medium text-text-normal">
+                      {canManageRoles && onSetRoles ? (
+                        <button
+                          type="button"
+                          aria-label={t("Remove {name}", { name: r.name })}
+                          onClick={() => onSetRoles(memberRoleIds.filter((id) => id !== r.id))}
+                          className="relative flex h-3 w-3 items-center justify-center rounded-full"
+                          style={{ backgroundColor: r.color }}
+                        >
+                          <IconClose size={8} className="text-black/70 opacity-0 group-hover/role:opacity-100" />
+                        </button>
+                      ) : (
+                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: r.color }} />
+                      )}
+                      {r.icon && <RoleIcon icon={r.icon} name={r.name} size={14} />}
+                      {r.name}
+                    </span>
+                  ))}
+                  {canManageRoles && onSetRoles && (
+                    <RolePicker
+                      roles={(assignableRoles ?? serverRoles).filter((r) => !r.is_default)}
+                      selected={memberRoleIds}
+                      onToggle={(id) =>
+                        onSetRoles(memberRoleIds.includes(id) ? memberRoleIds.filter((x) => x !== id) : [...memberRoleIds, id])
+                      }
+                      compact
+                    />
+                  )}
+                  {canPickSelfRoles && onSetSelfRoles && (
+                    <RolePicker
+                      roles={selfRoles}
+                      selected={selfRoleIds}
+                      onToggle={(id) =>
+                        onSetSelfRoles(
+                          selfRoleIds.includes(id)
+                            ? selfRoleIds.filter((x) => x !== id)
+                            : [...selfRoleIds, id],
+                        )
+                      }
+                      compact
+                    />
+                  )}
+                </div>
+              </Section>
+            )}
+
+            {!isSelf && note.state !== "unavailable" && (
+              <Section title={t("Note")}>
+                <textarea
+                  value={note.note}
+                  onChange={(e) => note.setNote(e.target.value.slice(0, USER_NOTE_MAX))}
+                  onBlur={() => void note.save()}
+                  disabled={note.state === "loading"}
+                  rows={1}
+                  placeholder={t("Click to add a note")}
+                  className="-mx-1 block min-h-[30px] w-[calc(100%+8px)] resize-none rounded-[3px] bg-transparent px-1 py-1.5 text-[12px] leading-4 text-text-normal outline-none placeholder:text-text-muted focus:bg-bg-tertiary"
+                />
+              </Section>
+            )}
+
+            {isSelf ? (
               <button
                 type="button"
-                disabled={requestSent}
-                onClick={async () => {
-                  if (!p.username) return;
-                  const err = await sendFriendRequest(p.username);
-                  setFriendNote(err);
+                onClick={() => {
+                  onClose();
+                  onOpenSettings?.();
                 }}
-                className="flex h-8 w-full items-center justify-center gap-1.5 rounded-[3px] bg-brand text-[14px] font-medium text-white transition-[filter] hover:brightness-110 disabled:cursor-default disabled:bg-button-secondary disabled:text-text-muted disabled:hover:brightness-100"
+                className={`mt-1 flex h-8 w-full items-center justify-center gap-1.5 rounded-[3px] text-[14px] font-medium text-white transition-[filter] ${
+                  theme ? "hover:brightness-110" : "bg-button-secondary hover:bg-button-secondary-hover"
+                }`}
+                style={theme ? { backgroundColor: theme.primary, color: theme.primaryText } : undefined}
               >
-                <IconUserPlus size={16} /> {requestSent ? t("Friend Request Sent") : t("Add Friend")}
+                <IconEdit size={16} /> {t("Edit Profile")}
               </button>
-              {friendNote && <p className="mt-1.5 text-[12px] leading-4 text-status-dnd">{friendNote}</p>}
-            </div>
-          ) : (
-            <input
-              value={message}
-              onChange={(e) => { setMessage(e.target.value); setSendError(null); }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void sendQuickMessage();
-                }
-              }}
-              placeholder={t("Message @{value}", { value: p.username ?? displayName(p) })}
-              aria-label={t("Message {name}", { name: displayName(p) })}
-              className="mt-1 h-10 w-full rounded-[3px] border border-bg-tertiary bg-transparent px-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
-            />
-          )}
-          {sendError && <p className="mt-1.5 text-[12px] leading-4 text-status-dnd">{sendError}</p>}
+            ) : friendsOnly ? (
+              <div className="mt-1">
+                <p className="mb-1.5 text-[12px] leading-4 text-text-muted">
+                  {t("Add {name} as a friend to message them.", { name: displayName(p) })}
+                </p>
+                <button
+                  type="button"
+                  disabled={requestSent}
+                  onClick={async () => {
+                    if (!p.username) return;
+                    const err = await sendFriendRequest(p.username);
+                    setFriendNote(err);
+                  }}
+                  className="flex h-8 w-full items-center justify-center gap-1.5 rounded-[3px] bg-brand text-[14px] font-medium text-white transition-[filter] hover:brightness-110 disabled:cursor-default disabled:bg-button-secondary disabled:text-text-muted disabled:hover:brightness-100"
+                >
+                  <IconUserPlus size={16} /> {requestSent ? t("Friend Request Sent") : t("Add Friend")}
+                </button>
+                {friendNote && <p className="mt-1.5 text-[12px] leading-4 text-status-dnd">{friendNote}</p>}
+              </div>
+            ) : (
+              <input
+                value={message}
+                onChange={(e) => { setMessage(e.target.value); setSendError(null); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void sendQuickMessage();
+                  }
+                }}
+                placeholder={t("Message @{value}", { value: p.username ?? displayName(p) })}
+                aria-label={t("Message {name}", { name: displayName(p) })}
+                className="mt-1 h-10 w-full rounded-[3px] border border-bg-tertiary bg-transparent px-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
+              />
+            )}
+            {sendError && <p className="mt-1.5 text-[12px] leading-4 text-status-dnd">{sendError}</p>}
+          </ArtPanel>
+          <SkinFloor itemId={p.equipped_overlay_effect} />
         </div>
       </div>
     </div>,

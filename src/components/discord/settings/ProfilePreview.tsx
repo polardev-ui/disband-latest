@@ -9,6 +9,7 @@ import { DisplayName } from "@/components/ui/DisplayName";
 import { safeImageUrl } from "@/lib/safe-url";
 import type { Profile, UserStatus } from "@/lib/supabase/types";
 import { useI18n } from "@/contexts/I18nContext";
+import { ProfileOverlay, SkinFloor } from "@/components/shop/ProfileOverlay";
 
 const STATUS_BG: Record<UserStatus, string> = {
   online: "bg-status-online",
@@ -66,9 +67,11 @@ export function ProfilePreview({
 
   return (
     <div
-      className={`overflow-hidden rounded-lg border border-divider ${theme ? "" : "bg-overlay-panel"} text-text-normal`}
+      className={`fx-overlay-host relative isolate overflow-hidden rounded-lg border border-divider ${theme ? "" : "bg-overlay-panel"} text-text-normal`}
       style={theme?.style}
     >
+      {/* The equipped profile effect, as everyone else sees it. */}
+      <ProfileOverlay itemId={profile.equipped_overlay_effect} />
       <label className="group relative block cursor-pointer" title={onChangeBanner ? t("Change banner") : undefined}>
         <div className="relative h-[136px] w-full overflow-hidden" style={{ background: bannerBg }}>
           {banner && (
@@ -83,7 +86,7 @@ export function ProfilePreview({
         </div>
         {onChangeBanner && (
           <>
-            <span className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/55 text-[13px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+            <span className="absolute inset-0 z-10 flex items-center justify-center gap-1.5 bg-black/55 text-[13px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
               <IconUpload size={16} /> {t("Change banner")}
             </span>
             <input
@@ -100,7 +103,7 @@ export function ProfilePreview({
         )}
       </label>
 
-      <div className="px-5 pb-5">
+      <div className="relative z-10 px-5 pb-5">
         <div
           className={`relative -mt-[46px] w-fit rounded-full p-[5px] ${theme ? "" : "bg-overlay-panel"}`}
           style={theme ? { backgroundColor: theme.avatarRing } : undefined}
@@ -170,6 +173,7 @@ export function ProfilePreview({
           </p>
         </div>
       </div>
+      <SkinFloor itemId={profile.equipped_overlay_effect} />
     </div>
   );
 }
