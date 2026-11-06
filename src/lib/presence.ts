@@ -145,7 +145,7 @@ export function presetForExpiresAt(expiresAt: string | null | undefined, now = D
 }
 
 /** dnd is a deliberate choice, so it outranks online; idle and offline are what's left over. */
-function presenceRank(status: string): number {
+export function presenceRank(status: string): number {
   switch (status) {
     case "dnd": return 4;
     case "online": return 3;

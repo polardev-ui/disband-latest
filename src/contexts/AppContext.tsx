@@ -44,6 +44,7 @@ import {
   flattenPresenceListening,
   flattenPresenceState,
   PRESENCE_CHANNEL,
+  presenceRank,
   type ListeningMap,
   type PresenceMap,
   type PresencePayload,
@@ -573,6 +574,14 @@ function logStartupTiming(line: string) {
   }
   console.info(`[startup] ${line}`);
 }
+
+/**
+ * The global presence channel being removed, if any. A new one can't be made
+ * until it is gone: `supabase.channel(topic)` would hand back the old one.
+ */
+let presenceTeardown: Promise<unknown> = Promise.resolve();
+/** Presence channels we've finished with, so one handed back by mistake is never reused. */
+const retiredPresenceChannels = new WeakSet<RealtimeChannel>();
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
@@ -1493,17 +1502,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!userId || !configured || !profile) return;
     const supabase = getSupabaseClient();
     /*
-     Self-healing presence (5 Nov 2026). Everyone else sees us through this one
-     channel, but a failed join (CHANNEL_ERROR / TIMED_OUT), a dropped socket
-     or Realtime's presence rate limit used to leave us silently untracked:
-     our own panel said Online (from the profile row) while everybody else saw
-     Offline until a full reload. Now a failed or closed channel is rejoined
-     with backoff, and a watchdog re-tracks us if our entry goes missing.
+     Presence (rewritten 6 Nov 2026). Everyone sees everyone through one global
+     channel, so these rules stop one bad moment from becoming a loop that makes
+     the whole roster flicker:
+
+     - A channel that errors or times out is rejoined by the realtime client
+       itself, which reports SUBSCRIBED again. We leave it alone. The 5 Nov
+       version tore it down and built a new one instead. Removing a channel
+       that was already closed fired its CLOSED callback, which scheduled the
+       next rebuild, and every join reset the backoff. So one hiccup became a
+       leave and rejoin every 2-3 seconds, forever: everyone else saw that
+       person blink offline, and the extra presence traffic tripped Realtime's
+       presence rate limit, which pushed more people into the loop.
+     - Only a channel the server closed (the presence rate limit does that) is
+       replaced, after the old one is gone, with backoff that only resets once
+       a join has held for a minute.
+     - Our own row always shows what we publish: a fresh presence snapshot
+       doesn't contain us until our track lands.
+     - Someone who drops out of presence keeps their last status for a few
+       seconds, so a reconnect isn't an offline blink for everyone watching.
     */
+    const GRACE_MS = 8_000;
+    // Our own presence key, so our own entry can be told apart from our other
+    // sessions (phone, another tab) in the snapshot.
+    const ownKey = `${userId}:${Math.random().toString(36).slice(2, 10)}`;
     let disposed = false;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let channel: RealtimeChannel | null = null;
     let retryTimer: number | undefined;
+    let healthyTimer: number | undefined;
+    let graceTimer: number | undefined;
     let attempt = 0;
+    let stuckChecks = 0;
+
+    let snapshot: Record<string, PresencePayload[]> = {};
+    let shownStatus: PresenceMap = new Map();
+    let shownListening: ListeningMap = new Map();
+    let shownActivity: ActivityMap = new Map();
+    const goneSince = new Map<string, number>();
 
     const currentPayload = (): PresencePayload => {
       const preferred = profileRef.current?.preferred_status ?? "online";
@@ -1512,69 +1547,170 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { userId, status: effective, listening: listeningRef.current, activity: activityRef.current };
     };
 
+    const render = () => {
+      if (disposed) return;
+      const status = flattenPresenceState(snapshot);
+      const listening = flattenPresenceListening(snapshot);
+      const activity = flattenPresenceActivity(snapshot);
+      const now = Date.now();
+
+      // People who just dropped out keep their last state for a moment.
+      for (const id of status.keys()) goneSince.delete(id);
+      let nextExpiry = Infinity;
+      for (const [id, last] of shownStatus) {
+        if (id === userId || status.has(id)) continue;
+        const since = goneSince.get(id) ?? now;
+        if (now - since >= GRACE_MS) {
+          goneSince.delete(id);
+          continue;
+        }
+        goneSince.set(id, since);
+        nextExpiry = Math.min(nextExpiry, since + GRACE_MS);
+        status.set(id, last);
+        if (shownListening.has(id)) listening.set(id, shownListening.get(id) ?? null);
+        if (shownActivity.has(id)) activity.set(id, shownActivity.get(id) ?? null);
+      }
+
+      // Ourselves: what this session publishes, merged with our other sessions.
+      const own = currentPayload();
+      let selfStatus = own.status;
+      let selfListening = own.listening ?? null;
+      let selfActivity = own.activity ?? null;
+      for (const [key, metas] of Object.entries(snapshot)) {
+        if (key === ownKey) continue;
+        for (const meta of metas ?? []) {
+          if (meta?.userId !== userId) continue;
+          if (presenceRank(meta.status ?? "online") > presenceRank(selfStatus)) selfStatus = meta.status ?? "online";
+          if (!selfListening && meta.listening) selfListening = meta.listening;
+          if (!selfActivity && meta.activity) selfActivity = meta.activity;
+        }
+      }
+      status.set(userId, selfStatus);
+      listening.set(userId, selfListening);
+      activity.set(userId, selfActivity);
+
+      shownStatus = status;
+      shownListening = listening;
+      shownActivity = activity;
+      setPresenceMap(status);
+      setListeningMap(listening);
+      setActivityMap(activity);
+
+      if (graceTimer !== undefined) window.clearTimeout(graceTimer);
+      graceTimer = nextExpiry === Infinity
+        ? undefined
+        : window.setTimeout(() => {
+          graceTimer = undefined;
+          render();
+        }, Math.max(100, nextExpiry - now));
+    };
+
+    const markUnhealthy = (ch: RealtimeChannel) => {
+      if (healthyTimer !== undefined) window.clearTimeout(healthyTimer);
+      healthyTimer = undefined;
+      if (presenceChannelRef.current === ch) presenceChannelRef.current = null;
+    };
+
     const scheduleRejoin = () => {
       if (disposed || retryTimer !== undefined) return;
-      const delay = Math.min(30_000, 2_000 * 2 ** attempt) + Math.random() * 1_000;
-      attempt += 1;
+      const delay = Math.min(60_000, 3_000 * 2 ** attempt) + Math.random() * 2_000;
+      attempt = Math.min(attempt + 1, 6);
       retryTimer = window.setTimeout(() => {
         retryTimer = undefined;
-        join();
+        void join();
       }, delay);
     };
 
-    const join = () => {
+    const join = async () => {
       if (disposed) return;
-      if (channel) {
-        if (presenceChannelRef.current === channel) presenceChannelRef.current = null;
-        void supabase.removeChannel(channel);
+      const old = channel;
+      channel = null;
+      if (old) {
+        retiredPresenceChannels.add(old);
+        markUnhealthy(old);
+        presenceTeardown = supabase.removeChannel(old).catch(() => {});
       }
-      const ch = supabase.channel(PRESENCE_CHANNEL);
+      // `supabase.channel(topic)` hands back any listed channel with the same
+      // topic, so a channel still on its way out (ours, or the previous run's
+      // after a remount) has to be gone before a new one is made.
+      await presenceTeardown;
+      if (disposed || channel) return;
+      const ch = supabase.channel(PRESENCE_CHANNEL, { config: { presence: { key: ownKey } } });
+      if (retiredPresenceChannels.has(ch)) {
+        // Its removal didn't go through; try again, then come back.
+        presenceTeardown = supabase.removeChannel(ch).catch(() => {});
+        scheduleRejoin();
+        return;
+      }
       channel = ch;
+      stuckChecks = 0;
       ch.on("presence", { event: "sync" }, () => {
-        const state = ch.presenceState() as Record<string, PresencePayload[]>;
-        setPresenceMap(flattenPresenceState(state));
-        setListeningMap(flattenPresenceListening(state));
-        setActivityMap(flattenPresenceActivity(state));
+        if (disposed || channel !== ch) return;
+        snapshot = ch.presenceState() as Record<string, PresencePayload[]>;
+        render();
       });
-      void ch.subscribe(async (status) => {
+      ch.subscribe((status) => {
         if (disposed || channel !== ch) return;
         if (status === "SUBSCRIBED") {
-          attempt = 0;
           presenceChannelRef.current = ch;
           const payload = currentPayload();
-          // Paint our own row immediately. Waiting for the next presence sync
-          // made the signed-in member look offline in the roster for a moment.
+          // Paint our own row now rather than on the next sync.
           setLocalPresence(payload.status);
-          await ch.track(payload);
-        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          if (presenceChannelRef.current === ch) presenceChannelRef.current = null;
+          void ch.track(payload).then();
+          if (healthyTimer !== undefined) window.clearTimeout(healthyTimer);
+          healthyTimer = window.setTimeout(() => {
+            healthyTimer = undefined;
+            attempt = 0;
+          }, 60_000);
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          // The realtime client rejoins this channel itself.
+          markUnhealthy(ch);
+        } else if (status === "CLOSED") {
+          // Closed by the server, not by us (we stop listening before we
+          // remove a channel). It's gone from the client's list already.
+          markUnhealthy(ch);
+          retiredPresenceChannels.add(ch);
+          channel = null;
           scheduleRejoin();
         }
       });
     };
 
-    join();
+    void join();
 
-    // Watchdog: if we're joined but missing from what everyone else sees,
-    // track again (once a minute at most, well under the presence rate limit).
+    // Watchdog, once a minute: rejoin if we have no channel, start over if a
+    // visible tab has been unable to join for three checks in a row, and track
+    // again if we're joined but missing from what everyone else sees.
     const watchdog = window.setInterval(() => {
-      const ch = presenceChannelRef.current;
-      if (!ch || ch !== channel) {
-        if (!channel || retryTimer === undefined) scheduleRejoin();
+      if (disposed) return;
+      const ch = channel;
+      if (!ch) {
+        scheduleRejoin();
         return;
       }
-      const state = ch.presenceState() as Record<string, PresencePayload[]>;
-      const present = Object.values(state).some((metas) => metas.some((m) => m.userId === userId));
-      if (!present) void ch.track(currentPayload());
+      if (presenceChannelRef.current !== ch) {
+        if (document.visibilityState !== "visible") return;
+        stuckChecks += 1;
+        if (stuckChecks >= 3 && retryTimer === undefined) void join();
+        return;
+      }
+      stuckChecks = 0;
+      const mine = (ch.presenceState() as Record<string, PresencePayload[]>)[ownKey];
+      if (!mine?.length) void ch.track(currentPayload()).then();
     }, 60_000);
 
     return () => {
       disposed = true;
       window.clearInterval(watchdog);
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
-      if (channel) {
-        if (presenceChannelRef.current === channel) presenceChannelRef.current = null;
-        void supabase.removeChannel(channel);
+      if (healthyTimer !== undefined) window.clearTimeout(healthyTimer);
+      if (graceTimer !== undefined) window.clearTimeout(graceTimer);
+      const ch = channel;
+      channel = null;
+      if (ch) {
+        retiredPresenceChannels.add(ch);
+        if (presenceChannelRef.current === ch) presenceChannelRef.current = null;
+        presenceTeardown = supabase.removeChannel(ch).catch(() => {});
       }
     };
   }, [userId, configured, profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1590,13 +1726,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Nothing playing, still nothing playing: no presence or database write.
     if (!prev && !activity) return;
     activityRef.current = activity;
-    setActivityMap((map) => {
-      const next = new Map(map);
-      next.set(userId, activity);
-      return next;
-    });
-    const status = profileRef.current?.status ?? "online";
-    void presenceChannelRef.current?.track({ userId, status, listening: listeningRef.current, activity } satisfies PresencePayload).then();
+    // Presence carries this to everyone online, and every update counts
+    // towards Realtime's presence rate limit. The desktop app re-publishes the
+    // same game every minute (to renew the row below) and a game's Rich
+    // Presence can repeat itself, so only a real change goes out.
+    if (JSON.stringify(prev ?? null) !== JSON.stringify(activity ?? null)) {
+      setActivityMap((map) => {
+        const next = new Map(map);
+        next.set(userId, activity);
+        return next;
+      });
+      const status = profileRef.current?.status ?? "online";
+      void presenceChannelRef.current?.track({ userId, status, listening: listeningRef.current, activity } satisfies PresencePayload).then();
+    }
     const changed = (prev?.name ?? null) !== (activity?.name ?? null)
       || prev?.details !== activity?.details || prev?.state !== activity?.state;
     if (!changed && Date.now() - lastActivityWriteRef.current < 55_000) return;
