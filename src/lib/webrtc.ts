@@ -192,8 +192,32 @@ export function ensureLanes(pc: RTCPeerConnection): void {
   if (pc.getTransceivers().length > 0) return;
   pc.addTransceiver("audio", { direction: "sendrecv" });
   pc.addTransceiver("video", { direction: "sendrecv" });
-  pc.addTransceiver("video", { direction: "sendrecv" });
+  preferScreenCodecs(pc.addTransceiver("video", { direction: "sendrecv" }));
   pc.addTransceiver("audio", { direction: "sendrecv" });
+}
+
+/*
+ With no preference the browser offers VP8 first, and VP8 is poor at screen
+ content: text smears and high resolutions fall apart long before the bitrate
+ cap is reached, so picking 1440p made no visible difference. VP9 (with its
+ screen-content tools) goes first, then H.264, and VP8 stays as the fallback
+ so anyone who can't do either still sees the share.
+*/
+const SCREEN_CODEC_ORDER = ["video/VP9", "video/H264", "video/VP8"];
+
+export function preferScreenCodecs(transceiver: RTCRtpTransceiver): void {
+  try {
+    const caps = typeof RTCRtpSender !== "undefined" ? RTCRtpSender.getCapabilities?.("video") : null;
+    if (!caps?.codecs?.length || typeof transceiver.setCodecPreferences !== "function") return;
+    const rank = (mime: string) => {
+      const i = SCREEN_CODEC_ORDER.indexOf(mime);
+      return i < 0 ? SCREEN_CODEC_ORDER.length : i;
+    };
+    const sorted = [...caps.codecs].sort((a, b) => rank(a.mimeType) - rank(b.mimeType));
+    transceiver.setCodecPreferences(sorted);
+  } catch {
+    // Keep the browser's default order.
+  }
 }
 
 /*

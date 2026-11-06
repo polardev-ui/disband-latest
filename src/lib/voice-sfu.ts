@@ -2,7 +2,7 @@
 
 import { apiFetch } from "@/lib/api";
 import { fetchIceServersQuick } from "@/lib/ice-servers";
-import { tuneOpus } from "@/lib/webrtc";
+import { preferScreenCodecs, tuneOpus } from "@/lib/webrtc";
 
 /*
  One voice seat on Cloudflare Realtime (an SFU).
@@ -139,6 +139,7 @@ export class SfuSeat {
     const pc = this.pc;
     if (!pc) return;
     const transceiver = pc.addTransceiver(track, { direction: "sendonly" });
+    if (name === "screen") preferScreenCodecs(transceiver);
     this.senders.set(name, transceiver);
     const offer = tuneOpus(await pc.createOffer());
     await pc.setLocalDescription(offer);
