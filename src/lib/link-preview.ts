@@ -10,8 +10,6 @@ export interface LinkPreview {
 }
 
 const URL_RE = /https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`]/gi;
-const INVITE_IN_URL_RE = /\/server\/[a-zA-Z0-9]{7}\b/;
-
 const GIFT_IN_URL_RE = /\/gift\/[a-zA-Z0-9]{10}\b/;
 
 const cache = new Map<string, LinkPreview | null>();
@@ -27,10 +25,10 @@ export function extractPreviewUrls(text: string, max = 3): string[] {
     const url = match[0];
     if (seen.has(url)) continue;
     if (GIFT_IN_URL_RE.test(url)) continue;
-    if (INVITE_IN_URL_RE.test(url)) {
-      const code = url.match(/\/server\/([a-zA-Z0-9]{7})\b/)?.[1];
-      if (code && inviteCodes.has(code)) continue;
-    }
+    // An invite link gets an invite card, not the website's link preview.
+    // This used to look for 7-character codes only, so a vanity link like
+    // disband.dev/server/rich showed the Disband homepage embed instead.
+    if (extractInviteCodes(url).some((code) => inviteCodes.has(code))) continue;
     seen.add(url);
     urls.push(url);
     if (urls.length >= max) break;

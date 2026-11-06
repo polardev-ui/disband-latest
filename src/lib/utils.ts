@@ -223,6 +223,15 @@ export function extractInviteCodes(text: string): string[] {
   return [...codes];
 }
 
+/**
+ * Take invite links out of message text: each one is shown as an invite card
+ * instead. Matches exactly what `extractInviteCodes` finds (vanity codes,
+ * www., /invite/ links), so a link never shows as both text and a card.
+ */
+export function stripInviteLinks(text: string): string {
+  return text.replace(new RegExp(INVITE_RE.source, "gi"), "");
+}
+
 export interface AvatarCrop {
   zoom: number;
   x: number;
