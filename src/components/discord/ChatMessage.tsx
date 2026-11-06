@@ -4,7 +4,7 @@ import { Fragment, memo, useMemo, useState, useEffect, type ReactNode } from "re
 import { AttachmentGrid } from "@/components/discord/AttachmentGrid";
 import { readAttachments } from "@/lib/message-attachments";
 import {
-  formatMessageTime, displayName, extractInviteCodes, normalizeMessageContent,
+  formatMessageTime, displayName, extractInviteCodes, stripInviteLinks, normalizeMessageContent,
   mentionsEveryone, mentionsUsername, roleMentionSlug,
 } from "@/lib/utils";
 import { extractGiftCodes } from "@/lib/gifts";
@@ -391,8 +391,7 @@ const codes = extractInviteCodes(content);
   // stripped: image/video links keep their visible URL above the card.
   const gifUrls = previewUrls.filter((u) => classifyLinkUrl(u) === "gif");
   const textOnly = removeUrlsFromText(
-    content
-      .replace(/(?:https?:\/\/[^\s]+)?\/server\/[a-zA-Z0-9]{7}\b/g, "")
+    stripInviteLinks(content)
       .replace(/(?:https?:\/\/[^\s]+)?\/gift\/[a-zA-Z0-9]{10}\b/g, ""),
     gifUrls,
   );
@@ -753,7 +752,7 @@ function ChatMessageImpl({
     return (
       <article
         id={`msg-${message.id}`}
-        className={`group relative mx-4 my-2 ${rowBgClass} ${highlightClass}  [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
+        className={`group relative mx-4 my-2 ${rowBgClass} ${highlightClass}  [@media(any-hover:none)]:select-none [@media(any-hover:none)]:[-webkit-touch-callout:none]`}
         onContextMenu={onContextMenu}
         onDoubleClick={onDoubleClick}
       >
@@ -800,7 +799,7 @@ function ChatMessageImpl({
     return (
       <article
         id={`msg-${message.id}`}
-        className={`group relative min-h-[22px] py-0.5 pl-[72px] pr-12 ${rowBgClass} ${highlightClass} ${message.sending ? "opacity-60" : ""} [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
+        className={`group relative min-h-[22px] py-0.5 pl-[72px] pr-12 ${rowBgClass} ${highlightClass} ${message.sending ? "opacity-60" : ""} [@media(any-hover:none)]:select-none [@media(any-hover:none)]:[-webkit-touch-callout:none]`}
         onContextMenu={onContextMenu}
         onDoubleClick={onDoubleClick}
       >
@@ -835,7 +834,7 @@ function ChatMessageImpl({
   return (
     <article
       id={`msg-${message.id}`}
-      className={`group relative mt-[17px] min-h-[44px] py-0.5 pl-[72px] pr-12 ${rowBgClass} ${highlightClass} ${message.sending ? "opacity-60" : ""} [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]`}
+      className={`group relative mt-[17px] min-h-[44px] py-0.5 pl-[72px] pr-12 ${rowBgClass} ${highlightClass} ${message.sending ? "opacity-60" : ""} [@media(any-hover:none)]:select-none [@media(any-hover:none)]:[-webkit-touch-callout:none]`}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
     >

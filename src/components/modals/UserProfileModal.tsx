@@ -515,7 +515,7 @@ export function UserProfileModal({
                       onClick={() => setStatusReplyOpen((v) => !v)}
                       aria-label={t("Reply to status")}
                       title={t("Reply to status")}
-                      className="absolute -top-2 right-1 flex h-6 w-6 items-center justify-center rounded-full border border-divider bg-bg-secondary text-text-muted opacity-0 shadow transition-all hover:text-text-normal focus-visible:opacity-100 group-hover/status:opacity-100 [@media(hover:none)]:opacity-100"
+                      className="absolute -top-2 right-1 flex h-6 w-6 items-center justify-center rounded-full border border-divider bg-bg-secondary text-text-muted opacity-0 shadow transition-all hover:text-text-normal focus-visible:opacity-100 group-hover/status:opacity-100 [@media(any-hover:none)]:opacity-100"
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="9 17 4 12 9 7" />

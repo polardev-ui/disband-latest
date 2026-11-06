@@ -56,9 +56,13 @@ export function MessageActionBar({
 
   const isOwn = message.author_id === currentUserId;
 
+  // Touch-only devices can't hover, so they always get the "more" button.
+  // That rule keys on any-hover, not hover: touchscreen laptops and tablets
+  // with a mouse report hover:none for their primary input, which put a
+  // stray ⋮ box beside every message for people who can hover just fine.
   return (
     <div
-      className="absolute -top-4 right-3.5 z-10 flex items-center rounded-[4px] border border-bg-tertiary bg-bg-primary opacity-0 shadow-[0_0_0_1px_rgba(0,0,0,0.04)] group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:[&>:not(:last-child)]:hidden"
+      className="absolute -top-4 right-3.5 z-10 flex items-center rounded-[4px] border border-bg-tertiary bg-bg-primary opacity-0 shadow-[0_0_0_1px_rgba(0,0,0,0.04)] group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 [@media(any-hover:none)]:opacity-100 [@media(any-hover:none)]:[&>:not(:last-child)]:hidden"
       onClick={(e) => e.stopPropagation()}
     >
       {QUICK_EMOJIS.map((emoji) => (
