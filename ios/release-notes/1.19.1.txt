@@ -1,0 +1,11 @@
+What's new in Disband 1.19.1
+
+• No more surprise sign-outs. Some of you were being signed out at random, often after the app had been in the background or on a patchy connection. You now stay signed in, and if Disband can't connect it says so and catches up by itself once you're back online.
+
+In case you missed 1.19:
+• Unread spaces and channels: a small white dot beside a space shows it has new messages, and unread channels stand out in bold.
+• Read once, read everywhere: catch up on your computer and your iPhone clears too, and the other way round.
+• New messages arrive live again after the app has been in the background.
+• Chats stay at the newest message as photos, GIFs and links load.
+• Role pings show in the role's own colour, and game activity cards show the game's artwork.
+• Plus other fixes and improvements.
