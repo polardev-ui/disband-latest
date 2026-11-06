@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStripe } from "@/lib/stripe";
+import { createCheckoutSession, getStripe } from "@/lib/stripe";
 import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 
 import { checkoutOrigin } from "@/lib/checkout-origin";
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Could not start the gift." }, { status: 500 });
     }
 
-    const session = await getStripe().checkout.sessions.create({
+    const session = await createCheckoutSession({
       ui_mode: "elements",
       mode: "payment",
       customer_email: user.email,

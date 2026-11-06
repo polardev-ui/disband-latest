@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStripe, getPriceId, type PaidPlan } from "@/lib/stripe";
+import { createCheckoutSession, getStripe, getPriceId, type PaidPlan } from "@/lib/stripe";
 import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 import { checkoutOrigin } from "@/lib/checkout-origin";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const session = await getStripe().checkout.sessions.create({
+    const session = await createCheckoutSession({
       ui_mode: "elements",
       customer_email: user.email,
       mode: "subscription",

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCatalystPriceId, getStripe } from "@/lib/stripe";
+import { createCheckoutSession, getCatalystPriceId, getStripe } from "@/lib/stripe";
 import { getRouteUser } from "@/lib/supabase/server";
 import { checkoutOrigin } from "@/lib/checkout-origin";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
     }
     const unitAmount = price.unit_amount ?? 0;
 
-    const session = await getStripe().checkout.sessions.create({
+    const session = await createCheckoutSession({
       ui_mode: "elements",
       mode: "payment",
       customer_email: user.email,

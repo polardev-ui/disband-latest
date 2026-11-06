@@ -51,3 +51,39 @@ export function getCatalystPriceId(): string {
   }
   return id;
 }
+
+/*
+ EU/UK consumers have 14 days to cancel a purchase, unless they ask for a
+ digital purchase to start straight away and acknowledge they lose that right
+ (Terms, Section 9). Stripe Checkout shows this as a required checkbox next
+ to the Terms. It needs a Terms of Service URL in the Stripe account's public
+ details; if that's missing, Stripe refuses the session, so checkout falls
+ back to no checkbox rather than breaking payments, and logs it loudly.
+*/
+const WITHDRAWAL_CONSENT = {
+  consent_collection: { terms_of_service: "required" },
+  custom_text: {
+    terms_of_service_acceptance: {
+      message:
+        "I agree to the [Terms of Service](https://disband.dev/terms) and ask for my purchase to start straight " +
+        "away. I understand that once it starts, I lose my right to cancel within 14 days.",
+    },
+  },
+} satisfies Partial<Stripe.Checkout.SessionCreateParams>;
+
+export async function createCheckoutSession(
+  params: Stripe.Checkout.SessionCreateParams,
+): Promise<Stripe.Checkout.Session> {
+  const stripe = getStripe();
+  try {
+    return await stripe.checkout.sessions.create({ ...params, ...WITHDRAWAL_CONSENT });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!/terms of service/i.test(message)) throw err;
+    console.error(
+      "[stripe] Checkout consent checkbox is off: set a Terms of Service URL in Stripe → Settings → Public details.",
+      message,
+    );
+    return stripe.checkout.sessions.create(params);
+  }
+}

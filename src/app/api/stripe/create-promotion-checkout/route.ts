@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStripe } from "@/lib/stripe";
+import { createCheckoutSession, getStripe } from "@/lib/stripe";
 import { getRouteUser, getServiceSupabase } from "@/lib/supabase/server";
 import { checkoutOrigin } from "@/lib/checkout-origin";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     if (!server.discoverable) return NextResponse.json({ error: "Turn on Discover for this space first (Overview → Discoverable)." }, { status: 409 });
 
     const origin = checkoutOrigin(req);
-    const session = await getStripe().checkout.sessions.create({
+    const session = await createCheckoutSession({
       ui_mode: "elements",
       mode: "payment",
       customer_email: user.email,
