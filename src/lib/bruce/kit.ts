@@ -291,6 +291,9 @@ export async function botCall(ctx: Pick<Ctx, "service" | "botId">, fn: string, a
 }
 
 export function friendly(message: string): string {
+  if (/needs the \w+ role permission/i.test(message)) {
+    return "I need a role with **Administrator** for that. The owner can give me one in Space Settings → Roles, or re-add me and tick \"Give it Administrator\".";
+  }
   if (/does not have|scope/i.test(message)) return "I wasn't given that permission when I was added to this space. Re-add me with it ticked.";
   if (/above|higher|hierarchy|top role/i.test(message)) return "That's above my highest role, so I can't touch it.";
   if (/owner|moderator|another bot/i.test(message)) return "I can't do that to the owner, moderators or other bots.";

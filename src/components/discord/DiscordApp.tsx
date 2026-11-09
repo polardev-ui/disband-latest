@@ -1688,6 +1688,8 @@ export function DiscordApp() {
     author?: Profile | null;
     embeds?: import("@/lib/embeds").Embed[] | null;
     webhook?: import("@/lib/embeds").MessageWebhookInfo | null;
+    components?: ChatMessageData["components"];
+    interaction?: ChatMessageData["interaction"];
     reply_to_deleted?: boolean;
   }): ChatMessageData => ({
     id: m.id,
@@ -1713,6 +1715,9 @@ export function DiscordApp() {
     // out here they reached the renderer as bare one-line text.
     embeds: m.embeds ?? null,
     webhook: m.webhook ?? null,
+    // A bot's buttons, and who ran the command it answers ("kai used /fact").
+    components: m.components ?? null,
+    interaction: m.interaction ?? null,
     reply_to_deleted: m.reply_to_deleted ?? false,
   });
 

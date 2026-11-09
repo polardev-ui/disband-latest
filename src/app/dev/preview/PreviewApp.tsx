@@ -25,6 +25,7 @@ const asyncVoid = async () => {};
 const asyncNull = async () => null;
 
 const ALL_PERMISSIONS: Record<ServerPermissionKey, boolean> = {
+  administrator: true,
   kick: true,
   ban: true,
   manage_roles: true,

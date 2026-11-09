@@ -50,6 +50,7 @@ export const PERM_GROUPS: { title: string; perms: { key: ServerPermissionKey; la
   {
     title: "Management",
     perms: [
+      { key: "administrator", label: "Administrator", hint: "Every permission, everywhere. Give it only to people and bots you fully trust." },
       { key: "manage_roles", label: "Manage roles", hint: "Create roles below their own and assign them." },
       { key: "manage_channels", label: "Manage channels", hint: "Create, edit and delete channels." },
       { key: "manage_server", label: "Manage space", hint: "Edit the space's settings and invites." },

@@ -118,6 +118,7 @@ export interface ChannelEffects {
 }
 
 export type ServerPermissionKey =
+  | "administrator"
   | "kick"
   | "ban"
   | "manage_roles"

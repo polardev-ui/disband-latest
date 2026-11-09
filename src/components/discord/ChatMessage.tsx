@@ -32,6 +32,8 @@ import { PlatformBadge } from "@/components/ui/PlatformBadge";
 import { ServerInviteCard } from "./ServerInviteCard";
 import { GiftCard } from "@/components/gift/GiftCard";
 import { LinkPreviewCard } from "./LinkPreviewCard";
+import { BotInviteEmbed } from "@/components/bot/BotInviteEmbed";
+import { extractBotInviteCodes, stripBotInviteLinks, isBotInviteUrl } from "@/lib/bot-invite-links";
 import { GifLinkEmbed, LinkedMedia, classifyLinkUrl } from "./LinkMediaEmbed";
 import { MessageAttachment } from "./MessageAttachment";
 import { AttachmentUploadCard } from "./AttachmentUploadCard";
@@ -384,14 +386,15 @@ function TimestampChip({ unix, flag }: { unix: number; flag: string }) {
 
 const codes = extractInviteCodes(content);
   const giftCodes = extractGiftCodes(content);
-  const previewUrls = areLinkPreviewsEnabled() ? extractPreviewUrls(content) : [];
+  const botInviteCodes = extractBotInviteCodes(content);
+  const previewUrls = (areLinkPreviewsEnabled() ? extractPreviewUrls(content) : []).filter((u) => !isBotInviteUrl(u));
   // A GIF link renders as the GIF itself (see GifLinkEmbed below), so its raw
   // URL leaves the body — otherwise the message prints the same link twice,
   // once as text and once as the image that replaced it. Only GIF links are
   // stripped: image/video links keep their visible URL above the card.
   const gifUrls = previewUrls.filter((u) => classifyLinkUrl(u) === "gif");
   const textOnly = removeUrlsFromText(
-    stripInviteLinks(content)
+    stripBotInviteLinks(stripInviteLinks(content))
       .replace(/(?:https?:\/\/[^\s]+)?\/gift\/[a-zA-Z0-9]{10}\b/g, ""),
     gifUrls,
   );
@@ -431,6 +434,9 @@ const codes = extractInviteCodes(content);
       )}
       {codes.map((code) => (
         <ServerInviteCard key={code} code={code} onLoad={onContentResize} />
+      ))}
+      {botInviteCodes.map((code) => (
+        <BotInviteEmbed key={`bot-${code}`} code={code} onLoad={onContentResize} />
       ))}
       {giftCodes.map((code) => (
         <GiftCard key={code} code={code} onLoad={onContentResize} />

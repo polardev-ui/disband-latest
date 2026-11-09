@@ -645,6 +645,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [platformBan, setPlatformBan] = useState<{ banned: boolean; reason?: string; vpnBlocked?: boolean } | null>(null);
   const [restrictions, setRestrictions] = useState<string[]>([]);
   const [serverPermissions, setServerPermissions] = useState<Record<ServerPermissionKey, boolean>>({
+    administrator: false,
     kick: false,
     ban: false,
     manage_roles: false,
@@ -2180,24 +2181,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if (permsRes.data && typeof permsRes.data === "object") {
           const p = permsRes.data as Record<string, unknown>;
+          // Administrator counts as every permission (migration 0247).
+          const admin = !!p.administrator;
           permissionsServerRef.current = serverId;
           setServerPermissions({
-            kick: !!p.kick,
-            ban: !!p.ban,
-            manage_roles: !!p.manage_roles,
-            manage_server: !!p.manage_server,
-            manage_channels: !!p.manage_channels,
-            manage_messages: !!p.manage_messages,
-            manage_emojis: !!p.manage_emojis,
-            manage_webhooks: !!p.manage_webhooks,
-            mention_everyone: !!p.mention_everyone,
-            send_messages: !!p.send_messages,
-            add_reactions: !!p.add_reactions,
-            attach_files: !!p.attach_files,
-            timeout_members: !!p.timeout_members,
-            pin_messages: !!p.pin_messages,
-            view_audit_log: !!p.view_audit_log,
-            create_invites: !!p.create_invites,
+            administrator: admin,
+            kick: admin || !!p.kick,
+            ban: admin || !!p.ban,
+            manage_roles: admin || !!p.manage_roles,
+            manage_server: admin || !!p.manage_server,
+            manage_channels: admin || !!p.manage_channels,
+            manage_messages: admin || !!p.manage_messages,
+            manage_emojis: admin || !!p.manage_emojis,
+            manage_webhooks: admin || !!p.manage_webhooks,
+            mention_everyone: admin || !!p.mention_everyone,
+            send_messages: admin || !!p.send_messages,
+            add_reactions: admin || !!p.add_reactions,
+            attach_files: admin || !!p.attach_files,
+            timeout_members: admin || !!p.timeout_members,
+            pin_messages: admin || !!p.pin_messages,
+            view_audit_log: admin || !!p.view_audit_log,
+            create_invites: admin || !!p.create_invites,
           });
         }
         if (Array.isArray(effectsRes.data)) {
