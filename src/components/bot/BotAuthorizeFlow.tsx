@@ -63,10 +63,10 @@ function SpaceIcon({ space, size = 32 }: { space: Pick<Space, "name" | "icon_url
 }
 
 /** A dropdown of your spaces, each with its icon. */
-function SpacePicker({ spaces, value, onChange }: { spaces: Space[]; value: string; onChange: (id: string) => void }) {
+function SpacePicker({ spaces, value, onChange }: { spaces: Space[] | null; value: string; onChange: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const chosen = spaces.find((s) => s.id === value) ?? null;
+  const chosen = spaces?.find((s) => s.id === value) ?? null;
 
   useEffect(() => {
     if (!open) return;
@@ -100,8 +100,10 @@ function SpacePicker({ spaces, value, onChange }: { spaces: Space[]; value: stri
       </button>
       {open && (
         <div role="listbox" className="menu-pop absolute inset-x-0 top-[calc(100%+6px)] z-20 max-h-[260px] overflow-y-auto rounded-xl border border-border-subtle bg-bg-floating p-1.5 shadow-[var(--elevation-high)]">
-          {spaces.length === 0 ? (
-            <p className="px-3 py-3 text-[13px] text-text-muted">You aren&apos;t in any spaces you can add bots to.</p>
+          {spaces === null ? (
+            <div className="flex justify-center px-3 py-4"><LoadingDots size={7} className="text-text-muted" /></div>
+          ) : spaces.length === 0 ? (
+            <p className="px-3 py-3 text-[13px] text-text-muted">You aren&apos;t in any spaces yet.</p>
           ) : spaces.map((s) => (
             <button
               key={s.id}
@@ -140,7 +142,7 @@ export function BotAuthorizeFlow({
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [verified, setVerified] = useState(false);
   const [userId, setUserId] = useState<string | null | undefined>(undefined);
-  const [spaces, setSpaces] = useState<Space[]>([]);
+  const [spaces, setSpaces] = useState<Space[] | null>(null);
   const [serverId, setServerId] = useState("");
   const [admin, setAdmin] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -169,18 +171,27 @@ export function BotAuthorizeFlow({
       if (!live) return;
       setUserId(uid);
       if (!uid) return;
+      // Two plain lookups (memberships, then those spaces) rather than one
+      // embedded select, which came back empty.
       const { data: rows } = await supabase
         .from("server_members")
-        .select("server_id, role, servers(id, name, icon_url, owner_id)")
+        .select("server_id, role")
         .eq("user_id", uid)
-        .limit(200);
+        .limit(500);
+      const roles = new Map(((rows ?? []) as { server_id: string; role: string }[]).map((r) => [r.server_id, r.role]));
+      if (!live || roles.size === 0) {
+        if (live) setSpaces([]);
+        return;
+      }
+      const { data: servers } = await supabase
+        .from("servers")
+        .select("id, name, icon_url, owner_id")
+        .in("id", [...roles.keys()]);
       if (!live) return;
-      const list = ((rows ?? []) as unknown as { role: string; servers: Space | Space[] | null }[])
-        .map((r) => ({ role: r.role, s: Array.isArray(r.servers) ? r.servers[0] : r.servers }))
-        .filter((r): r is { role: string; s: Space } => !!r.s)
+      const canAdd = (s: Space) => s.owner_id === uid || roles.get(s.id) === "admin";
+      const list = ((servers ?? []) as Space[])
         // Owners and admins first: they're the ones who can add bots.
-        .sort((a, b) => Number(b.s.owner_id === uid || b.role === "admin") - Number(a.s.owner_id === uid || a.role === "admin") || a.s.name.localeCompare(b.s.name))
-        .map((r) => r.s);
+        .sort((a, b) => Number(canAdd(b)) - Number(canAdd(a)) || a.name.localeCompare(b.name));
       setSpaces(list);
     })();
     return () => { live = false; };
@@ -189,7 +200,7 @@ export function BotAuthorizeFlow({
   const invite = load.state === "ready" ? load.invite : null;
   const fixedSpace = invite?.server ?? null;
   const target = fixedSpace ? fixedSpace.id : serverId;
-  const chosen = useMemo(() => spaces.find((s) => s.id === target) ?? (fixedSpace ? { ...fixedSpace } : null), [spaces, target, fixedSpace]);
+  const chosen = useMemo(() => (spaces ?? []).find((s) => s.id === target) ?? (fixedSpace ? { ...fixedSpace } : null), [spaces, target, fixedSpace]);
   const isOwner = !!chosen && !!userId && chosen.owner_id === userId;
 
   const authorize = useCallback(async () => {
