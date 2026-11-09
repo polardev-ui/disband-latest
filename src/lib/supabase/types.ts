@@ -32,6 +32,8 @@ export interface Profile {
   /** Gradient direction for name color (e.g. "90deg", "180deg"). */
   name_gradient_dir?: string | null;
   is_bot?: boolean;
+  /** A bot made by Disband (e.g. Bruce); only the server can set it. Migration 0245. */
+  verified_bot?: boolean;
   /** Privacy: people who share a space may send a message request. Migration 0193. */
   allow_message_requests?: boolean;
   /** "standard" | "anonymous" — anonymous accounts are throwaway; see migration 0125. */

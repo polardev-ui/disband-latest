@@ -30,7 +30,7 @@ async function syncProfile(service: Service, id: string) {
   const suffix = id.replace(/-/g, "").slice(0, 6);
   for (const username of ["bruce", "brucebot", `bruce_${suffix}`]) {
     const { error } = await service.from("profiles").upsert(
-      { id, username, display_name: "Bruce", is_bot: true, avatar_url: AVATAR, status: "online", bio: "Disband's own all-rounder. Moderation, tickets, levels, coins and 150+ commands. Press Authorize App to add me!" },
+      { id, username, display_name: "Bruce", is_bot: true, verified_bot: true, avatar_url: AVATAR, status: "online", bio: "Disband's own all-rounder. Moderation, tickets, levels, coins and 150+ commands. Press Authorize App to add me!" },
       { onConflict: "id" },
     );
     if (!error) return true;
