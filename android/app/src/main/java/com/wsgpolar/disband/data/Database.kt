@@ -53,7 +53,9 @@ object Database {
                 filter { eq("server_id", serverId) }
                 order("position", Order.ASCENDING)
             }
-            .decodeList()
+            .decodeList<Channel>()
+            // Forum posts are channels too; they open from their forum.
+            .filter { it.parentId == null }
     }
 
     suspend fun categories(serverId: String): List<ChannelCategory> {

@@ -31,6 +31,10 @@ struct DisplayMessage: Identifiable, Hashable {
     var embeds: [MessageEmbed] = []
     /// Set when a webhook posted this message.
     var webhook: MessageWebhook? = nil
+    /// A bot's buttons.
+    var components: [ActionRow] = []
+    /// Who ran the command this bot message answers.
+    var interaction: MessageInteraction? = nil
 
     init(id: String, authorId: String, author: Profile?, content: String,
          attachmentUrl: String?, attachmentType: AttachmentType?,
@@ -68,6 +72,8 @@ struct DisplayMessage: Identifiable, Hashable {
                   mentions: m.mentions)
         self.embeds = m.embeds ?? []
         self.webhook = m.webhook
+        self.components = m.components?.items ?? []
+        self.interaction = m.interaction?.value
     }
     init(_ m: DmMessage) {
         self.init(id: m.id, authorId: m.authorId, author: m.author, content: m.content,
@@ -104,9 +110,11 @@ struct RawMessageRow: Decodable, Sendable {
     let mentions: [String]?
     let embeds: [MessageEmbed]?
     let webhook: MessageWebhook?
+    let components: LossyList<ActionRow>?
+    let interaction: Lenient<MessageInteraction>?
 
     enum CodingKeys: String, CodingKey {
-        case id, content, mentions, embeds, webhook
+        case id, content, mentions, embeds, webhook, components, interaction
         case authorId = "author_id"
         case attachmentUrl = "attachment_url"
         case attachmentType = "attachment_type"

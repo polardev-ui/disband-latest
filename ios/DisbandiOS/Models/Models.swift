@@ -25,6 +25,15 @@ enum MemberRole: String, Codable {
 
 enum ChannelType: String, Codable {
     case text, voice
+    /// A forum: posts, each its own thread (a child text channel).
+    case forum
+
+    /// A kind this build doesn't know yet reads as text, rather than
+    /// failing to decode and emptying the whole channel list.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ChannelType(rawValue: raw) ?? .text
+    }
 }
 
 enum AttachmentType: String, Codable {
@@ -233,9 +242,13 @@ struct Channel: Codable, Identifiable, Hashable {
     var isStage: Bool?
     /// Set while the stage is live.
     var stageTopic: String?
+    /// Set on a forum post: the forum it belongs to. Posts aren't listed
+    /// among the channels; they open from their forum.
+    var parentId: String?
 
     enum CodingKeys: String, CodingKey {
         case id, name, type, position
+        case parentId = "parent_id"
         case readOnly = "read_only"
         case isStage = "is_stage"
         case stageTopic = "stage_topic"
@@ -283,9 +296,13 @@ struct Message: Codable, Identifiable, Hashable {
     var embeds: [MessageEmbed]?
     /// Set when a webhook posted this; carries the name and picture to show.
     var webhook: MessageWebhook?
+    /// A bot's buttons.
+    var components: LossyList<ActionRow>?
+    /// Who ran the command this bot message answers ("kai used /fact").
+    var interaction: Lenient<MessageInteraction>?
 
     enum CodingKeys: String, CodingKey {
-        case id, content, mentions, author, embeds, webhook
+        case id, content, mentions, author, embeds, webhook, components, interaction
         case channelId = "channel_id"
         case authorId = "author_id"
         case attachmentUrl = "attachment_url"

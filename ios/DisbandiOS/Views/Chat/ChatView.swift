@@ -34,6 +34,9 @@ struct ChatView: View {
     /// The channel's space and how many of its members are online, for the
     /// line under the title. Nil until known.
     @State private var channelServerId: String?
+    /// The bots' slash commands in this space, loaded when "/" is typed.
+    @State private var botCommands: [BotCommand] = []
+    @State private var runningCommand: BotCommand?
     @State private var onlineCount: Int?
     @State private var draft = ""
     @State private var stickToBottom = true
@@ -128,7 +131,15 @@ struct ChatView: View {
             } else {
                 if let editingMessage { editBanner(editingMessage) }
                 else if let replyingTo { replyBanner(replyingTo) }
-                if mentionQuery != nil, !mentions.results.isEmpty {
+                if case .channel = model.source,
+                   let matches = BotCommandSuggestionList.matching(draft, in: botCommands) {
+                    BotCommandSuggestionList(commands: matches) { cmd in
+                        draft = ""
+                        runningCommand = cmd
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+                                if mentionQuery != nil, !mentions.results.isEmpty {
                     MentionSuggestionList(results: mentions.results) { pick in
                         draft = MentionSearch.applying(pick, to: draft)
                         mentions.clear()
@@ -145,9 +156,10 @@ struct ChatView: View {
                                 hasAttachments: !staged.isEmpty,
                                 onPasteImages: editingMessage == nil ? { stagePasted($0) } : nil)
                                 .onChange(of: draft) {
-                                    if let name = app.profile?.name, !draft.isEmpty {
+                                    if let name = app.profile?.name, !draft.isEmpty, !draft.hasPrefix("/") {
                                         model.notifyTyping(displayName: name)
                                     }
+                                    if draft.hasPrefix("/") { Task { await loadBotCommands() } }
                                 }
             }
         }
@@ -162,6 +174,12 @@ struct ChatView: View {
             NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
         ) { _ in
             keyboardHeight = 0
+        }
+        .sheet(item: $runningCommand) { cmd in
+            if case .channel(let id, _) = model.source, let serverId = channelServerId {
+                BotCommandSheet(command: cmd, channelId: id, serverId: serverId) {}
+                    .presentationDetents([.medium, .large])
+            }
         }
         .navigationTitle(model.source.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -947,11 +965,20 @@ struct ChatView: View {
         return !Calendar.current.isDate(previous, inSameDayAs: current)
     }
 
+    /// The space's bot commands, for the "/" list (cached for a minute).
+    private func loadBotCommands() async {
+        guard case .channel(let id, _) = model.source else { return }
+        if channelServerId == nil { channelServerId = await ServerOnlineCount.serverId(forChannel: id) }
+        guard let serverId = channelServerId else { return }
+        botCommands = await BotCommandService.commands(serverId: serverId)
+    }
+
     private func isGrouped(at index: Int) -> Bool {
         guard index > 0, !startsNewDay(at: index) else { return false }
         let prev = model.messages[index - 1]
         let cur = model.messages[index]
-        guard prev.authorId == cur.authorId, cur.replyToId == nil else { return false }
+        // A bot's answer to a command starts its own block, under "used /x".
+        guard prev.authorId == cur.authorId, cur.replyToId == nil, cur.interaction == nil else { return false }
         // One webhook can post as several names; each name is its own speaker.
         guard prev.webhook?.name == cur.webhook?.name,
               prev.webhook?.avatarUrl == cur.webhook?.avatarUrl else { return false }

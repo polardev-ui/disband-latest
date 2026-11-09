@@ -136,6 +136,8 @@ struct SpacesView: View {
                      composerLockedReason: lockedReason)
         case .members(let server):
             ServerMembersView(server: server)
+        case .forum(let channel, let canModerate):
+            ForumView(forum: channel, canModerate: canModerate)
         }
     }
 

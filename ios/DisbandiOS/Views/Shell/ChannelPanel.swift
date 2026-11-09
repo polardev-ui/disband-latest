@@ -5,6 +5,8 @@ import SwiftUI
 enum SpacesRoute: Hashable {
     case chat(ChatSource, callPeer: Profile?, canModerate: Bool, lockedReason: String? = nil)
     case members(Server)
+    /// A forum's posts.
+    case forum(Channel, canModerate: Bool)
 }
 
 /// Opens a Home route. On iPhone it's pushed over everything; on iPad
@@ -325,11 +327,33 @@ struct ChannelPanel: View {
         if !isCollapsed {
             VStack(spacing: 2) {
                 ForEach(section.channels) { channel in
-                    if channel.type == .voice { voiceRow(channel) } else { textRow(channel) }
+                    if channel.type == .voice { voiceRow(channel) }
+                    else if channel.type == .forum { forumRow(channel) }
+                    else { textRow(channel) }
                 }
             }
             .padding(.horizontal, 8)
         }
+    }
+
+    private func forumRow(_ channel: Channel) -> some View {
+        RouteLink(value: SpacesRoute.forum(channel, canModerate: canModerate)) {
+            HStack(spacing: 10) {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Brand.textMuted)
+                    .frame(width: 22)
+                Text(channel.name)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Brand.textSecondary)
+                    .lineLimit(1)
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 42)
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(ChannelRowStyle())
     }
 
     private func textRow(_ channel: Channel) -> some View {
@@ -467,7 +491,8 @@ struct ChannelPanel: View {
             .rpc("my_server_permissions", params: ["p_server_id": server.id]).execute().value
         async let loadedTimeout = Self.timeoutEnd(serverId: server.id, userId: app.currentUserId)
 
-        channels = await loadedChannels ?? []
+        // Forum posts are channels too; they open from their forum, not the list.
+        channels = (await loadedChannels ?? []).filter { $0.parentId == nil }
         categories = await loadedCategories ?? []
         effects = Dictionary(((await loadedEffects) ?? []).map { ($0.channelId, $0) },
                              uniquingKeysWith: { first, _ in first })

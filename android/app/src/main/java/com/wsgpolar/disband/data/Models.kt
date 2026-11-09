@@ -57,6 +57,8 @@ enum class MemberRole {
 enum class ChannelType {
     @SerialName("text") Text,
     @SerialName("voice") Voice,
+    /** A forum: posts, each its own thread (a child text channel). */
+    @SerialName("forum") Forum,
 }
 
 /**
@@ -235,6 +237,8 @@ data class Channel(
     /// Set while the stage is live.
     @SerialName("stage_topic") var stageTopic: String? = null,
     @SerialName("stage_started_at") var stageStartedAt: String? = null,
+    /** Set on a forum post: its forum. Posts open from their forum, not the list. */
+    @SerialName("parent_id") var parentId: String? = null,
 )
 
 @Serializable
@@ -323,6 +327,10 @@ data class Message(
     var embeds: List<Embed>? = null,
     /** Set when a webhook sent this: the name and picture it posts under. */
     var webhook: MessageWebhook? = null,
+    /** A bot's buttons. Kept raw and read leniently (BotUi.parseButtons). */
+    var components: kotlinx.serialization.json.JsonElement? = null,
+    /** Who ran the command this bot message answers. Read leniently too. */
+    var interaction: kotlinx.serialization.json.JsonElement? = null,
 )
 
 /*

@@ -146,6 +146,10 @@ struct MessageRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 if let replyTo { replyPreview(replyTo) }
+                // "kai used /fact" above a bot's answer to a command.
+                if let interaction = message.interaction, interaction.type == "command", interaction.name != nil {
+                    InteractionHeader(interaction: interaction)
+                }
 
                 if !grouped {
                     HStack(spacing: 6) {
@@ -210,6 +214,11 @@ struct MessageRow: View {
                 // Rich embeds from webhooks and bots.
                 ForEach(Array(message.embeds.enumerated()), id: \.offset) { _, embed in
                     RichEmbedView(embed: embed, onTapMention: onTapMention)
+                }
+
+                // A bot's buttons.
+                if !message.components.isEmpty {
+                    BotButtonsView(messageId: message.id, rows: message.components)
                 }
 
                 attachment

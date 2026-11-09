@@ -1216,7 +1216,7 @@ private fun ChannelsPage(server: Server, push: (Page) -> Unit, onChanged: () -> 
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(ChannelType.Text to "Text", ChannelType.Voice to "Voice").forEach { (type, label) ->
+                        listOf(ChannelType.Text to "Text", ChannelType.Voice to "Voice", ChannelType.Forum to "Forum").forEach { (type, label) ->
                             val on = newType == type
                             Text(
                                 label,

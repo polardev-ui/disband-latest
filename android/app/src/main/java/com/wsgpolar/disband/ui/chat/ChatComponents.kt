@@ -145,6 +145,10 @@ data class ChatRow(
     val reactions: List<ReactionSummaryRow> = emptyList(),
     val embeds: List<com.wsgpolar.disband.data.Embed> = emptyList(),
     val webhook: com.wsgpolar.disband.data.MessageWebhook? = null,
+    /** "kai used /fact" above a bot's answer to a command. */
+    val interaction: com.wsgpolar.disband.data.BotInteraction? = null,
+    /** A bot's buttons, row by row. */
+    val buttons: List<List<com.wsgpolar.disband.data.BotButton>> = emptyList(),
 ) {
     /** The array when there is one, otherwise a set of one from the legacy
      *  columns — see `resolveAttachments`. */
@@ -217,6 +221,8 @@ fun ChatScaffold(
     onSendAttachments: (suspend (String) -> Boolean)? = null,
     /** Fired on every keystroke; the caller throttles the broadcast. */
     onTyping: () -> Unit = {},
+    /** Shown above the composer with the current draft: bot command suggestions. */
+    commandBar: (@Composable (draft: String, clear: () -> Unit) -> Unit)? = null,
 ) {
     val palette = LocalPalette.current
     val listState = rememberLazyListState()
@@ -382,6 +388,7 @@ fun ChatScaffold(
             attachments = attachments,
             onSendAttachments = onSendAttachments,
             onTyping = onTyping,
+            commandBar = commandBar,
         )
     }
 }
@@ -523,6 +530,8 @@ private fun ChatRow.groupsWith(previous: ChatRow?): Boolean {
     if (previous == null) return false
     if (previous.authorId != authorId || authorId == null) return false
     if (replyToId != null) return false
+    // A bot's answer to a command starts its own block, under "used /x".
+    if (interaction != null) return false
     val gap = TimeFormat.minutesBetween(previous.createdAt, createdAt) ?: return false
     return gap in 0..7
 }
@@ -715,6 +724,7 @@ private fun Composer(
     attachments: AttachmentSender? = null,
     onSendAttachments: (suspend (String) -> Boolean)? = null,
     onTyping: () -> Unit = {},
+    commandBar: (@Composable (draft: String, clear: () -> Unit) -> Unit)? = null,
 ) {
     // State-based fields: only these take images and GIFs from the keyboard
     // (the value-based field never told Gboard it could, so it refused).
@@ -757,6 +767,7 @@ private fun Composer(
     )
 
     Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
+        if (editingRow == null) commandBar?.invoke(text) { draftState.clearText() }
         if (hasStaged && attachments != null) StagedStrip(attachments, palette)
         attachments?.progress?.let { progress ->
             LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(2.dp),

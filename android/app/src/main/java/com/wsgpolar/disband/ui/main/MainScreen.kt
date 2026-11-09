@@ -455,6 +455,7 @@ fun MainScreen(
                         destination.channel != null -> {
                             val channel = destination.channel
                             if (channel.type == ChannelType.Voice) VoiceStageView(app, channel, onMinimize = close, onBack = close)
+                            else if (channel.type == ChannelType.Forum) com.wsgpolar.disband.ui.chat.ForumScreen(app, channel, destination.serverName, close)
                             else com.wsgpolar.disband.ui.chat.ChannelChatScreen(app, channel, destination.serverName, close)
                         }
                         destination.dm != null -> DmChatScreen(app, destination.dm, close)

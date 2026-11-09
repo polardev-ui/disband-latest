@@ -885,6 +885,8 @@ final class ChatViewModel {
         )
         message.embeds = row.embeds ?? []
         message.webhook = row.webhook
+        message.components = row.components?.items ?? []
+        message.interaction = row.interaction?.value
         // Already here under its real id — the send promoted it before the
         // echo arrived, which is the normal order. Refresh it rather than
         // appending a duplicate.

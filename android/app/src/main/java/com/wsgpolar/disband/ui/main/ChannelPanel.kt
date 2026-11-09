@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -346,12 +347,14 @@ private fun ChannelRow(
     val icon = when {
         isStage -> Icons.Filled.Podcasts
         channel.type == ChannelType.Voice -> Icons.Filled.VolumeUp
+        channel.type == ChannelType.Forum -> Icons.Filled.Forum
         channel.readOnly == true -> Icons.Filled.Lock
         else -> Icons.Filled.Tag
     }
     val iconDescription = when {
         isStage -> "Stage channel"
         channel.type == ChannelType.Voice -> "Voice channel"
+        channel.type == ChannelType.Forum -> "Forum"
         channel.readOnly == true -> "Announcement channel"
         else -> "Text channel"
     }

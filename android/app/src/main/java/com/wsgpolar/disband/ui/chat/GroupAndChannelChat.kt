@@ -284,6 +284,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         onLoadOlder = { scope.launch { timeline.older() } },
         conversationKey = "channel:${channel.id}",
         emptyText = "No messages yet",
+        commandBar = { draft, clear -> BotCommandBar(channel.serverId, channel.id, draft, clear) },
         sendEnabled = !readOnly,
         sendPlaceholder = when {
             editingRow != null -> "Edit message"
@@ -416,6 +417,8 @@ private fun Message.toRow(me: String? = null): ChatRow = ChatRow(
     createdAt = createdAt,
     embeds = embeds.orEmpty(),
     webhook = webhook,
+    interaction = com.wsgpolar.disband.data.BotService.parseInteraction(interaction),
+    buttons = com.wsgpolar.disband.data.BotService.parseButtons(components),
 )
 
 private fun GroupMessage.toRow(me: String? = null): ChatRow = ChatRow(

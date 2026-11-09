@@ -49,6 +49,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.wsgpolar.disband.core.Palette
+import com.wsgpolar.disband.core.Brand
+import kotlinx.coroutines.launch
 import com.wsgpolar.disband.core.TimeFormat
 import com.wsgpolar.disband.data.StoredAttachment
 import com.wsgpolar.disband.ui.AvatarImage
@@ -99,6 +101,7 @@ fun MessageRow(
             .padding(horizontal = 12.dp, vertical = if (grouped) 1.dp else 4.dp)
     ) {
         if (repliedTo != null) ReplyPreview(repliedTo, palette)
+        row.interaction?.let { InteractionHeader(it, palette) }
 
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             // A run of messages from one person keeps one avatar; the gutter
@@ -161,6 +164,11 @@ fun MessageRow(
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         row.embeds.forEach { EmbedCard(it, palette) }
                     }
+                }
+
+                if (row.buttons.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    BotButtons(row.id, row.buttons, palette)
                 }
 
                 if (row.reactions.isNotEmpty()) {
@@ -641,5 +649,98 @@ private fun ReactionChips(
                 )
             }
         }
+    }
+}
+
+/** "kai used /fact" above a bot's answer, as on the web and Discord. */
+@Composable
+private fun InteractionHeader(interaction: com.wsgpolar.disband.data.BotInteraction, palette: Palette) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 52.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            interaction.who,
+            color = palette.textSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Spacer(Modifier.width(5.dp))
+        Text("used", color = palette.textMuted, fontSize = 12.sp)
+        Spacer(Modifier.width(5.dp))
+        Text(
+            "/" + interaction.name,
+            color = palette.accent,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(palette.accent.copy(alpha = 0.14f))
+                .padding(horizontal = 6.dp, vertical = 1.dp),
+        )
+    }
+}
+
+/** A bot message's buttons. Link buttons open their page; others go to the bot. */
+@Composable
+private fun BotButtons(
+    messageId: String,
+    rows: List<List<com.wsgpolar.disband.data.BotButton>>,
+    palette: Palette,
+) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    var pressing by remember(messageId) { mutableStateOf<String?>(null) }
+    var error by remember(messageId) { mutableStateOf<String?>(null) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        rows.forEach { row ->
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEach { b ->
+                    val color = when (b.style) {
+                        "primary" -> palette.accent
+                        "success" -> androidx.compose.ui.graphics.Color(0xFF248046)
+                        "danger" -> androidx.compose.ui.graphics.Color(0xFFDA373C)
+                        else -> palette.elevated
+                    }
+                    val busy = pressing != null && pressing == b.customId
+                    Box(
+                        Modifier
+                            .heightIn(min = 34.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(if (b.disabled) color.copy(alpha = 0.5f) else color)
+                            .clickable(enabled = !b.disabled && pressing == null, role = Role.Button) {
+                                if (b.style == "link" && b.url != null) {
+                                    runCatching { uri.openUri(b.url) }
+                                    return@clickable
+                                }
+                                val id = b.customId ?: return@clickable
+                                pressing = id
+                                error = null
+                                scope.launch {
+                                    try { com.wsgpolar.disband.data.BotService.press(messageId, id) }
+                                    catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                                    catch (_: Exception) { error = "That button didn't work. Try again." }
+                                    pressing = null
+                                }
+                            }
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            if (busy) "…" else listOfNotNull(b.emoji?.takeIf { it.isNotBlank() }, b.label).joinToString(" ") +
+                                if (b.style == "link") " ↗" else "",
+                            color = androidx.compose.ui.graphics.Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
+        error?.let { Text(it, color = Brand.dnd, fontSize = 12.sp) }
     }
 }

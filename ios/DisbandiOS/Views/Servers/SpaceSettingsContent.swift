@@ -212,6 +212,7 @@ struct NewChannelSheet: View {
                     Picker("Type", selection: $type) {
                         Label("Text", systemImage: "number").tag(ChannelType.text)
                         Label("Voice", systemImage: "speaker.wave.2").tag(ChannelType.voice)
+                        Label("Forum", systemImage: "bubble.left.and.bubble.right").tag(ChannelType.forum)
                     }
                     .pickerStyle(.inline)
                     .labelsHidden()

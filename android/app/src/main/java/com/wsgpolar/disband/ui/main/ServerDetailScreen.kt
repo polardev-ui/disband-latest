@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -70,8 +71,12 @@ fun ServerDetailScreen(app: AppState, server: Server, onBack: () -> Unit) {
     }
 
     openChannel?.let { channel ->
-        ChannelChatScreen(app = app, channel = channel, serverName = server.name,
-            onBack = { openChannel = null })
+        if (channel.type == ChannelType.Forum) {
+            com.wsgpolar.disband.ui.chat.ForumScreen(app, channel, server.name, onBack = { openChannel = null })
+        } else {
+            ChannelChatScreen(app = app, channel = channel, serverName = server.name,
+                onBack = { openChannel = null })
+        }
         return
     }
     openVoice?.let { channel ->
@@ -169,7 +174,11 @@ private fun ChannelRow(channel: Channel, palette: Palette, onOpen: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            if (channel.type == ChannelType.Voice) Icons.Filled.GraphicEq else Icons.Filled.Tag,
+            when (channel.type) {
+                ChannelType.Voice -> Icons.Filled.GraphicEq
+                ChannelType.Forum -> Icons.Filled.Forum
+                else -> Icons.Filled.Tag
+            },
             contentDescription = null,
             tint = palette.textMuted,
             modifier = Modifier.size(20.dp),
