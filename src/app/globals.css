@@ -552,6 +552,12 @@ html[data-desktop-os="linux"] .desktop-titlebar-controls {
 ::-webkit-scrollbar-corner {
   background: transparent;
 }
+/* No arrow buttons (Windows draws them by default). */
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
 
 @keyframes tooltip-enter {
   from {
@@ -1941,13 +1947,20 @@ img.twemoji {
 }
 
 /* Sidebars: hairline scrollbars that only show while the list is hovered. */
-.channel-scroll, .member-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; }
-.channel-scroll:hover, .member-scroll:hover { scrollbar-color: color-mix(in srgb, var(--text-muted) 35%, transparent) transparent; }
+/* The standard scrollbar-width/-color properties are for Firefox only. In
+   Chromium (Chrome, and WebView2 in the Windows app) they override the
+   ::-webkit-scrollbar styling below, which drew Windows' full classic
+   scrollbar, arrows and track, as a wide strip beside the DM and channel
+   lists. */
+@supports not selector(::-webkit-scrollbar) {
+  .channel-scroll, .member-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  .channel-scroll:hover, .member-scroll:hover { scrollbar-color: color-mix(in srgb, var(--text-muted) 35%, transparent) transparent; }
+  .chat-scroll { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text-muted) 35%, transparent) transparent; }
+}
 .channel-scroll::-webkit-scrollbar, .member-scroll::-webkit-scrollbar { width: 6px; }
 .channel-scroll::-webkit-scrollbar-thumb, .member-scroll::-webkit-scrollbar-thumb { background: transparent; border: 0; border-radius: 6px; }
 .channel-scroll:hover::-webkit-scrollbar-thumb, .member-scroll:hover::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 35%, transparent); }
 /* The conversation: a slim floating thumb, no track. */
-.chat-scroll { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text-muted) 35%, transparent) transparent; }
 .chat-scroll::-webkit-scrollbar { width: 12px; }
 .chat-scroll::-webkit-scrollbar-track { background: transparent; }
 .chat-scroll::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 35%, transparent); border: 3px solid transparent; background-clip: padding-box; border-radius: 12px; min-height: 40px; }
@@ -2010,8 +2023,13 @@ body.connection-down .app-base-layer {
   from { opacity: 1; transform: none; }
   to { opacity: 0; transform: scale(0.975); }
 }
-.settings-sidebar { scrollbar-width: thin; scrollbar-color: transparent transparent; }
-.settings-sidebar:hover { scrollbar-color: color-mix(in srgb, var(--text-muted) 35%, transparent) transparent; }
+@supports not selector(::-webkit-scrollbar) {
+  .settings-sidebar { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  .settings-sidebar:hover { scrollbar-color: color-mix(in srgb, var(--text-muted) 35%, transparent) transparent; }
+}
+.settings-sidebar::-webkit-scrollbar { width: 6px; }
+.settings-sidebar::-webkit-scrollbar-thumb { background: transparent; border: 0; border-radius: 6px; }
+.settings-sidebar:hover::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 35%, transparent); }
 .settings-scroll::-webkit-scrollbar { width: 10px; }
 .settings-scroll::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 32%, transparent); border: 3px solid transparent; background-clip: padding-box; border-radius: 10px; }
 /* The "Disband is restarting" / "You're offline" screen reuses the layer. */
