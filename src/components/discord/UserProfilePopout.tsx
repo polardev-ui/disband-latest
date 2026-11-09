@@ -129,6 +129,10 @@ export function UserProfilePopout({
   }, [targetId, knownContact]);
   const friendsOnly = !!targetId && !knownContact && canRequest?.id === targetId && !canRequest.ok;
   const requestSent = !!targetId && pendingOutgoing.some((f) => f.addressee_id === targetId);
+  // The banner's Add Friend button: anyone you aren't friends with yet.
+  const isFriend = !!targetId && friends.some((f) => f.id === targetId);
+  const canAddFriend = !!targetId && !isFriend && !!p?.username;
+  const [addingFriend, setAddingFriend] = useState(false);
 
   useOverlayDismiss(onClose, open);
 
@@ -221,14 +225,38 @@ export function UserProfilePopout({
                 {theme && <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: theme.bannerTint }} />}
               </>
             )}
+            {canAddFriend && (
+              <button
+                type="button"
+                disabled={requestSent || addingFriend}
+                onClick={async () => {
+                  if (!p.username) return;
+                  setAddingFriend(true);
+                  const err = await sendFriendRequest(p.username);
+                  setAddingFriend(false);
+                  setFriendNote(err);
+                }}
+                title={requestSent ? t("Friend Request Sent") : t("Add Friend")}
+                aria-label={requestSent ? t("Friend Request Sent") : t("Add Friend")}
+                className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/15 backdrop-blur-sm transition-colors hover:bg-black/65 disabled:cursor-default"
+              >
+                {requestSent ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12" /></svg>
+                ) : (
+                  <IconUserPlus size={17} />
+                )}
+              </button>
+            )}
           </div>
 
-          {/* Avatar, cut into the banner */}
+          {/* Avatar, cut into the banner. Above the badges row (z-20): that
+              row spans the card's width and covered the avatar's lower half,
+              so only the top half could be clicked. */}
           <button
             type="button"
             onClick={onOpenFullProfile}
             aria-label={t("View full profile")}
-            className={`group/avatar absolute left-4 z-10 rounded-full p-1.5 ${theme ? "" : "bg-bg-floating"}`}
+            className={`group/avatar absolute left-4 z-20 rounded-full p-1.5 ${theme ? "" : "bg-bg-floating"}`}
             style={{ top: banner ? 76 : 16, backgroundColor: theme?.avatarRing }}
           >
             <span className="relative block">
@@ -416,6 +444,7 @@ export function UserProfilePopout({
               />
             )}
             {sendError && <p className="mt-1.5 text-[12px] leading-4 text-status-dnd">{sendError}</p>}
+            {friendNote && !friendsOnly && <p className="mt-1.5 text-[12px] leading-4 text-status-dnd">{friendNote}</p>}
             {p.is_bot && <AuthorizeAppButton userId={p.id} className="mt-2" />}
           </ArtPanel>
           <SkinFloor itemId={p.equipped_overlay_effect} />

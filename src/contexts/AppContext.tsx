@@ -696,6 +696,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [serverMentionCounts, setServerMentionCounts] = useState<Map<string, number>>(new Map());
   const [groupUnreadMap, setGroupUnreadMap] = useState<Map<string, number>>(new Map());
   const [presenceMap, setPresenceMap] = useState<PresenceMap>(new Map());
+  // Bots never join the presence channel; they're online while they run
+  // (migration 0246). The running ones are folded into presenceMap so the
+  // member list, its Online section and every status dot agree.
+  const [onlineBots, setOnlineBots] = useState<string[]>([]);
   const [listeningMap, setListeningMap] = useState<ListeningMap>(new Map());
   const [activityMap, setActivityMap] = useState<ActivityMap>(new Map());
   const activityRef = useRef<Activity | null>(null);
@@ -7191,6 +7195,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCallPhase(phase);
   }, [markActivity]);
 
+  useEffect(() => {
+    if (!configured || !userId) return;
+    let live = true;
+    const load = async () => {
+      const { data } = await getSupabaseClient()
+        .from("profiles")
+        .select("id")
+        .eq("is_bot", true)
+        .eq("bot_online", true)
+        .limit(1000);
+      if (!live || !data) return;
+      const ids = (data as { id: string }[]).map((r) => r.id).sort();
+      setOnlineBots((prev) => (prev.join(",") === ids.join(",") ? prev : ids));
+    };
+    void load();
+    const t = window.setInterval(() => void load(), 60_000);
+    return () => {
+      live = false;
+      window.clearInterval(t);
+    };
+  }, [configured, userId]);
+  const presenceWithBots = useMemo<PresenceMap>(() => {
+    if (onlineBots.length === 0) return presenceMap;
+    const next = new Map(presenceMap);
+    for (const id of onlineBots) if (!next.has(id)) next.set(id, "online");
+    return next;
+  }, [presenceMap, onlineBots]);
+
   const value: AppContextValue = {
     ready,
     hydrated,
@@ -7386,7 +7418,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     groupUnreadMap,
     getGroupUnreadCount,
     clearGroupUnread,
-    presenceMap,
+    presenceMap: presenceWithBots,
     listeningMap,
     activityMap,
     setGameActivity,
