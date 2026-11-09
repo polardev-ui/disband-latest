@@ -73,10 +73,13 @@ export function flattenPresenceListening(
 }
 
 export function presenceStatusFor(
-  profile: Pick<Profile, "id" | "status"> | null | undefined,
+  profile: (Pick<Profile, "id" | "status"> & Partial<Pick<Profile, "is_bot" | "bot_online">>) | null | undefined,
   presence: PresenceMap | null,
 ): UserStatus {
   if (!profile) return "offline";
+  // Bots never join the presence channel: they are online while they're
+  // running and checking in with the gateway (migration 0246).
+  if (profile.is_bot) return profile.bot_online ? "online" : "offline";
   return presence?.get(profile.id) ?? "offline";
 }
 

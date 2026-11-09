@@ -606,7 +606,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>(() => getSavedSessions());
   const [profile, setProfile] = useState<Profile | null>(null);
-  useEffect(() => { setCurrentUserStatus(profile?.status ?? (profile as { preferred_status?: UserStatus } | null)?.preferred_status); }, [profile]);
+  // Do Not Disturb is what you chose (preferred_status). The live status can
+  // read "offline" or "idle" for a moment while the app reconnects or goes
+  // idle, and reading that let pings and sounds through while you were on DND.
+  useEffect(() => {
+    const chosen = (profile as { preferred_status?: UserStatus | null } | null)?.preferred_status;
+    setCurrentUserStatus(chosen === "dnd" || profile?.status === "dnd" ? "dnd" : profile?.status ?? chosen);
+  }, [profile]);
   const [tetherProfile, setTetherProfile] = useState<Profile | null>(null);
   const [officialProfile, setOfficialProfile] = useState<Profile | null>(null);
   const [servers, setServers] = useState<Server[]>([]);

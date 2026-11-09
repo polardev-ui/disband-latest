@@ -113,7 +113,7 @@ export function MemberList({ serverId = null, channelId = null, members, roles, 
   }, [serverTimeouts]);
 
   const liveStatus = useCallback(
-    (p: Profile): UserStatus => presenceMap.get(p.id) ?? "offline",
+    (p: Profile): UserStatus => (p.is_bot ? (p.bot_online ? "online" : "offline") : presenceMap.get(p.id) ?? "offline"),
     [presenceMap],
   );
 

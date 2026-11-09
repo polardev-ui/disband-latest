@@ -38,6 +38,8 @@ export async function POST(request: Request) {
   const work = (async () => {
     const me = await ensureBruce(service);
     if (!me) throw new Error("Bruce could not be set up");
+    // Every run is a check-in, so Bruce shows online while he's working.
+    await service.rpc("bot_heartbeat", { p_bot_id: me.botId });
     let handled = 0;
     const deadline = Date.now() + 45_000;
     while (Date.now() < deadline) {

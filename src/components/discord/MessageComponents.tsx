@@ -5,6 +5,8 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { safeWindowOpen } from "@/lib/safe-url";
 import type { ActionRow, ButtonStyle, MessageInteractionInfo } from "@/lib/bot-commands";
 import { useI18n } from "@/contexts/I18nContext";
+import { useProfiles } from "@/lib/profile-store";
+import { Avatar } from "@/components/ui/Avatar";
 
 /*
  A bot message's buttons, and the "@kai used /weather" line above a bot's
@@ -71,13 +73,23 @@ export function MessageComponents({ messageId, rows }: { messageId: string; rows
 
 export function InteractionHeader({ interaction }: { interaction?: MessageInteractionInfo | null }) {
   const { t } = useI18n();
+  const profiles = useProfiles(interaction?.user_id ? [interaction.user_id] : []);
   if (!interaction || interaction.type !== "command" || !interaction.name) return null;
+  const who = interaction.user_id ? profiles.get(interaction.user_id) : undefined;
+  const name = (interaction.display_name ?? "").trim() || interaction.username || t("Someone");
   return (
-    <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1 text-[14px] text-text-muted">
-      <span aria-hidden className="mr-0.5">↳</span>
-      <span className="truncate font-medium text-header-secondary">{interaction.display_name ?? interaction.username ?? t("Someone")}</span>
-      <span className="shrink-0">used</span>
-      <span className="shrink-0 font-medium text-[#00a8fc]">/{interaction.name}</span>
+    <div className="relative mb-0.5 flex h-[22px] max-w-full items-center gap-1.5 text-[14px] text-text-muted">
+      {/* The spine curls from the avatar column up into this line, as on replies. */}
+      <span aria-hidden className="absolute -left-[38px] top-[9px] h-[13px] w-[33px] rounded-tl-[6px] border-l-2 border-t-2 border-border-strong" />
+      {who ? <Avatar profile={who} size="sm" className="!h-4 !w-4 shrink-0 !text-[7px]" /> : <span className="h-4 w-4 shrink-0 rounded-full bg-button-secondary" />}
+      <span className="truncate font-semibold text-header-secondary">{name}</span>
+      <span className="shrink-0">{t("used")}</span>
+      <span className="inline-flex h-[20px] shrink-0 items-center gap-1 rounded-md bg-brand-soft px-1.5 font-medium text-brand">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
+          <path d="M16 3 8 21" />
+        </svg>
+        {interaction.name}
+      </span>
     </div>
   );
 }

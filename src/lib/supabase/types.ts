@@ -34,6 +34,8 @@ export interface Profile {
   is_bot?: boolean;
   /** A bot made by Disband (e.g. Bruce); only the server can set it. Migration 0245. */
   verified_bot?: boolean;
+  /** A bot that is running right now (checked in within 3 minutes). Migration 0246. */
+  bot_online?: boolean;
   /** Privacy: people who share a space may send a message request. Migration 0193. */
   allow_message_requests?: boolean;
   /** "standard" | "anonymous" — anonymous accounts are throwaway; see migration 0125. */

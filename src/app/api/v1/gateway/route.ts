@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
   const gate = await checkBotRateLimit(service, "gateway", bot.botId);
   if (gate.limited) return botRateLimited(gate.retryAfterSeconds);
 
+  // Polling means it's running: show it online (migration 0246).
+  void service.rpc("bot_heartbeat", { p_bot_id: bot.botId }).then(() => undefined, () => undefined);
+
   const requested = Number(request.nextUrl.searchParams.get("timeout") ?? 20);
   const timeoutMs = Math.min(Math.max(Number.isFinite(requested) ? requested : 20, 1), 20) * 1000;
   const deadline = Date.now() + timeoutMs;

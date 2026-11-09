@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
 import { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import { usePresence } from "@/hooks/usePresence";
 import { createPortal } from "react-dom";
@@ -67,6 +68,9 @@ function writeDraft(key: string, text: string, spans: MentionSpan[]) {
 
 interface ChatInputProps {
   placeholder: string;
+  /** Who posted the newest message here; clears "is thinking" when it's the bot. */
+  lastMessageAuthorId?: string | null;
+  lastMessageId?: string | null;
   members?: Profile[];
   roles?: ServerRole[];
 
@@ -166,6 +170,8 @@ const COMPOSER_MAX_LINES = 16;
 
 export function ChatInput({
   placeholder,
+  lastMessageAuthorId,
+  lastMessageId,
   members = [],
   roles = [],
   channels = [],
@@ -201,6 +207,17 @@ export function ChatInput({
   const [command, setCommand] = useState<{ def: SlashCommand; initial: Record<string, string> } | null>(null);
   const [botCommand, setBotCommand] = useState<{ def: SpaceBotCommand; initial: Record<string, string> } | null>(null);
   const [commandNotice, setCommandNotice] = useState<string | null>(null);
+  // "Bruce is thinking…" after a bot command, as on Discord, until its answer lands.
+  const [botThinking, setBotThinking] = useState<{ botUserId: string; name: string; avatarUrl: string | null; at: number; slow: boolean; after: string | null } | null>(null);
+  useEffect(() => {
+    if (botThinking && lastMessageAuthorId === botThinking.botUserId && lastMessageId !== botThinking.after) setBotThinking(null);
+  }, [lastMessageAuthorId, lastMessageId, botThinking]);
+  useEffect(() => {
+    if (!botThinking) return;
+    const slow = window.setTimeout(() => setBotThinking((b) => (b ? { ...b, slow: true } : b)), 15000);
+    const gone = window.setTimeout(() => setBotThinking(null), 25000);
+    return () => { window.clearTimeout(slow); window.clearTimeout(gone); };
+  }, [botThinking?.at]);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const { mounted: plusMounted, exiting: plusExiting } = usePresence(plusMenuOpen);
   const [giftOpen, setGiftOpen] = useState(false);
@@ -903,6 +920,22 @@ export function ChatInput({
           document.body,
         )}
 
+      {botThinking && !command && !botCommand && (
+        <div role="status" className="view-enter mb-2 flex items-center gap-2.5 px-1 py-1 text-[14px] text-text-muted">
+          {botThinking.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={botThinking.avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full" />
+          ) : (
+            <span className="h-6 w-6 shrink-0 rounded-full bg-button-secondary" />
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="font-semibold text-header-primary">{botThinking.name}</span>{" "}
+            {botThinking.slow ? t("is taking a while to answer…") : t("is thinking")}
+          </span>
+          {!botThinking.slow && <LoadingDots size={6} className="text-text-muted" />}
+        </div>
+      )}
+
       {commandNotice && !command && !botCommand && (
         <div role="status" className="view-enter mb-2 flex items-center gap-2 rounded-lg bg-bg-secondary px-3 py-2 text-[14px] text-text-normal">
           <span aria-hidden className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-status-online text-[10px] font-bold text-white">✓</span>
@@ -1080,9 +1113,10 @@ export function ChatInput({
               el.setSelectionRange(restore.length, restore.length);
             });
           }}
-          onDone={(message) => {
+          onDone={(message, thinking) => {
             setBotCommand(null);
-            setCommandNotice(message);
+            if (thinking) setBotThinking({ ...thinking, at: Date.now(), slow: false, after: lastMessageId ?? null });
+            else setCommandNotice(message);
             requestAnimationFrame(() => textareaRef.current?.focus());
           }}
         />

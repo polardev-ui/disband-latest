@@ -31,7 +31,8 @@ interface Props {
   channelId: string;
   initial?: Record<string, string>;
   onExit: (restore: string) => void;
-  onDone: (message: string) => void;
+  /** `thinking` is set when a bot was asked: it is now working on an answer. */
+  onDone: (message: string, thinking?: { botUserId: string; name: string; avatarUrl: string | null }) => void;
 }
 
 interface PickItem {
@@ -203,7 +204,7 @@ export function BotCommandComposer({ command, members, channels, serverId, chann
       setError({ option: null, text: err.message });
       return;
     }
-    onDone(`Sent /${command.name} to ${command.bot_name}.`);
+    onDone(`Sent /${command.name} to ${command.bot_name}.`, { botUserId: command.bot_user_id, name: command.bot_name, avatarUrl: command.bot_avatar_url });
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>, opt: CommandOption, index: number) {

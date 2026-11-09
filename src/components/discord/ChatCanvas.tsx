@@ -1197,6 +1197,8 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           </div>
         ) : (
         <ChatInput
+          lastMessageAuthorId={messages.length ? (messages[messages.length - 1] as { author_id?: string | null }).author_id ?? null : null}
+          lastMessageId={messages.length ? messages[messages.length - 1].id : null}
           placeholder={placeholder ?? (messageContext === "dm" ? t("Message @{name}", { name: channelName }) : messageContext === "channel" ? t("Message #{name}", { name: channelName }) : t("Message {name}", { name: channelName }))}
           members={members}
           roles={roles}
