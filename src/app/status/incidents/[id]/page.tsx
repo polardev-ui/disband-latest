@@ -21,9 +21,9 @@ export const metadata: Metadata = {
 const PILL: Record<IncidentStatus, string> = {
   investigating: "bg-[#f23f43]/15 text-[#ff8f91]",
   identified: "bg-[#f0b232]/15 text-[#f6c95f]",
-  monitoring: "bg-[#5865f2]/20 text-[#b4baff]",
+  monitoring: "bg-brand/20 text-[#b4baff]",
   resolved: "bg-[#23a55a]/15 text-[#6bdc96]",
-  scheduled: "bg-[#5865f2]/20 text-[#b4baff]",
+  scheduled: "bg-brand/20 text-[#b4baff]",
   in_progress: "bg-[#f0b232]/15 text-[#f6c95f]",
   completed: "bg-[#23a55a]/15 text-[#6bdc96]",
   published: "bg-white/[0.06] text-text-normal",
@@ -37,15 +37,15 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
   const monitors = snapshot.monitors.filter((m) => incident.monitor_ids.includes(m.id));
 
   return (
-    <div className="min-h-screen bg-bg-tertiary text-text-normal">
+    <div className="min-h-screen bg-bg-secondary text-text-normal">
       <MarketingNav />
       <main className="mx-auto max-w-3xl px-4 pb-16 pt-24 sm:px-6">
-        <Link href="/status" className="text-[13px] text-[#00a8fc] hover:underline">
+        <Link href="/status" className="text-[13px] text-text-link hover:underline">
           ← Back to status
         </Link>
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
-          <span className={`rounded-[4px] px-1.5 py-0.5 text-[11px] font-semibold ${PILL[incident.status]}`}>
+          <span className={`rounded-lg px-1.5 py-0.5 text-[11px] font-semibold ${PILL[incident.status]}`}>
             {INCIDENT_STATUS_LABEL[incident.status]}
           </span>
           <span className="text-[11px] uppercase tracking-[0.03em] text-text-muted">
@@ -60,12 +60,12 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
           {incident.resolved_at ? ` · Resolved ${formatDateTime(incident.resolved_at, { utc: true })}` : ""}
         </p>
 
-        <div className="mt-6 rounded-lg bg-[#2b2d31] p-4">
+        <div className="mt-6 rounded-lg bg-bg-secondary-alt p-4">
           <p className="text-[12px] font-bold uppercase tracking-[0.03em] text-text-muted">Affected services</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {monitors.length > 0 ? (
               monitors.map((monitor) => (
-                <span key={monitor.id} className="rounded-[4px] bg-white/[0.05] px-2 py-1 text-[13px] text-text-normal">
+                <span key={monitor.id} className="rounded-lg bg-white/[0.05] px-2 py-1 text-[13px] text-text-normal">
                   {monitor.name}
                 </span>
               ))
@@ -83,14 +83,14 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
 
         <section className="mt-8">
           <h2 className="mb-3 text-[12px] font-bold uppercase tracking-[0.03em] text-text-muted">Timeline</h2>
-          <ol className="rounded-lg bg-[#2b2d31] px-4 py-2">
+          <ol className="rounded-lg bg-bg-secondary-alt px-4 py-2">
             {incident.updates.length === 0 ? (
               <li className="py-3 text-[13px] text-text-muted">No updates have been posted yet.</li>
             ) : (
               incident.updates.map((update, index) => (
                 <li key={update.id} className="relative flex gap-3 py-3">
                   <span className="relative flex w-3 shrink-0 justify-center">
-                    <span className="mt-1.5 h-2 w-2 rounded-full bg-[#5865f2]" />
+                    <span className="mt-1.5 h-2 w-2 rounded-full bg-brand" />
                     {index < incident.updates.length - 1 && (
                       <span aria-hidden className="absolute bottom-[-12px] top-3 w-px bg-white/[0.08]" />
                     )}
@@ -112,7 +112,7 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
 
         <p className="mt-8 text-[13px] text-text-muted">
           Need help?{" "}
-          <Link href="/bug-report" className="text-[#00a8fc] hover:underline">
+          <Link href="/bug-report" className="text-text-link hover:underline">
             Report a bug
           </Link>
           .

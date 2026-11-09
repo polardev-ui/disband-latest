@@ -146,7 +146,7 @@ export function ThemesPanel() {
           }}
           rows={12}
           placeholder={"/* Try: */\nbutton {\n  border-radius: 0;\n}"}
-          className="w-full resize-y rounded-md border border-divider bg-bg-tertiary p-3 font-mono text-[13px] leading-relaxed text-text-normal outline-none focus:ring-2 focus:ring-brand disabled:opacity-50"
+          className="w-full resize-y rounded-md border border-border-subtle bg-bg-tertiary p-3 font-mono text-[13px] leading-relaxed text-text-normal outline-none focus:ring-2 focus:ring-brand disabled:opacity-50"
         />
         <div className="mt-2 flex items-center gap-3">
           <button
@@ -188,7 +188,7 @@ export function ThemesPanel() {
             disabled={locked}
             onChange={(e) => setIconName(e.target.value)}
             placeholder="icon name"
-            className="w-44 rounded-md border border-divider bg-bg-tertiary px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand disabled:opacity-50"
+            className="w-44 rounded-md border border-border-subtle bg-bg-tertiary px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand disabled:opacity-50"
           />
           <input
             ref={fileRef}
@@ -205,7 +205,7 @@ export function ThemesPanel() {
             type="button"
             disabled={locked || uploading || !iconName.trim()}
             onClick={() => fileRef.current?.click()}
-            className="rounded-md border border-divider px-4 py-2 text-sm font-semibold text-text-normal hover:bg-interactive-hover disabled:opacity-50"
+            className="rounded-md border border-border-subtle px-4 py-2 text-sm font-semibold text-text-normal hover:bg-interactive-hover disabled:opacity-50"
           >
             {uploading ? t("Uploading…") : t("Upload icon")}
           </button>
@@ -216,7 +216,7 @@ export function ThemesPanel() {
             {Object.entries(skin.icons).map(([name, url]) => (
               <li
                 key={name}
-                className="flex items-center gap-3 rounded-md border border-divider bg-bg-secondary px-3 py-2"
+                className="flex items-center gap-3 rounded-md border border-border-subtle bg-bg-secondary px-3 py-2"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={url} alt="" className="h-6 w-6 shrink-0 object-contain" />

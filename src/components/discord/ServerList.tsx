@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Tooltip } from "./Tooltip";
 import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui/ServerBadge";
 import { IconPlus, IconCompass } from "@/components/icons";
+import { Star, Download, CircleHelp, House } from "lucide-react";
 import { displayName, serverInitials } from "@/lib/utils";
 import { safeImageUrl } from "@/lib/safe-url";
 import { GroupAvatar } from "@/components/ui/GroupAvatar";
@@ -138,13 +139,19 @@ interface ServerListProps {
   onFolderContext: (folder: ServerFolder, x: number, y: number) => void;
   onReorderServers: (slots: RailSlot[]) => void;
   onReorderFolders: (orderedIds: string[]) => void;
+  /** The Favorites hub (starred channels and conversations). Hidden when absent. */
+  favoritesActive?: boolean;
+  onSelectFavorites?: () => void;
+  /** Rail shortcuts at the foot of the list; hidden when absent. */
+  onOpenDownloads?: () => void;
+  onOpenHelp?: () => void;
 }
 
 function UnreadCountBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   const label = count > 99 ? "99+" : String(count);
   return (
-    <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full border-4 border-bg-tertiary bg-status-dnd px-1 text-[12px] font-bold leading-none text-white">
+    <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full border-[3px] border-bg-secondary bg-status-dnd px-1 text-[11px] font-bold leading-none text-white">
       {label}
     </span>
   );
@@ -158,7 +165,7 @@ function DropIndicator({ edge }: { edge: "before" | "after" }) {
   return (
     <span
       aria-hidden
-      className={`pointer-events-none absolute left-1/2 z-10 h-[3px] w-12 -translate-x-1/2 rounded-full bg-white ${
+      className={`pointer-events-none absolute left-1/2 z-10 h-[3px] w-11 -translate-x-1/2 rounded-full bg-brand ${
         edge === "before" ? "-top-[5px]" : "-bottom-[5px]"
       }`}
     />
@@ -293,13 +300,13 @@ function ServerButton({
           draggable={draggable}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
-          className="relative flex h-12 w-12 items-center justify-center"
+          className="relative flex h-11 w-11 items-center justify-center"
         >
           {icon ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={icon} alt="" draggable={false} data-active={active || undefined} className="rail-icon h-12 w-12 object-cover" />
+            <img src={icon} alt="" draggable={false} data-active={active || undefined} className="rail-icon h-11 w-11 object-cover" />
           ) : (
-            <span data-active={active || undefined} className="rail-icon rail-icon-fill h-12 w-12 text-[15px] font-medium">
+            <span data-active={active || undefined} className="rail-icon rail-icon-fill h-11 w-11 text-[14px] font-semibold">
               {serverInitials(server.name)}
             </span>
           )}
@@ -307,7 +314,7 @@ function ServerButton({
             <span
               aria-label={t(mentionCount === 1 ? "{count} unread mention" : "{count} unread mentions", { count: mentionCount })}
               title={t(mentionCount === 1 ? "{count} unread mention" : "{count} unread mentions", { count: mentionCount })}
-              className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-[3px] border-bg-tertiary bg-status-dnd px-1 text-[11px] font-bold leading-none text-white"
+              className="absolute -right-1.5 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-[3px] border-bg-secondary bg-status-dnd px-1 text-[11px] font-bold leading-none text-white"
             >
               {mentionCount > 99 ? "99+" : mentionCount}
             </span>
@@ -315,7 +322,7 @@ function ServerButton({
           {badgeKind && (
             <span
               title={SERVER_BADGE_LABEL[badgeKind]}
-              className="absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-bg-tertiary"
+              className="absolute -bottom-0.5 -right-1 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-bg-secondary"
             >
               <ServerBadge kind={badgeKind} size={14} />
             </span>
@@ -336,7 +343,39 @@ function RailPill({ state }: { state: "none" | "unread" | "active" }) {
 }
 
 function RailSeparator() {
-  return <div aria-hidden className="mx-auto h-0.5 w-8 shrink-0 rounded-[1px] bg-[#35363c]" />;
+  return <div aria-hidden className="mx-auto h-0.5 w-8 shrink-0 rounded-full bg-border-subtle" />;
+}
+
+/** A round rail shortcut (Add, Explore, Download, Help): a dashed outline that fills on hover. */
+function RailAction({
+  label,
+  active = false,
+  onClick,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rail-item group relative flex w-full justify-center">
+      <RailPill state={active ? "active" : "none"} />
+      <Tooltip label={label} side="right">
+        <button
+          type="button"
+          aria-label={label}
+          aria-current={active ? "true" : undefined}
+          onClick={onClick}
+          className="relative flex h-11 w-11 items-center justify-center"
+        >
+          <span data-active={active || undefined} className="rail-icon rail-icon-action h-11 w-11">
+            {children}
+          </span>
+        </button>
+      </Tooltip>
+    </div>
+  );
 }
 
 export function ServerList({
@@ -362,10 +401,15 @@ export function ServerList({
   onFolderContext,
   onReorderServers,
   onReorderFolders,
+  favoritesActive = false,
+  onSelectFavorites,
+  onOpenDownloads,
+  onOpenHelp,
 }: ServerListProps) {
   const { t } = useI18n();
-  const homeActive =
-    viewMode === "home" || viewMode === "dm" || viewMode === "group" || viewMode === "notes";
+  // While the Favorites list is up, only the star is selected.
+  const homeActive = !favoritesActive &&
+    (viewMode === "home" || viewMode === "dm" || viewMode === "group" || viewMode === "notes");
   const visibleDmUnreads = dmUnreads.filter(
     (entry) => !(viewMode === "dm" && activeDmThreadId === entry.threadId),
   );
@@ -437,7 +481,7 @@ export function ServerList({
   };
 
   const renderServerButton = (server: Server) => {
-    const active = activeServerId === server.id && viewMode === "space";
+    const active = !favoritesActive && activeServerId === server.id && viewMode === "space";
     const hasUnread = serverUnreadSet.has(server.id) && !active;
     const dt = dropTarget;
     return (
@@ -466,7 +510,7 @@ export function ServerList({
       aria-label={t("Spaces")}
       // Top-aligned on purpose. Centring the stack leaves a gap above the home
       // button whenever the rail is shorter than the window.
-      className="rail-scroll flex w-[72px] shrink-0 flex-col items-center overflow-y-auto bg-bg-tertiary pb-3 pt-3"
+      className="rail-scroll flex h-full w-[72px] shrink-0 flex-col items-center overflow-y-auto bg-bg-secondary pb-3 pt-3"
     >
       <div className="flex w-full flex-col items-center gap-2">
       <div className="rail-item group relative flex w-full justify-center">
@@ -477,15 +521,33 @@ export function ServerList({
             aria-label={t("Direct Messages")}
             aria-current={homeActive ? "true" : undefined}
             onClick={onSelectHome}
-            className="relative flex h-12 w-12 items-center justify-center"
+            className="relative flex h-11 w-11 items-center justify-center"
           >
-            <span data-active={homeActive || undefined} className="rail-icon rail-icon-fill h-12 w-12">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="" draggable={false} className="h-8 w-8 object-contain brightness-0 invert" />
+            <span data-active={homeActive || undefined} className="rail-icon rail-icon-home h-11 w-11">
+              <House size={22} strokeWidth={2.2} aria-hidden />
             </span>
           </button>
         </Tooltip>
       </div>
+
+      {onSelectFavorites && (
+        <div className="rail-item group relative flex w-full justify-center">
+          <RailPill state={favoritesActive ? "active" : "none"} />
+          <Tooltip label={t("Favorites")} side="right">
+            <button
+              type="button"
+              aria-label={t("Favorites")}
+              aria-current={favoritesActive ? "true" : undefined}
+              onClick={onSelectFavorites}
+              className="relative flex h-11 w-11 items-center justify-center"
+            >
+              <span data-active={favoritesActive || undefined} className="rail-icon rail-icon-fill h-11 w-11">
+                <Star size={20} strokeWidth={2.2} fill="currentColor" />
+              </span>
+            </button>
+          </Tooltip>
+        </div>
+      )}
 
       {visibleDmUnreads.map((entry) => {
         const active = viewMode === "dm" && activeDmThreadId === entry.threadId;
@@ -497,10 +559,10 @@ export function ServerList({
                 type="button"
                 aria-label={t("{count} unread messages from {name}", { count: entry.count, name: displayName(entry.friend) })}
                 onClick={() => onSelectDmThread(entry.threadId)}
-                className="relative flex h-12 w-12 items-center justify-center"
+                className="relative flex h-11 w-11 items-center justify-center"
               >
-                <span className="rail-icon h-12 w-12 overflow-hidden">
-                  <Avatar profile={entry.friend} size="md" className="h-12 w-12" />
+                <span className="rail-icon h-11 w-11 overflow-hidden">
+                  <Avatar profile={entry.friend} size="md" className="h-11 w-11" />
                 </span>
                 <UnreadCountBadge count={entry.count} />
               </button>
@@ -517,10 +579,10 @@ export function ServerList({
               type="button"
               aria-label={t("{count} unread messages in {name}", { count: entry.count, name: entry.group.name })}
               onClick={() => onSelectGroupChat?.(entry.group.id)}
-              className="relative flex h-12 w-12 items-center justify-center"
+              className="relative flex h-11 w-11 items-center justify-center"
             >
-              <span className="rail-icon h-12 w-12 overflow-hidden">
-                <GroupAvatar group={entry.group} size={48} />
+              <span className="rail-icon h-11 w-11 overflow-hidden">
+                <GroupAvatar group={entry.group} size={44} />
               </span>
               <UnreadCountBadge count={entry.count} />
             </button>
@@ -577,7 +639,7 @@ export function ServerList({
             >
               {/* An open folder sits on a tinted column, the classic way. */}
               {isOpen && (
-                <span aria-hidden className="absolute bottom-0 left-1/2 top-0 w-12 -translate-x-1/2 rounded-2xl" style={{ backgroundColor: `${folder.color}33` }} />
+                <span aria-hidden className="absolute bottom-0 left-1/2 top-0 w-11 -translate-x-1/2 rounded-[14px]" style={{ backgroundColor: `${folder.color}2b` }} />
               )}
               <div className="rail-item group relative flex w-full justify-center">
                 <RailPill state={!isOpen && hasActive ? "active" : !isOpen && hasUnread ? "unread" : "none"} />
@@ -594,23 +656,23 @@ export function ServerList({
                     draggable
                     onDragStart={(e) => startFolderDrag(e, folder.id)}
                     onDragEnd={endDrag}
-                    className={`relative flex h-12 w-12 items-center justify-center rounded-2xl transition-shadow ${isDrop ? "ring-2 ring-white/70" : ""}`}
+                    className={`relative flex h-11 w-11 items-center justify-center rounded-[14px] transition-shadow ${isDrop ? "ring-2 ring-brand" : ""}`}
                   >
                     {isOpen ? (
-                      <span className="flex h-12 w-12 items-center justify-center rounded-2xl" style={{ color: folder.color }}>
+                      <span className="flex h-11 w-11 items-center justify-center rounded-[14px]" style={{ color: folder.color }}>
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                           <path d="M20 7H12L10.553 5.106C10.214 4.428 9.521 4 8.764 4H3C2.447 4 2 4.447 2 5V19C2 20.104 2.895 21 4 21H20C21.104 21 22 20.104 22 19V9C22 7.896 21.104 7 20 7Z" />
                         </svg>
                       </span>
                     ) : (
-                      <span className="grid h-12 w-12 grid-cols-2 gap-[3px] rounded-2xl p-[7px]" style={{ backgroundColor: `${folder.color}55` }}>
+                      <span className="grid h-11 w-11 grid-cols-2 gap-[3px] rounded-[14px] p-[6px]" style={{ backgroundColor: `${folder.color}45` }}>
                         {members.slice(0, 4).map((m) => {
                           const mi = safeImageUrl(m.icon_url);
                           return mi ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img key={m.id} src={mi} alt="" className="h-[15px] w-[15px] rounded-full object-cover" />
+                            <img key={m.id} src={mi} alt="" className="h-[14px] w-[14px] rounded-full object-cover" />
                           ) : (
-                            <span key={m.id} className="flex h-[15px] w-[15px] items-center justify-center rounded-full bg-bg-primary text-[7px] font-semibold text-text-normal">
+                            <span key={m.id} className="flex h-[14px] w-[14px] items-center justify-center rounded-full bg-bg-tertiary text-[7px] font-semibold text-text-normal">
                               {serverInitials(m.name).slice(0, 1)}
                             </span>
                           );
@@ -633,31 +695,27 @@ export function ServerList({
         })}
       </div>
 
-      <div className="rail-item group relative flex w-full justify-center">
-        <RailPill state="none" />
-        <Tooltip label={t("Add a Space")} side="right">
-          <button type="button" aria-label={t("Add a Space")} onClick={onCreateServer} className="relative flex h-12 w-12 items-center justify-center">
-            <span className="rail-icon rail-icon-action h-12 w-12">
-              <IconPlus size={24} />
-            </span>
-          </button>
-        </Tooltip>
-      </div>
-
-      <div className="rail-item group relative flex w-full justify-center">
-        <RailPill state={viewMode === "discover" ? "active" : "none"} />
-        <Tooltip label={t("Explore Discoverable Spaces")} side="right">
-          <button type="button" aria-label={t("Explore discoverable spaces")} onClick={onDiscover} className="relative flex h-12 w-12 items-center justify-center">
-            <span data-active={viewMode === "discover" || undefined} className="rail-icon rail-icon-action h-12 w-12">
-              <IconCompass size={24} />
-            </span>
-          </button>
-        </Tooltip>
-      </div>
       <div
         aria-hidden
-        className={`h-[3px] w-12 rounded-full bg-white transition-opacity ${dropTarget?.kind === "top-end" ? "opacity-100" : "opacity-0"}`}
+        className={`-my-1 h-[3px] w-11 rounded-full bg-brand transition-opacity ${dropTarget?.kind === "top-end" ? "opacity-100" : "opacity-0"}`}
       />
+
+      <RailAction label={t("Explore Discoverable Spaces")} active={viewMode === "discover"} onClick={onDiscover}>
+        <IconCompass size={22} />
+      </RailAction>
+      <RailAction label={t("Add a Space")} onClick={onCreateServer}>
+        <IconPlus size={22} />
+      </RailAction>
+      {onOpenDownloads && (
+        <RailAction label={t("Download Apps")} onClick={onOpenDownloads}>
+          <Download size={20} strokeWidth={2} />
+        </RailAction>
+      )}
+      {onOpenHelp && (
+        <RailAction label={t("Help")} onClick={onOpenHelp}>
+          <CircleHelp size={20} strokeWidth={2} />
+        </RailAction>
+      )}
       </div>
     </nav>
   );

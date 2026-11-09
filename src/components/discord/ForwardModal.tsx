@@ -61,7 +61,7 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
         role="dialog"
         aria-modal="true"
         aria-label={t("Forward message")}
-        className={`classic-modal${exiting ? " modal-pop-out" : ""} relative flex max-h-[min(640px,calc(100dvh-32px))] w-full max-w-[440px] flex-col overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
+        className={`classic-modal${exiting ? " modal-pop-out" : ""} relative flex max-h-[min(640px,calc(100dvh-32px))] w-full max-w-[440px] flex-col overflow-hidden rounded-xl border border-border-subtle bg-bg-primary shadow-[var(--elevation-high)]`}
       >
         <div className="px-4 pt-4">
           <h2 className="text-[20px] font-semibold leading-6 text-header-primary">{t("Forward To")}</h2>
@@ -73,7 +73,7 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
             placeholder={t("Search")}
             aria-label={t("Search friends and groups")}
             autoFocus
-            className="mt-4 h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
+            className="mt-4 h-10 w-full rounded-md border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
           />
         </div>
 
@@ -88,7 +88,7 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
                 key={`${dest.kind}-${dest.id}`}
                 type="button"
                 onClick={() => handleSelect(dest)}
-                className="group flex h-[44px] w-full items-center gap-3 rounded-[4px] px-2 text-left hover:bg-interactive-hover"
+                className="group flex h-[44px] w-full items-center gap-3 rounded-lg px-2 text-left hover:bg-interactive-hover"
               >
                 {dest.kind === "group" ? (
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-[14px] font-semibold text-white">
@@ -102,7 +102,7 @@ export function ForwardModal({ open, onClose, onForward }: ForwardModalProps) {
                 )}
                 <span className="min-w-0 flex-1 truncate text-[16px] font-medium text-header-primary">{dest.label}</span>
                 <span className="shrink-0 text-[12px] text-header-secondary">{dest.kind === "dm" ? t("Direct Message") : t("Group DM")}</span>
-                <span className="ml-2 hidden h-8 shrink-0 items-center rounded-[3px] bg-brand px-3 text-[14px] font-medium text-white group-hover:flex">
+                <span className="ml-2 hidden h-8 shrink-0 items-center rounded-md bg-brand px-3 text-[14px] font-medium text-white group-hover:flex">
                   {t("Send")}
                 </span>
               </button>

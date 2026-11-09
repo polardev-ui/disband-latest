@@ -29,7 +29,7 @@ export function RoleIcon({
         width={size}
         height={size}
         draggable={false}
-        className={`inline-block shrink-0 rounded-[4px] object-contain align-[-0.15em] ${className}`}
+        className={`inline-block shrink-0 rounded-lg object-contain align-[-0.15em] ${className}`}
         style={{ width: size, height: size }}
       />
     );

@@ -30,7 +30,7 @@ const platformSpecs = [
 
 export function MarketingHomePage() {
   return (
-    <div className="min-h-screen bg-[#131417] text-[#dbdee1]">
+    <div className="min-h-screen bg-[#131417] text-text-normal">
       <MarketingNav />
 
       <main className="pt-14">
@@ -48,7 +48,7 @@ export function MarketingHomePage() {
                 people to talk.
               </h1>
 
-              <p className="mt-6 max-w-md text-[17px] leading-relaxed text-[#9aa0a8]">
+              <p className="mt-6 max-w-md text-[17px] leading-relaxed text-text-muted">
                 Spaces, direct messages, group chats, and voice calls — in one app that runs
                 natively on your machine and in the browser, from a single account.
               </p>
@@ -62,7 +62,7 @@ export function MarketingHomePage() {
                 </a>
                 <Link
                   href="/login"
-                  className="group inline-flex items-center gap-1.5 rounded-md px-4 py-3 text-[15px] font-medium text-[#c4c9d0] transition-colors hover:text-white"
+                  className="group inline-flex items-center gap-1.5 rounded-md px-4 py-3 text-[15px] font-medium text-text-normal transition-colors hover:text-white"
                 >
                   Open in browser
                   <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
@@ -83,10 +83,10 @@ export function MarketingHomePage() {
           <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-y-2 lg:grid-cols-4 lg:gap-y-0 lg:divide-x lg:divide-white/[0.06]">
             {platformSpecs.map((spec) => (
               <div key={spec.label} className="px-5 py-7 lg:first:pl-0 lg:last:pr-0">
-                <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">
+                <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-text-muted">
                   {spec.label}
                 </dt>
-                <dd className="mt-2 text-sm text-[#c4c9d0]">{spec.value}</dd>
+                <dd className="mt-2 text-sm text-text-normal">{spec.value}</dd>
               </div>
             ))}
           </dl>
@@ -104,7 +104,7 @@ export function MarketingHomePage() {
                 <article key={item.index} className="border-t border-white/10 pt-6">
                   <p className="font-mono text-[11px] tracking-[0.14em] text-brand">{item.index}</p>
                   <h3 className="mt-4 text-[17px] font-semibold text-white">{item.title}</h3>
-                  <p className="mt-3 text-[15px] leading-relaxed text-[#9aa0a8]">{item.body}</p>
+                  <p className="mt-3 text-[15px] leading-relaxed text-text-muted">{item.body}</p>
                 </article>
               ))}
             </div>
@@ -120,7 +120,7 @@ export function MarketingHomePage() {
               <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">
                 Start talking in about a minute.
               </h2>
-              <p className="mt-2 text-[15px] text-[#9aa0a8]">
+              <p className="mt-2 text-[15px] text-text-muted">
                 Free to create an account. No card, no trial timer.
               </p>
             </div>

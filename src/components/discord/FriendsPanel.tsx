@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
 import { useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useI18n } from "@/contexts/I18nContext";
@@ -35,12 +36,12 @@ const TAB_LABEL: Record<FriendsTab, string> = {
   blocked: "Blocked",
 };
 
-function StatusAvatar({ profile, presence }: { profile: Profile; presence: PresenceMap }) {
+function StatusAvatar({ profile, presence, ring = "var(--bg-primary)" }: { profile: Profile; presence: PresenceMap; ring?: string }) {
   const live = presence.get(profile.id) ?? "offline";
   return (
     <div className="relative shrink-0">
       <Avatar profile={profile} size="sm" />
-      <StatusDot status={live} ring="var(--bg-primary)" className="absolute -bottom-[3px] -right-[3px] group-hover:![background:var(--interactive-hover)]" />
+      <StatusDot status={live} ring={ring} className="absolute -bottom-[3px] -right-[3px] group-hover:![background:var(--interactive-hover)]" />
     </div>
   );
 }
@@ -63,7 +64,7 @@ function RowAction({
         e.stopPropagation();
         onClick(e);
       }}
-      className="flex h-9 w-9 items-center justify-center rounded-full bg-bg-secondary text-interactive-normal transition-colors hover:text-interactive-active group-hover:bg-bg-tertiary"
+      className="flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-bg-secondary-alt text-interactive-normal transition-colors hover:border-border-strong hover:text-interactive-active"
     >
       {children}
     </button>
@@ -178,13 +179,13 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
-      <header className="relative z-[2] flex h-12 shrink-0 items-center gap-2 px-4 shadow-[var(--elevation-low)]">
-        <IconFriends size={24} className="shrink-0 text-channels-default" />
-        <h1 className="shrink-0 text-[16px] font-semibold text-header-primary">{t("Friends")}</h1>
+      <header className="relative z-[2] flex h-14 shrink-0 items-center gap-2 border-b border-column-border px-4">
+        <IconFriends size={22} className="shrink-0 text-channels-default" />
+        <h1 className="shrink-0 text-[16px] font-semibold text-header-primary">{t("My friends")}</h1>
 
         <span className="mx-2 h-6 w-px shrink-0 bg-divider" />
 
-        <nav className="flex items-center gap-4 overflow-x-auto">
+        <nav className="flex items-center gap-1.5 overflow-x-auto">
           {(["online", "all", "pending", "blocked"] as const).map((id) => (
             <button
               key={id}
@@ -193,7 +194,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                 setTab(id);
                 setAddOpen(false);
               }}
-              className={`flex shrink-0 items-center rounded-[4px] px-2 py-0.5 text-[16px] font-medium leading-5 transition-colors ${
+              className={`flex h-8 shrink-0 items-center rounded-lg px-3 text-[15px] font-medium leading-5 transition-colors ${
                 tab === id && !addOpen
                   ? "bg-interactive-selected text-interactive-active"
                   : "text-interactive-normal hover:bg-interactive-hover hover:text-text-normal"
@@ -218,24 +219,31 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
               setAddError(null);
               setAddSuccess(null);
             }}
-            className={`shrink-0 rounded-[4px] px-2 py-0.5 text-[16px] font-medium leading-5 transition-colors ${
+            className={`flex h-8 shrink-0 items-center rounded-lg px-3 text-[15px] font-semibold leading-5 transition-colors ${
               addOpen
-                ? "bg-transparent text-[#2dc770]"
-                : "bg-button-green text-white hover:bg-button-green-hover"
+                ? "bg-brand-soft text-brand"
+                : "bg-brand text-brand-foreground hover:bg-brand-hover"
             }`}
           >
-            {t("Add Friend")}
+            {t("Add friend")}
           </button>
         </nav>
       </header>
 
       {addOpen && (
-        <div className="shrink-0 border-b border-divider px-[30px] py-5">
-          <h2 className="text-[16px] font-semibold uppercase leading-5 text-header-primary">{t("Add Friend")}</h2>
-          <p className="mt-1 text-sm text-text-muted">
+        <div className="view-enter flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6">
+          <h2 className="text-[20px] font-bold leading-6 text-header-primary">{t("Add friend")}</h2>
+          <p className="mt-1.5 text-[14px] leading-5 text-text-muted">
             {t("You can add friends by their Disband username.")}
           </p>
-          <form onSubmit={submitAdd} className="mt-3 flex max-w-xl gap-2">
+          {/* One field with the button inside it; the border turns red or green with the result. */}
+          <form
+            onSubmit={submitAdd}
+            className={`mt-4 flex h-[52px] max-w-2xl items-center gap-2 rounded-xl border bg-bg-secondary pl-4 pr-1.5 transition-colors focus-within:border-brand ${
+              addError ? "border-status-dnd" : addSuccess ? "border-status-online" : "border-border-subtle"
+            }`}
+          >
+            <span aria-hidden className="text-[15px] font-semibold text-text-muted">@</span>
             <input
               autoFocus
               value={addValue}
@@ -244,34 +252,41 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                 setAddError(null);
                 setAddSuccess(null);
               }}
+              aria-label={t("Username")}
               placeholder={t("Enter a username")}
-              className="min-w-0 flex-1 rounded-lg border border-bg-tertiary bg-bg-tertiary px-3 py-3 text-[16px] text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc] focus:ring-brand/20"
+              autoComplete="off"
+              spellCheck={false}
+              className="h-full min-w-0 flex-1 bg-transparent text-[15px] text-text-normal outline-none placeholder:text-text-muted"
             />
             <button
               type="submit"
               disabled={!addValue.trim() || sending}
-              className="shrink-0 rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              aria-busy={sending}
+              className="h-10 shrink-0 rounded-lg bg-brand px-4 text-[14px] font-semibold text-brand-foreground transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-bg-tertiary disabled:text-text-muted"
             >
-              {sending ? t("Sending…") : t("Send request")}
+              {sending ? <LoadingDots size={6} /> : t("Send request")}
             </button>
           </form>
-          {addError && <p className="mt-2 text-sm text-status-dnd">{addError}</p>}
-          {addSuccess && <p className="mt-2 text-sm text-status-online">{addSuccess}</p>}
+          <div aria-live="polite" className="min-h-[24px] pt-2">
+            {addError && <p className="text-[13px] text-status-dnd">{addError}</p>}
+            {addSuccess && <p className="text-[13px] text-status-online">{addSuccess}</p>}
+          </div>
+
         </div>
       )}
 
       {!addOpen && (
-        <div className="shrink-0 px-[30px] pb-2 pt-4">
+        <div className="shrink-0 px-6 pb-2 pt-4">
           <div className="relative">
             <IconSearch
-              size={16}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+              size={18}
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted"
             />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={tab === "online" ? t("Search online friends") : t("Search friends")}
-              className="w-full rounded-[4px] border border-transparent bg-bg-tertiary py-[5px] pl-9 pr-10 text-[16px] text-text-normal outline-none placeholder:text-text-muted focus:ring-0 focus:ring-brand/20"
+              className="h-11 w-full rounded-lg border border-border-subtle bg-bg-secondary-alt pl-10 pr-10 text-[15px] text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-border-strong"
             />
             {query && (
               <button
@@ -288,8 +303,8 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
       )}
 
       {!addOpen && (
-        <div key={tab} className="view-enter min-h-0 flex-1 overflow-y-auto px-[30px] pb-6">
-          <p className="sticky top-0 z-10 bg-bg-primary pb-2 pt-4 text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] text-header-secondary">
+        <div key={tab} className="view-enter min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+          <p className="sticky top-0 z-10 bg-bg-primary pb-2 pt-4 text-[12px] font-semibold uppercase leading-4 tracking-[0.04em] text-text-muted">
             {heading}
           </p>
 
@@ -348,7 +363,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
               onAdd={() => setAddOpen(true)}
             />
           ) : (
-            <ul className="border-t border-divider">
+            <ul>
               {visible.map((friend) => (
                 <li key={friend.id}>
                   <div
@@ -365,7 +380,7 @@ export function FriendsPanel({ onOpenProfile, onFriendContext }: FriendsPanelPro
                       e.preventDefault();
                       onFriendContext(friend, e.clientX, e.clientY);
                     }}
-                    className="group -mx-2.5 flex h-[62px] cursor-pointer items-center gap-3 rounded-lg border-t border-divider/60 px-2.5 transition-colors hover:rounded-lg hover:border-transparent hover:bg-interactive-hover [&+li]:hover:border-transparent"
+                    className="group -mx-3 flex h-[62px] cursor-pointer items-center gap-3 rounded-xl px-3 transition-colors hover:bg-interactive-hover"
                   >
                     <StatusAvatar profile={friend} presence={presenceMap} />
                     <div className="min-w-0 flex-1">
@@ -440,29 +455,38 @@ function EmptyState({
   }
   if (totalFriends === 0) {
     return (
-      <div className="py-12">
-        <IconFriends size={48} className="mb-4 text-text-muted" />
-        <h2 className="text-lg font-semibold text-text-normal">{t("No friends yet")}</h2>
-        <p className="mt-1 max-w-sm text-sm text-text-muted">
+      <div className="flex flex-col items-center py-20 text-center">
+        <span className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-bg-tertiary text-interactive-normal">
+          <IconFriends size={34} />
+        </span>
+        <h2 className="text-[20px] font-semibold text-header-primary">{t("No friends yet")}</h2>
+        <p className="mt-1.5 max-w-sm text-[15px] text-text-muted">
           {t("Add someone by their username to start sending messages and calls.")}
         </p>
         <button
           type="button"
           onClick={onAdd}
-          className="mt-4 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
+          className="mt-5 rounded-lg bg-brand px-4 py-2 text-[14px] font-semibold text-brand-foreground transition-colors hover:bg-brand-hover"
         >
-          {t("Add Friend")}
+          {t("Add friend")}
         </button>
       </div>
     );
   }
-  return (
-    <p className="py-10 text-sm text-text-muted">
-      {tab === "online"
-        ? t("Nobody's online right now.")
-        : t("No friends to show.")}
-    </p>
-  );
+  if (tab === "online") {
+    return (
+      <div className="flex flex-col items-center py-24 text-center">
+        <span className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-bg-tertiary text-interactive-normal">
+          <IconFriends size={34} />
+        </span>
+        <h2 className="text-[20px] font-semibold text-header-primary">{t("Nobody's around right now")}</h2>
+        <p className="mt-1.5 max-w-sm text-[15px] text-text-muted">
+          {t("Friends show up here the moment they come online.")}
+        </p>
+      </div>
+    );
+  }
+  return <p className="py-10 text-sm text-text-muted">{t("No friends to show.")}</p>;
 }
 
 function PendingList({
@@ -554,13 +578,14 @@ export function ActiveNowPanel() {
   }, [friends, dmListEntries, presenceMap]);
 
   return (
-    <aside className="hidden w-[360px] shrink-0 flex-col overflow-hidden border-l border-divider bg-bg-primary xl:flex">
-      <div className="flex shrink-0 items-center px-4 pb-4 pt-4">
-        <h2 className="text-[20px] font-extrabold leading-6 text-header-primary">{t("Active Now")}</h2>
+    <aside className="hidden w-[340px] shrink-0 flex-col overflow-hidden border-l border-column-border bg-bg-primary xl:flex">
+      <div className="flex h-14 shrink-0 items-center px-5">
+        <h2 className="text-[20px] font-bold leading-6 text-header-primary">{t("Active now")}</h2>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
         {active.length === 0 ? (
-          <div className="pt-2 text-center">
+          <div className="flex h-full flex-col items-center justify-center px-4 pb-16 text-center">
+            <span aria-hidden className="mb-3 text-[28px] font-bold leading-none text-text-muted">z<sup className="text-[20px]">z</sup></span>
             <p className="text-[16px] font-semibold text-header-primary">{t("It’s quiet for now…")}</p>
             <p className="mt-1 text-sm leading-relaxed text-text-muted">
               {t("When a friend starts an activity or comes online, you’ll see them here.")}
@@ -569,8 +594,8 @@ export function ActiveNowPanel() {
         ) : (
           <ul className="space-y-2 pt-1">
             {active.map((f) => (
-              <li key={f.id} className="flex items-center gap-3 rounded-[4px] border border-divider bg-bg-secondary px-4 py-3 transition-colors hover:bg-interactive-hover">
-                <StatusAvatar profile={f} presence={presenceMap} />
+              <li key={f.id} className="flex items-center gap-3 rounded-xl border border-border-subtle bg-bg-secondary-alt px-3.5 py-3 transition-colors hover:border-border-strong">
+                <StatusAvatar profile={f} presence={presenceMap} ring="var(--bg-secondary-alt)" />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-text-normal">
                     {displayName(f)}

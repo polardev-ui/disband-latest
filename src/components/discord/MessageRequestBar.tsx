@@ -48,7 +48,7 @@ export function MessageRequestBar({ threadId, friend }: { threadId: string; frie
           type="button"
           disabled={busy}
           onClick={() => void run(() => respondMessageRequest(threadId, "accept"), false)}
-          className="rounded-[3px] bg-brand px-4 py-1.5 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+          className="rounded-md bg-brand px-4 py-1.5 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
         >
           {t("Accept")}
         </button>
@@ -56,7 +56,7 @@ export function MessageRequestBar({ threadId, friend }: { threadId: string; frie
           type="button"
           disabled={busy}
           onClick={() => void run(() => respondMessageRequest(threadId, "ignore"), true)}
-          className="rounded-[3px] bg-button-secondary px-4 py-1.5 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover disabled:opacity-50"
+          className="rounded-md bg-button-secondary px-4 py-1.5 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover disabled:opacity-50"
         >
           {t("Ignore")}
         </button>
@@ -64,7 +64,7 @@ export function MessageRequestBar({ threadId, friend }: { threadId: string; frie
           type="button"
           disabled={busy}
           onClick={() => void run(() => blockUser(friend.id), true)}
-          className="rounded-[3px] px-4 py-1.5 text-[14px] font-medium text-status-dnd transition-colors hover:bg-status-dnd/10 disabled:opacity-50"
+          className="rounded-md px-4 py-1.5 text-[14px] font-medium text-status-dnd transition-colors hover:bg-status-dnd/10 disabled:opacity-50"
         >
           {t("Block")}
         </button>

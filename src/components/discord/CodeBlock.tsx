@@ -53,7 +53,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
       <Highlight code={code.replace(/\n$/, "")} language={lang} theme={themes.vsDark}>
         {({ className, style, tokens, getLineProps, getTokenProps }) => (
           <pre
-            className={`${className} overflow-x-auto rounded-[4px] border border-bg-tertiary p-2 font-mono text-[14px] leading-[18px]`}
+            className={`${className} overflow-x-auto rounded-lg border border-bg-tertiary p-2 font-mono text-[14px] leading-[18px]`}
             // The theme brings its own background, which is what makes the
             // highlighting legible regardless of the app's current theme.
             style={{ ...style, background: "var(--bg-secondary)" }}

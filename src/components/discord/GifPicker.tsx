@@ -3,6 +3,7 @@
 import { SolidGifIcon } from "@/components/icons/SolidIcons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { createPortal } from "react-dom";
 import { gifThumb, gifUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
 import { IconClose, IconStar } from "@/components/icons";
@@ -24,11 +25,14 @@ function GifThumb({ gif, isFav, onSelect, onToggleFav }: {
   const thumb = gifThumb(gif);
   const full = gifUrl(gif);
   const [hover, setHover] = useState(false);
+  const isMobile = useIsMobile();
   if (!thumb || !full) return null;
+  // Reserve the GIF's real shape before it loads, so the columns don't jump.
+  const ratio = gif.width && gif.height ? `${gif.width} / ${gif.height}` : undefined;
 
   return (
     <div
-      className="relative overflow-hidden rounded hover:ring-2 hover:ring-brand"
+      className="relative overflow-hidden rounded-lg hover:ring-2 hover:ring-brand"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
@@ -46,7 +50,8 @@ function GifThumb({ gif, isFav, onSelect, onToggleFav }: {
             muted
             playsInline
             webkit-playsinline=""
-            className="h-24 w-full object-cover"
+            className="block h-auto w-full bg-bg-tertiary"
+            style={{ aspectRatio: ratio }}
           />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
@@ -54,11 +59,12 @@ function GifThumb({ gif, isFav, onSelect, onToggleFav }: {
             src={thumb.src}
             alt={gif.title ?? "GIF"}
             loading="lazy"
-            className="h-24 w-full object-cover"
+            className="block h-auto w-full bg-bg-tertiary"
+            style={{ aspectRatio: ratio }}
           />
         )}
       </button>
-      {(hover || isFav) && (
+      {(hover || (isMobile && isFav)) && (
         <FavStarButton
           active={isFav}
           onToggle={() => onToggleFav(full, gif.title ?? null)}
@@ -75,7 +81,7 @@ function FavThumb({ fav, onSelect, onRemove }: {
 }) {
   const { t } = useI18n();
   return (
-    <div className="relative overflow-hidden rounded hover:ring-2 hover:ring-brand">
+    <div className="relative overflow-hidden rounded-lg hover:ring-2 hover:ring-brand">
       <button
         type="button"
         onClick={() => { onSelect(fav.url); }}
@@ -87,7 +93,7 @@ function FavThumb({ fav, onSelect, onRemove }: {
           src={fav.url}
           alt={fav.title ?? t("Favourite GIF")}
           loading="lazy"
-          className="h-24 w-full object-cover"
+          className="block h-auto min-h-12 w-full bg-bg-tertiary"
           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
         />
       </button>
@@ -205,7 +211,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
           <div
             id="gif-picker-panel"
             role="dialog" aria-label={t("GIF picker")}
-            className="menu-pop fixed z-[100] flex h-[420px] flex-col overflow-hidden rounded-[4px] bg-bg-secondary shadow-[var(--elevation-high)]"
+            className="menu-pop fixed z-[100] flex h-[440px] flex-col overflow-hidden rounded-2xl border border-border-subtle bg-bg-floating shadow-[var(--elevation-high)]"
             style={{
               left: panelPos.left,
               bottom: panelPos.bottom,
@@ -213,13 +219,13 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
               maxHeight: `calc(100dvh - ${panelPos.bottom + 8}px)`,
             }}
           >
-            <div className="relative z-[1] flex shrink-0 items-center gap-2 p-3 shadow-[var(--elevation-low)]">
+            <div className="relative z-[1] flex shrink-0 items-center gap-2 border-b border-border-subtle p-3">
               {tab === "search" ? (
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   autoFocus aria-label={t("Search GIFs")} placeholder={t("Search KLIPY for GIFs")}
-                  className="h-8 min-w-0 flex-1 rounded-[3px] border border-transparent bg-bg-tertiary px-2 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-border-subtle bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-brand"
                 />
               ) : (
                 <p className="min-w-0 flex-1 px-1 text-sm font-semibold text-text-normal">
@@ -231,19 +237,19 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
                 aria-label={tab === "favorites" ? t("Back to search") : t("View favourite GIFs")}
                 title={tab === "favorites" ? t("Back to search") : t("Favourites")}
                 onClick={() => setTab((t) => (t === "favorites" ? "search" : "favorites"))}
-                className={`rounded p-1.5 transition-colors hover:bg-interactive-hover ${
+                className={`rounded-lg p-1.5 transition-colors hover:bg-interactive-hover ${
                   tab === "favorites" ? "text-yellow-400" : "text-text-muted hover:text-text-normal"
                 }`}
               >
                 <IconStar size={17} className={tab === "favorites" ? "fill-yellow-400" : ""} />
               </button>
-              <button type="button" onClick={() => setOpen(false)} aria-label={t("Close GIF picker")} className="rounded p-1 text-text-muted hover:text-text-normal">
+              <button type="button" onClick={() => setOpen(false)} aria-label={t("Close GIF picker")} className="rounded-lg p-1.5 text-text-muted hover:bg-interactive-hover hover:text-text-normal">
                 <IconClose size={16} />
               </button>
             </div>
             <div className="flex min-h-0 flex-1">
-            <nav aria-label={t("GIF categories")} className="channel-scroll flex w-[88px] shrink-0 flex-col gap-1 overflow-y-auto bg-bg-tertiary p-2">
-              {["Trending", "Favourites", "Happy", "Thanks", "Celebrate", "Hello"].map(c => <button key={c} type="button" aria-pressed={c === "Favourites" ? tab === "favorites" : tab === "search" && query === (c === "Trending" ? "" : c)} onClick={() => {setTab(c === "Favourites" ? "favorites" : "search"); if(c !== "Favourites") setQuery(c === "Trending" ? "" : c);}} className="rounded-[3px] px-1 py-2 text-left text-[12px] font-medium text-interactive-normal hover:bg-interactive-hover hover:text-white aria-pressed:bg-interactive-selected aria-pressed:text-white">{c}</button>)}
+            <nav aria-label={t("GIF categories")} className="channel-scroll flex w-[88px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-border-subtle bg-bg-secondary p-2">
+              {["Trending", "Favourites", "Happy", "Thanks", "Celebrate", "Hello"].map(c => <button key={c} type="button" aria-pressed={c === "Favourites" ? tab === "favorites" : tab === "search" && query === (c === "Trending" ? "" : c)} onClick={() => {setTab(c === "Favourites" ? "favorites" : "search"); if(c !== "Favourites") setQuery(c === "Trending" ? "" : c);}} className="rounded-lg px-2 py-2 text-left text-[12px] font-semibold text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active aria-pressed:bg-interactive-selected aria-pressed:text-interactive-active">{c}</button>)}
             </nav>
             <div className="channel-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-2" onMouseOver={e => {const title = (e.target as HTMLElement).closest("button[title]")?.getAttribute("title"); if(title) setPreview(title);}} onFocus={e => {const title = (e.target as HTMLElement).closest("button[title]")?.getAttribute("title"); if(title) setPreview(title);}}>
               {tab === "favorites" ? (
@@ -254,7 +260,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
                     {t("Nothing starred yet — hover any GIF and tap the star.")}
                   </p>
                 ) : (
-                  <div className="grid grid-cols-2 gap-1">
+                  <div className="columns-2 gap-1.5 [&>*]:mb-1.5 [&>*]:break-inside-avoid">
                     {favorites.map((fav) => (
                       <FavThumb
                         key={fav.url}
@@ -268,9 +274,9 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
               ) : (
               <>
               {loading && gifs.length === 0 && !error && (
-                <div className="grid grid-cols-2 gap-1" aria-hidden>
+                <div className="columns-2 gap-1.5 [&>*]:mb-1.5 [&>*]:break-inside-avoid" aria-hidden>
                   {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="h-24 animate-pulse rounded bg-bg-accent" />
+                    <div key={i} className="skeleton-glimmer rounded-lg" style={{ height: [96, 140, 120, 80, 150, 110][i] }} />
                   ))}
                 </div>
               )}
@@ -279,7 +285,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
                 <p className="py-4 text-center text-sm text-text-muted">{t("No GIFs found")}</p>
               )}
               {!loading && !error && gifs.length > 0 && (
-                <div className="grid grid-cols-2 gap-1">
+                <div className="columns-2 gap-1.5 [&>*]:mb-1.5 [&>*]:break-inside-avoid">
                   {gifs.map((gif) => {
                     const full = gifUrl(gif);
                     return (
@@ -298,7 +304,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
               )}
             </div>
             </div>
-            <footer className="flex h-12 shrink-0 items-center justify-between gap-2 bg-bg-secondary-alt px-3 text-[12px] text-header-secondary"><span className="truncate">{preview}</span><span className="shrink-0 font-bold">KLIPY</span></footer>
+            <footer className="flex h-12 shrink-0 items-center justify-between gap-2 border-t border-border-subtle bg-bg-secondary-alt px-3 text-[12px] text-header-secondary"><span className="truncate">{preview}</span><span className="shrink-0 font-bold">KLIPY</span></footer>
           </div>,
           document.body,
         )
@@ -320,7 +326,7 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
             return next;
           });
         }}
-        className={`mt-[6px] flex h-8 w-10 items-center justify-center transition-colors hover:text-interactive-active disabled:cursor-not-allowed disabled:opacity-40 ${
+        className={`mt-[9px] flex h-8 w-10 items-center justify-center transition-colors hover:text-interactive-active disabled:cursor-not-allowed disabled:opacity-40 ${
           open ? "text-interactive-active" : "text-interactive-normal"
         }`}
       >

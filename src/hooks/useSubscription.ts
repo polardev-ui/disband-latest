@@ -31,49 +31,57 @@ export function useSubscription(userId: string | undefined) {
       return null;
     }
     setLoading(true);
-    const supabase = getSupabaseClient();
-
-    const fetchOnce = async () => {
-      const { data, error } = await supabase
-        .from("subscriptions")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle();
-      return { data, error };
-    };
-
-    let { data, error } = await fetchOnce();
-
-    if (error && (error.code === "PGRST303" || /JWT expired/i.test(error.message ?? ""))) {
-      const refreshed = await refreshSessionOnce();
-      if ("session" in refreshed && refreshed.session) {
-        const retry = await fetchOnce();
-        data = retry.data;
-        error = retry.error;
-      }
-    }
-
-    if (error && error.code !== "PGRST116") {
-      console.error("Failed to load subscription:", error);
-    }
-    const row = (data as Subscription | null) ?? null;
-    setSubscription(row);
-
-    // Gifted Aero (dashboard grants) carries the same entitlements as a paid
-    // subscription. Loaded alongside so every consumer of `plan` — Tether
-    // gating, nudges, limits — treats gifted users as Aero without caring
-    // which source granted it.
+    // A request that throws (offline, blocked) must still end the loading
+    // state, or every plan-gated screen waits on a spinner for good.
     try {
-      const { data: giftRows } = await supabase
-        .from("gift_entitlements")
-        .select("plan,expires_at")
-        .eq("user_id", userId);
-      setGifts((giftRows as GiftEntitlement[] | null) ?? []);
-    } catch {
-      setGifts([]);
+      const supabase = getSupabaseClient();
+
+      const fetchOnce = async () => {
+        const { data, error } = await supabase
+          .from("subscriptions")
+          .select("*")
+          .eq("user_id", userId)
+          .maybeSingle();
+        return { data, error };
+      };
+
+      let { data, error } = await fetchOnce();
+
+      if (error && (error.code === "PGRST303" || /JWT expired/i.test(error.message ?? ""))) {
+        const refreshed = await refreshSessionOnce();
+        if ("session" in refreshed && refreshed.session) {
+          const retry = await fetchOnce();
+          data = retry.data;
+          error = retry.error;
+        }
+      }
+
+      if (error && error.code !== "PGRST116") {
+        console.error("Failed to load subscription:", error);
+      }
+      const row = (data as Subscription | null) ?? null;
+      setSubscription(row);
+
+      // Gifted Aero (dashboard grants) carries the same entitlements as a paid
+      // subscription. Loaded alongside so every consumer of `plan` — Tether
+      // gating, nudges, limits — treats gifted users as Aero without caring
+      // which source granted it.
+      try {
+        const { data: giftRows } = await supabase
+          .from("gift_entitlements")
+          .select("plan,expires_at")
+          .eq("user_id", userId);
+        setGifts((giftRows as GiftEntitlement[] | null) ?? []);
+      } catch {
+        setGifts([]);
+      }
+      return row;
+    } catch (err) {
+      console.error("Failed to load subscription:", err);
+      return null;
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-    return row;
   }, [userId]);
 
   useEffect(() => {

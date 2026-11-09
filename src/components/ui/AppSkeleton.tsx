@@ -38,7 +38,7 @@ export function AppSkeleton() {
   }, []);
 
   return (
-    <div role="status" aria-live="polite" className="relative flex h-full w-full overflow-hidden bg-bg-tertiary">
+    <div role="status" aria-live="polite" className="relative flex h-full w-full overflow-hidden bg-bg-secondary">
       <span className="sr-only">{t("Loading Disband")}</span>
 
       {/* Server rail */}

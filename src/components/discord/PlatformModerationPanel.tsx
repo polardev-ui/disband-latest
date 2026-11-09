@@ -179,7 +179,7 @@ export function PlatformModerationPanel() {
               className="mt-1 w-full rounded bg-bg-accent px-3 py-2 text-sm outline-none focus:border-[#00a8fc]"
             />
             {dropdownOpen && (searching || results.length > 0 || query.trim().length > 0) && (
-              <div className="absolute z-10 mt-1 max-h-72 w-full overflow-y-auto rounded-[4px] border border-divider bg-bg-floating shadow-[var(--elevation-high)]">
+              <div className="absolute z-10 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-divider bg-bg-floating shadow-[var(--elevation-high)]">
                 {searching && (
                   <p className="px-3 py-3 text-xs text-text-muted">Searching…</p>
                 )}

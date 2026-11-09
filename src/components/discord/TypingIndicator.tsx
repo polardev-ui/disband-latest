@@ -81,7 +81,7 @@ export function TypingIndicator({
       role="status"
       aria-live="polite"
       aria-atomic
-      className={`flex h-6 items-center gap-2 px-4 transition-opacity duration-300 ${
+      className={`flex h-6 items-center gap-2 bg-bg-primary px-4 transition-opacity duration-300 ${
         active ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >

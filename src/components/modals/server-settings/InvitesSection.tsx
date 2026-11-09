@@ -50,7 +50,7 @@ export function CopyField({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex items-center gap-2">
-      <div className="flex h-10 min-w-0 flex-1 items-center rounded-[3px] border border-transparent bg-bg-tertiary px-3.5">
+      <div className="flex h-10 min-w-0 flex-1 items-center rounded-md border border-border-subtle bg-bg-tertiary px-3.5">
         <span className="truncate font-mono text-[13px] text-text-normal">{value}</span>
       </div>
       <button
@@ -133,7 +133,7 @@ function VanityCard({
       <SettingsSection title={t("Custom invite link")} description={t("A short, memorable link that's yours as long as the space stays at Level 2.")}>
         <LevelLock level={2} count={catalystCount} perk="Custom invite links" onBoost={onBoost} />
         {current && (
-          <div className="flex items-center justify-between gap-3 border-t border-divider px-5 py-3.5">
+          <div className="flex items-center justify-between gap-3 border-t border-border-subtle px-5 py-3.5">
             <p className="min-w-0 text-[13px] text-text-muted">
               {t("Your current link")}{" "}<span className="font-mono text-text-normal">{current}</span> still works.
             </p>
@@ -144,7 +144,7 @@ function VanityCard({
             )}
           </div>
         )}
-        {error && <p className="border-t border-divider px-5 py-3 text-[13px] text-status-dnd">{error}</p>}
+        {error && <p className="border-t border-border-subtle px-5 py-3 text-[13px] text-status-dnd">{error}</p>}
       </SettingsSection>
     );
   }
@@ -166,7 +166,7 @@ function VanityCard({
               }}
               disabled={!isOwner}
               placeholder="my-space"
-              className="h-10 min-w-0 flex-1 rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 font-mono text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-[#00a8fc] disabled:opacity-60"
+              className="h-10 min-w-0 flex-1 rounded-md border border-border-subtle bg-bg-tertiary px-3.5 font-mono text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-brand disabled:opacity-60"
             />
             {isOwner && (
               <button type="button" onClick={() => void submit(clean || null)} disabled={saving || !dirty} className={`${btn.primary} h-10`}>

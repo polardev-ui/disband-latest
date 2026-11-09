@@ -68,7 +68,7 @@ function NotificationRow({
       <button
         type="button"
         onClick={() => onSelect(notification)}
-        className="mx-2 flex w-[calc(100%-16px)] items-start gap-3 rounded-[4px] px-2 py-2.5 text-left transition-colors hover:bg-interactive-hover"
+        className="mx-2 flex w-[calc(100%-16px)] items-start gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-interactive-hover"
       >
         <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${accent}`}>
           <Icon size={20} />
@@ -112,7 +112,7 @@ function FilterTab({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`flex h-7 items-center gap-1.5 rounded-[4px] px-2 text-[14px] font-medium transition-colors ${
+      className={`flex h-7 items-center gap-1.5 rounded-lg px-2 text-[14px] font-medium transition-colors ${
         active
           ? "bg-interactive-selected text-interactive-active"
           : "text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active"
@@ -293,7 +293,7 @@ export function NotificationBell({ compact = false }: { compact?: boolean }) {
 
             <div className="chat-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2">
               {navError && (
-                <p role="alert" className="mx-4 mt-3 rounded-[4px] bg-status-dnd/10 px-3 py-2 text-[14px] text-status-dnd">
+                <p role="alert" className="mx-4 mt-3 rounded-lg bg-status-dnd/10 px-3 py-2 text-[14px] text-status-dnd">
                   {navError}
                 </p>
               )}

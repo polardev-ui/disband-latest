@@ -129,7 +129,7 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
       <SettingsSection title={t("Slots")}>
         <SlotMeter used={emoji.length} limit={limit} label={t("Custom emoji")} />
         {bonus > 0 && (
-          <p className="border-t border-divider px-5 py-3 text-[13px] text-text-muted">
+          <p className="border-t border-border-subtle px-5 py-3 text-[13px] text-text-muted">
             {t("Includes")}{" "}<span className="font-medium text-brand">+{EMOJI_SLOTS_BONUS}</span> from this space&apos;s Catalyst level.
           </p>
         )}
@@ -157,7 +157,7 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
               <div className="flex flex-col justify-end gap-3">
                 <div>
                   <FieldLabel htmlFor="emoji-name" aside={`${name.length}/32`}>{t("Name")}</FieldLabel>
-                  <div className="flex h-10 items-center rounded-[3px] border border-transparent bg-bg-tertiary px-3 focus-within:border-brand">
+                  <div className="flex h-10 items-center rounded-md border border-border-subtle bg-bg-tertiary px-3 focus-within:border-brand">
                     <span className="text-text-muted">:</span>
                     <input
                       id="emoji-name"
@@ -199,7 +199,7 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
               return (
                 <li
                   key={e.id}
-                  className="view-enter group relative flex flex-col items-center rounded-lg bg-bg-secondary px-3 pb-3 pt-4 transition-colors hover:border-text-muted/40"
+                  className="view-enter group relative flex flex-col items-center rounded-xl border border-border-subtle bg-surface-raised px-3 pb-3 pt-4 transition-colors hover:border-text-muted/40"
                   style={enterStyle(i)}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -209,7 +209,7 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
                     type="button"
                     onClick={() => setRemoving(e)}
                     aria-label={t("Delete :{name}:", { name: e.name })}
-                    className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-[8px] text-text-muted opacity-0 transition-[opacity,background-color,color] hover:bg-status-dnd/12 hover:text-status-dnd focus-visible:opacity-100 group-hover:opacity-100"
+                    className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-xl text-text-muted opacity-0 transition-[opacity,background-color,color] hover:bg-status-dnd/12 hover:text-status-dnd focus-visible:opacity-100 group-hover:opacity-100"
                   >
                     <IconTrash size={14} />
                   </button>

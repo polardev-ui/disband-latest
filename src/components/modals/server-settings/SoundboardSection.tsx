@@ -128,7 +128,7 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
                   value={name}
                   onChange={(e) => setName(e.target.value.slice(0, 32))}
                   placeholder={t("Airhorn")}
-                  className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-[#00a8fc]"
+                  className="h-10 w-full rounded-md border border-border-subtle bg-bg-tertiary px-3.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-brand"
                 />
               </div>
               <div>
@@ -138,7 +138,7 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
                   value={emoji}
                   onChange={(e) => setEmoji(Array.from(e.target.value).slice(-4).join(""))}
                   placeholder="📣"
-                  className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3 text-center text-[20px] text-text-normal outline-none placeholder:opacity-50 focus:border-[#00a8fc]"
+                  className="h-10 w-full rounded-md border border-border-subtle bg-bg-tertiary px-3 text-center text-[20px] text-text-normal outline-none placeholder:opacity-50 focus:border-brand"
                 />
               </div>
             </div>
@@ -167,7 +167,7 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
                 <li
                   key={s.id}
                   className={`view-enter flex items-center gap-3 rounded-[14px] border bg-bg-secondary px-3 py-2.5 transition-colors ${
-                    playing ? "border-brand/60" : "border-divider"
+                    playing ? "border-brand/60" : "border-border-subtle"
                   }`}
                   style={enterStyle(i)}
                 >
@@ -175,7 +175,7 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
                     type="button"
                     onClick={() => play(s)}
                     aria-label={playing ? t("Stop {name}", { name: s.name }) : t("Play {name}", { name: s.name })}
-                    className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] text-[22px] transition-[background-color,transform] duration-150 active:scale-95 ${
+                    className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[22px] transition-[background-color,transform] duration-150 active:scale-95 ${
                       playing ? "bg-brand/18" : "bg-bg-accent hover:bg-interactive-hover"
                     }`}
                   >

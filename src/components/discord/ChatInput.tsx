@@ -155,11 +155,11 @@ type SlashEntry = { kind: "builtin"; def: SlashCommand } | { kind: "bot"; def: S
 
 /** The classic autocomplete popup above the composer, and its parts. */
 const AUTOCOMPLETE =
-  "menu-pop absolute bottom-full left-4 right-4 z-20 mb-2 max-h-[490px] overflow-y-auto rounded-lg bg-bg-secondary pb-2 shadow-[var(--elevation-high)]";
+  "menu-pop absolute bottom-full left-4 right-4 z-20 mb-2 max-h-[490px] overflow-y-auto rounded-xl border border-border-subtle bg-bg-floating pb-2 shadow-[var(--elevation-high)]";
 const AUTOCOMPLETE_HEADER =
-  "px-3 pb-1 pt-3 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary";
+  "px-3 pb-1 pt-3 text-[12px] font-semibold uppercase leading-4 tracking-[0.04em] text-text-muted";
 const AUTOCOMPLETE_ROW =
-  "mx-2 flex h-[34px] w-[calc(100%-16px)] items-center gap-3 rounded-[4px] px-2 text-left";
+  "mx-2 flex h-[34px] w-[calc(100%-16px)] items-center gap-3 rounded-lg px-2 text-left";
 
 /** Visible lines before the composer starts scrolling, matching Discord. */
 const COMPOSER_MAX_LINES = 16;
@@ -1113,7 +1113,7 @@ export function ChatInput({
       ) : (
       <>
       {(replyTo || editingMessageId) && (
-        <div className="flex h-[34px] items-center gap-2 rounded-t-lg bg-bg-secondary pl-4 pr-2 text-[14px]">
+        <div className="flex h-[36px] items-center gap-2 rounded-t-xl border border-b-0 border-border-subtle bg-bg-secondary-alt pl-4 pr-2 text-[14px]">
           <p className="min-w-0 flex-1 truncate text-header-secondary">
             {editingMessageId ? (
               t("Editing message — escape to cancel")
@@ -1148,7 +1148,7 @@ export function ChatInput({
           setDragOver(false);
           if (e.dataTransfer.files?.length) void handleFiles(e.dataTransfer.files);
         }}
-        className={`relative rounded-lg bg-bg-composer ${dragOver ? "ring-2 ring-brand" : ""} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
+        className={`relative rounded-xl border bg-bg-composer transition-colors ${dragOver ? "border-brand ring-2 ring-brand/40" : "border-border-subtle focus-within:border-border-strong"} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
       >
         {entries.length > 0 && (
           <div className="flex flex-wrap gap-2 border-b border-divider px-3 py-2">
@@ -1172,7 +1172,7 @@ export function ChatInput({
                 if (allowPolls) setPlusMenuOpen((v) => !v);
                 else fileRef.current?.click();
               }}
-              className="group/plus -ml-4 flex h-[44px] w-[56px] shrink-0 items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"
+              className="group/plus -ml-4 flex h-[50px] w-[56px] shrink-0 items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"
             >
               <span className={`flex h-6 w-6 items-center justify-center rounded-full text-bg-composer transition-colors ${
                 plusMenuOpen ? "bg-interactive-active" : "bg-interactive-normal group-hover/plus:bg-interactive-active"
@@ -1197,7 +1197,7 @@ export function ChatInput({
                   e.preventDefault();
                   e.stopPropagation();
                 }}
-                className={`menu-pop${plusExiting ? " pop-out" : ""} absolute bottom-full left-0 z-20 mb-2 w-[220px] rounded-[4px] bg-bg-floating px-1.5 py-1.5 shadow-[var(--elevation-high)]`}
+                className={`menu-pop${plusExiting ? " pop-out" : ""} absolute bottom-full left-0 z-20 mb-2 w-[220px] rounded-xl border border-border-subtle bg-bg-floating px-1.5 py-1.5 shadow-[var(--elevation-high)]`}
               >
                 {[
                   {
@@ -1224,7 +1224,7 @@ export function ChatInput({
                     autoFocus={i === 0}
                     disabled={item.disabled}
                     onClick={() => { setPlusMenuOpen(false); item.onSelect(); }}
-                    className="group/item flex w-full items-center gap-2 rounded-[2px] px-2 py-1.5 text-left text-interactive-normal outline-none hover:bg-brand-hover hover:text-white focus-visible:bg-brand-hover focus-visible:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    className="group/item flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-interactive-normal outline-none hover:bg-interactive-hover hover:text-interactive-active focus-visible:bg-interactive-hover focus-visible:text-interactive-active disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                       {item.icon}
@@ -1250,7 +1250,7 @@ export function ChatInput({
               layer (absolute, inset-0) has to share or the caret drifts. The
               textarea used to be inline-block, so its wrapper also reserved
               descender space beneath it and the text sat ~3px high. */}
-          <div className="flex min-h-[44px] min-w-0 flex-1 items-center py-[11px]">
+          <div className="flex min-h-[50px] min-w-0 flex-1 items-center py-[14px]">
           <div className="relative w-full">
             {/* The styled layer. aria-hidden: the textarea is the real input,
                 and a screen reader must not read the text twice. */}
@@ -1310,7 +1310,7 @@ export function ChatInput({
             placeholder={editingMessageId ? t("Edit your message…") : placeholder}
             rows={1}
             enterKeyHint="send"
-            className="relative z-[1] block min-h-0 w-full resize-none bg-transparent py-px text-[16px] leading-[22px] text-transparent caret-text-normal placeholder:text-[#6d6f78] focus:outline-none"
+            className="relative z-[1] block min-h-0 w-full resize-none bg-transparent py-px text-[16px] leading-[22px] text-transparent caret-text-normal placeholder:text-text-muted focus:outline-none"
             onScroll={(e) => {
               // Keep the styled layer pinned to the textarea once the text is
               // long enough to scroll, or the two drift apart.
@@ -1331,7 +1331,7 @@ export function ChatInput({
               title={editingMessageId ? t("Finish editing before sending a gift") : t("Send a gift")}
               disabled={!!editingMessageId}
               onClick={() => setGiftOpen(true)}
-              className={`mt-[6px] flex h-8 w-10 shrink-0 items-center justify-center transition-colors hover:text-interactive-active disabled:cursor-not-allowed disabled:opacity-40 ${
+              className={`mt-[9px] flex h-8 w-10 shrink-0 items-center justify-center transition-colors hover:text-interactive-active disabled:cursor-not-allowed disabled:opacity-40 ${
                 giftOpen ? "text-interactive-active" : "text-interactive-normal"
               }`}
             >
@@ -1360,7 +1360,7 @@ export function ChatInput({
                 setActivityError(null);
                 setActivityOpen((value) => !value);
               }}
-              className={`mt-[6px] flex h-8 w-10 shrink-0 items-center justify-center transition-colors hover:text-interactive-active ${
+              className={`mt-[9px] flex h-8 w-10 shrink-0 items-center justify-center transition-colors hover:text-interactive-active ${
                 activityOpen || activityBusy ? "text-interactive-active" : "text-interactive-normal"
               }`}
             >
@@ -1394,7 +1394,7 @@ export function ChatInput({
               type="submit"
               aria-label={editingMessageId ? t("Save edit") : t("Send message")}
               title={editingMessageId ? t("Save edit") : t("Send message")}
-              className="ml-1 mt-[6px] hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-white transition-colors hover:bg-brand-hover [@media(pointer:coarse)]:flex"
+              className="ml-1 mt-[9px] hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-white transition-colors hover:bg-brand-hover [@media(pointer:coarse)]:flex"
             >
               <IconSend size={16} />
             </button>
@@ -1447,7 +1447,7 @@ function renderMentionChips(text: string, spans: MentionSpan[]) {
   for (const m of [...spans].sort((a, b) => a.start - b.start)) {
     out.push(text.slice(last, m.start));
     out.push(
-      <span key={m.start} className="rounded-[3px] bg-[rgb(88_101_242/0.3)] text-[#c9cdfb] shadow-[0_0_0_1px_rgb(88_101_242/0.3)]">
+      <span key={m.start} className="rounded-md bg-brand-soft text-header-primary shadow-[0_0_0_1px_var(--brand-soft)]">
         {text.slice(m.start, m.end)}
       </span>,
     );

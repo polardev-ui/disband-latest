@@ -71,23 +71,25 @@ export function ManagementPanel({ isOwner, isManager = true }: { isOwner: boolea
   async function suspend(suspendIt: boolean) {
     const id = await resolveSpace(space);
     if (!id) return say("error", "Couldn't find that space. Use its ID or an invite link.");
+    const run = async () => {
+      setBusy(true);
+      const { error } = await getSupabaseClient().rpc("manager_suspend_server", { p_server: id, p_suspend: suspendIt, p_reason: spaceReason || null });
+      if (error) { setBusy(false); return say("error", error.message); }
+      if (suspendIt && sweep) {
+        const res = await apiFetch("/api/moderation/server-sweep", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ serverId: id }) });
+        const json = (await res.json()) as { reviewed?: number; actions?: unknown[]; needsHumanReview?: string[]; error?: string };
+        setBusy(false);
+        if (!res.ok) return say("error", `Suspended, but the review failed: ${json.error ?? res.status}`);
+        return say("ok", `Suspended. Sentinel reviewed ${json.reviewed} members and acted on ${json.actions?.length ?? 0}${json.needsHumanReview?.length ? `; ${json.needsHumanReview.length} need a human decision on a ban` : ""}.`);
+      }
+      setBusy(false);
+      say("ok", suspendIt ? "Space suspended." : "Suspension lifted.");
+    };
     if (suspendIt && !(await confirmDialog({
       title: "Suspend this space?",
       body: sweep ? "It becomes read-only and closed to new members, and Sentinel reviews everyone who spoke there." : "It becomes read-only and closed to new members.",
-      confirmLabel: "Suspend",
-    }))) return;
-    setBusy(true);
-    const { error } = await getSupabaseClient().rpc("manager_suspend_server", { p_server: id, p_suspend: suspendIt, p_reason: spaceReason || null });
-    if (error) { setBusy(false); return say("error", error.message); }
-    if (suspendIt && sweep) {
-      const res = await apiFetch("/api/moderation/server-sweep", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ serverId: id }) });
-      const json = (await res.json()) as { reviewed?: number; actions?: unknown[]; needsHumanReview?: string[]; error?: string };
-      setBusy(false);
-      if (!res.ok) return say("error", `Suspended, but the review failed: ${json.error ?? res.status}`);
-      return say("ok", `Suspended. Sentinel reviewed ${json.reviewed} members and acted on ${json.actions?.length ?? 0}${json.needsHumanReview?.length ? `; ${json.needsHumanReview.length} need a human decision on a ban` : ""}.`);
-    }
-    setBusy(false);
-    say("ok", suspendIt ? "Space suspended." : "Suspension lifted.");
+      confirmLabel: "Suspend", action: run }))) return;
+    if (!(suspendIt)) await run();
   }
 
   async function strike() {
@@ -107,16 +109,16 @@ export function ManagementPanel({ isOwner, isManager = true }: { isOwner: boolea
 
       {isManager && <>
       <SettingsSection title="Team" description={isOwner ? "Appoint managers, staff and moderators." : "Appoint staff and moderators. Only the owner appoints managers."}>
-        <div className="flex flex-wrap gap-2 border-b border-divider px-5 py-4">
+        <div className="flex flex-wrap gap-2 border-b border-border-subtle px-5 py-4">
           <input value={grantName} onChange={(e) => setGrantName(e.target.value)} placeholder="username" className={`${settingsInputClass} max-w-[220px]`} />
-          <select value={grantRole} onChange={(e) => setGrantRole(e.target.value as Role)} className="rounded-[3px] bg-bg-tertiary px-2 text-[14px]">
+          <select value={grantRole} onChange={(e) => setGrantRole(e.target.value as Role)} className="rounded-md bg-bg-tertiary px-2 text-[14px]">
             {isOwner && <option value="manager">Manager</option>}
             <option value="staff">Staff</option>
             <option value="moderator">Moderator</option>
           </select>
           <button type="button" className={btn.primary} disabled={!grantName.trim()} onClick={() => void grant()}>Grant</button>
         </div>
-        <ul className="divide-y divide-divider">
+        <ul className="divide-y divide-border-subtle">
           {team.map((m) => (
             <li key={m.user_id} className="flex flex-wrap items-center gap-3 px-5 py-3">
               <span className="min-w-0 flex-1 truncate font-semibold text-header-primary">{m.display_name || m.username} <span className="font-normal text-text-muted">@{m.username}</span></span>
@@ -158,7 +160,7 @@ export function ManagementPanel({ isOwner, isManager = true }: { isOwner: boolea
         <div className="space-y-3 px-5 py-4">
           <div className="flex flex-wrap gap-2">
             <input value={strikeName} onChange={(e) => setStrikeName(e.target.value)} placeholder="username" className={`${settingsInputClass} max-w-[220px]`} />
-            <select value={severity} onChange={(e) => setSeverity(Number(e.target.value))} className="rounded-[3px] bg-bg-tertiary px-2 text-[14px]">
+            <select value={severity} onChange={(e) => setSeverity(Number(e.target.value))} className="rounded-md bg-bg-tertiary px-2 text-[14px]">
               <option value={1}>Minor (1)</option><option value={2}>Serious (2)</option><option value={3}>Severe (3)</option>
             </select>
           </div>
@@ -172,7 +174,7 @@ export function ManagementPanel({ isOwner, isManager = true }: { isOwner: boolea
             ))}
           </div>
           {restrict.length > 0 && (
-            <label className="flex items-center gap-2 text-[14px]">For <input type="number" min={1} max={365} value={restrictDays} onChange={(e) => setRestrictDays(Number(e.target.value))} className="w-20 rounded-[3px] bg-bg-tertiary px-2 py-1" /> days</label>
+            <label className="flex items-center gap-2 text-[14px]">For <input type="number" min={1} max={365} value={restrictDays} onChange={(e) => setRestrictDays(Number(e.target.value))} className="w-20 rounded-md bg-bg-tertiary px-2 py-1" /> days</label>
           )}
           <button type="button" className={btn.danger} disabled={!strikeName.trim() || !strikeReason.trim()} onClick={() => void strike()}>Issue strike</button>
         </div>
@@ -224,19 +226,22 @@ function BotModeration() {
 
   async function act(action: "warn" | "deactivate" | "reactivate") {
     if (!open) return;
-    if (action === "deactivate" && !(await confirmDialog({ title: `Deactivate ${open.bot.name}?`, body: "Its token stops working at once in every space. The owner is told why.", confirmLabel: "Deactivate" }))) return;
-    setBusy(true);
-    const res = await apiFetch("/api/admin/bots", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bot_id: open.bot.id, action, reason }),
-    });
-    const json = (await res.json().catch(() => ({}))) as { error?: string };
-    setBusy(false);
-    if (!res.ok) return setNote({ tone: "error", text: json.error ?? "That didn't work." });
-    setNote({ tone: "ok", text: action === "warn" ? "Owner warned." : action === "deactivate" ? "Bot deactivated and owner told." : "Bot reactivated." });
-    void openBot(open.bot.id);
-    void search(query);
+    const run = async () => {
+      setBusy(true);
+      const res = await apiFetch("/api/admin/bots", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bot_id: open.bot.id, action, reason }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      setBusy(false);
+      if (!res.ok) return setNote({ tone: "error", text: json.error ?? "That didn't work." });
+      setNote({ tone: "ok", text: action === "warn" ? "Owner warned." : action === "deactivate" ? "Bot deactivated and owner told." : "Bot reactivated." });
+      void openBot(open.bot.id);
+      void search(query);
+    };
+    if (action === "deactivate" && !(await confirmDialog({ title: `Deactivate ${open.bot.name}?`, body: "Its token stops working at once in every space. The owner is told why.", confirmLabel: "Deactivate", action: run }))) return;
+    if (!(action === "deactivate")) await run();
   }
 
   return (
@@ -249,7 +254,7 @@ function BotModeration() {
         </form>
 
         {open ? (
-          <div className="rounded-lg bg-bg-secondary p-4">
+          <div className="rounded-xl border border-border-subtle bg-surface-raised p-4">
             <div className="flex items-start gap-3">
               <span className="min-w-0 flex-1">
                 <span className="block text-[16px] font-semibold text-header-primary">
@@ -304,7 +309,7 @@ function BotModeration() {
             </div>
           </div>
         ) : (
-          <ul className="divide-y divide-divider rounded-lg bg-bg-secondary">
+          <ul className="divide-y divide-border-subtle rounded-lg bg-bg-secondary">
             {bots === null && <li className="h-12 animate-pulse" />}
             {bots?.length === 0 && <li className="px-3 py-3 text-[14px] text-text-muted">No bots found.</li>}
             {bots?.map((b) => (

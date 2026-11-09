@@ -222,6 +222,16 @@ class Client:
     def rename_channel(self, channel_id, name):
         return self._rest.patch("/api/v1/channels/%s" % _path_segment(channel_id), {"name": name})
 
+    def delete_message(self, channel_id, message_id):
+        """Deletes a message (messages.delete scope).
+
+        The bot's own messages always; anyone's when one of the bot's roles has
+        Manage Messages. ``message_id`` may be the id or the numeric display_id.
+        """
+        self._rest.delete(
+            "/api/v1/channels/%s/messages/%s" % (_path_segment(channel_id), _path_segment(str(message_id)))
+        )
+
     def delete_channel(self, channel_id):
         return self._rest.delete("/api/v1/channels/%s" % _path_segment(channel_id))
 

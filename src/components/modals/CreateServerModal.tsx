@@ -105,7 +105,7 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
         role="dialog"
         aria-modal="true"
         aria-label={t("Create a space")}
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-[440px] overflow-hidden rounded-lg bg-bg-primary text-center shadow-[var(--elevation-high)]`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative w-full max-w-[440px] overflow-hidden rounded-xl border border-border-subtle bg-bg-primary text-center shadow-[var(--elevation-high)]`}
       >
         <button type="button" onClick={onClose} aria-label={t("Close")} className="absolute right-4 top-4 text-interactive-normal hover:text-interactive-active">
           <IconClose size={24} />
@@ -145,7 +145,7 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
               <button
                 type="button"
                 onClick={() => { setError(null); setStep("join"); }}
-                className="mt-2 h-[38px] w-full rounded-[3px] bg-button-secondary text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover"
+                className="mt-2 h-[38px] w-full rounded-md bg-button-secondary text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover"
               >
                 {t("Join a Space")}
               </button>
@@ -182,7 +182,7 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   maxLength={32}
-                  className="mt-2 h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none focus:border-[#00a8fc]"
+                  className="mt-2 h-10 w-full rounded-md border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none focus:border-[#00a8fc]"
                   placeholder={t("My awesome space")}
                 />
               </label>
@@ -193,15 +193,15 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
                   onChange={(e) => setDescription(e.target.value)}
                   rows={2}
                   maxLength={190}
-                  className="mt-2 w-full resize-none rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 py-2 text-[16px] text-text-normal outline-none focus:border-[#00a8fc]"
+                  className="mt-2 w-full resize-none rounded-md border border-transparent bg-bg-tertiary px-2.5 py-2 text-[16px] text-text-normal outline-none focus:border-[#00a8fc]"
                 />
               </label>
-              <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-[3px] bg-bg-secondary px-3 py-2 transition-colors hover:bg-interactive-hover">
+              <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-md bg-bg-secondary px-3 py-2 transition-colors hover:bg-interactive-hover">
                 <IconUpload size={18} className="text-interactive-normal" />
                 <span className="flex-1 text-[14px] text-text-normal">{bannerUrl ? t("Change banner") : t("Add a banner (optional)")}</span>
                 {safeImageUrl(bannerUrl) && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={safeImageUrl(bannerUrl)!} alt="" className="h-8 w-16 rounded-[3px] object-cover" />
+                  <img src={safeImageUrl(bannerUrl)!} alt="" className="h-8 w-16 rounded-md object-cover" />
                 )}
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void handleBanner(e.target.files[0])} />
               </label>
@@ -212,7 +212,7 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
               <button
                 type="submit"
                 disabled={loading || isUploading || !name.trim()}
-                className="h-[38px] rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+                className="h-[38px] rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
               >
                 {loading ? t("Creating…") : t("Create")}
               </button>,
@@ -236,7 +236,7 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
                   value={invite}
                   onChange={(e) => setInvite(e.target.value)}
                   placeholder="https://disband.dev/server/hTKzmak"
-                  className="mt-2 h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
+                  className="mt-2 h-10 w-full rounded-md border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
                 />
               </label>
               <p className="mt-4 text-[12px] font-bold uppercase leading-4 text-header-secondary">{t("Invites should look like")}</p>
@@ -248,7 +248,7 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
               <button
                 type="submit"
                 disabled={loading || !invite.trim()}
-                className="h-[38px] rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+                className="h-[38px] rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
               >
                 {loading ? t("Joining…") : t("Join Space")}
               </button>,

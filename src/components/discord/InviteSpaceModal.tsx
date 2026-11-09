@@ -36,7 +36,7 @@ export function InviteSpaceModal({ server, onClose }: InviteSpaceModalProps) {
 
   return (
     <div className={`fixed inset-0 z-[90] flex items-center justify-center bg-overlay-scrim overlay-fade${exiting ? " overlay-fade-out" : ""} p-4`}>
-      <div role="dialog" aria-modal="true" aria-label={t("Invite people to {name}", { name: shown.name })} className={`modal-pop${exiting ? " modal-pop-out" : ""} flex max-h-[80vh] w-full max-w-md flex-col rounded-lg bg-bg-secondary shadow-[var(--elevation-high)]`}>
+      <div role="dialog" aria-modal="true" aria-label={t("Invite people to {name}", { name: shown.name })} className={`modal-pop${exiting ? " modal-pop-out" : ""} flex max-h-[80vh] w-full max-w-md flex-col rounded-xl border border-border-subtle bg-bg-secondary shadow-[var(--elevation-high)]`}>
         <div className="flex items-start justify-between gap-4 px-5 pb-3 pt-5">
           <div className="min-w-0">
             <h2 className="text-lg font-bold">{t("Invite people")}</h2>

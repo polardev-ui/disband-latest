@@ -38,7 +38,7 @@ export function AvatarCropModal({ open, imageUrl, onClose, onSave }: AvatarCropM
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       <button type="button" className="absolute inset-0 bg-overlay-scrim-strong overlay-fade" onClick={onClose} aria-label={t("Close")} />
-      <div role="dialog" aria-modal="true" aria-label={t("Adjust profile picture")} className="modal-pop relative w-full max-w-md rounded-lg border border-divider bg-bg-primary p-6 shadow-[var(--elevation-high)]">
+      <div role="dialog" aria-modal="true" aria-label={t("Adjust profile picture")} className="modal-pop relative w-full max-w-md rounded-xl border border-border-subtle bg-bg-primary p-6 shadow-[var(--elevation-high)]">
         <button type="button" onClick={onClose} className="absolute right-4 top-4 text-text-muted">
           <IconClose size={24} />
         </button>

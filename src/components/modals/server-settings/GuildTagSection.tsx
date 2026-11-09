@@ -86,15 +86,15 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
             perk="Guild tags"
             onBoost={onBoost}
           />
-          <div className="border-t border-divider/60 px-5 py-4">
-            <p className="mb-3 text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">
+          <div className="border-t border-border-subtle px-5 py-4">
+            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.06em] text-text-muted">
               {t("Eight icons, any colour")}
             </p>
             <div className="flex flex-wrap gap-2 text-text-muted/70">
               {GUILD_TAG_ICONS.map((item) => (
                 <span
                   key={item.id}
-                  className="flex h-8 w-8 items-center justify-center rounded-[4px] border border-divider/70 bg-bg-tertiary"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-border-subtle bg-bg-tertiary"
                   title={item.label}
                 >
                   <PixelGuildIcon icon={item.id} size={24} />
@@ -201,9 +201,9 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
       >
         {loading ? (
           <div className="space-y-4 p-5" aria-hidden>
-            <div className="skeleton-glimmer h-10 w-full rounded-[3px]" />
-            <div className="skeleton-glimmer h-9 w-2/3 rounded-[3px]" />
-            <div className="skeleton-glimmer h-8 w-1/2 rounded-[3px]" />
+            <div className="skeleton-glimmer h-10 w-full rounded-md" />
+            <div className="skeleton-glimmer h-9 w-2/3 rounded-md" />
+            <div className="skeleton-glimmer h-8 w-1/2 rounded-md" />
           </div>
         ) : (
           <div className="space-y-5 p-5">
@@ -229,7 +229,7 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
               </div>
               <div>
                 <FieldLabel>{t("Preview")}</FieldLabel>
-                <div className="flex h-[46px] items-center gap-2 rounded-[3px] bg-bg-tertiary px-3">
+                <div className="flex h-[46px] items-center gap-2 rounded-md bg-bg-tertiary px-3">
                   <span className="text-[16px] font-medium text-header-primary">polar</span>
                   <GuildTagBadge tag={preview} />
                 </div>
@@ -247,10 +247,10 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
                     aria-label={item.label}
                     aria-pressed={icon === item.id}
                     title={item.label}
-                    className={`flex aspect-square items-center justify-center rounded-[4px] border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                    className={`flex aspect-square items-center justify-center rounded-lg border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                       icon === item.id
                         ? "border-brand bg-brand/15"
-                        : "border-divider/70 bg-bg-tertiary hover:bg-interactive-hover"
+                        : "border-border-subtle bg-bg-tertiary hover:bg-interactive-hover"
                     }`}
                     style={{ color: normalizedColor }}
                   >
@@ -278,7 +278,7 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
                   />
                 ))}
                 <label
-                  className="relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-divider bg-bg-tertiary text-[17px] font-medium text-text-muted transition-colors hover:bg-interactive-hover"
+                  className="relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-border-subtle bg-bg-tertiary text-[17px] font-medium text-text-muted transition-colors hover:bg-interactive-hover"
                   title={t("Pick any colour")}
                 >
                   +
@@ -293,7 +293,7 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
               </div>
             </div>
 
-            <div className="rounded-[4px] border border-divider/70 bg-bg-tertiary/60">
+            <div className="rounded-lg border border-border-subtle bg-bg-tertiary/60">
               <SettingRow
                 label={t("Private tag")}
                 description={t("People can still wear the {tag} tag, but clicking it says this space is private instead of showing the space’s profile.", { tag: sanitizeGuildTag(tag) || "TAG" })}
@@ -305,14 +305,14 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
 
             {error && <InlineError>{error}</InlineError>}
             {notice && (
-              <p role="status" className="rounded-[4px] border border-status-online/25 bg-status-online/8 px-3.5 py-2.5 text-[13px] text-status-online">
+              <p role="status" className="rounded-lg border border-status-online/25 bg-status-online/8 px-3.5 py-2.5 text-[13px] text-status-online">
                 {notice === "removed"
                   ? t("Removed. It no longer appears on anyone's profile.")
                   : t("Saved. Anyone in {name} can wear it from Profile settings.", { name: server.name })}
               </p>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-divider/60 pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-4">
               <div>
                 {existing && (
                   <button

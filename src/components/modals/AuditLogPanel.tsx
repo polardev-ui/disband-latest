@@ -111,7 +111,7 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
     return (
       <div className="overflow-hidden rounded-lg bg-bg-secondary">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="flex items-center gap-3 border-b border-divider px-4 py-3.5 last:border-b-0">
+          <div key={i} className="flex items-center gap-3 border-b border-border-subtle px-4 py-3.5 last:border-b-0">
             <div className="h-8 w-8 animate-pulse rounded-full bg-bg-accent" />
             <div className="h-3 flex-1 animate-pulse rounded bg-bg-accent" style={{ maxWidth: 220 + i * 40 }} />
           </div>
@@ -146,7 +146,7 @@ export function AuditLogPanel({ serverId }: { serverId: string }) {
               ? `${row.details?.enabled === false ? "removed" : "granted"} the Verified badge on`
               : action?.label ?? row.action;
         return (
-          <li key={row.id} className="view-enter flex items-start gap-3 border-b border-divider px-4 py-3 last:border-b-0" style={enterStyle(i)}>
+          <li key={row.id} className="view-enter flex items-start gap-3 border-b border-border-subtle px-4 py-3 last:border-b-0" style={enterStyle(i)}>
             <div className="relative shrink-0">
               {actor ? <Avatar profile={actor} size="sm" /> : <span className="block h-8 w-8 rounded-full bg-bg-accent" />}
               <span

@@ -81,7 +81,7 @@ export function MfaChallengeScreen() {
 
   if (loadingFactors) {
     return (
-      <div className="flex app-screen items-center justify-center bg-bg-tertiary text-text-muted">
+      <div className="flex app-screen items-center justify-center bg-bg-secondary text-text-muted">
         {t("Loading your security methods…")}
       </div>
     );
@@ -89,7 +89,7 @@ export function MfaChallengeScreen() {
 
   if (loadError) {
     return (
-      <div className="flex app-screen items-center justify-center bg-bg-tertiary p-6">
+      <div className="flex app-screen items-center justify-center bg-bg-secondary p-6">
         <div className="w-full max-w-sm rounded-lg bg-bg-secondary p-8 text-center shadow-[var(--elevation-high)]">
           <h1 className="text-xl font-bold text-text-normal">{t("Something went wrong")}</h1>
           <p className="mt-2 text-sm text-text-muted">{loadError}</p>
@@ -113,7 +113,7 @@ export function MfaChallengeScreen() {
   }
 
   return (
-    <div className="flex app-screen items-center justify-center bg-bg-tertiary p-6">
+    <div className="flex app-screen items-center justify-center bg-bg-secondary p-6">
       <div className="w-full max-w-sm rounded-lg bg-bg-secondary p-8 shadow-[var(--elevation-high)]">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex justify-center">
@@ -129,7 +129,7 @@ export function MfaChallengeScreen() {
           <form onSubmit={submitTotp} className="space-y-4">
             {totpFactors.length > 1 && (
               <label className="block">
-                <span className="mb-1 block text-xs font-bold uppercase text-text-muted">{t("Authenticator")}</span>
+                <span className="mb-1.5 block text-[13px] font-semibold text-header-secondary">{t("Authenticator")}</span>
                 <select
                   value={selectedFactorId}
                   onChange={(e) => setSelectedFactorId(e.target.value)}
@@ -144,7 +144,7 @@ export function MfaChallengeScreen() {
               </label>
             )}
             <label className="block">
-              <span className="mb-1 block text-xs font-bold uppercase text-text-muted">{t("Authentication code")}</span>
+              <span className="mb-1.5 block text-[13px] font-semibold text-header-secondary">{t("Authentication code")}</span>
               <input
                 required
                 inputMode="numeric"

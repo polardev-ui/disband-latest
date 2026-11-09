@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { MarketingFooter, MarketingNav } from "@/components/marketing/MarketingLayout";
+import { LegalShell } from "@/components/marketing/LegalShell";
 
 export const metadata: Metadata = {
   title: "End User License Agreement",
@@ -13,13 +13,9 @@ const link = "text-brand hover:underline";
 
 export default function EulaPage() {
   return (
-    <div className="min-h-screen bg-[#1e1f22] text-[#dbdee1]">
-      <MarketingNav />
-      <main className="mx-auto max-w-3xl px-6 pb-16 pt-24">
-        <h1 className="text-3xl font-bold text-white">End User License Agreement</h1>
-        <p className="mt-2 text-sm text-[#949ba4]">Last updated: November 6, 2026</p>
+    <LegalShell title="End User License Agreement" updated="November 6, 2026" path="/eula">
 
-        <div className="mt-8 space-y-6 text-[15px] leading-relaxed text-[#b5bac1]">
+        <div className="mt-8 space-y-6 text-[15px] leading-relaxed text-interactive-normal">
           <p>
             This End User License Agreement (“EULA”) is a legal agreement between you and{" "}
             <strong>Genysis IQ LLC</strong> (“Genysis IQ,” “Disband,” “we,” “us,” or “our”). It covers
@@ -40,7 +36,7 @@ export default function EulaPage() {
             the App, this EULA controls.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">1. License</h2>
+          <h2 className="text-lg font-semibold text-header-primary">1. License</h2>
           <p>
             Subject to this EULA and the Terms of Service, we grant you a limited, personal,
             non-exclusive, non-transferable, non-sublicensable, revocable license to download, install,
@@ -56,7 +52,7 @@ export default function EulaPage() {
             legal guardian.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">2. Ownership</h2>
+          <h2 className="text-lg font-semibold text-header-primary">2. Ownership</h2>
           <p>
             The App is licensed, not sold. Genysis IQ and its licensors own the App and all
             intellectual-property rights in it, including its code, design, artwork, and the Disband
@@ -68,7 +64,7 @@ export default function EulaPage() {
             payment to you.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">3. Restrictions</h2>
+          <h2 className="text-lg font-semibold text-header-primary">3. Restrictions</h2>
           <p>Except where applicable law expressly allows it despite this restriction, you may not:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>Copy, modify, translate, or create derivative works of the App;</li>
@@ -100,7 +96,7 @@ export default function EulaPage() {
             reports in Section 4 of the Terms of Service.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">4. Source Code and Developer Libraries</h2>
+          <h2 className="text-lg font-semibold text-header-primary">4. Source Code and Developer Libraries</h2>
           <p>
             Some of Disband’s source code is publicly viewable. Viewing it does not give you a license
             to copy, modify, redistribute, or deploy it, apart from any rights that come with a specific
@@ -111,7 +107,7 @@ export default function EulaPage() {
             libraries for JavaScript and Python, are governed by that license instead of this EULA.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">5. Third-Party Software and Services</h2>
+          <h2 className="text-lg font-semibold text-header-primary">5. Third-Party Software and Services</h2>
           <p>
             The App includes third-party and open-source components, such as fonts, icons, and software
             libraries, that are licensed under their own terms. Those terms apply to those components,
@@ -123,7 +119,7 @@ export default function EulaPage() {
             we are not responsible for them.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">6. Updates</h2>
+          <h2 className="text-lg font-semibold text-header-primary">6. Updates</h2>
           <p>
             The App may download and install updates automatically, through an app store or the desktop
             updater. Some updates may be required to keep using the Service, and older versions may stop
@@ -131,7 +127,7 @@ export default function EulaPage() {
             unless the update comes with different terms.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">7. Device Permissions and Data</h2>
+          <h2 className="text-lg font-semibold text-header-primary">7. Device Permissions and Data</h2>
           <p>
             Some features need access to parts of your device, such as the microphone and camera for
             calls, screen capture for screen sharing, notifications, and files or photos for uploads.
@@ -148,7 +144,7 @@ export default function EulaPage() {
             <Link href="/privacy" className={link}>Privacy Policy</Link>.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">8. Purchases and Digital Items</h2>
+          <h2 className="text-lg font-semibold text-header-primary">8. Purchases and Digital Items</h2>
           <p>
             Subscriptions and other purchases made in or for the App are governed by Section 9 of the
             Terms of Service and, for app store purchases, by the store’s rules.
@@ -162,7 +158,7 @@ export default function EulaPage() {
             unavailable because your account is suspended or terminated under the Terms of Service.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">9. Term and Termination</h2>
+          <h2 className="text-lg font-semibold text-header-primary">9. Term and Termination</h2>
           <p>
             This EULA applies from the time you first download, install, or use the App until it is
             terminated.
@@ -178,7 +174,7 @@ export default function EulaPage() {
           </p>
           <p>Sections 2, 8, 10, 11, 12, 13, 15, and 17 continue to apply after this EULA ends.</p>
 
-          <h2 className="text-lg font-semibold text-white">10. Disclaimer of Warranties</h2>
+          <h2 className="text-lg font-semibold text-header-primary">10. Disclaimer of Warranties</h2>
           <p>
             To the maximum extent permitted by law, the App is provided “as is” and “as available,”
             with all faults and without warranties of any kind, as described in Section 11 of the Terms
@@ -188,15 +184,15 @@ export default function EulaPage() {
           </p>
           <p>Nothing in this EULA excludes a warranty or consumer right that cannot legally be excluded.</p>
 
-          <h2 className="text-lg font-semibold text-white">11. Limitation of Liability</h2>
+          <h2 className="text-lg font-semibold text-header-primary">11. Limitation of Liability</h2>
           <p>
             To the maximum extent permitted by law, the limits on liability in Section 12 of the Terms of
             Service apply to the App and to this EULA. Those limits do not apply where liability cannot
             legally be limited.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">12. App Stores</h2>
-          <h3 className="text-base font-semibold text-white">Apple App Store</h3>
+          <h2 className="text-lg font-semibold text-header-primary">12. App Stores</h2>
+          <h3 className="text-base font-semibold text-header-primary">Apple App Store</h3>
           <p>
             If you downloaded the App from Apple’s App Store, the following terms also apply. If they
             conflict with the rest of this EULA, they control.
@@ -261,14 +257,14 @@ export default function EulaPage() {
             </li>
           </ul>
 
-          <h3 className="text-base font-semibold text-white">Google Play and other stores</h3>
+          <h3 className="text-base font-semibold text-header-primary">Google Play and other stores</h3>
           <p>
             If you downloaded the App from Google Play, Google Play’s terms and policies also apply to
             your download and any purchases. Google is not a party to this EULA and is not responsible
             for the App. The same applies to any other store you get the App from.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">13. Export Controls and Sanctions</h2>
+          <h2 className="text-lg font-semibold text-header-primary">13. Export Controls and Sanctions</h2>
           <p>
             You may not use, export, or re-export the App in violation of U.S. export control or
             sanctions laws, or any other laws that apply. You represent that you are not located in a
@@ -276,7 +272,7 @@ export default function EulaPage() {
             list of prohibited or restricted parties.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">14. U.S. Government End Users</h2>
+          <h2 className="text-lg font-semibold text-header-primary">14. U.S. Government End Users</h2>
           <p>
             The App is “commercial computer software” and “commercial computer software documentation”
             as those terms are used in the Federal Acquisition Regulation and the Defense Federal
@@ -284,7 +280,7 @@ export default function EulaPage() {
             to all other users under this EULA.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">15. Governing Law and Courts</h2>
+          <h2 className="text-lg font-semibold text-header-primary">15. Governing Law and Courts</h2>
           <p>
             This EULA is governed by the laws of the State of Florida, without regard to conflict-of-law
             rules. Disputes about this EULA or the App must be brought as described in Section 14 of the
@@ -292,7 +288,7 @@ export default function EulaPage() {
           </p>
           <p>Nothing in this section prevents a consumer from asserting rights that cannot legally be waived.</p>
 
-          <h2 className="text-lg font-semibold text-white">16. Changes to This EULA</h2>
+          <h2 className="text-lg font-semibold text-header-primary">16. Changes to This EULA</h2>
           <p>
             We may update this EULA. When we make material changes, we will update the “Last updated”
             date and give notice where reasonably practical.
@@ -302,7 +298,7 @@ export default function EulaPage() {
             agree, stop using the App and delete it.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">17. General Provisions</h2>
+          <h2 className="text-lg font-semibold text-header-primary">17. General Provisions</h2>
           <p>
             This EULA, the Terms of Service, and the Privacy Policy are the entire agreement between you
             and Genysis IQ about the App.
@@ -314,7 +310,7 @@ export default function EulaPage() {
             transfer it, for example as part of a merger, acquisition, or sale of assets.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">18. Contact</h2>
+          <h2 className="text-lg font-semibold text-header-primary">18. Contact</h2>
           <p>Genysis IQ LLC</p>
           <p>10524 Moss Park Rd, Suite 204-653</p>
           <p>Orlando, Florida 32832</p>
@@ -325,8 +321,6 @@ export default function EulaPage() {
         <Link href="/home" className="mt-10 inline-block text-sm text-brand hover:underline">
           ← Back to home
         </Link>
-      </main>
-      <MarketingFooter />
-    </div>
+    </LegalShell>
   );
 }

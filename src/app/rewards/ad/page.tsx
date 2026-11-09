@@ -92,14 +92,14 @@ export default function RewardedAdPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-5 bg-bg-tertiary p-6 text-text-normal">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-5 bg-bg-secondary p-6 text-text-normal">
       <h1 className="text-2xl font-bold text-header-primary">Watch an ad, earn {CURRENCY.plural}</h1>
       <p className="max-w-md text-center text-[15px] text-text-muted">
         Watch to the end and {AD_REWARD} {CURRENCY.plural} land in your wallet once the ad network confirms the view.
       </p>
       <div id="applixir-ad-container" className="w-full max-w-[640px]" />
       {(state === "idle" || state === "error") && (
-        <button type="button" onClick={() => void start()} className="rounded-[3px] bg-brand px-5 py-2.5 font-semibold text-white hover:bg-brand-hover">
+        <button type="button" onClick={() => void start()} className="rounded-md bg-brand px-5 py-2.5 font-semibold text-white hover:bg-brand-hover">
           {state === "idle" ? "Start the ad" : "Try again"}
         </button>
       )}

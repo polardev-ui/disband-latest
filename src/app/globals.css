@@ -47,14 +47,23 @@
   --color-mention-bg: var(--mention-bg, rgb(240 178 50 / 0.1));
   --color-mention-border: var(--mention-border, var(--status-idle));
 
-  --radius-sm: var(--skin-radius-sm, 0.125rem);
+  /* Redesign surfaces: hairlines between columns, borders on cards and
+     floating layers, and the raised card colour used inside settings. */
+  --color-column-border: var(--column-border);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-surface-raised: var(--surface-raised);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-foreground: var(--brand-foreground, #fff);
+
+  --radius-sm: var(--skin-radius-sm, 0.25rem);
   --radius-md: var(--skin-radius-md, 0.375rem);
   --radius-lg: var(--skin-radius-lg, 0.5rem);
   --radius-xl: var(--skin-radius-xl, 0.75rem);
   --radius-2xl: var(--skin-radius-2xl, 1rem);
   --radius-3xl: var(--skin-radius-3xl, 1.5rem);
 
-  --font-sans: var(--skin-font, var(--font-noto, var(--font-discord)));
+  --font-sans: var(--skin-font, var(--font-plex, var(--font-noto, var(--font-discord))));
 }
 
 @font-face {
@@ -72,127 +81,196 @@
 }
 
 /*
- Dark — the default theme, web and desktop only (iOS and Android draw their
- own native palettes and are deliberately untouched).
+ Themes — web and desktop only (iOS and Android draw their own native
+ palettes and are deliberately untouched).
 
- The classic Discord dark palette: three stacked greys give the layout its
- depth instead of borders.
+ The redesign trades the classic three stacked greys for flat, near-black
+ surfaces separated by hairlines, an indigo accent and roomier corners.
 
-   tertiary   #1e1f22  space rail, inputs
-   secondary  #2b2d31  channel list, member list
-   sec-alt    #232428  user panel
-   primary    #313338  the conversation
-   floating   #111214  popouts, menus, tooltips
+   secondary      rail, channel/DM list, settings nav, modals
+   primary        the conversation and the member list
+   secondary-alt  the user area and cards raised inside a sidebar
+   tertiary       inputs, search fields, chips — lighter than the surface
+   floating       context menus, tooltips and popouts
 
- The theme id stays "dark": it is stored on the profile and read by the mobile
- apps, so a new id would arrive there as an unknown theme.
+ `:root` holds the base dark values plus *derived* tokens written in terms of
+ the base ones. A theme that only sets the base palette (Sunset, Ocean, …)
+ still gets coherent floating layers, borders and buttons, because var()
+ inside color-mix() resolves against that theme's own values. The three
+ house themes then pin every token to a tuned value.
+
+ `--mix-contrast` is the direction "lighter" means on a theme (white on dark,
+ black on light) and `--mix-shade` the direction "deeper" means.
+
+ The theme ids stay "dark", "midnight" and "light": they are stored on the
+ profile and read by the mobile apps, so a new id would arrive there as an
+ unknown theme.
 */
-:root,
-[data-theme="dark"] {
-  --bg-primary: #313338;
-  --bg-secondary: #2b2d31;
-  --bg-tertiary: #1e1f22;
-  --bg-accent: #1e1f22;
-  --bg-secondary-alt: #232428;
-  --bg-floating: #111214;
-  --bg-composer: #383a40;
-  --bg-message-hover: #2e3035;
-  --interactive-hover: #35373c;
-  --interactive-selected: #404249;
-  --interactive-normal: #b5bac1;
-  --interactive-active: #ffffff;
-  --interactive-muted: #4e5058;
-  --channels-default: #80848e;
-  --header-primary: #f2f3f5;
-  --header-secondary: #b5bac1;
-  --brand: #5865f2;
-  --brand-hover: #4752c4;
-  --text-normal: #dbdee1;
-  --text-muted: #949ba4;
-  --text-link: #00a8fc;
+:root {
+  --mix-contrast: #ffffff;
+  --mix-shade: #000000;
+
+  --bg-primary: #1f1d23;
+  --bg-secondary: #1a181e;
+  --bg-tertiary: #2a2730;
+  --bg-accent: #2a2730;
+  --interactive-hover: #26232b;
+  --interactive-selected: #302d36;
+  --brand: #4641d9;
+  --brand-hover: #3a35c2;
+  --text-normal: #e5e4e9;
+  --text-muted: #9d97aa;
+  --text-link: #6ccff9;
   --status-online: #23a55a;
   --status-idle: #f0b232;
   --status-dnd: #f23f43;
-  --status-offline: #80848e;
-  --divider: #3f4147;
-  --button-secondary: #4e5058;
-  --button-secondary-hover: #6d6f78;
-  --button-green: #248046;
-  --button-green-hover: #1a6334;
-  --button-danger: #da373c;
-  --button-danger-hover: #a12828;
+  --status-offline: #8e8a98;
+  --divider: #2c2932;
+
+  --bg-secondary-alt: color-mix(in srgb, var(--bg-secondary) 96%, var(--mix-contrast));
+  --bg-floating: color-mix(in srgb, var(--bg-secondary) 76%, var(--mix-shade));
+  --bg-composer: color-mix(in srgb, var(--bg-primary) 96%, var(--mix-contrast));
+  --bg-message-hover: color-mix(in srgb, var(--bg-primary) 98%, var(--mix-contrast));
+  --interactive-normal: color-mix(in srgb, var(--text-normal) 55%, var(--text-muted));
+  --interactive-active: color-mix(in srgb, var(--text-normal) 30%, var(--mix-contrast));
+  --interactive-muted: color-mix(in srgb, var(--text-muted) 45%, var(--bg-secondary));
+  --channels-default: var(--text-muted);
+  --header-primary: color-mix(in srgb, var(--text-normal) 60%, var(--mix-contrast));
+  --header-secondary: color-mix(in srgb, var(--text-normal) 65%, var(--text-muted));
+  --button-secondary: color-mix(in srgb, var(--bg-secondary) 88%, var(--mix-contrast));
+  --button-secondary-hover: color-mix(in srgb, var(--bg-secondary) 82%, var(--mix-contrast));
+  --button-green: #2f9e57;
+  --button-green-hover: #278449;
+  --button-danger: #d93a3c;
+  --button-danger-hover: #b92f31;
   --mention-bg: rgb(240 177 50 / 0.08);
   --mention-border: #f0b132;
+  --column-border: color-mix(in srgb, var(--bg-secondary) 94%, var(--mix-contrast));
+  --border-subtle: color-mix(in srgb, var(--bg-secondary) 90%, var(--mix-contrast));
+  --border-strong: color-mix(in srgb, var(--bg-secondary) 80%, var(--mix-contrast));
+  --surface-raised: color-mix(in srgb, var(--bg-secondary) 95%, var(--mix-contrast));
+  --brand-soft: color-mix(in srgb, var(--brand) 18%, transparent);
   --font-discord: "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial,
     sans-serif;
-  --overlay-surface: #111214;
-  --overlay-panel: #313338;
-  --overlay-media: #2b2d31;
-  --overlay-scrim: rgb(0 0 0 / 0.7);
-  --overlay-scrim-strong: rgb(0 0 0 / 0.85);
-  --elevation-low: 0 1px 0 hsl(0 0% 0.8% / 0.2), 0 1.5px 0 hsl(240 7.7% 2.5% / 0.05), 0 2px 0 hsl(0 0% 0.8% / 0.05);
-  --elevation-high: 0 8px 16px hsl(0 0% 0% / 0.24);
+  --overlay-surface: var(--bg-floating);
+  --overlay-panel: var(--bg-secondary);
+  --overlay-media: var(--bg-secondary);
+  --overlay-scrim: rgb(0 0 0 / 0.6);
+  --overlay-scrim-strong: rgb(0 0 0 / 0.82);
+  --elevation-low: 0 1px 0 rgb(0 0 0 / 0.18);
+  --elevation-high: 0 12px 32px rgb(0 0 0 / 0.4), 0 2px 6px rgb(0 0 0 / 0.24);
+  --focus-ring: color-mix(in srgb, var(--text-link) 55%, transparent);
 }
 
+/* Dark — the default. Plum-tinted near-black greys with an indigo accent. */
+[data-theme="dark"] {
+  --bg-primary: #1f1d23;
+  --bg-secondary: #1a181e;
+  --bg-secondary-alt: #232028;
+  --bg-tertiary: #2a2730;
+  --bg-accent: #2a2730;
+  --bg-floating: #141217;
+  --bg-composer: #26232b;
+  --bg-message-hover: #24222a;
+  --interactive-hover: #26232b;
+  --interactive-selected: #302d36;
+  --interactive-normal: #b1acbb;
+  --interactive-active: #ffffff;
+  --interactive-muted: #4d4955;
+  --channels-default: #9d97aa;
+  --header-primary: #f4f4f6;
+  --header-secondary: #cecbd4;
+  --text-normal: #e5e4e9;
+  --text-muted: #9d97aa;
+  --divider: #2c2932;
+  --column-border: #24212a;
+  --border-subtle: #2f2c36;
+  --border-strong: #3d3946;
+  --surface-raised: #222026;
+  --button-secondary: #322f39;
+  --button-secondary-hover: #3c3943;
+}
+
+/* AMOLED ("Coal"): true black surfaces, separated by hairlines. */
 [data-theme="midnight"] {
-  --bg-primary: #060607;
-  --bg-secondary: #0a0a0b;
-  --bg-tertiary: #050506;
-  --bg-accent: #111214;
-  --interactive-hover: #1a1b1e;
-  --interactive-selected: #232428;
-  --brand: #5865f2;
-  --brand-hover: #4752c4;
-  --text-normal: #dbdee1;
-  --text-muted: #949ba4;
-  --text-link: #00a8fc;
-  --status-online: #23a559;
+  --bg-primary: #000000;
+  --bg-secondary: #000000;
+  --bg-secondary-alt: #0e0d10;
+  --bg-tertiary: #121115;
+  --bg-accent: #121115;
+  --bg-floating: #0b0a0d;
+  --bg-composer: #0f0e12;
+  --bg-message-hover: #08070a;
+  --interactive-hover: #121115;
+  --interactive-selected: #1b1a1f;
+  --interactive-normal: #b1acbb;
+  --interactive-active: #ffffff;
+  --interactive-muted: #3d3a44;
+  --channels-default: #918b9d;
+  --header-primary: #f4f4f6;
+  --header-secondary: #cecbd4;
+  --brand: #4641d9;
+  --brand-hover: #3a35c2;
+  --text-normal: #e5e4e9;
+  --text-muted: #918b9d;
+  --text-link: #6ccff9;
+  --status-online: #23a55a;
   --status-idle: #f0b232;
   --status-dnd: #f23f43;
-  --status-offline: #80848e;
-  --divider: #2e3035;
+  --status-offline: #7d7887;
+  --divider: #1d1c21;
+  --column-border: #19181c;
+  --border-subtle: #222126;
+  --border-strong: #302e35;
+  --surface-raised: #0c0b0e;
+  --button-secondary: #1c1b20;
+  --button-secondary-hover: #26252b;
+  --overlay-scrim: rgb(0 0 0 / 0.7);
 }
 
 [data-theme="light"] {
-  --bg-primary: #ffffff;
+  --mix-contrast: #000000;
+  --mix-shade: #ffffff;
+  --bg-primary: #fbfbfc;
   --bg-secondary: #f2f3f5;
-  --bg-tertiary: #e3e5e8;
-  --bg-accent: #e3e5e8;
-  --bg-secondary-alt: #ebedef;
+  --bg-tertiary: #e6e7ea;
+  --bg-accent: #e6e7ea;
+  --bg-secondary-alt: #ebecef;
   --bg-floating: #ffffff;
-  --bg-composer: #ebedef;
-  --bg-message-hover: #f7f7f7;
+  --bg-composer: #eff0f2;
+  --bg-message-hover: #f4f5f7;
   --interactive-hover: #e8e9ec;
-  --interactive-selected: #d7d9dd;
-  --interactive-normal: #4e5058;
-  --interactive-active: #060607;
-  --interactive-muted: #c4c9ce;
-  --channels-default: #5c5e66;
-  --header-primary: #060607;
-  --header-secondary: #4e5058;
-  --brand: #5865f2;
-  --brand-hover: #4752c4;
-  --text-normal: #313338;
-  --text-muted: #5c5e66;
-  --text-link: #006ce7;
-  --status-online: #23a55a;
-  --status-idle: #f0b232;
-  --status-dnd: #f23f43;
+  --interactive-selected: #dddfe4;
+  --interactive-normal: #4e525b;
+  --interactive-active: #0e1014;
+  --interactive-muted: #c3c6cc;
+  --channels-default: #686c75;
+  --header-primary: #0e1014;
+  --header-secondary: #4b4f58;
+  --brand: #4641d9;
+  --brand-hover: #3a35c2;
+  --text-normal: #2e3138;
+  --text-muted: #686c75;
+  --text-link: #0b6bcb;
+  --status-online: #1f9d55;
+  --status-idle: #d99a0b;
+  --status-dnd: #e0393c;
   --status-offline: #80848e;
-  --divider: #e1e2e4;
-  --button-secondary: #6d6f78;
-  --button-secondary-hover: #4e5058;
-  --button-green: #248046;
-  --button-green-hover: #1a6334;
-  --button-danger: #da373c;
-  --button-danger-hover: #a12828;
-  --overlay-surface: #ffffff;
-  --overlay-panel: #ffffff;
-  --overlay-media: #f2f3f5;
-  --overlay-scrim: rgb(0 0 0 / 0.6);
-  --overlay-scrim-strong: rgb(0 0 0 / 0.8);
-  --elevation-low: 0 1px 0 hsl(0 0% 0% / 0.08);
-  --elevation-high: 0 8px 16px hsl(0 0% 0% / 0.16);
+  --divider: #e1e3e6;
+  --column-border: #e4e5e9;
+  --border-subtle: #dcdee2;
+  --border-strong: #c9ccd2;
+  --surface-raised: #ffffff;
+  --button-secondary: #e3e5e8;
+  --button-secondary-hover: #d6d9de;
+  --button-green: #23874a;
+  --button-green-hover: #1c6e3c;
+  --button-danger: #d23437;
+  --button-danger-hover: #b02a2d;
+  --overlay-scrim: rgb(14 16 20 / 0.45);
+  --overlay-scrim-strong: rgb(14 16 20 / 0.7);
+  --elevation-low: 0 1px 0 rgb(0 0 0 / 0.06);
+  --elevation-high: 0 12px 32px rgb(15 17 22 / 0.14), 0 2px 6px rgb(15 17 22 / 0.08);
 }
 
 [data-theme="sunset"] {
@@ -301,7 +379,7 @@ html {
 body {
   min-height: 100%;
   overflow-x: hidden;
-  background-color: var(--bg-tertiary);
+  background-color: var(--bg-secondary);
   color: var(--text-normal);
   font-family: var(--font-sans);
   font-size: 16px;
@@ -456,20 +534,23 @@ html[data-desktop-os="linux"] .desktop-titlebar-controls {
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background-color: var(--bg-tertiary);
-  border-radius: 4px;
-  border: 2px solid transparent;
+  background-color: color-mix(in srgb, var(--text-muted) 32%, transparent);
+  border-radius: 10px;
+  border: 3px solid transparent;
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background-color: var(--interactive-selected);
+  background-color: color-mix(in srgb, var(--text-muted) 55%, transparent);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 @keyframes tooltip-enter {
@@ -1724,6 +1805,10 @@ img.twemoji {
 }
 
 [data-theme="dark"],[data-theme="midnight"],[data-theme="light"] { --brand-foreground:#fff; }
+/* Light themes and skins: "lighter" means towards black, "deeper" towards
+   white, so the derived surfaces in :root shade the right way. */
+[data-theme="parchment"],[data-theme="porcelain"],
+[data-skin="y2k"],[data-skin="paper"],[data-skin="brutalist"] { --mix-contrast:#000; --mix-shade:#fff; }
 [data-theme="sunset"],[data-theme="ocean"],[data-theme="rose-gold"],[data-theme="plasma"],[data-theme="nord"] { --brand-foreground:#17131b; }
 [data-theme="plasma"] { --text-muted:#baa2d2; }
 [data-theme="nord"] { --bg-primary:#363f50; --bg-secondary:#2e3645; --bg-tertiary:#242c38; --text-muted:#c1cad7; --divider:#536177; }
@@ -1778,52 +1863,65 @@ img.twemoji {
 }
 
 /* ===================================================================== */
-/* Classic layout: space rail                                             */
+/* Space rail                                                             */
 /* ===================================================================== */
 .rail-scroll { scrollbar-width: none; }
 .rail-scroll::-webkit-scrollbar { display: none; }
 
-/* The left-edge pill. A dot for unread, a short bar on hover, a tall bar for
-   the selected item — height animates between them. */
+/* The left-edge indicator. A dot for unread, a short bar on hover, a tall bar
+   for the selected item — height animates between them. */
 .rail-pill {
   position: absolute;
   left: 0;
   top: 50%;
-  width: 8px;
+  width: 4px;
   height: 0;
-  margin-left: -4px;
   border-radius: 0 4px 4px 0;
-  background: var(--header-primary, #f2f3f5);
+  background: var(--header-primary, #f4f4f6);
   transform: translateY(-50%);
   transition: height 0.2s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.2s ease;
   opacity: 0;
   pointer-events: none;
 }
 .rail-pill[data-state="unread"] { height: 8px; opacity: 1; }
-.rail-item:hover .rail-pill:not([data-state="active"]) { height: 20px; opacity: 1; }
-.rail-pill[data-state="active"] { height: 40px; opacity: 1; }
+.rail-item:hover .rail-pill:not([data-state="active"]) { height: 18px; opacity: 1; }
+.rail-pill[data-state="active"] { height: 36px; opacity: 1; }
 
-/* Circle at rest, rounded square when hovered or selected. */
+/* Round at rest, a soft squircle when hovered or selected. */
 .rail-icon {
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  transition: border-radius 0.15s ease-out, background-color 0.15s ease-out, color 0.15s ease-out;
+  transition: border-radius 0.18s ease-out, background-color 0.15s ease-out, color 0.15s ease-out, border-color 0.15s ease-out;
 }
 .rail-item:hover .rail-icon,
-.rail-icon[data-active] { border-radius: 16px; }
+.rail-icon[data-active] { border-radius: 14px; }
 .rail-item:active .rail-icon { transform: translateY(1px); }
 
-/* Spaces without a picture, and the home button: grey, brand when active. */
-.rail-icon-fill { background: var(--bg-primary); color: var(--text-normal); }
+/* Spaces without a picture and the Favorites star: a quiet chip that takes
+   the accent when it is hovered or selected. */
+.rail-icon-fill { background: var(--bg-tertiary); color: var(--text-normal); }
 .rail-item:hover .rail-icon-fill,
-.rail-icon-fill[data-active] { background: var(--brand); color: #fff; }
+.rail-icon-fill[data-active] { background: var(--brand); color: var(--brand-foreground, #fff); }
 
-/* Add / Explore: green glyph that fills in on hover. */
-.rail-icon-action { background: var(--bg-primary); color: var(--status-online); }
+/* Home is always the accent: it is the way back from anywhere. */
+.rail-icon-home { background: var(--bg-tertiary); color: #fff; }
+.rail-icon-home[data-active],
+.rail-item:hover .rail-icon-home { background: var(--brand); }
+
+/* Add, Explore, Download, Help: dashed outlines that fill in on hover. */
+.rail-icon-action {
+  background: transparent;
+  color: var(--interactive-normal);
+  border: 1.5px dashed var(--border-strong);
+}
 .rail-item:hover .rail-icon-action,
-.rail-icon-action[data-active] { background: var(--status-online); color: #fff; }
+.rail-icon-action[data-active] {
+  background: var(--brand);
+  border-color: transparent;
+  color: var(--brand-foreground, #fff);
+}
 
 .rail-enter { animation: rail-enter 0.25s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
 @keyframes rail-enter {
@@ -1842,16 +1940,18 @@ img.twemoji {
   to { opacity: 1; transform: none; }
 }
 
-/* Thin classic scrollbars: channel list and member list hide the track. */
+/* Sidebars: hairline scrollbars that only show while the list is hovered. */
 .channel-scroll, .member-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; }
-.channel-scroll:hover, .member-scroll:hover { scrollbar-color: var(--bg-tertiary) transparent; }
-.channel-scroll::-webkit-scrollbar, .member-scroll::-webkit-scrollbar { width: 4px; }
-.channel-scroll::-webkit-scrollbar-thumb, .member-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
-.channel-scroll:hover::-webkit-scrollbar-thumb, .member-scroll:hover::-webkit-scrollbar-thumb { background: var(--bg-tertiary); }
-/* The chat scroller keeps a visible track, like the classic message list. */
-.chat-scroll::-webkit-scrollbar { width: 16px; }
-.chat-scroll::-webkit-scrollbar-track { background: var(--bg-secondary-alt, var(--bg-secondary)); border: 4px solid var(--bg-primary); border-radius: 8px; }
-.chat-scroll::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border: 4px solid transparent; background-clip: padding-box; border-radius: 8px; min-height: 40px; }
+.channel-scroll:hover, .member-scroll:hover { scrollbar-color: color-mix(in srgb, var(--text-muted) 35%, transparent) transparent; }
+.channel-scroll::-webkit-scrollbar, .member-scroll::-webkit-scrollbar { width: 6px; }
+.channel-scroll::-webkit-scrollbar-thumb, .member-scroll::-webkit-scrollbar-thumb { background: transparent; border: 0; border-radius: 6px; }
+.channel-scroll:hover::-webkit-scrollbar-thumb, .member-scroll:hover::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 35%, transparent); }
+/* The conversation: a slim floating thumb, no track. */
+.chat-scroll { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text-muted) 35%, transparent) transparent; }
+.chat-scroll::-webkit-scrollbar { width: 12px; }
+.chat-scroll::-webkit-scrollbar-track { background: transparent; }
+.chat-scroll::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 35%, transparent); border: 3px solid transparent; background-clip: padding-box; border-radius: 12px; min-height: 40px; }
+.chat-scroll::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text-muted) 55%, transparent); border: 3px solid transparent; background-clip: padding-box; }
 @media (prefers-reduced-motion: reduce) { .menu-pop { animation: none; } }
 
 /* Classic modal entrance: a quick scale-up from 0.9 with a slight overshoot,
@@ -1882,32 +1982,38 @@ img.twemoji {
 /* ===================================================================== */
 /* Classic full-screen settings layers                                    */
 /* ===================================================================== */
-/* The app steps back while a settings layer is open… */
+/* The app eases back a touch while a settings window floats over it… */
 .app-base-layer {
-  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.2s ease;
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.2s ease;
   transform-origin: center;
 }
-body.layer-open .app-base-layer,
+body.layer-open .app-base-layer {
+  transform: scale(0.985);
+  pointer-events: none;
+}
+/* The connection screen reuses the layer and wants the app out of sight. */
 body.connection-down .app-base-layer {
   transform: scale(0.93);
   opacity: 0;
   pointer-events: none;
 }
-/* …and the layer zooms in to meet it. */
-.settings-layer { animation: settings-layer-in 0.2s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
-.settings-layer-out { animation: settings-layer-out 0.15s ease-in both; }
-@keyframes settings-layer-in {
-  from { opacity: 0; transform: scale(1.1); }
+/* …the scrim fades in, and the window scales up to meet it. */
+.settings-layer { animation: overlay-fade 0.18s ease-out both; }
+.settings-layer-out { animation: overlay-fade-out 0.15s ease-in both; }
+.settings-layer .settings-window { animation: settings-window-in 0.24s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+.settings-layer-out .settings-window { animation: settings-window-out 0.15s ease-in both; }
+@keyframes settings-window-in {
+  from { opacity: 0; transform: scale(0.965) translateY(8px); }
   to { opacity: 1; transform: none; }
 }
-@keyframes settings-layer-out {
+@keyframes settings-window-out {
   from { opacity: 1; transform: none; }
-  to { opacity: 0; transform: scale(1.1); }
+  to { opacity: 0; transform: scale(0.975); }
 }
 .settings-sidebar { scrollbar-width: thin; scrollbar-color: transparent transparent; }
-.settings-sidebar:hover { scrollbar-color: var(--bg-tertiary) transparent; }
-.settings-scroll::-webkit-scrollbar { width: 8px; }
-.settings-scroll::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 4px; }
+.settings-sidebar:hover { scrollbar-color: color-mix(in srgb, var(--text-muted) 35%, transparent) transparent; }
+.settings-scroll::-webkit-scrollbar { width: 10px; }
+.settings-scroll::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 32%, transparent); border: 3px solid transparent; background-clip: padding-box; border-radius: 10px; }
 /* The "Disband is restarting" / "You're offline" screen reuses the layer. */
 .connection-pulse { animation: connection-pulse 1.6s ease-in-out infinite; }
 @keyframes connection-pulse {
@@ -1917,5 +2023,40 @@ body.connection-down .app-base-layer {
 @media (prefers-reduced-motion: reduce) {
   .connection-pulse { animation: none; }
   .app-base-layer { transition: none; }
-  .settings-layer, .settings-layer-out { animation: none; }
+  .settings-layer, .settings-layer-out,
+  .settings-layer .settings-window, .settings-layer-out .settings-window { animation: none; }
 }
+
+/* ===================================================================== */
+/* Disband Aero page                                                      */
+/* ===================================================================== */
+/* An indigo-to-violet field with two soft light sources; flat underneath so
+   the white type stays crisp. */
+.aero-hero {
+  background:
+    radial-gradient(60% 70% at 18% 8%, rgb(140 120 255 / 0.55), transparent 70%),
+    radial-gradient(50% 60% at 88% 20%, rgb(224 85 255 / 0.4), transparent 70%),
+    linear-gradient(180deg, #4b43e0 0%, #3e35c9 55%, #33299f 100%);
+}
+.aero-orbit { animation: aero-orbit 40s linear infinite; }
+@keyframes aero-orbit { to { transform: rotate(360deg); } }
+.aero-emblem { animation: marketing-float 7s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .aero-orbit, .aero-emblem { animation: none; }
+}
+[data-motion="reduced"] .aero-orbit,
+[data-motion="reduced"] .aero-emblem { animation: none; }
+
+/* ===================================================================== */
+/* Chat wallpaper (Disband Lite and Aero)                                 */
+/* ===================================================================== */
+/* The wallpaper's layers sit over the conversation's own surface colour.
+   Set on <html> by applyAppearance() in src/lib/appearance.ts. */
+html[data-chat-wallpaper] .chat-wallpaper-host {
+  background: var(--chat-wallpaper), var(--bg-primary);
+}
+
+/* Policy pages: section headings get room above them inside the card. */
+.legal-body h2 { margin-top: 2rem; font-size: 1.25rem; letter-spacing: -0.01em; }
+.legal-body h2:first-child { margin-top: 0; }
+.legal-body a { color: var(--text-link); }

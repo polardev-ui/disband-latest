@@ -160,8 +160,8 @@ export function GroupRingOverlay({ groupName, onJoin, onDismiss }: {
       <p className="mt-1 text-[16px] font-semibold text-header-primary">{groupName}</p>
       <p className="text-[14px] text-header-secondary">{t("Someone started a call in this group")}</p>
       <div className="mt-3 flex gap-2">
-        <button type="button" onClick={onJoin} className="h-[38px] flex-1 rounded-[3px] bg-button-green text-[14px] font-medium text-white hover:bg-button-green-hover">{t("Join Call")}</button>
-        <button type="button" onClick={onDismiss} className="h-[38px] rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white hover:bg-button-secondary-hover">{t("Ignore")}</button>
+        <button type="button" onClick={onJoin} className="h-[38px] flex-1 rounded-md bg-button-green text-[14px] font-medium text-white hover:bg-button-green-hover">{t("Join Call")}</button>
+        <button type="button" onClick={onDismiss} className="h-[38px] rounded-md bg-button-secondary px-4 text-[14px] font-medium text-white hover:bg-button-secondary-hover">{t("Ignore")}</button>
       </div>
     </div>
   );

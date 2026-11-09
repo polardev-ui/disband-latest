@@ -1,12 +1,12 @@
 "use client";
 
+import { AuthorizeAppButton } from "@/components/ui/AuthorizeAppButton";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
-import { useUserNote, USER_NOTE_MAX } from "@/hooks/useUserNote";
 import { Avatar } from "@/components/ui/Avatar";
 import { GuildTag } from "@/components/ui/GuildTag";
 import { ListeningCard } from "@/components/ui/ListeningCard";
@@ -43,6 +43,8 @@ export interface UserProfilePopoutProps {
   isSelf?: boolean;
   plan?: SubscriptionPlan;
   isServerMember?: boolean;
+  /** Their roles are still loading: hold the section's place. */
+  rolesPending?: boolean;
   memberJoinedAt?: string | null;
   serverName?: string | null;
   serverIcon?: string | null;
@@ -74,6 +76,7 @@ export function UserProfilePopout({
   isSelf,
   plan,
   isServerMember,
+  rolesPending,
   memberJoinedAt,
   serverName,
   serverIcon,
@@ -100,7 +103,6 @@ export function UserProfilePopout({
   const [message, setMessage] = useState("");
   const [sendError, setSendError] = useState<string | null>(null);
   const badgeCount = useBadgeCount(p?.id, isSelf ? plan : undefined);
-  const note = useUserNote(open && !isSelf ? user?.id : null, open && !isSelf ? p?.id : null);
   const [friendNote, setFriendNote] = useState<string | null>(null);
 
   // Strangers can only be messaged as a request, and only when you share a
@@ -203,7 +205,7 @@ export function UserProfilePopout({
         role="dialog"
         aria-label={t("{name}'s profile", { name: displayName(p) })}
         data-side={pos?.side ?? "right"}
-        className={`profile-popout${exiting ? " profile-popout-out" : ""} fx-overlay-host absolute isolate flex max-h-[calc(100dvh-80px)] w-[340px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-lg ${theme ? "" : "bg-bg-secondary-alt"} text-text-normal shadow-[0_8px_16px_rgba(0,0,0,0.24),0_0_0_1px_rgba(0,0,0,0.2)]`}
+        className={`profile-popout${exiting ? " profile-popout-out" : ""} fx-overlay-host absolute isolate flex max-h-[calc(100dvh-80px)] w-[340px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-2xl border ${theme ? "border-white/10" : "border-border-subtle bg-bg-floating"} text-text-normal shadow-[var(--elevation-high)]`}
         style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? "visible" : "hidden", ...theme?.style }}
       >
         {/* The equipped profile effect: over the banner, under the profile,
@@ -226,7 +228,7 @@ export function UserProfilePopout({
             type="button"
             onClick={onOpenFullProfile}
             aria-label={t("View full profile")}
-            className={`group/avatar absolute left-4 z-10 rounded-full p-1.5 ${theme ? "" : "bg-bg-secondary-alt"}`}
+            className={`group/avatar absolute left-4 z-10 rounded-full p-1.5 ${theme ? "" : "bg-bg-floating"}`}
             style={{ top: banner ? 76 : 16, backgroundColor: theme?.avatarRing }}
           >
             <span className="relative block">
@@ -253,10 +255,10 @@ export function UserProfilePopout({
           </div>
 
           {/* Inner card */}
-          <ArtPanel art={art} className="mx-4 mb-4 mt-7 rounded-lg p-3" background={theme ? "bg-black/10" : "bg-bg-floating"}>
+          <ArtPanel art={art} className={`mx-4 mb-4 mt-7 rounded-xl p-3 ${theme ? "" : "border border-border-subtle"}`} background={theme ? "bg-black/10" : "bg-bg-secondary-alt"}>
             <div className="flex items-center gap-1">
               <h2
-                className={`min-w-0 truncate text-[20px] font-semibold leading-6 text-header-primary ${NAME_FONT_CLASS[(p.name_font as NameFontId) ?? "default"] ?? ""}`}
+                className={`min-w-0 truncate text-[22px] font-bold leading-7 text-header-primary ${NAME_FONT_CLASS[(p.name_font as NameFontId) ?? "default"] ?? ""}`}
                 style={p.name_color ? (p.name_color_2 ? { backgroundImage: `linear-gradient(135deg, ${p.name_color}, ${p.name_color_2})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" } : { color: p.name_color }) : undefined}
               >
                 {displayName(p)}
@@ -273,7 +275,7 @@ export function UserProfilePopout({
             )}
             {statusNote && <p className="mt-1.5 text-[14px] leading-[18px] text-text-normal">{statusNote}</p>}
 
-            <div className={`my-3 h-px ${theme ? "bg-white/15" : "bg-[#2e2f34]"}`} />
+            <div className={`my-3 h-px ${theme ? "bg-white/15" : "bg-border-subtle"}`} />
 
             {p.bio?.trim() && (
               <Section title={t("About Me")}>
@@ -288,12 +290,12 @@ export function UserProfilePopout({
                 <span>{formatDate(p.created_at)}</span>
                 {isServerMember && memberJoinedAt && (
                   <>
-                    <span className="h-1 w-1 rounded-full bg-[#4e5058]" />
+                    <span className="h-1 w-1 rounded-full bg-text-muted/60" />
                     {serverIcon && safeImageUrl(serverIcon) ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={safeImageUrl(serverIcon)!} alt="" className="h-4 w-4 rounded-full object-cover" title={serverName ?? undefined} />
                     ) : (
-                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-bg-secondary text-[7px] font-bold" title={serverName ?? undefined}>
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-bg-tertiary text-[7px] font-bold" title={serverName ?? undefined}>
                         {(serverName ?? "?").slice(0, 1)}
                       </span>
                     )}
@@ -306,11 +308,20 @@ export function UserProfilePopout({
             {activity && <div className="mb-3"><ActivityCard activity={activity} /></div>}
             {listening && <div className="mb-3"><ListeningCard listening={listening} /></div>}
 
+            {rolesPending && !isServerMember && (
+              <Section title={t("Roles")}>
+                <div className="flex flex-wrap gap-1" aria-busy="true" aria-label="Loading roles">
+                  {[64, 88, 52].map((w) => (
+                    <span key={w} className="skeleton-glimmer h-6 rounded-full" style={{ width: w }} />
+                  ))}
+                </div>
+              </Section>
+            )}
             {isServerMember && (roles.length > 0 || canManageRoles || canPickSelfRoles) && (
               <Section title={roles.length === 1 ? t("Role") : t("Roles")}>
                 <div className="flex flex-wrap gap-1">
                   {roles.map((r) => (
-                    <span key={r.id} className="group/role inline-flex h-[22px] items-center gap-1 rounded-[4px] bg-bg-secondary px-1.5 text-[12px] font-medium text-text-normal">
+                    <span key={r.id} className="group/role inline-flex h-6 items-center gap-1.5 rounded-full border border-border-subtle bg-bg-tertiary px-2 text-[12px] font-medium text-text-normal">
                       {canManageRoles && onSetRoles ? (
                         <button
                           type="button"
@@ -356,20 +367,6 @@ export function UserProfilePopout({
               </Section>
             )}
 
-            {!isSelf && note.state !== "unavailable" && (
-              <Section title={t("Note")}>
-                <textarea
-                  value={note.note}
-                  onChange={(e) => note.setNote(e.target.value.slice(0, USER_NOTE_MAX))}
-                  onBlur={() => void note.save()}
-                  disabled={note.state === "loading"}
-                  rows={1}
-                  placeholder={t("Click to add a note")}
-                  className="-mx-1 block min-h-[30px] w-[calc(100%+8px)] resize-none rounded-[3px] bg-transparent px-1 py-1.5 text-[12px] leading-4 text-text-normal outline-none placeholder:text-text-muted focus:bg-bg-tertiary"
-                />
-              </Section>
-            )}
-
             {isSelf ? (
               <button
                 type="button"
@@ -377,12 +374,12 @@ export function UserProfilePopout({
                   onClose();
                   onOpenSettings?.();
                 }}
-                className={`mt-1 flex h-8 w-full items-center justify-center gap-1.5 rounded-[3px] text-[14px] font-medium text-white transition-[filter] ${
-                  theme ? "hover:brightness-110" : "bg-button-secondary hover:bg-button-secondary-hover"
+                className={`mt-1 flex h-10 w-full items-center justify-center gap-1.5 rounded-xl text-[14px] font-semibold transition-[filter,background-color] ${
+                  theme ? "hover:brightness-110" : "bg-brand text-brand-foreground hover:bg-brand-hover"
                 }`}
                 style={theme ? { backgroundColor: theme.primary, color: theme.primaryText } : undefined}
               >
-                <IconEdit size={16} /> {t("Edit Profile")}
+                <IconEdit size={16} /> {t("Edit profile")}
               </button>
             ) : friendsOnly ? (
               <div className="mt-1">
@@ -397,7 +394,7 @@ export function UserProfilePopout({
                     const err = await sendFriendRequest(p.username);
                     setFriendNote(err);
                   }}
-                  className="flex h-8 w-full items-center justify-center gap-1.5 rounded-[3px] bg-brand text-[14px] font-medium text-white transition-[filter] hover:brightness-110 disabled:cursor-default disabled:bg-button-secondary disabled:text-text-muted disabled:hover:brightness-100"
+                  className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-brand text-[14px] font-semibold text-brand-foreground transition-colors hover:bg-brand-hover disabled:cursor-default disabled:bg-button-secondary disabled:text-text-muted"
                 >
                   <IconUserPlus size={16} /> {requestSent ? t("Friend Request Sent") : t("Add Friend")}
                 </button>
@@ -415,10 +412,11 @@ export function UserProfilePopout({
                 }}
                 placeholder={t("Message @{value}", { value: p.username ?? displayName(p) })}
                 aria-label={t("Message {name}", { name: displayName(p) })}
-                className="mt-1 h-10 w-full rounded-[3px] border border-bg-tertiary bg-transparent px-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
+                className="mt-1 h-10 w-full rounded-xl border border-border-subtle bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-brand"
               />
             )}
             {sendError && <p className="mt-1.5 text-[12px] leading-4 text-status-dnd">{sendError}</p>}
+            {p.is_bot && <AuthorizeAppButton userId={p.id} className="mt-2" />}
           </ArtPanel>
           <SkinFloor itemId={p.equipped_overlay_effect} />
         </div>
@@ -432,7 +430,7 @@ function Section({ title, aside, children }: { title: string; aside?: React.Reac
   return (
     <section className="mb-3">
       <div className="mb-1.5 flex items-center justify-between">
-        <h3 className="text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-primary">{title}</h3>
+        <h3 className="text-[12px] font-semibold uppercase leading-4 tracking-[0.04em] text-text-muted">{title}</h3>
         {aside}
       </div>
       {children}

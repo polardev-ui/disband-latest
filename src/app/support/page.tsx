@@ -56,7 +56,7 @@ function ThemeSwitcher() {
       {open && (
         <>
           <button type="button" aria-label="Close" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-50 mt-2 max-h-72 w-52 overflow-y-auto rounded-[4px] border border-divider bg-bg-secondary p-1.5 shadow-[var(--elevation-high)]">
+          <div className="absolute right-0 z-50 mt-2 max-h-72 w-52 overflow-y-auto rounded-lg border border-divider bg-bg-secondary p-1.5 shadow-[var(--elevation-high)]">
             {themes.map((t) => (
               <button
                 key={t.id}
@@ -65,7 +65,7 @@ function ThemeSwitcher() {
                   setTheme(t.id);
                   setOpen(false);
                 }}
-                className={`flex w-full items-center gap-2.5 rounded-[3px] px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-interactive-hover ${
+                className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-interactive-hover ${
                   theme === t.id ? "font-semibold" : ""
                 }`}
               >
@@ -159,13 +159,13 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
             autoComplete="email"
-            className="min-w-0 flex-1 rounded-[4px] border border-divider bg-bg-tertiary px-4 py-3 text-[15px] outline-none placeholder:text-text-muted focus:border-brand/60 "
+            className="min-w-0 flex-1 rounded-lg border border-divider bg-bg-tertiary px-4 py-3 text-[15px] outline-none placeholder:text-text-muted focus:border-brand/60 "
           />
           <button
             type="button"
             disabled={busy}
             onClick={() => void send()}
-            className="shrink-0 rounded-[4px] bg-brand px-6 py-3 text-[15px] font-bold text-white transition-all hover:bg-brand-hover disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-brand px-6 py-3 text-[15px] font-bold text-white transition-all hover:bg-brand-hover disabled:opacity-50"
           >
             {busy ? "Sending…" : "Send code"}
           </button>
@@ -182,13 +182,13 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
               placeholder="6-digit code"
               inputMode="numeric"
               autoComplete="one-time-code"
-              className="min-w-0 flex-1 rounded-[4px] border border-divider bg-bg-tertiary px-4 py-3 text-[15px] tracking-[0.02em] outline-none placeholder:text-text-muted focus:border-brand/60 "
+              className="min-w-0 flex-1 rounded-lg border border-divider bg-bg-tertiary px-4 py-3 text-[15px] tracking-[0.02em] outline-none placeholder:text-text-muted focus:border-brand/60 "
             />
             <button
               type="button"
               disabled={busy}
               onClick={() => void verify()}
-              className="shrink-0 rounded-[4px] bg-brand px-6 py-3 text-[15px] font-bold text-white transition-all hover:bg-brand-hover disabled:opacity-50"
+              className="shrink-0 rounded-lg bg-brand px-6 py-3 text-[15px] font-bold text-white transition-all hover:bg-brand-hover disabled:opacity-50"
             >
               {busy ? "Checking…" : "Verify & continue"}
             </button>
@@ -497,7 +497,7 @@ function SupportHome() {
           {!ready ? (
             <div aria-label="Loading" className="animate-pulse rounded-[28px] border border-divider bg-bg-secondary p-6">
               <div className="h-5 w-2/3 rounded bg-bg-accent" />
-              <div className="mt-3 h-12 w-full rounded-[4px] bg-bg-accent" />
+              <div className="mt-3 h-12 w-full rounded-lg bg-bg-accent" />
             </div>
           ) : needsVerify && !session ? (
             <VerifyEmail onVerified={() => undefined} />
@@ -507,7 +507,7 @@ function SupportHome() {
         </div>
         {error && <p className="mt-3 text-[13px] text-status-dnd">{error}</p>}
         {noAccount && session && (
-          <p className="mx-auto mt-3 max-w-md rounded-[4px] bg-bg-secondary px-4 py-2.5 text-[13px] leading-relaxed text-text-muted">
+          <p className="mx-auto mt-3 max-w-md rounded-lg bg-bg-secondary px-4 py-2.5 text-[13px] leading-relaxed text-text-muted">
             This email isn&apos;t attached to a Disband account yet — Tether
             can still answer general questions here.
           </p>
@@ -572,7 +572,7 @@ function SupportHome() {
                     key={t.id}
                     type="button"
                     onClick={() => { setOpeningDraft(""); setActive(t); }}
-                    className="flex items-center gap-3 rounded-[4px] border border-divider bg-bg-secondary px-4 py-3.5 text-left transition-all hover:border-brand/40"
+                    className="flex items-center gap-3 rounded-lg border border-divider bg-bg-secondary px-4 py-3.5 text-left transition-all hover:border-brand/40"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[14px] font-bold text-text-normal">
@@ -608,7 +608,7 @@ function SupportHome() {
                     key={t.id}
                     type="button"
                     onClick={() => { setOpeningDraft(""); setActive(t); }}
-                    className="flex items-center gap-3 rounded-[4px] border border-divider bg-bg-secondary/60 px-4 py-3.5 text-left transition-all hover:border-brand/40"
+                    className="flex items-center gap-3 rounded-lg border border-divider bg-bg-secondary/60 px-4 py-3.5 text-left transition-all hover:border-brand/40"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[14px] font-bold text-text-normal">
@@ -641,7 +641,7 @@ function SupportHome() {
           ].map(([q, a]) => (
             <details
               key={q}
-              className="group rounded-[4px] border border-divider bg-bg-secondary px-5 py-4 "
+              className="group rounded-lg border border-divider bg-bg-secondary px-5 py-4 "
             >
               <summary className="cursor-pointer list-none text-[15px] font-bold text-text-normal">
                 {q}

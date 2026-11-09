@@ -35,12 +35,12 @@ interface Monitor {
 type ApiError = { error?: string };
 
 const INPUT =
-  "h-9 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-[#00a8fc]";
+  "h-9 w-full rounded-md border border-transparent bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-brand";
 const LABEL = "mb-1.5 block text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-text-secondary";
 const BUTTON =
-  "inline-flex h-9 items-center justify-center gap-2 rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex h-9 items-center justify-center gap-2 rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:pointer-events-none disabled:opacity-50";
 const BUTTON_SECONDARY =
-  "inline-flex h-9 items-center justify-center gap-2 rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex h-9 items-center justify-center gap-2 rounded-md bg-button-secondary px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover disabled:pointer-events-none disabled:opacity-50";
 const BUTTON_DANGER = "text-[13px] font-medium text-status-dnd hover:underline disabled:opacity-50";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -98,18 +98,20 @@ function MonitorItem({
   }
 
   async function remove() {
-    if (!(await confirmDialog({ title: `Delete “${monitor.name}”`, body: "Its check history is removed too.", confirmLabel: "Delete Monitor" }))) return;
-    setSaving(true);
-    onError("");
-    try {
-      const res = await apiFetch(`/api/status-admin/monitors/${monitor.id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Could not delete the monitor.");
-      onDeleted(monitor.id);
-    } catch (cause) {
-      onError(cause instanceof Error ? cause.message : "Could not delete the monitor.");
-    } finally {
-      setSaving(false);
-    }
+    const run = async () => {
+      setSaving(true);
+      onError("");
+      try {
+        const res = await apiFetch(`/api/status-admin/monitors/${monitor.id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Could not delete the monitor.");
+        onDeleted(monitor.id);
+      } catch (cause) {
+        onError(cause instanceof Error ? cause.message : "Could not delete the monitor.");
+      } finally {
+        setSaving(false);
+      }
+    };
+    if (!(await confirmDialog({ title: `Delete “${monitor.name}”`, body: "Its check history is removed too.", confirmLabel: "Delete Monitor", action: run }))) return;
   }
 
   return (
@@ -259,18 +261,20 @@ function IncidentItem({
   }
 
   async function remove() {
-    if (!(await confirmDialog({ title: `Delete “${incident.title}”`, body: "The timeline goes with it.", confirmLabel: "Delete Incident" }))) return;
-    setBusy(true);
-    onError("");
-    try {
-      const res = await apiFetch(`/api/status-admin/incidents/${incident.id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Could not delete the incident.");
-      onDeleted(incident.id);
-    } catch (cause) {
-      onError(cause instanceof Error ? cause.message : "Could not delete the incident.");
-    } finally {
-      setBusy(false);
-    }
+    const run = async () => {
+      setBusy(true);
+      onError("");
+      try {
+        const res = await apiFetch(`/api/status-admin/incidents/${incident.id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Could not delete the incident.");
+        onDeleted(incident.id);
+      } catch (cause) {
+        onError(cause instanceof Error ? cause.message : "Could not delete the incident.");
+      } finally {
+        setBusy(false);
+      }
+    };
+    if (!(await confirmDialog({ title: `Delete “${incident.title}”`, body: "The timeline goes with it.", confirmLabel: "Delete Incident", action: run }))) return;
   }
 
   const affected = incident.monitor_ids.map((id) => monitorNames.get(id)).filter(Boolean);
@@ -283,7 +287,7 @@ function IncidentItem({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-[14px] font-medium text-header-primary">{incident.title}</p>
-            <span className="rounded-[3px] bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.03em] text-text-muted">
+            <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.03em] text-text-muted">
               {INCIDENT_STATUS_LABEL[incident.status]}
             </span>
           </div>
@@ -298,7 +302,7 @@ function IncidentItem({
       <div className="border-t border-white/[0.05] px-4 py-4">
         <div className="mb-4 space-y-2">
           {incident.updates.map((update) => (
-            <div key={update.id} className="rounded-[4px] bg-bg-tertiary px-3 py-2">
+            <div key={update.id} className="rounded-lg bg-bg-tertiary px-3 py-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.03em] text-text-muted">
                 {INCIDENT_STATUS_LABEL[update.status]} · {formatDateTime(update.created_at)}
               </p>
@@ -328,7 +332,7 @@ function IncidentItem({
               onChange={(e) => setBody(e.target.value)}
               rows={2}
               placeholder="What changed?"
-              className="w-full resize-y rounded-[3px] border border-transparent bg-bg-tertiary px-3 py-2 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-[#00a8fc]"
+              className="w-full resize-y rounded-md border border-transparent bg-bg-tertiary px-3 py-2 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-brand"
             />
           </label>
         </div>
@@ -453,7 +457,7 @@ export default function StatusAdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-bg-tertiary text-text-normal">
+    <div className="min-h-screen bg-bg-secondary text-text-normal">
       <MarketingNav />
       <main className="mx-auto max-w-5xl px-4 pb-16 pt-24 sm:px-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -464,7 +468,7 @@ export default function StatusAdminPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/status" className="text-[13px] text-[#00a8fc] hover:underline">
+            <Link href="/status" className="text-[13px] text-text-link hover:underline">
               View public page
             </Link>
             <button type="button" onClick={() => void load()} disabled={loading} className={BUTTON_SECONDARY}>
@@ -474,27 +478,27 @@ export default function StatusAdminPage() {
         </div>
 
         {denied ? (
-          <div className="mt-8 rounded-lg bg-[#2b2d31] px-5 py-6">
+          <div className="mt-8 rounded-lg bg-bg-secondary-alt px-5 py-6">
             <p className="text-[15px] font-semibold text-header-primary">Platform owner only</p>
             <p className="mt-1 text-[14px] text-text-muted">{denied}</p>
           </div>
         ) : loading ? (
           <div className="mt-8 space-y-3">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-lg bg-[#2b2d31]" />
+              <div key={i} className="h-16 animate-pulse rounded-lg bg-bg-secondary-alt" />
             ))}
           </div>
         ) : (
           <>
             {error && (
-              <p className="mt-4 rounded-[4px] border border-[#f23f43]/25 bg-[#f23f43]/[0.06] px-3 py-2 text-[13px] text-[#ff8f91]">
+              <p className="mt-4 rounded-lg border border-[#f23f43]/25 bg-[#f23f43]/[0.06] px-3 py-2 text-[13px] text-[#ff8f91]">
                 {error}
               </p>
             )}
 
             <section className="mt-8">
               <h2 className="mb-2 text-[12px] font-bold uppercase tracking-[0.03em] text-text-muted">Monitors</h2>
-              <div className="rounded-lg bg-[#2b2d31]">
+              <div className="rounded-lg bg-bg-secondary-alt">
                 {monitors.length === 0 ? (
                   <p className="px-4 py-4 text-[13px] text-text-muted">No monitors yet.</p>
                 ) : (
@@ -510,7 +514,7 @@ export default function StatusAdminPage() {
                 )}
               </div>
 
-              <div className="mt-4 rounded-lg bg-[#2b2d31] p-4">
+              <div className="mt-4 rounded-lg bg-bg-secondary-alt p-4">
                 <p className="mb-3 text-[12px] font-bold uppercase tracking-[0.03em] text-text-muted">Add a monitor</p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label>
@@ -544,7 +548,7 @@ export default function StatusAdminPage() {
 
             <section className="mt-8">
               <h2 className="mb-2 text-[12px] font-bold uppercase tracking-[0.03em] text-text-muted">Incidents</h2>
-              <div className="rounded-lg bg-[#2b2d31]">
+              <div className="rounded-lg bg-bg-secondary-alt">
                 {incidents.length === 0 ? (
                   <p className="px-4 py-4 text-[13px] text-text-muted">No incidents, maintenance or announcements.</p>
                 ) : (
@@ -561,7 +565,7 @@ export default function StatusAdminPage() {
                 )}
               </div>
 
-              <div className="mt-4 rounded-lg bg-[#2b2d31] p-4">
+              <div className="mt-4 rounded-lg bg-bg-secondary-alt p-4">
                 <p className="mb-3 text-[12px] font-bold uppercase tracking-[0.03em] text-text-muted">Post an update</p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="sm:col-span-2">
@@ -609,7 +613,7 @@ export default function StatusAdminPage() {
                   )}
                   <label className="sm:col-span-2">
                     <span className={LABEL}>Affected services</span>
-                    <div className="flex flex-wrap gap-2 rounded-[3px] bg-bg-tertiary px-3 py-2">
+                    <div className="flex flex-wrap gap-2 rounded-md bg-bg-tertiary px-3 py-2">
                       {monitors.map((monitor) => (
                         <label key={monitor.id} className="flex items-center gap-1.5 text-[13px] text-text-normal">
                           <input
@@ -635,7 +639,7 @@ export default function StatusAdminPage() {
                       onChange={(e) => setBody(e.target.value)}
                       rows={3}
                       placeholder="What is happening, and what are you doing about it?"
-                      className="w-full resize-y rounded-[3px] border border-transparent bg-bg-tertiary px-3 py-2 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-[#00a8fc]"
+                      className="w-full resize-y rounded-md border border-transparent bg-bg-tertiary px-3 py-2 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-brand"
                     />
                   </label>
                 </div>

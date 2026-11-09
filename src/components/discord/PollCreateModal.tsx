@@ -62,7 +62,7 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
 
   const label = "mb-2 block text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary";
   const field =
-    "h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-[#00a8fc]";
+    "h-10 w-full rounded-md border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-[#00a8fc]";
 
   return createPortal(
     <div
@@ -73,7 +73,7 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
         role="dialog"
         aria-modal="true"
         aria-label={t("Create a Poll")}
-        className={`classic-modal${exiting ? " modal-pop-out" : ""} flex max-h-[calc(100dvh-32px)] w-full max-w-[480px] flex-col overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
+        className={`classic-modal${exiting ? " modal-pop-out" : ""} flex max-h-[calc(100dvh-32px)] w-full max-w-[480px] flex-col overflow-hidden rounded-xl border border-border-subtle bg-bg-primary shadow-[var(--elevation-high)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
@@ -126,7 +126,7 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
             <button
               type="button"
               onClick={() => setOptions((prev) => [...prev, ""])}
-              className="mt-2 flex h-10 w-full items-center gap-2 rounded-[3px] border border-dashed border-interactive-normal/40 px-2.5 text-[16px] text-header-secondary transition-colors hover:border-interactive-normal hover:text-header-primary"
+              className="mt-2 flex h-10 w-full items-center gap-2 rounded-md border border-dashed border-interactive-normal/40 px-2.5 text-[16px] text-header-secondary transition-colors hover:border-interactive-normal hover:text-header-primary"
             >
               <IconPlus size={16} />
               {t("Add another answer")}
@@ -144,7 +144,7 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
             type="button"
             disabled={!canCreate}
             onClick={() => void create()}
-            className="h-[38px] min-w-[96px] rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-[38px] min-w-[96px] rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {creating ? t("Posting…") : t("Post")}
           </button>

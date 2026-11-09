@@ -65,7 +65,7 @@ export function TosConsentPopup() {
           type="button"
           disabled={saving}
           onClick={() => void accept()}
-          className="rounded-[3px] bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
         >
           {saving ? "Saving…" : "I agree"}
         </button>

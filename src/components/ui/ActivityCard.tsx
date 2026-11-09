@@ -89,7 +89,7 @@ export function ActivityCard({ activity }: { activity: Activity }) {
       {buttons.length > 0 && (
         <div className="mt-3 flex flex-col gap-2">
           {buttons.map((b) => (
-            <a key={b.url} href={b.url} target="_blank" rel="noopener noreferrer" className="flex h-8 items-center justify-center rounded-[4px] bg-button-secondary px-3 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover">
+            <a key={b.url} href={b.url} target="_blank" rel="noopener noreferrer" className="flex h-8 items-center justify-center rounded-lg bg-button-secondary px-3 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover">
               {b.label}
             </a>
           ))}

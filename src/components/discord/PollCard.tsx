@@ -89,18 +89,18 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
 
   if (loading) {
     return (
-      <div className="mt-1 w-full max-w-[520px] animate-pulse rounded-[4px] border border-divider bg-bg-secondary p-3">
-        <div className="h-3 w-16 rounded-[2px] bg-bg-accent" />
-        <div className="mt-2 h-4 w-3/4 rounded-[2px] bg-bg-accent" />
-        <div className="mt-3 h-9 rounded-[3px] bg-bg-accent" />
-        <div className="mt-1.5 h-9 rounded-[3px] bg-bg-accent" />
+      <div className="mt-1 w-full max-w-[520px] animate-pulse rounded-lg border border-divider bg-bg-secondary p-3">
+        <div className="h-3 w-16 rounded-md bg-bg-accent" />
+        <div className="mt-2 h-4 w-3/4 rounded-md bg-bg-accent" />
+        <div className="mt-3 h-9 rounded-md bg-bg-accent" />
+        <div className="mt-1.5 h-9 rounded-md bg-bg-accent" />
       </div>
     );
   }
 
   if (!poll) {
     return (
-      <div className="mt-1 w-full max-w-[520px] rounded-[4px] border border-divider bg-bg-secondary p-3 text-[14px] text-text-muted">
+      <div className="mt-1 w-full max-w-[520px] rounded-lg border border-divider bg-bg-secondary p-3 text-[14px] text-text-muted">
         {error ?? t("Poll unavailable")}
       </div>
     );
@@ -111,7 +111,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
   const isAuthor = !!currentUserId && poll.authorId === currentUserId;
 
   return (
-    <div className="mt-1 w-full max-w-[520px] overflow-hidden rounded-[4px] border border-divider bg-bg-secondary">
+    <div className="mt-1 w-full max-w-[520px] overflow-hidden rounded-lg border border-divider bg-bg-secondary">
       <div className="flex items-start gap-3 border-b border-divider px-3.5 py-2.5">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.09em] text-text-muted">{t("Poll")}</p>
@@ -125,7 +125,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
             onClick={() => void close()}
             disabled={busy}
             title={t("Close this poll")}
-            className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-[2px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+            className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
           >
             <IconClose size={14} />
           </button>
@@ -146,9 +146,9 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
               disabled={poll.closed || busy}
               onClick={() => void vote(i)}
               title={mine ? t("Click again to take your vote back") : undefined}
-              className={`relative block w-full overflow-hidden rounded-[3px] border px-3 py-2 text-left transition-colors ${
+              className={`relative block w-full overflow-hidden rounded-md border px-3 py-2 text-left transition-colors ${
                 mine
-                  ? "border-brand bg-[#5865f2]/15"
+                  ? "border-brand bg-brand/15"
                   : poll.closed
                     ? "border-divider bg-bg-accent"
                     : "border-divider bg-bg-accent hover:border-[#4f545c] hover:bg-bg-secondary-alt"
@@ -157,7 +157,7 @@ export function PollCard({ pollId, currentUserId }: { pollId: string; currentUse
               <span
                 aria-hidden
                 className={`absolute inset-y-0 left-0 transition-[width] duration-200 ease-out ${
-                  mine ? "bg-[#5865f2]/25" : winning ? "bg-status-online/15" : "bg-text-normal/[0.055]"
+                  mine ? "bg-brand/25" : winning ? "bg-status-online/15" : "bg-text-normal/[0.055]"
                 }`}
                 style={{ width: `${pct}%` }}
               />

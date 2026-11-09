@@ -21,6 +21,8 @@ export type DialogRequest =
       body?: string;
       confirmLabel: string;
       tone: DialogTone;
+      /** Runs after confirming; the dialog stays open, showing it working, until it settles. */
+      action?: () => unknown;
       resolve: (ok: boolean) => void;
     }
   | {
@@ -89,9 +91,17 @@ export function confirmDialog(opts: {
   body?: string;
   confirmLabel?: string;
   tone?: DialogTone;
+  /**
+   * The work the confirm button does. Given this, the dialog stays open with
+   * the button greyed out and showing dots until the work finishes, so you see
+   * it happening; the promise then resolves true.
+   */
+  action?: () => unknown;
 }): Promise<boolean> {
   if (hosts === 0) {
-    return Promise.resolve(window.confirm(opts.body ? `${opts.title}\n\n${opts.body}` : opts.title));
+    const ok = window.confirm(opts.body ? `${opts.title}\n\n${opts.body}` : opts.title);
+    if (!ok || !opts.action) return Promise.resolve(ok);
+    return Promise.resolve(opts.action()).then(() => true, () => true);
   }
   return new Promise((resolve) => {
     enqueue({
@@ -101,6 +111,7 @@ export function confirmDialog(opts: {
       body: opts.body,
       confirmLabel: opts.confirmLabel ?? "Confirm",
       tone: opts.tone ?? "danger",
+      action: opts.action,
       resolve,
     });
   });

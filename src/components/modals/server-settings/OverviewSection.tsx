@@ -101,13 +101,13 @@ export function OverviewSection({ server, isOwner }: SectionProps) {
             onChange={(next) => void toggleDiscovery(next)}
           />
         </SettingRow>
-        {discoveryError && <p className="border-t border-divider px-5 py-3 text-[13px] text-status-dnd">{discoveryError}</p>}
+        {discoveryError && <p className="border-t border-border-subtle px-5 py-3 text-[13px] text-status-dnd">{discoveryError}</p>}
       </SettingsSection>
 
       <InlineError>{error}</InlineError>
 
       {isOwner && (dirty || saving || savedFlash) && (
-        <div className="view-enter sticky bottom-0 -mx-8 mt-8 flex items-center justify-between gap-3 border-t border-divider bg-overlay-panel px-8 py-3">
+        <div className="view-enter sticky bottom-0 -mx-8 mt-8 flex items-center justify-between gap-3 border-t border-border-subtle bg-overlay-panel px-8 py-3">
           <p className="text-[14px] text-text-muted">{savedFlash ? t("Saved.") : t("You have unsaved changes.")}</p>
           <div className="flex gap-2">
             {dirty && (

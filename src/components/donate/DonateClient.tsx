@@ -45,7 +45,7 @@ function Initial({ name, avatarUrl, size = 40 }: { name: string | null; avatarUr
   return (
     <span
       aria-hidden
-      className="flex shrink-0 items-center justify-center rounded-full bg-[#2b2d31] text-[15px] font-semibold text-[#b5bac1]"
+      className="flex shrink-0 items-center justify-center rounded-full bg-bg-secondary-alt text-[15px] font-semibold text-interactive-normal"
       style={{ width: size, height: size }}
     >
       {name ? name.charAt(0).toUpperCase() : "?"}
@@ -181,7 +181,7 @@ export function DonateClient() {
       <form
         id="give"
         onSubmit={donate}
-        className="h-fit scroll-mt-24 rounded-2xl border border-white/[0.06] bg-[#232428] p-6 sm:p-7"
+        className="h-fit scroll-mt-24 rounded-2xl border border-white/[0.06] bg-bg-secondary-alt p-6 sm:p-7"
       >
         {thanks && (
           <div role="status" className="mb-6 rounded-xl border border-[#3ba55c]/30 bg-[#3ba55c]/10 p-4 text-[14px] leading-relaxed text-[#b9e8c7]">
@@ -191,10 +191,10 @@ export function DonateClient() {
         )}
 
         <h2 className="text-xl font-semibold text-white">Make a donation</h2>
-        <p className="mt-1 text-[14px] text-[#949ba4]">One-off, in US dollars, paid securely through Stripe.</p>
+        <p className="mt-1 text-[14px] text-text-muted">One-off, in US dollars, paid securely through Stripe.</p>
 
         <fieldset className="mt-6">
-          <legend className="text-xs font-semibold uppercase tracking-[0.1em] text-[#949ba4]">Amount</legend>
+          <legend className="text-xs font-semibold uppercase tracking-[0.1em] text-text-muted">Amount</legend>
           <div className="mt-3 grid grid-cols-3 gap-2">
             {DONATION_PRESETS_CENTS.map((cents) => (
               <button
@@ -205,18 +205,18 @@ export function DonateClient() {
                 className={`h-11 rounded-lg border text-[15px] font-semibold transition-colors ${
                   preset === cents
                     ? "border-brand bg-brand text-white"
-                    : "border-white/10 bg-[#1e1f22] text-[#dbdee1] hover:border-white/25"
+                    : "border-white/10 bg-bg-secondary text-text-normal hover:border-white/25"
                 }`}
               >
                 {formatUsd(cents)}
               </button>
             ))}
             <label
-              className={`relative col-span-3 flex h-11 items-center rounded-lg border bg-[#1e1f22] ${
+              className={`relative col-span-3 flex h-11 items-center rounded-lg border bg-bg-secondary ${
                 preset == null ? "border-brand" : "border-white/10"
               }`}
             >
-              <span className="pl-3 text-[15px] text-[#949ba4]">$</span>
+              <span className="pl-3 text-[15px] text-text-muted">$</span>
               <input
                 inputMode="decimal"
                 aria-label="Custom amount in US dollars"
@@ -234,7 +234,7 @@ export function DonateClient() {
         </fieldset>
 
         <div className="mt-6">
-          <label htmlFor="donate-message" className="text-xs font-semibold uppercase tracking-[0.1em] text-[#949ba4]">
+          <label htmlFor="donate-message" className="text-xs font-semibold uppercase tracking-[0.1em] text-text-muted">
             Message <span className="font-normal normal-case tracking-normal text-[#6d6f78]">(optional, shown on the wall)</span>
           </label>
           <textarea
@@ -243,12 +243,12 @@ export function DonateClient() {
             onChange={(e) => { setMessage(e.target.value.slice(0, DONATION_MESSAGE_MAX)); setError(null); }}
             rows={3}
             placeholder="Say something to the team, or to everyone reading."
-            className="mt-2 w-full resize-none rounded-lg border border-white/10 bg-[#1e1f22] px-3 py-2.5 text-[15px] text-white outline-none placeholder:text-[#6d6f78] focus:border-brand"
+            className="mt-2 w-full resize-none rounded-lg border border-white/10 bg-bg-secondary px-3 py-2.5 text-[15px] text-white outline-none placeholder:text-[#6d6f78] focus:border-brand"
           />
           <p className="mt-1 text-right text-[12px] text-[#6d6f78]">{messageLeft} left · no links</p>
         </div>
 
-        <div className="mt-4 rounded-xl bg-[#1e1f22] p-4">
+        <div className="mt-4 rounded-xl bg-bg-secondary p-4">
           {!viewerLoaded ? (
             <div className="h-10 animate-pulse rounded-lg bg-white/[0.04]" />
           ) : viewer ? (
@@ -258,7 +258,7 @@ export function DonateClient() {
                 <span className="block text-[14px] text-white">
                   {showName ? <>Show as <strong>{viewer.name}</strong></> : <>Show as <strong>Anonymous</strong></>}
                 </span>
-                <span className="block text-[12px] text-[#949ba4]">
+                <span className="block text-[12px] text-text-muted">
                   {showName
                     ? "Your name, avatar, amount and message appear on the wall, and you get the Donor badge."
                     : "Only the amount and your message appear. No badge, so it stays anonymous."}
@@ -278,7 +278,7 @@ export function DonateClient() {
               </span>
             </label>
           ) : (
-            <div className="text-[14px] leading-relaxed text-[#b5bac1]">
+            <div className="text-[14px] leading-relaxed text-interactive-normal">
               <p>
                 You&rsquo;re not logged in, so your donation will show as <strong className="text-white">Anonymous</strong>.{" "}
                 <Link href="/login" className="text-brand hover:underline">Log in</Link> if you&rsquo;d like your name on the wall and the Donor badge.
@@ -312,14 +312,14 @@ export function DonateClient() {
       {/* The wall. */}
       <section aria-labelledby="wall-heading" className="min-w-0">
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-2xl border border-white/[0.06] bg-[#232428] p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#949ba4]">Raised so far</p>
+          <div className="rounded-2xl border border-white/[0.06] bg-bg-secondary-alt p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-text-muted">Raised so far</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-white">
               {wall ? formatUsd(wall.totalCents) : wallError ? "—" : <span className="inline-block h-8 w-24 animate-pulse rounded bg-white/[0.06]" />}
             </p>
           </div>
-          <div className="rounded-2xl border border-white/[0.06] bg-[#232428] p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#949ba4]">Donations</p>
+          <div className="rounded-2xl border border-white/[0.06] bg-bg-secondary-alt p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-text-muted">Donations</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-white">
               {wall ? wall.donorCount.toLocaleString("en-GB") : wallError ? "—" : <span className="inline-block h-8 w-12 animate-pulse rounded bg-white/[0.06]" />}
             </p>
@@ -327,36 +327,36 @@ export function DonateClient() {
         </div>
 
         <h2 id="wall-heading" className="mt-8 text-xl font-semibold text-white">Supporters</h2>
-        <p className="mt-1 text-[14px] text-[#949ba4]">Everyone who&rsquo;s chipped in, newest first.</p>
+        <p className="mt-1 text-[14px] text-text-muted">Everyone who&rsquo;s chipped in, newest first.</p>
 
         <div className="mt-4 space-y-2">
           {wallError && !wall && (
-            <p className="rounded-xl bg-[#232428] p-5 text-[14px] text-[#949ba4]">
+            <p className="rounded-xl bg-bg-secondary-alt p-5 text-[14px] text-text-muted">
               Couldn&rsquo;t load the wall right now.{" "}
               <button type="button" onClick={() => void loadWall()} className="text-brand hover:underline">Try again</button>
             </p>
           )}
           {!wall && !wallError &&
-            Array.from({ length: 4 }, (_, i) => <div key={i} className="h-[72px] animate-pulse rounded-xl bg-[#232428]" />)}
+            Array.from({ length: 4 }, (_, i) => <div key={i} className="h-[72px] animate-pulse rounded-xl bg-bg-secondary-alt" />)}
           {wall && wall.entries.length === 0 && (
             <div className="rounded-xl border border-dashed border-white/10 p-8 text-center">
               <p className="text-[15px] font-medium text-white">No donations yet.</p>
-              <p className="mt-1 text-[14px] text-[#949ba4]">Be the first name on the wall.</p>
+              <p className="mt-1 text-[14px] text-text-muted">Be the first name on the wall.</p>
             </div>
           )}
           {wall?.entries.map((d) => (
-            <article key={d.id} className="flex gap-3 rounded-xl bg-[#232428] p-4">
+            <article key={d.id} className="flex gap-3 rounded-xl bg-bg-secondary-alt p-4">
               <Initial name={d.name} avatarUrl={d.avatarUrl} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-2">
-                  <span className={`truncate text-[15px] font-semibold ${d.name ? "text-white" : "text-[#b5bac1]"}`}>
+                  <span className={`truncate text-[15px] font-semibold ${d.name ? "text-white" : "text-interactive-normal"}`}>
                     {d.name ?? "Anonymous"}
                   </span>
                   <span className="text-[15px] font-semibold text-[#86dca3]">{formatUsd(d.amountCents)}</span>
                   <span className="text-[12px] text-[#6d6f78]">{timeAgo(d.paidAt)}</span>
                 </div>
                 {d.message && (
-                  <p className="mt-1 break-words text-[14px] leading-relaxed text-[#b5bac1]">{d.message}</p>
+                  <p className="mt-1 break-words text-[14px] leading-relaxed text-interactive-normal">{d.message}</p>
                 )}
                 {staff && d.message && (
                   <button

@@ -120,7 +120,7 @@ export function GuildTagSpaceModal() {
           <div className="skeleton-glimmer h-4 w-4/5 rounded" />
         </div>
       ) : error ? (
-        <p role="alert" className="rounded-[4px] border border-status-dnd/30 bg-status-dnd/10 px-3.5 py-3 text-[14px] text-status-dnd">
+        <p role="alert" className="rounded-lg border border-status-dnd/30 bg-status-dnd/10 px-3.5 py-3 text-[14px] text-status-dnd">
           {error}
         </p>
       ) : space?.private ? (
@@ -173,7 +173,7 @@ export function GuildTagSpaceModal() {
               </span>
             </div>
             {!space.discoverable && !joined && (
-              <p className="mt-3 rounded-[4px] bg-bg-tertiary px-3 py-2 text-[12px] leading-4 text-text-muted">
+              <p className="mt-3 rounded-lg bg-bg-tertiary px-3 py-2 text-[12px] leading-4 text-text-muted">
                 {t("This space isn’t discoverable. Ask someone inside for an invite to join.")}
               </p>
             )}

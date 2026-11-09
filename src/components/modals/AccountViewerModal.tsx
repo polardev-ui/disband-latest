@@ -117,16 +117,28 @@ export function AccountViewerModal({
 
   const changeBan = async () => {
     if (busy) return;
-    let body: Record<string, string>;
+    // Sends the change; returns an error to show, or null.
+    const send = async (body: Record<string, string>) => {
+      setBusy(true);
+      const res = await apiFetch("/api/moderation/platform-ban", { method: "POST", body: JSON.stringify(body) });
+      setBusy(false);
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as { error?: string } | null;
+        return json?.error ?? "That didn't work. Try again.";
+      }
+      onBanChange?.();
+      return null;
+    };
+    let failure: string | null = null;
     if (ban) {
-      const ok = await confirmDialog({
+      // The popup stays open, showing it working, until the unban is done.
+      await confirmDialog({
         title: `Unban ${name}?`,
         body: "They can sign in and use Disband again straight away.",
         confirmLabel: "Unban",
         tone: "danger",
+        action: async () => { failure = await send({ action: "unban", userId }); },
       });
-      if (!ok) return;
-      body = { action: "unban", userId };
     } else {
       const reason = await promptDialog({
         title: `Ban ${name} from Disband?`,
@@ -137,17 +149,10 @@ export function AccountViewerModal({
         maxLength: 300,
       });
       if (reason === null) return;
-      body = { action: "ban", userId, reason: reason.trim() };
+      failure = await send({ action: "ban", userId, reason: reason.trim() });
     }
-    setBusy(true);
-    const res = await apiFetch("/api/moderation/platform-ban", { method: "POST", body: JSON.stringify(body) });
-    setBusy(false);
-    if (!res.ok) {
-      const json = (await res.json().catch(() => null)) as { error?: string } | null;
-      await alertDialog(json?.error ?? "That didn't work. Try again.");
-      return;
-    }
-    onBanChange?.();
+    // Shown after the popup has closed (an alert queues behind an open one).
+    if (failure) await alertDialog(failure);
   };
 
   return createPortal(
@@ -157,7 +162,7 @@ export function AccountViewerModal({
         role="dialog"
         aria-modal="true"
         aria-label={`Account: ${name}`}
-        className="classic-modal relative flex max-h-[min(720px,calc(100dvh-32px))] w-full max-w-[480px] flex-col overflow-hidden rounded-lg bg-bg-floating shadow-[var(--elevation-high)]"
+        className="classic-modal relative flex max-h-[min(720px,calc(100dvh-32px))] w-full max-w-[480px] flex-col overflow-hidden rounded-xl border border-border-subtle bg-bg-floating shadow-[var(--elevation-high)]"
       >
         <button
           type="button"
@@ -252,7 +257,7 @@ export function AccountViewerModal({
                       type="button"
                       onClick={() => void copyId()}
                       aria-label="Copy user ID"
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
                     >
                       {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
                     </button>
@@ -274,7 +279,7 @@ export function AccountViewerModal({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-[38px] min-w-[96px] items-center justify-center rounded-[4px] px-4 text-[14px] font-medium text-text-normal hover:underline"
+              className="inline-flex h-[38px] min-w-[96px] items-center justify-center rounded-lg px-4 text-[14px] font-medium text-text-normal hover:underline"
             >
               Close
             </button>
@@ -282,7 +287,7 @@ export function AccountViewerModal({
               type="button"
               onClick={() => void changeBan()}
               disabled={busy}
-              className={`inline-flex h-[38px] min-w-[96px] items-center justify-center gap-1.5 rounded-[4px] px-4 text-[14px] font-medium text-white transition-colors disabled:opacity-50 ${
+              className={`inline-flex h-[38px] min-w-[96px] items-center justify-center gap-1.5 rounded-lg px-4 text-[14px] font-medium text-white transition-colors disabled:opacity-50 ${
                 ban ? "bg-button-secondary hover:bg-button-secondary-hover" : "bg-button-danger hover:bg-button-danger-hover"
               }`}
             >
@@ -318,7 +323,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Notice({ tone, children }: { tone: "danger"; children: React.ReactNode }) {
   return (
-    <p className={`mt-3 rounded-[4px] px-3 py-2 text-[13px] ${tone === "danger" ? "bg-status-dnd/10 text-status-dnd" : ""}`}>{children}</p>
+    <p className={`mt-3 rounded-lg px-3 py-2 text-[13px] ${tone === "danger" ? "bg-status-dnd/10 text-status-dnd" : ""}`}>{children}</p>
   );
 }
 

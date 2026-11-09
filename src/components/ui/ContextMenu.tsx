@@ -284,7 +284,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
             data-context-menu
             role="menu"
             aria-labelledby={menuId}
-            className={`menu-pop${menuExiting ? " pop-out" : ""} fixed min-w-[188px] max-w-[320px] max-h-[70vh] overflow-y-auto overscroll-contain rounded-[4px] bg-bg-floating px-2 py-1.5 shadow-[var(--elevation-high)] [@media(pointer:coarse)]:min-w-[240px]`}
+            className={`menu-pop${menuExiting ? " pop-out" : ""} fixed min-w-[188px] max-w-[320px] max-h-[70vh] overflow-y-auto overscroll-contain rounded-xl border border-border-subtle bg-bg-floating px-1.5 py-1.5 shadow-[var(--elevation-high)] [@media(pointer:coarse)]:min-w-[240px]`}
             style={{
               zIndex: OVERLAY_Z.contextMenu,
               left: Math.min(shownMenu.x, window.innerWidth - 200),
@@ -308,7 +308,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
             </span>
             {shownMenu.items.map((item, i) =>
               item.separator ? (
-                <div key={item.id} role="separator" className="mx-1 my-1 h-px bg-[#2e2f34]" />
+                <div key={item.id} role="separator" className="mx-1.5 my-1 h-px bg-border-subtle" />
               ) : (
                 <button
                   key={item.id}
@@ -320,10 +320,10 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
                     if (!item.disabled) item.onClick?.();
                     closeMenu();
                   }}
-                  className={`my-0.5 flex min-h-8 w-full items-center gap-2 rounded-[2px] px-2 py-1.5 text-left text-[14px] font-medium leading-[18px] outline-none disabled:opacity-50 [@media(pointer:coarse)]:py-2.5 [@media(pointer:coarse)]:text-[15px] ${
+                  className={`my-0.5 flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[14px] font-medium leading-[18px] outline-none disabled:opacity-50 [@media(pointer:coarse)]:py-2.5 [@media(pointer:coarse)]:text-[15px] ${
                     item.danger
-                      ? "text-status-dnd hover:bg-button-danger hover:text-white focus-visible:bg-button-danger focus-visible:text-white"
-                      : "text-interactive-normal hover:bg-brand-hover hover:text-white focus-visible:bg-brand-hover focus-visible:text-white"
+                      ? "text-status-dnd hover:bg-status-dnd/12 focus-visible:bg-status-dnd/12"
+                      : "text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active focus-visible:bg-interactive-hover focus-visible:text-interactive-active"
                   }`}
                 >
                   <span className="min-w-0 flex-1 truncate">{t(item.label)}</span>

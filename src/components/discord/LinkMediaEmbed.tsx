@@ -36,7 +36,7 @@ export function GifLinkEmbed({ url, onLoad }: { url: string; onLoad?: () => void
 
   return (
     <div
-      className="relative mt-1 max-w-[432px] overflow-hidden rounded-[4px] border border-divider"
+      className="relative mt-1 max-w-[432px] overflow-hidden rounded-lg border border-divider"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
@@ -90,13 +90,13 @@ export function LinkedMedia({ url, kind, onLoad }: {
         <VideoPlayer
           src={src}
           onLoad={onLoad}
-          className="max-h-64 w-full rounded-[4px] border border-divider"
+          className="max-h-64 w-full rounded-lg border border-divider"
         />
       </div>
     );
   }
   return (
-    <div className="relative mt-1 max-w-[432px] overflow-hidden rounded-[4px] border border-divider bg-bg-secondary">
+    <div className="relative mt-1 max-w-[432px] overflow-hidden rounded-lg border border-divider bg-bg-secondary">
       <button
         type="button"
         onClick={() => setLightbox(true)}

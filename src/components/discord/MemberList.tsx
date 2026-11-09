@@ -265,13 +265,13 @@ export function MemberList({ serverId = null, channelId = null, members, roles, 
   // members followed by a pop-in list.
   if (loading && !useWindow) {
     return (
-      <aside className="flex w-60 shrink-0 flex-col bg-bg-secondary px-4 py-4" aria-label={t("Loading members")}>
+      <aside className="flex w-[248px] shrink-0 flex-col border-l border-column-border bg-bg-primary px-4 py-4" aria-label={t("Loading members")}>
         <h2 className="px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
           {t("Members")}
         </h2>
         <div className="flex flex-col gap-1" aria-hidden>
           {Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2.5 rounded-[4px] px-2 py-1.5">
+            <div key={i} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
               <span className="skeleton-glimmer h-8 w-8 shrink-0 rounded-full" />
               <span className="flex min-w-0 flex-1 flex-col gap-1.5">
                 <span
@@ -290,7 +290,7 @@ export function MemberList({ serverId = null, channelId = null, members, roles, 
   // blank rail with no explanation.
   if (!useWindow && members.length === 0) {
     return (
-      <aside className="flex w-60 shrink-0 flex-col bg-bg-secondary px-4 py-4">
+      <aside className="flex w-[248px] shrink-0 flex-col border-l border-column-border bg-bg-primary px-4 py-4">
         <h2 className="px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
           {t("Members")}
         </h2>
@@ -306,7 +306,7 @@ export function MemberList({ serverId = null, channelId = null, members, roles, 
     <aside
       ref={scrollerRef}
       onScroll={onScroll}
-      className="member-scroll flex w-60 shrink-0 flex-col overflow-y-auto bg-bg-secondary"
+      className="member-scroll flex w-[248px] shrink-0 flex-col overflow-y-auto border-l border-column-border bg-bg-primary"
     >
       <div className="pb-5 pl-2 pr-0">
         <div style={{ height: padTop }} aria-hidden />
@@ -315,7 +315,7 @@ export function MemberList({ serverId = null, channelId = null, members, roles, 
             <h2
               key={item.key}
               data-member-header
-              className="flex h-10 items-end truncate pb-1 pl-2 pr-2 pt-6 text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] text-channels-default"
+              className="flex h-10 items-end truncate pb-1.5 pl-2 pr-2 pt-6 text-[13px] font-semibold leading-4 text-channels-default"
             >
               {BUILT_IN_HEADERS.has(item.label) ? t(item.label) : item.label} — {item.count}
             </h2>
@@ -357,7 +357,7 @@ export function MemberList({ serverId = null, channelId = null, members, roles, 
         {hasMore && (
           <div className="flex flex-col gap-1 pt-1" aria-hidden>
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-2.5 rounded-[4px] px-2 py-1.5">
+              <div key={i} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
                 <span className="skeleton-glimmer h-8 w-8 shrink-0 rounded-full" />
                 <span className="skeleton-glimmer h-3 rounded" style={{ width: `${58 + ((i * 23) % 30)}%` }} />
               </div>
@@ -372,7 +372,7 @@ export function MemberList({ serverId = null, channelId = null, members, roles, 
 /** A placeholder the height of a member row, shown until its page lands. */
 function SkeletonRow({ seed }: { seed: number }) {
   return (
-    <div data-member-row aria-hidden className="my-px flex h-[42px] w-[224px] items-center gap-3 px-2 opacity-30">
+    <div data-member-row aria-hidden className="my-px flex h-[42px] w-[232px] items-center gap-3 px-2 opacity-30">
       <span className="h-8 w-8 shrink-0 rounded-full bg-bg-tertiary" />
       <span className="h-3.5 rounded-full bg-bg-tertiary" style={{ width: `${45 + ((seed * 37) % 40)}%` }} />
     </div>
@@ -423,17 +423,17 @@ function Row({
         e.preventDefault();
         onContext?.(m, e.clientX, e.clientY);
       }}
-      className={`group my-px flex h-[42px] w-[224px] items-center gap-3 rounded-[4px] px-2 transition-colors duration-75 hover:bg-interactive-hover ${
+      className={`group my-px flex h-[42px] w-[232px] items-center gap-3 rounded-lg px-2 transition-colors duration-75 hover:bg-interactive-hover ${
         live === "offline" ? "opacity-30 hover:opacity-100" : ""
       }`}
     >
       <div className="relative shrink-0">
         <Avatar profile={p} size="sm" />
-        {live !== "offline" && <StatusDot status={live} ring="var(--bg-secondary)" className="absolute -bottom-[3px] -right-[3px] group-hover:![background:var(--interactive-hover)]" />}
+        {live !== "offline" && <StatusDot status={live} ring="var(--bg-primary)" className="absolute -bottom-[3px] -right-[3px] group-hover:![background:var(--interactive-hover)]" />}
       </div>
       <span className="flex min-w-0 flex-1 flex-col items-start">
       <span
-        className={`flex w-full min-w-0 items-center gap-1 truncate text-[16px] font-medium leading-5 ${live === "offline" ? "text-channels-default" : "text-channels-default group-hover:text-interactive-active"}`}
+        className={`flex w-full min-w-0 items-center gap-1 truncate text-[15px] font-medium leading-5 ${live === "offline" ? "text-channels-default" : "text-channels-default group-hover:text-interactive-active"}`}
         style={color ? { color } : undefined}
       >
         <span

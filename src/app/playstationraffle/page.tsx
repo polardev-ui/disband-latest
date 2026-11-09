@@ -59,7 +59,7 @@ const facts = [
 
 export default function PlayStationRafflePage() {
   return (
-    <div className="min-h-screen bg-[#1e1f22]">
+    <div className="min-h-screen bg-bg-secondary">
       <MarketingNav />
       <main className="pt-14">
         {/* Hero */}
@@ -71,7 +71,7 @@ export default function PlayStationRafflePage() {
             <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-extrabold tracking-tight text-white sm:text-6xl">
               Win a <span className="bg-gradient-to-r from-brand to-[#5865f2] bg-clip-text text-transparent">PlayStation 5</span>
             </h1>
-            <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-[#b5bac1]">
+            <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-interactive-normal">
               Rate Disband 5 stars or refer your people — every step earns real entries.
               One winner drawn <span className="font-semibold text-white">December 15</span>, open worldwide.
             </p>
@@ -95,7 +95,7 @@ export default function PlayStationRafflePage() {
         {/* How it works */}
         <section className="mx-auto max-w-6xl px-6 py-20">
           <h2 className="text-2xl font-bold text-white sm:text-3xl">How the giveaway works</h2>
-          <p className="mt-2 max-w-2xl text-[#9aa0a8]">
+          <p className="mt-2 max-w-2xl text-text-muted">
             Three steps, real entries, one winner. No purchase required — a review or a referral gets you in.
           </p>
           <div className="mt-10 grid gap-5 sm:grid-cols-3">
@@ -106,7 +106,7 @@ export default function PlayStationRafflePage() {
               >
                 <span className="font-mono text-sm font-bold text-brand">{s.n}</span>
                 <h3 className="mt-4 text-lg font-semibold text-white">{s.title}</h3>
-                <p className="mt-2 flex-1 text-sm leading-relaxed text-[#9aa0a8]">{s.body}</p>
+                <p className="mt-2 flex-1 text-sm leading-relaxed text-text-muted">{s.body}</p>
                 {s.cta && s.href && (
                   <Link href={s.href} className="mt-5 inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-brand hover:text-white">
                     {s.cta}
@@ -122,14 +122,14 @@ export default function PlayStationRafflePage() {
         <section className="border-y border-white/5 bg-[#1a1b1e]">
           <div className="mx-auto max-w-6xl px-6 py-20">
             <h2 className="text-2xl font-bold text-white sm:text-3xl">The details</h2>
-            <p className="mt-2 max-w-2xl text-[#9aa0a8]">
+            <p className="mt-2 max-w-2xl text-text-muted">
               Everything you need to know, in plain language.
             </p>
             <div className="mt-10 grid gap-5 sm:grid-cols-2">
               {facts.map((f) => (
                 <div key={f.label} className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
                   <h3 className="font-semibold text-white">{f.label}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-[#9aa0a8]">{f.body}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-text-muted">{f.body}</p>
                 </div>
               ))}
             </div>

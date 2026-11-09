@@ -191,7 +191,7 @@ export function GuildTagBadge({
   const small = size === "sm";
   return (
     <span
-      className={`inline-flex shrink-0 select-none items-center justify-center gap-[3px] whitespace-nowrap rounded-[4px] font-bold uppercase leading-none tracking-[0.02em] ${
+      className={`inline-flex shrink-0 select-none items-center justify-center gap-[3px] whitespace-nowrap rounded-lg font-bold uppercase leading-none tracking-[0.02em] ${
         small ? "h-[16px] px-[4px] text-[10px]" : "h-[18px] px-[5px] text-[11px]"
       } ${onActivate ? "cursor-pointer transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80" : ""} ${className}`}
       style={{

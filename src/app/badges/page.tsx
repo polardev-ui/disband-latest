@@ -71,8 +71,8 @@ function availabilityLabel(a: BadgeAvailability, now: number): { text: string; t
 const TONE_CLASSES = {
   open: "border-[#3ba55d]/30 bg-[#3ba55d]/10 text-[#6fd391]",
   limited: "border-[#f0b232]/35 bg-[#f0b232]/10 text-[#f5c862]",
-  closed: "border-white/10 bg-white/[0.04] text-[#9aa0a8]",
-  staff: "border-[#5865f2]/30 bg-[#5865f2]/10 text-[#a5adff]",
+  closed: "border-white/10 bg-white/[0.04] text-text-muted",
+  staff: "border-brand/30 bg-brand/10 text-[#a5adff]",
 };
 
 function formatShare(holders: number, users: number): string {
@@ -102,14 +102,14 @@ function BadgeCard({ badge, users, now }: { badge: CatalogueEntry; users: number
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-[16px] font-semibold leading-tight text-white">{badge.name}</h3>
-          <p className="mt-1 text-[14px] leading-snug text-[#b5bac1]">{badge.description}</p>
+          <p className="mt-1 text-[14px] leading-snug text-interactive-normal">{badge.description}</p>
         </div>
       </div>
 
       {guide && (
         <div>
-          <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[#6e727a]">How to get it</p>
-          <p className="mt-1 text-[14px] leading-relaxed text-[#9aa0a8]">{guide.howTo}</p>
+          <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-text-muted">How to get it</p>
+          <p className="mt-1 text-[14px] leading-relaxed text-text-muted">{guide.howTo}</p>
         </div>
       )}
 
@@ -129,7 +129,7 @@ function BadgeCard({ badge, users, now }: { badge: CatalogueEntry; users: number
           </span>
         )}
         {badge.holders !== null && users ? (
-          <span className="ml-auto text-[12px] tabular-nums text-[#6e727a]">
+          <span className="ml-auto text-[12px] tabular-nums text-text-muted">
             {badge.holders.toLocaleString("en-GB")} {badge.holders === 1 ? "person" : "people"} · {formatShare(badge.holders, users)}
           </span>
         ) : null}
@@ -153,34 +153,34 @@ export default async function BadgesPage() {
     .filter((c) => c.badges.length > 0);
 
   return (
-    <div className="min-h-screen bg-[#1e1f22]">
+    <div className="min-h-screen bg-bg-secondary">
       <MarketingNav />
       <main className="px-4 pb-24 pt-28 sm:px-6">
         <div className="mx-auto max-w-6xl">
-          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">Profile badges</p>
+          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-text-muted">Profile badges</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.02em] text-white sm:text-[2.5rem]">Badges</h1>
-          <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-[#9aa0a8]">
+          <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-text-muted">
             Badges sit on your profile next to your name. Here&apos;s what each one means, how to get it, and how many
             people have it.
           </p>
 
-          <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-[#9aa0a8]">
+          <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-text-muted">
             {(Object.keys(RARITY_COLOURS) as Rarity[]).map((r) => (
               <span key={r} className="inline-flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: RARITY_COLOURS[r] }} />
                 <span className="font-medium" style={{ color: RARITY_COLOURS[r] }}>{r}</span>
-                <span className="text-[#6e727a]">{RARITY_RANGES[r]}</span>
+                <span className="text-text-muted">{RARITY_RANGES[r]}</span>
               </span>
             ))}
           </div>
 
           {sections.length === 0 ? (
-            <p className="mt-16 text-[15px] text-[#9aa0a8]">Badges couldn&apos;t be loaded right now. Try again in a minute.</p>
+            <p className="mt-16 text-[15px] text-text-muted">Badges couldn&apos;t be loaded right now. Try again in a minute.</p>
           ) : (
             sections.map((section) => (
               <section key={section.key} className="mt-14">
                 <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">{section.title}</h2>
-                {section.blurb && <p className="mt-1 text-[14px] text-[#9aa0a8]">{section.blurb}</p>}
+                {section.blurb && <p className="mt-1 text-[14px] text-text-muted">{section.blurb}</p>}
                 <ul className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {section.badges.map((b) => (
                     <BadgeCard key={b.key} badge={b} users={users} now={now} />
@@ -191,7 +191,7 @@ export default async function BadgesPage() {
           )}
 
           {users ? (
-            <p className="mt-14 text-[13px] text-[#6e727a]">
+            <p className="mt-14 text-[13px] text-text-muted">
               Rarity is the share of all {users.toLocaleString("en-GB")} Disband accounts holding each badge, updated hourly.
             </p>
           ) : null}

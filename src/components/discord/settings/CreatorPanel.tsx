@@ -96,7 +96,7 @@ export function CreatorPanel() {
       {note && <p role="status" className="rounded-md bg-bg-secondary px-3 py-2 text-[14px] text-text-normal">{note}</p>}
 
       <SettingsSection title={t("Your platforms")} description={t("We only read your public follower count and handle. You can disconnect at any time.")}>
-        <ul className="divide-y divide-divider">
+        <ul className="divide-y divide-border-subtle">
           {(Object.keys(META) as Platform[]).map((p) => {
             const c = connections.find((x) => x.platform === p);
             const progress = c ? Math.min(1, c.followers / THRESHOLD) : 0;

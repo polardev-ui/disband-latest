@@ -164,7 +164,7 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
                 key={s.id}
                 type="button"
                 onClick={() => void selectServer(s.id)}
-                className="flex w-full items-center gap-2.5 rounded-[4px] px-2 py-1.5 text-left text-[14px] text-text-normal hover:bg-interactive-hover"
+                className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[14px] text-text-normal hover:bg-interactive-hover"
               >
                 {safeImageUrl(s.icon_url) ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -188,7 +188,7 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
                 key={f.id}
                 type="button"
                 onClick={() => void openDmWithFriend(f.id)}
-                className="flex w-full items-center gap-2.5 rounded-[4px] px-2 py-1.5 text-left text-[14px] text-text-normal hover:bg-interactive-hover"
+                className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[14px] text-text-normal hover:bg-interactive-hover"
               >
                 <Avatar profile={f} size="sm" className="!h-6 !w-6 !text-[10px]" />
                 <span className="truncate">{displayName(f)}</span>
@@ -200,7 +200,7 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
         <button
           type="button"
           onClick={onOpenFullProfile}
-          className="relative z-10 mx-4 mb-4 mt-auto h-8 rounded-[3px] text-[14px] font-medium text-header-secondary transition-colors hover:bg-interactive-hover hover:text-header-primary"
+          className="relative z-10 mx-4 mb-4 mt-auto h-8 rounded-md text-[14px] font-medium text-header-secondary transition-colors hover:bg-interactive-hover hover:text-header-primary"
         >
           {t("View Full Profile")}
         </button>

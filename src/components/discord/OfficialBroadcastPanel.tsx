@@ -151,62 +151,63 @@ export function OfficialBroadcastPanel() {
       setError("Find the account you want to write to first.");
       return;
     }
+    const run = async () => {
+      setBusy(true);
+      try {
+        const headers = await authHeaders();
+        if (!headers) { setError("Not authenticated"); return; }
+        const res = await apiFetch("/api/admin/broadcast", {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "send",
+            password,
+            audience,
+            targetUserId: audience === "user" ? recipient?.id : undefined,
+            kind,
+            title: title.trim(),
+            body: body.trim(),
+            link: link.trim() || undefined,
+            sendEmail,
+          }),
+        });
+        const json = (await res.json()) as {
+          error?: string;
+          recipientCount?: number;
+          emailSent?: number;
+          emailFailed?: number;
+          emailFailures?: Array<{ username: string | null; reason: string }>;
+        };
+        if (json.error) { setError(json.error); return; }
+
+        const emailed =
+          sendEmail && (json.emailSent ?? 0) > 0
+            ? ` ${json.emailSent} emailed${json.emailFailed ? `, ${json.emailFailed} failed (first: ${json.emailFailures?.[0]?.reason ?? "unknown"})` : ""}.`
+            : "";
+        setSuccess(
+          `Sent to ${json.recipientCount ?? 0} ${json.recipientCount === 1 ? "account" : "accounts"}.${emailed} Push goes out over the next couple of minutes.`,
+        );
+        setPassword("");
+        setBody("");
+        setLink("");
+        setSendEmail(false);
+        setRecipient(null);
+        setQuery("");
+        await load();
+      } catch {
+        setError("An unexpected error occurred.");
+      } finally {
+        setBusy(false);
+      }
+    };
     if (audience === "everyone" && !(await confirmDialog({
       title: `Send to all ${audienceCount.toLocaleString("en-GB")} accounts?`,
       body: sendEmail ? "It will also send an email to every one of them." : "Everyone on Disband gets this.",
       confirmLabel: "Send to Everyone",
-      tone: "primary",
-    }))) {
+      tone: "primary", action: run }))) {
       return;
     }
-
-    setBusy(true);
-    try {
-      const headers = await authHeaders();
-      if (!headers) { setError("Not authenticated"); return; }
-      const res = await apiFetch("/api/admin/broadcast", {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "send",
-          password,
-          audience,
-          targetUserId: audience === "user" ? recipient?.id : undefined,
-          kind,
-          title: title.trim(),
-          body: body.trim(),
-          link: link.trim() || undefined,
-          sendEmail,
-        }),
-      });
-      const json = (await res.json()) as {
-        error?: string;
-        recipientCount?: number;
-        emailSent?: number;
-        emailFailed?: number;
-        emailFailures?: Array<{ username: string | null; reason: string }>;
-      };
-      if (json.error) { setError(json.error); return; }
-
-      const emailed =
-        sendEmail && (json.emailSent ?? 0) > 0
-          ? ` ${json.emailSent} emailed${json.emailFailed ? `, ${json.emailFailed} failed (first: ${json.emailFailures?.[0]?.reason ?? "unknown"})` : ""}.`
-          : "";
-      setSuccess(
-        `Sent to ${json.recipientCount ?? 0} ${json.recipientCount === 1 ? "account" : "accounts"}.${emailed} Push goes out over the next couple of minutes.`,
-      );
-      setPassword("");
-      setBody("");
-      setLink("");
-      setSendEmail(false);
-      setRecipient(null);
-      setQuery("");
-      await load();
-    } catch {
-      setError("An unexpected error occurred.");
-    } finally {
-      setBusy(false);
-    }
+    if (audience !== "everyone") await run();
   }
 
   async function refreshDelivery(entry: HistoryEntry) {

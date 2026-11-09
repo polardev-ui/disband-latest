@@ -17,6 +17,8 @@ import { AeroIcon } from "@/components/icons/AeroIcon";
 import { GroupAvatar } from "@/components/ui/GroupAvatar";
 import { IconChevronLeft, IconClose, IconFriends, IconGroup, IconInbox, IconPlus, IconCrown, IconSparkle } from "@/components/icons";
 import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
+import { favoritesAvailable, isFavorite, toggleFavorite } from "@/lib/favorites";
+import { IconStar } from "@/components/icons";
 import type { GroupChatWithMembers } from "@/lib/supabase/types";
 
 const STATUS_BG = {
@@ -35,6 +37,10 @@ interface HomePanelProps {
   onOpenShop?: () => void;
   /** Opens the Ctrl/⌘+K quick switcher. */
   onOpenQuickSwitcher?: () => void;
+  /** The Aero page is showing in the main column (its row is selected). */
+  aeroActive?: boolean;
+  /** Shows the friends page; defaults to the plain home view. */
+  onOpenFriends?: () => void;
 }
 
 function NavRow({
@@ -56,14 +62,39 @@ function NavRow({
     <button
       type="button"
       onClick={onClick}
-      className={`group/nav mb-0.5 flex h-[42px] w-full items-center gap-3 rounded-[4px] px-2 text-left transition-colors duration-75 ${
+      aria-current={active ? "page" : undefined}
+      className={`group/nav mb-0.5 flex h-11 w-full items-center gap-3 rounded-lg px-2 text-left transition-colors duration-75 ${
         active ? "bg-interactive-selected text-interactive-active" : "text-channels-default hover:bg-interactive-hover hover:text-text-normal"
       }`}
     >
-      <span className={`flex h-8 w-8 shrink-0 items-center justify-center ${accent ? "text-[#ff73fa]" : ""}`}>{icon}</span>
-      <span className="min-w-0 flex-1 truncate text-[16px] font-medium leading-5">{label}</span>
+      {/* Icons sit in a round chip; the selected row's chip takes the accent. */}
+      <span
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
+          active
+            ? "bg-brand text-brand-foreground"
+            : accent
+              ? "bg-[linear-gradient(135deg,#7c74ff,#e055ff)] text-white"
+              : "bg-bg-tertiary text-interactive-normal group-hover/nav:text-interactive-active"
+        }`}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-[15px] font-medium leading-5">{label}</span>
       {trailing}
     </button>
+  );
+}
+
+/** "⌘ K" / "Ctrl K" keycaps for the quick switcher row. */
+function ShortcutKeys() {
+  const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent);
+  return (
+    <span aria-hidden className="ml-auto flex shrink-0 items-center gap-1">
+      <kbd className="flex h-5 min-w-5 items-center justify-center rounded-md bg-bg-tertiary px-1 font-sans text-[11px] font-semibold text-text-muted">
+        {mac ? "⌘" : "Ctrl"}
+      </kbd>
+      <kbd className="flex h-5 min-w-5 items-center justify-center rounded-md bg-bg-tertiary px-1 font-sans text-[11px] font-semibold text-text-muted">K</kbd>
+    </span>
   );
 }
 
@@ -91,6 +122,8 @@ export function HomePanel({
   onOpenSubscription,
   onOpenShop,
   onOpenQuickSwitcher,
+  aeroActive = false,
+  onOpenFriends,
 }: HomePanelProps) {
   const {
     pendingIncoming,
@@ -113,6 +146,7 @@ export function HomePanel({
     tetherProfile,
     subscriptionPlan,
     messageRequests,
+    user,
   } = useApp();
   const { t } = useI18n();
   const { openMenu } = useContextMenu();
@@ -157,7 +191,7 @@ export function HomePanel({
     }
   }
 
-  const onFriends = viewMode === "home";
+  const onFriends = viewMode === "home" && !aeroActive;
 
   // Aero users get a pinned Tether row so the assistant is discoverable: it
   // opens a real DM thread (migration 0102) where every message is an ask.
@@ -220,7 +254,17 @@ export function HomePanel({
   // Closing hides the row; messaging them again — or a new message from them
   // — brings the row and its history back.
   function openDmRowMenu(entry: (typeof dmListEntries)[number], x: number, y: number) {
+    const threadId = entry.threadId;
+    const userId = user?.id;
     openMenu(x, y, [
+      ...(threadId && userId && favoritesAvailable()
+        ? [{
+            id: "favorite",
+            label: isFavorite("dm", threadId) ? t("Remove from Favorites") : t("Add to Favorites"),
+            icon: <IconStar size={16} />,
+            onClick: () => void toggleFavorite(userId, "dm", threadId),
+          }]
+        : []),
       {
         id: "message",
         label: t("Message"),
@@ -248,22 +292,23 @@ export function HomePanel({
 
   return (
     <aside className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-bg-secondary">
-      <div className="flex h-12 shrink-0 items-center px-2.5 shadow-[var(--elevation-low)]">
+      <div className="flex h-14 shrink-0 items-center border-b border-column-border px-2">
         <button
           type="button"
           onClick={() => onOpenQuickSwitcher?.()}
-          className="h-7 w-full truncate rounded-[4px] bg-bg-tertiary px-1.5 text-left text-[14px] font-medium leading-6 text-text-muted"
+          className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[14px] font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
         >
-          {t("Find or start a conversation")}
+          <span className="truncate">{t("Quick switcher")}</span>
+          <ShortcutKeys />
         </button>
       </div>
 
-      <nav className="px-2 pt-2">
+      <nav className="border-b border-column-border px-2 pb-2 pt-2">
         <NavRow
-          icon={<SolidFriendsIcon size={24} />}
+          icon={<SolidFriendsIcon size={18} />}
           label={t("Friends")}
           active={onFriends}
-          onClick={() => setViewHome()}
+          onClick={() => (onOpenFriends ? onOpenFriends() : setViewHome())}
           trailing={
             pendingIncoming.length > 0 ? (
               <span
@@ -276,25 +321,26 @@ export function HomePanel({
           }
         />
         <NavRow
-          icon={<SolidNotesIcon size={24} />}
-          label={t("Notes")}
+          icon={<SolidNotesIcon size={18} />}
+          label={t("Personal notes")}
           active={viewMode === "notes"}
           onClick={() => void setViewNotes()}
         />
         <NavRow
-          icon={<AeroIcon size={24} />}
-          label="Aero"
+          icon={<AeroIcon size={18} />}
+          label="Disband Aero"
           accent
+          active={aeroActive}
           onClick={() => onOpenSubscription?.()}
         />
         <NavRow
-          icon={<CartIcon />}
+          icon={<CartIcon size={18} />}
           label={t("Shop")}
           onClick={() => onOpenShop?.()}
         />
         {messageRequests.length > 0 && (
           <NavRow
-            icon={<IconInbox size={22} />}
+            icon={<IconInbox size={18} />}
             label={t("Message Requests")}
             active={requestsOpen}
             onClick={() => setShowRequests((v) => !v)}
@@ -322,7 +368,7 @@ export function HomePanel({
               >
                 <IconChevronLeft size={16} />
               </button>
-              <p className="text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] text-channels-default">{t("Message Requests")}</p>
+              <p className="text-[13px] font-semibold leading-4 text-channels-default">{t("Message Requests")}</p>
             </div>
             <p className="px-2 pb-2 text-[12px] leading-4 text-text-muted">
               {t("From people you share a space with. They won’t know you’ve seen it unless you reply.")}
@@ -334,7 +380,7 @@ export function HomePanel({
                   key={req.threadId}
                   type="button"
                   onClick={() => void selectDmThread(req.threadId)}
-                  className={`mb-0.5 flex min-h-[42px] w-full items-center gap-3 rounded-[4px] px-2 py-1 text-left transition-colors duration-75 ${
+                  className={`mb-0.5 flex min-h-[42px] w-full items-center gap-3 rounded-lg px-2 py-1 text-left transition-colors duration-75 ${
                     active ? "bg-interactive-selected text-interactive-active" : "text-channels-default hover:bg-interactive-hover hover:text-text-normal"
                   }`}
                 >
@@ -350,8 +396,8 @@ export function HomePanel({
           </>
         ) : (
           <>
-            <div className="group/dmh flex h-10 items-center justify-between pb-1 pl-2 pr-2 pt-[18px]">
-              <p className="text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] text-channels-default group-hover/dmh:text-text-normal">{t("Direct Messages")}</p>
+            <div className="group/dmh flex h-10 items-center justify-between pb-1 pl-2 pr-2 pt-4">
+              <p className="text-[13px] font-semibold leading-4 text-channels-default group-hover/dmh:text-text-normal">{t("Direct messages")}</p>
               <Tooltip label={t("Create DM")} side="top">
                 <button
                   type="button"
@@ -378,7 +424,7 @@ export function HomePanel({
                       e.preventDefault();
                       onGroupContext?.(g, e.clientX, e.clientY);
                     }}
-                    className={`mb-0.5 flex h-[42px] w-full items-center gap-3 rounded-[4px] px-2 text-left transition-colors duration-75 ${
+                    className={`mb-0.5 flex h-[42px] w-full items-center gap-3 rounded-lg px-2 text-left transition-colors duration-75 ${
                       active ? "bg-interactive-selected text-interactive-active" : unreadCount > 0 ? "text-interactive-active hover:bg-interactive-hover" : "text-channels-default hover:bg-interactive-hover hover:text-text-normal"
                     }`}
                   >
@@ -431,7 +477,7 @@ export function HomePanel({
                   onPointerUp={dmRowPointerEnd}
                   onPointerCancel={dmRowPointerEnd}
                   onPointerLeave={dmRowPointerEnd}
-                  className={`group/dmrow mb-0.5 flex h-[42px] w-full select-none items-center gap-3 rounded-[4px] px-2 text-left transition-colors duration-75 ${
+                  className={`group/dmrow mb-0.5 flex h-[42px] w-full select-none items-center gap-3 rounded-lg px-2 text-left transition-colors duration-75 ${
                     active ? "bg-interactive-selected text-interactive-active" : entry.unreadCount > 0 ? "text-interactive-active hover:bg-interactive-hover" : "text-channels-default hover:bg-interactive-hover hover:text-text-normal"
                   }`}
                 >
@@ -489,7 +535,7 @@ export function HomePanel({
                 type="button"
                 onClick={() => void openDmWithFriend(tetherProfile.id)}
                 title={t("Message Tether directly")}
-                className="mb-0.5 flex h-[42px] w-full items-center gap-3 rounded-[4px] px-2 text-left text-channels-default transition-colors duration-75 hover:bg-interactive-hover hover:text-text-normal"
+                className="mb-0.5 flex h-[42px] w-full items-center gap-3 rounded-lg px-2 text-left text-channels-default transition-colors duration-75 hover:bg-interactive-hover hover:text-text-normal"
               >
                 <div className="relative">
                   <Avatar profile={tetherProfile} size="sm" />

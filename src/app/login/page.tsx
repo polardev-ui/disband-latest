@@ -23,7 +23,7 @@ function LoginGate() {
 
   if (ready && session && !mfaRequired) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg-tertiary text-text-muted">
+      <div className="flex min-h-screen items-center justify-center bg-bg-secondary text-text-muted">
         Redirecting…
       </div>
     );
@@ -31,18 +31,18 @@ function LoginGate() {
 
   if (ready && session && mfaRequired) {
     return (
-      <div className="relative min-h-screen bg-bg-tertiary">
+      <div className="relative min-h-screen bg-bg-secondary">
         <MfaChallengeScreen />
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-screen bg-bg-tertiary">
+    <div className="relative min-h-screen bg-bg-secondary">
       {!isTauri() && (
         <Link
           href="/home"
-          className="absolute right-6 top-6 z-20 flex items-center gap-2 text-[14px] font-medium text-white/80 hover:text-white hover:underline"
+          className="absolute right-6 top-6 z-20 flex items-center gap-2 rounded-full bg-black/20 px-3.5 py-1.5 text-[13px] font-semibold text-white/85 ring-1 ring-white/15 transition-colors hover:bg-black/30 hover:text-white"
         >
           ← Back to home
         </Link>

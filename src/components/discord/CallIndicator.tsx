@@ -75,7 +75,7 @@ export function CallIndicator() {
   const elapsed = connected && state.startedAt ? formatElapsed(Math.max(0, now - state.startedAt)) : null;
 
   return (
-    <div className="rtc-enter shrink-0 border-b border-divider/60 bg-bg-secondary-alt px-2 pb-2 pt-2">
+    <div className="rtc-enter mx-2 mt-1 shrink-0 rounded-xl border border-border-subtle bg-bg-secondary-alt px-2 pb-2 pt-2">
       <div className="flex items-center gap-1">
         <div className="min-w-0 flex-1 pl-1">
           <div className="flex items-center gap-1">
@@ -101,7 +101,7 @@ export function CallIndicator() {
               type="button"
               onClick={hangup}
               aria-label={t("Disconnect")}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-status-dnd/15 text-status-dnd transition-colors hover:bg-status-dnd hover:text-white"
             >
               <IconPhoneOff size={20} />
             </button>
@@ -134,8 +134,8 @@ function PanelButton({ label, active, onClick, children }: { label: string; acti
           onClick={onClick}
           aria-label={label}
           aria-pressed={active}
-          className={`flex h-8 w-full items-center justify-center rounded-[4px] transition-colors ${
-            active ? "bg-status-online text-white" : "bg-bg-secondary text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active"
+          className={`flex h-8 w-full items-center justify-center rounded-lg transition-colors ${
+            active ? "bg-brand text-brand-foreground" : "bg-bg-tertiary text-interactive-normal hover:bg-interactive-selected hover:text-interactive-active"
           }`}
         >
           {children}

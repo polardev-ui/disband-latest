@@ -76,7 +76,7 @@ function ConsentCard() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg-tertiary p-4">
+    <div className="flex min-h-screen items-center justify-center bg-bg-secondary p-4">
       <div className="w-full max-w-[440px] overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]">
         {error && !consent ? (
           <div className="p-8 text-center">
@@ -128,8 +128,8 @@ function ConsentCard() {
               {error && <p className="mt-3 text-[14px] text-status-dnd">{error}</p>}
             </div>
             <div className="flex justify-end gap-2 bg-bg-secondary px-6 py-4">
-              <button type="button" disabled={busy} onClick={() => back({ error: "access_denied" })} className="h-[38px] rounded-[3px] px-4 text-[14px] font-medium text-text-normal hover:underline">Cancel</button>
-              <button type="button" disabled={busy} onClick={() => void authorise()} className="h-[38px] min-w-[110px] rounded-[3px] bg-brand px-4 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60">
+              <button type="button" disabled={busy} onClick={() => back({ error: "access_denied" })} className="h-[38px] rounded-md px-4 text-[14px] font-medium text-text-normal hover:underline">Cancel</button>
+              <button type="button" disabled={busy} onClick={() => void authorise()} className="h-[38px] min-w-[110px] rounded-md bg-brand px-4 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60">
                 {busy ? "Authorising…" : "Authorise"}
               </button>
             </div>

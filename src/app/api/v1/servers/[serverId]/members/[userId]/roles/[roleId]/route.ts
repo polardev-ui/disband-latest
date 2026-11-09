@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, botJsonError } from "@/lib/bot-auth";
 import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
+import { resolveRoleId } from "@/lib/bot-ids";
 
 type Params = { params: Promise<{ serverId: string; userId: string; roleId: string }> };
 
@@ -13,7 +14,9 @@ async function change(request: NextRequest, { params }: Params, fn: "bot_add_mem
   if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
   const gate = await checkBotRateLimit(service, "write", bot.botId);
   if (gate.limited) return botRateLimited(gate.retryAfterSeconds);
-  const { error } = await service.rpc(fn, { p_bot_id: bot.botId, p_server_id: serverId, p_user_id: userId, p_role_id: roleId });
+  const role = await resolveRoleId(service, roleId);
+  if (!role) return NextResponse.json({ error: "Role not found" }, { status: 404 });
+  const { error } = await service.rpc(fn, { p_bot_id: bot.botId, p_server_id: serverId, p_user_id: userId, p_role_id: role });
   if (error) return NextResponse.json({ error: error.message }, { status: botJsonError(error) });
   return NextResponse.json({ ok: true });
 }

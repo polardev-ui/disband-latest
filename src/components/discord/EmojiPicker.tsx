@@ -102,7 +102,7 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
         aria-label={t("Insert emoji")}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="group/emoji mt-[6px] flex h-8 w-10 items-center justify-center"
+        className="group/emoji mt-[9px] flex h-8 w-10 items-center justify-center"
       >
         {/* The classic emoji button: a grey face that colours in and grows. */}
         <span
@@ -120,28 +120,28 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
           <div
             id="emoji-picker-panel"
             role="dialog" aria-label={t("Emoji picker")}
-            className="menu-pop fixed z-[100] flex h-[420px] flex-col overflow-hidden rounded-[4px] bg-bg-secondary shadow-[var(--elevation-high)]"
+            className="menu-pop fixed z-[100] flex h-[440px] flex-col overflow-hidden rounded-2xl border border-border-subtle bg-bg-floating shadow-[var(--elevation-high)]"
             style={{ left: panelPos.left, bottom: panelPos.bottom, width: panelPos.width, maxHeight: `calc(100dvh - ${panelPos.bottom + 8}px)` }}
           >
-            <div className="shrink-0 p-3 shadow-[var(--elevation-low)]">
+            <div className="shrink-0 border-b border-border-subtle p-3">
               <input autoFocus aria-label={t("Search emoji")} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Find the perfect emoji")}
-                className="h-8 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]" />
+                className="h-9 w-full rounded-lg border border-border-subtle bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-brand" />
             </div>
             <div className="flex min-h-0 flex-1">
-              <nav aria-label={t("Emoji categories")} className="channel-scroll flex w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto bg-bg-tertiary py-2">
-                {customEmoji.length > 0 && <button type="button" aria-label={t("Space Emoji")} aria-pressed={!q && category === "Space Emoji"} onClick={() => {setSearch("");setCategory("Space Emoji");}} className="h-9 w-9 shrink-0 rounded-[4px] text-interactive-normal hover:bg-interactive-hover">#</button>}
-                {EMOJI_CATEGORIES.map((cat) => <button key={cat.name} type="button" aria-label={cat.name} aria-pressed={!q && category === cat.name} onClick={() => {setSearch("");setCategory(cat.name);}} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] ${!q && category === cat.name ? "bg-interactive-selected" : "grayscale hover:bg-interactive-hover hover:grayscale-0"}`}><EmojiImg emoji={cat.emojis[0]} /></button>)}
+              <nav aria-label={t("Emoji categories")} className="channel-scroll flex w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-border-subtle bg-bg-secondary py-2">
+                {customEmoji.length > 0 && <button type="button" aria-label={t("Space Emoji")} aria-pressed={!q && category === "Space Emoji"} onClick={() => {setSearch("");setCategory("Space Emoji");}} className="h-9 w-9 shrink-0 rounded-lg text-interactive-normal hover:bg-interactive-hover">#</button>}
+                {EMOJI_CATEGORIES.map((cat) => <button key={cat.name} type="button" aria-label={cat.name} aria-pressed={!q && category === cat.name} onClick={() => {setSearch("");setCategory(cat.name);}} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${!q && category === cat.name ? "bg-interactive-selected" : "grayscale hover:bg-interactive-hover hover:grayscale-0"}`}><EmojiImg emoji={cat.emojis[0]} /></button>)}
               </nav>
               <div className="channel-scroll min-w-0 flex-1 overflow-y-auto p-2">
-                <h3 className="mb-2 px-1 text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">{q ? t("Search Results") : category}</h3>
+                <h3 className="mb-2 px-1 text-[11px] font-bold uppercase tracking-[0.06em] text-text-muted">{q ? t("Search Results") : category}</h3>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(32px,1fr))] gap-0.5">
-                  {(q ? customEmoji.filter(e => e.name.toLowerCase().includes(q)) : category === "Space Emoji" ? customEmoji : []).map(e => <button key={e.id} type="button" aria-label={`:${e.name}:`} onMouseEnter={() => setPreview({label:`:${e.name}:`,url:e.url})} onFocus={() => setPreview({label:`:${e.name}:`,url:e.url})} onClick={() => {onSelect(`:${e.name}:`);setOpen(false);}} className="flex h-9 items-center justify-center rounded-[4px] hover:bg-interactive-selected"><img src={safeImageUrl(e.url) ?? ""} alt={e.name} className="h-7 w-7 object-contain" /></button>)}
-                  {(q ? searched.map(m => ({emoji:m.emoji,label:`:${m.shortcode}:`})) : (EMOJI_CATEGORIES.find(c => c.name === category)?.emojis ?? []).map(emoji => ({emoji,label:emoji}))).map((item,i) => <button key={`${item.label}-${i}`} type="button" aria-label={item.label} onMouseEnter={() => setPreview(item)} onFocus={() => setPreview(item)} onClick={() => {onSelect(item.emoji);setOpen(false);}} className="flex h-9 items-center justify-center rounded-[4px] hover:bg-interactive-selected"><EmojiImg emoji={item.emoji} size="28px" /></button>)}
+                  {(q ? customEmoji.filter(e => e.name.toLowerCase().includes(q)) : category === "Space Emoji" ? customEmoji : []).map(e => <button key={e.id} type="button" aria-label={`:${e.name}:`} onMouseEnter={() => setPreview({label:`:${e.name}:`,url:e.url})} onFocus={() => setPreview({label:`:${e.name}:`,url:e.url})} onClick={() => {onSelect(`:${e.name}:`);setOpen(false);}} className="flex h-9 items-center justify-center rounded-lg hover:bg-interactive-selected"><img src={safeImageUrl(e.url) ?? ""} alt={e.name} className="h-7 w-7 object-contain" /></button>)}
+                  {(q ? searched.map(m => ({emoji:m.emoji,label:`:${m.shortcode}:`})) : (EMOJI_CATEGORIES.find(c => c.name === category)?.emojis ?? []).map(emoji => ({emoji,label:emoji}))).map((item,i) => <button key={`${item.label}-${i}`} type="button" aria-label={item.label} onMouseEnter={() => setPreview(item)} onFocus={() => setPreview(item)} onClick={() => {onSelect(item.emoji);setOpen(false);}} className="flex h-9 items-center justify-center rounded-lg hover:bg-interactive-selected"><EmojiImg emoji={item.emoji} size="28px" /></button>)}
                 </div>
                 {q && searched.length === 0 && !customEmoji.some(e => e.name.toLowerCase().includes(q)) && <p className="py-8 text-center text-[14px] text-text-muted">{t("No emoji found.")}</p>}
               </div>
             </div>
-            <footer className="flex h-14 shrink-0 items-center gap-3 bg-bg-secondary-alt px-4 text-[14px] text-header-secondary">
+            <footer className="flex h-14 shrink-0 items-center gap-3 border-t border-border-subtle bg-bg-secondary-alt px-4 text-[14px] text-header-secondary">
               {preview?.emoji ? <EmojiImg emoji={preview.emoji} size="32px" /> : preview?.url ? <img src={safeImageUrl(preview.url) ?? ""} alt="" className="h-8 w-8 object-contain" /> : <EmojiImg emoji="🙂" size="32px" />}
               <span className="truncate">{preview?.label ?? t("Pick an emoji")}</span>
             </footer>

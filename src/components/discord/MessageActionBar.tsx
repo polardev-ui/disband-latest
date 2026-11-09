@@ -62,7 +62,7 @@ export function MessageActionBar({
   // stray ⋮ box beside every message for people who can hover just fine.
   return (
     <div
-      className="absolute -top-4 right-3.5 z-10 flex items-center rounded-[4px] border border-bg-tertiary bg-bg-primary opacity-0 shadow-[0_0_0_1px_rgba(0,0,0,0.04)] group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 [@media(any-hover:none)]:opacity-100 [@media(any-hover:none)]:[&>:not(:last-child)]:hidden"
+      className="absolute -top-4 right-3.5 z-10 flex items-center overflow-hidden rounded-lg border border-border-subtle bg-bg-floating opacity-0 shadow-[var(--elevation-high)] group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 [@media(any-hover:none)]:opacity-100 [@media(any-hover:none)]:[&>:not(:last-child)]:hidden"
       onClick={(e) => e.stopPropagation()}
     >
       {QUICK_EMOJIS.map((emoji) => (

@@ -22,31 +22,45 @@ export interface ProfileMemberRow {
   role_ids: string[];
 }
 
+// Rows already fetched, so reopening a profile shows its roles straight away.
+const cache = new Map<string, ProfileMemberRow | null>();
+
+/**
+ * `pending` is true while the row is still on its way, so the card can hold
+ * the Roles section's place instead of popping it in a second later.
+ */
 export function useProfileMember(
   serverId: string | null | undefined,
   userId: string | null | undefined,
   loaded: boolean,
   refreshKey: number,
-): ProfileMemberRow | null {
-  const [row, setRow] = useState<ProfileMemberRow | null>(null);
+): { row: ProfileMemberRow | null; pending: boolean } {
+  const key = serverId && userId ? `${serverId}:${userId}` : null;
+  const [state, setState] = useState<{ key: string | null; row: ProfileMemberRow | null; done: boolean }>({ key: null, row: null, done: false });
 
   useEffect(() => {
-    if (!serverId || !userId || (loaded && refreshKey === 0)) {
-      setRow(null);
+    if (!serverId || !userId || !key || (loaded && refreshKey === 0)) {
+      setState({ key, row: null, done: true });
       return;
     }
+    const hit = cache.get(key);
+    setState({ key, row: hit ?? null, done: cache.has(key) });
     let live = true;
     void getSupabaseClient()
       .rpc("get_server_members_by_ids", { p_server_id: serverId, p_user_ids: [userId] })
       .then(({ data, error }) => {
-        if (!live || error) return;
-        const first = ((data ?? []) as ProfileMemberRow[])[0];
-        setRow(first ?? null);
+        if (!live) return;
+        const first = error ? hit ?? null : ((data ?? []) as ProfileMemberRow[])[0] ?? null;
+        if (!error) cache.set(key, first);
+        setState({ key, row: first, done: true });
       });
     return () => {
       live = false;
     };
-  }, [serverId, userId, loaded, refreshKey]);
+  }, [serverId, userId, key, loaded, refreshKey]);
 
-  return row && row.user_id === userId && row.server_id === serverId ? row : null;
+  const current = state.key === key;
+  const row = current && state.row && state.row.user_id === userId && state.row.server_id === serverId ? state.row : null;
+  const needsFetch = !!key && !(loaded && refreshKey === 0);
+  return { row, pending: needsFetch && (!current || !state.done) };
 }

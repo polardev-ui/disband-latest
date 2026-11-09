@@ -37,14 +37,14 @@ export function CookieConsent() {
           <button
             type="button"
             onClick={() => decide("rejected")}
-            className="rounded-[3px] bg-bg-tertiary px-3 py-1.5 text-[13px] font-medium text-text-normal hover:bg-bg-modifier-hover"
+            className="rounded-md bg-bg-tertiary px-3 py-1.5 text-[13px] font-medium text-text-normal hover:bg-bg-modifier-hover"
           >
             Reject optional
           </button>
           <button
             type="button"
             onClick={() => decide("accepted")}
-            className="rounded-[3px] bg-[#5865f2] px-3 py-1.5 text-[13px] font-medium text-white hover:bg-[#4752c4]"
+            className="rounded-md bg-brand px-3 py-1.5 text-[13px] font-medium text-white hover:bg-brand-hover"
           >
             Accept all
           </button>

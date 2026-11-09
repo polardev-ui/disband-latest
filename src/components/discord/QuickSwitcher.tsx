@@ -84,7 +84,7 @@ export function QuickSwitcher({ open, onClose }: { open: boolean; onClose: () =>
         role="dialog"
         aria-modal="true"
         aria-label={t("Quick Switcher")}
-        className={`classic-modal${exiting ? " classic-modal-out" : ""} relative w-full max-w-[570px] rounded-lg bg-bg-primary px-8 pb-4 pt-5 shadow-[var(--elevation-high)]`}
+        className={`classic-modal${exiting ? " classic-modal-out" : ""} relative w-full max-w-[570px] rounded-xl border border-border-subtle bg-bg-primary px-8 pb-4 pt-5 shadow-[var(--elevation-high)]`}
       >
         <input
           ref={inputRef}
@@ -104,7 +104,7 @@ export function QuickSwitcher({ open, onClose }: { open: boolean; onClose: () =>
           }}
           placeholder={t("Where would you like to go?")}
           aria-label={t("Search for spaces, channels or DMs")}
-          className="h-[70px] w-full rounded-[4px] bg-bg-tertiary px-4 text-[20px] text-text-normal outline-none placeholder:text-text-muted"
+          className="h-[70px] w-full rounded-lg bg-bg-tertiary px-4 text-[20px] text-text-normal outline-none placeholder:text-text-muted"
         />
         <div className="mt-2 max-h-[300px] overflow-y-auto" role="listbox">
           {results.length === 0 ? (
@@ -120,7 +120,7 @@ export function QuickSwitcher({ open, onClose }: { open: boolean; onClose: () =>
                   aria-selected={active}
                   onMouseEnter={() => setIndex(i)}
                   onClick={() => go(r)}
-                  className={`flex h-[34px] w-full items-center gap-2.5 rounded-[4px] px-2 text-left ${active ? "bg-interactive-selected text-interactive-active" : "text-interactive-normal"}`}
+                  className={`flex h-[34px] w-full items-center gap-2.5 rounded-lg px-2 text-left ${active ? "bg-interactive-selected text-interactive-active" : "text-interactive-normal"}`}
                 >
                   {r.kind === "dm" ? (
                     <Avatar profile={friendById.get(r.profileId) ?? { display_name: r.label }} size="sm" className="!h-5 !w-5 !text-[9px]" />

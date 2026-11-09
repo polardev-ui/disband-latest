@@ -30,9 +30,9 @@ export function EmailChangeStatus() {
   const state = params.get("state") ?? "invalid";
   const copy = STATES[state] ?? STATES.invalid;
   return (
-    <main className="flex min-h-screen items-center justify-center bg-bg-primary px-6">
-      <div className="w-full max-w-md rounded-[8px] border border-divider bg-bg-secondary p-8 text-center">
-        <p className="text-xl font-semibold text-text-normal">{copy.title}</p>
+    <main className="aero-hero flex min-h-screen items-center justify-center px-6">
+      <div className="w-full max-w-md rounded-2xl border border-border-subtle bg-bg-secondary p-8 text-center shadow-[0_40px_90px_-30px_rgba(10,6,40,0.85)]">
+        <p className="text-[22px] font-bold text-header-primary">{copy.title}</p>
         <p className="mt-3 text-sm leading-relaxed text-text-muted">{copy.body}</p>
       </div>
     </main>

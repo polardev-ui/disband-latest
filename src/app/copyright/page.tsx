@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { MarketingFooter, MarketingNav } from "@/components/marketing/MarketingLayout";
+import { LegalShell } from "@/components/marketing/LegalShell";
 
 export const metadata: Metadata = {
   title: "Copyright Policy",
@@ -13,13 +13,9 @@ const link = "text-brand hover:underline";
 
 export default function CopyrightPage() {
   return (
-    <div className="min-h-screen bg-[#1e1f22] text-[#dbdee1]">
-      <MarketingNav />
-      <main className="mx-auto max-w-3xl px-6 pb-16 pt-24">
-        <h1 className="text-3xl font-bold text-white">Copyright Policy</h1>
-        <p className="mt-2 text-sm text-[#949ba4]">Last updated: November 6, 2026</p>
+    <LegalShell title="Copyright Policy" updated="November 6, 2026" path="/copyright">
 
-        <div className="mt-8 space-y-6 text-[15px] leading-relaxed text-[#b5bac1]">
+        <div className="mt-8 space-y-6 text-[15px] leading-relaxed text-interactive-normal">
           <p>
             Genysis IQ LLC (“Genysis IQ,” “Disband,” “we,” “us,” or “our”) respects the intellectual
             property of others and expects people who use Disband to do the same. This policy explains
@@ -34,7 +30,7 @@ export default function CopyrightPage() {
             countries, including notices under the EU Digital Services Act, through the same channel.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">1. Before You Send a Notice</h2>
+          <h2 className="text-lg font-semibold text-header-primary">1. Before You Send a Notice</h2>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
               Only the copyright owner, or a person authorized to act on the owner’s behalf, may send a
@@ -55,7 +51,7 @@ export default function CopyrightPage() {
             </li>
           </ul>
 
-          <h2 className="text-lg font-semibold text-white">2. How to Send a Copyright Notice</h2>
+          <h2 className="text-lg font-semibold text-header-primary">2. How to Send a Copyright Notice</h2>
           <p>Send your notice to our designated Copyright Agent:</p>
           <p className="whitespace-pre-line">
             Copyright Agent{"\n"}
@@ -99,7 +95,7 @@ export default function CopyrightPage() {
             may not be able to act on a notice until it is complete.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">3. What Happens After a Notice</h2>
+          <h2 className="text-lg font-semibold text-header-primary">3. What Happens After a Notice</h2>
           <p>
             We review each notice and, where appropriate, remove or disable access to the material
             promptly. We will let you know what we decided.
@@ -110,7 +106,7 @@ export default function CopyrightPage() {
             they can respond or send a counter-notice.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">4. Counter-Notices</h2>
+          <h2 className="text-lg font-semibold text-header-primary">4. Counter-Notices</h2>
           <p>
             If material you posted was removed because of a copyright notice and you believe it was
             removed because of a mistake or misidentification, you may send a counter-notice to our
@@ -150,7 +146,7 @@ export default function CopyrightPage() {
             was removed by mistake can make you liable for damages under 17 U.S.C. § 512(f).
           </p>
 
-          <h2 className="text-lg font-semibold text-white">5. Repeat Infringers</h2>
+          <h2 className="text-lg font-semibold text-header-primary">5. Repeat Infringers</h2>
           <p>
             In appropriate circumstances, we disable or terminate the accounts of users who repeatedly
             infringe copyrights or other intellectual property rights.
@@ -164,14 +160,14 @@ export default function CopyrightPage() {
             also remove spaces that are used mainly to share infringing material.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">6. Spaces and Moderators</h2>
+          <h2 className="text-lg font-semibold text-header-primary">6. Spaces and Moderators</h2>
           <p>
             Space owners and moderators can remove content in their own spaces, but they cannot act on
             copyright notices for us. Send copyright notices to our Copyright Agent as described in
             Section 2.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">7. Trademarks and Other Rights</h2>
+          <h2 className="text-lg font-semibold text-header-primary">7. Trademarks and Other Rights</h2>
           <p>
             To report a trademark infringement, email legal@disband.dev with your name and contact
             details, the trademark and its registration details, where it is used on Disband, and why
@@ -179,7 +175,7 @@ export default function CopyrightPage() {
             intellectual property complaints under our Terms of Service and applicable law.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">8. Notices From Outside the United States</h2>
+          <h2 className="text-lg font-semibold text-header-primary">8. Notices From Outside the United States</h2>
           <p>
             You can send copyright and other intellectual property complaints under the laws of any
             country to the address in Section 2, and we will assess them under the law that applies. A
@@ -189,7 +185,7 @@ export default function CopyrightPage() {
             <Link href="/legal/eu-uk" className={link}>EU and UK Information</Link> page.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">9. Disband’s Own Materials</h2>
+          <h2 className="text-lg font-semibold text-header-primary">9. Disband’s Own Materials</h2>
           <p>
             Disband’s software, designs, artwork, and other original materials are protected by
             copyright and other laws and are owned by or licensed to Genysis IQ LLC. See our{" "}
@@ -197,7 +193,7 @@ export default function CopyrightPage() {
             <Link href="/eula" className={link}>End User License Agreement</Link>.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">10. Changes to This Policy</h2>
+          <h2 className="text-lg font-semibold text-header-primary">10. Changes to This Policy</h2>
           <p>
             We may update this policy from time to time. When we do, we will update the “Last updated”
             date above.
@@ -207,8 +203,6 @@ export default function CopyrightPage() {
         <Link href="/legal" className="mt-10 inline-block text-sm text-brand hover:underline">
           ← All legal documents
         </Link>
-      </main>
-      <MarketingFooter />
-    </div>
+    </LegalShell>
   );
 }

@@ -98,7 +98,7 @@ export function RolePicker({ roles, selected, onToggle, disabled, align = "left"
             ref={panelRef}
             role="dialog"
             aria-label={t("Roles")}
-            className="menu-pop fixed flex flex-col overflow-hidden rounded-[4px] bg-bg-floating shadow-[var(--elevation-high)]"
+            className="menu-pop fixed flex flex-col overflow-hidden rounded-lg bg-bg-floating shadow-[var(--elevation-high)]"
             style={{
               zIndex: OVERLAY_Z.contextMenu,
               width: PANEL_W,
@@ -128,7 +128,7 @@ export function RolePicker({ roles, selected, onToggle, disabled, align = "left"
                 }}
                 placeholder={t("Role")}
                 aria-label={t("Search roles")}
-                className="h-[30px] w-full rounded-[4px] bg-bg-tertiary px-2 text-[14px] text-text-normal outline-none placeholder:text-text-muted"
+                className="h-[30px] w-full rounded-lg bg-bg-tertiary px-2 text-[14px] text-text-normal outline-none placeholder:text-text-muted"
               />
             </div>
             <div role="listbox" aria-multiselectable className="channel-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2">
@@ -147,7 +147,7 @@ export function RolePicker({ roles, selected, onToggle, disabled, align = "left"
                       aria-selected={checked}
                       onMouseEnter={() => setActive(i)}
                       onClick={() => onToggle(role.id)}
-                      className={`flex h-8 w-full items-center gap-2 rounded-[2px] px-2 text-left ${i === active ? "bg-interactive-hover" : ""}`}
+                      className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-left ${i === active ? "bg-interactive-hover" : ""}`}
                     >
                       {role.icon ? (
                         <RoleIcon icon={role.icon} name={role.name} size={16} />
@@ -157,7 +157,7 @@ export function RolePicker({ roles, selected, onToggle, disabled, align = "left"
                       <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-interactive-active">{role.name}</span>
                       <span
                         aria-hidden
-                        className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[3px] border ${
+                        className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border ${
                           checked ? "border-brand bg-brand text-white" : "border-interactive-normal/60 text-transparent"
                         }`}
                       >
@@ -188,8 +188,8 @@ export function RolePicker({ roles, selected, onToggle, disabled, align = "left"
         title={compact ? t("Add role") : undefined}
         className={
           compact
-            ? `flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] bg-bg-secondary text-interactive-normal transition-colors hover:text-interactive-active disabled:cursor-not-allowed disabled:opacity-50 ${open ? "text-interactive-active" : ""}`
-            : "flex h-8 shrink-0 items-center gap-1.5 rounded-[3px] bg-button-secondary px-3 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover disabled:cursor-not-allowed disabled:opacity-50"
+            ? `flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-bg-secondary text-interactive-normal transition-colors hover:text-interactive-active disabled:cursor-not-allowed disabled:opacity-50 ${open ? "text-interactive-active" : ""}`
+            : "flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-button-secondary px-3 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover disabled:cursor-not-allowed disabled:opacity-50"
         }
       >
         <IconPlus size={compact ? 14 : 16} />

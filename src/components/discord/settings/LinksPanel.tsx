@@ -116,24 +116,27 @@ export function LinksPanel() {
   }
 
   async function newSecret(link: Link) {
-    if (!(await confirmDialog({ title: t("Make a new secret?"), body: t("The current secret stops working straight away. Update your server before signing anyone in."), confirmLabel: t("Make new secret") }))) return;
-    const res = await apiFetch(`/api/oauth2/links/${link.id}/secret`, { method: "POST" });
-    const json = (await res.json().catch(() => ({}))) as { client_secret?: string; error?: string };
-    if (!res.ok || !json.client_secret) return setNote({ tone: "error", text: json.error ?? "Couldn't make a new secret." });
-    setSecret({ linkId: link.id, value: json.client_secret });
-    void load();
+    if (!(await confirmDialog({ title: t("Make a new secret?"), body: t("The current secret stops working straight away. Update your server before signing anyone in."), confirmLabel: t("Make new secret"), action: async () => {
+      const res = await apiFetch(`/api/oauth2/links/${link.id}/secret`, { method: "POST" });
+      const json = (await res.json().catch(() => ({}))) as { client_secret?: string; error?: string };
+      if (!res.ok || !json.client_secret) return setNote({ tone: "error", text: json.error ?? "Couldn't make a new secret." });
+      setSecret({ linkId: link.id, value: json.client_secret });
+      await load();
+    } }))) return;
   }
 
   async function remove(link: Link) {
-    if (!(await confirmDialog({ title: t("Delete {name}?", { name: link.name }), body: t("Everyone signed in through it is signed out of your site's Disband access, and its button stops working."), confirmLabel: t("Delete") }))) return;
-    await apiFetch(`/api/oauth2/links/${link.id}`, { method: "DELETE" });
-    void load();
+    if (!(await confirmDialog({ title: t("Delete {name}?", { name: link.name }), body: t("Everyone signed in through it is signed out of your site's Disband access, and its button stops working."), confirmLabel: t("Delete"), action: async () => {
+      await apiFetch(`/api/oauth2/links/${link.id}`, { method: "DELETE" });
+      await load();
+    } }))) return;
   }
 
   async function revokeGrant(grant: Grant) {
-    if (!(await confirmDialog({ title: (grant.link?.name ? t("Remove {name}?", { name: grant.link.name }) : t("Remove this app?")), body: t("It loses access to your Disband account. You can sign in to it again later."), confirmLabel: t("Remove access") }))) return;
-    await apiFetch(`/api/oauth2/grants?link_id=${grant.link_id}`, { method: "DELETE" });
-    void load();
+    if (!(await confirmDialog({ title: (grant.link?.name ? t("Remove {name}?", { name: grant.link.name }) : t("Remove this app?")), body: t("It loses access to your Disband account. You can sign in to it again later."), confirmLabel: t("Remove access"), action: async () => {
+      await apiFetch(`/api/oauth2/grants?link_id=${grant.link_id}`, { method: "DELETE" });
+      await load();
+    } }))) return;
   }
 
   return (
@@ -146,7 +149,7 @@ export function LinksPanel() {
         ) : grants.length === 0 ? (
           <p className="px-5 py-4 text-[14px] text-text-muted">{t("None yet.")}</p>
         ) : (
-          <ul className="divide-y divide-divider">
+          <ul className="divide-y divide-border-subtle">
             {grants.map((g) => (
               <li key={g.link_id} className="flex items-center gap-3 px-5 py-3">
                 {g.link?.icon_url ? (
@@ -184,7 +187,7 @@ export function LinksPanel() {
           {links?.map((link) => {
             const editingValue = editing[link.id];
             return (
-              <div key={link.id} className="rounded-lg bg-bg-secondary p-4">
+              <div key={link.id} className="rounded-xl border border-border-subtle bg-surface-raised p-4">
                 <div className="flex items-start gap-3">
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[16px] font-semibold text-header-primary">{link.name}</span>
@@ -248,7 +251,7 @@ export function LinksPanel() {
           {links?.length === 0 && !creating && <p className="text-[14px] text-text-muted">{t("You haven’t made a Link yet.")}</p>}
 
           {creating ? (
-            <div className="space-y-3 rounded-lg bg-bg-secondary p-4">
+            <div className="space-y-3 rounded-xl border border-border-subtle bg-surface-raised p-4">
               <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder={t("Name people will see, e.g. My Game")} className={settingsInputClass} autoFocus />
               <input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder={t("Website (optional), https://…")} className={settingsInputClass} />
               <textarea value={redirects} onChange={(e) => setRedirects(e.target.value)} rows={3} placeholder={t("Redirect URLs, one per line\nhttps://example.com/auth/disband/callback")} className={`${settingsInputClass} font-mono text-[13px]`} />

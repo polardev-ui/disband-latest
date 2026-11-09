@@ -51,7 +51,7 @@ export function SendInvitePanel({ inviteUrl, serverName }: SendInvitePanelProps)
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("Search friends")}
               aria-label={t("Search friends")}
-              className="h-9 w-full rounded-[3px] border border-transparent bg-bg-tertiary pl-9 pr-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-[#00a8fc]"
+              className="h-9 w-full rounded-md border border-transparent bg-bg-tertiary pl-9 pr-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-[#00a8fc]"
             />
           </label>
         </div>

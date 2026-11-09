@@ -66,7 +66,7 @@ export function WebhooksSection({ server }: SectionProps) {
   const [resetting, setResetting] = useState<Webhook | null>(null);
 
   const textChannels = useMemo(
-    () => channels.filter((c) => c.type === "text").sort((a, b) => a.position - b.position),
+    () => channels.filter((c) => c.type === "text" && !c.parent_id).sort((a, b) => a.position - b.position),
     [channels],
   );
 
@@ -230,7 +230,7 @@ export function WebhooksSection({ server }: SectionProps) {
               const dirty = draft.name.trim() !== hook.name || draft.channelId !== hook.channel_id;
               const avatar = safeImageUrl(hook.avatar_url);
               return (
-                <li key={hook.id} className="border-b border-divider last:border-b-0">
+                <li key={hook.id} className="border-b border-border-subtle last:border-b-0">
                   <button
                     type="button"
                     aria-expanded={open}
@@ -259,7 +259,7 @@ export function WebhooksSection({ server }: SectionProps) {
                   </button>
 
                   {open && (
-                    <div className="border-t border-divider px-5 py-5">
+                    <div className="border-t border-border-subtle px-5 py-5">
                       <div className="flex flex-col gap-5 sm:flex-row">
                         <div className="flex shrink-0 flex-col items-center gap-2">
                           {avatar ? (
@@ -294,7 +294,7 @@ export function WebhooksSection({ server }: SectionProps) {
 
                         <div className="min-w-0 flex-1 space-y-4">
                           <label className="block">
-                            <span className="mb-1.5 block text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">
+                            <span className="mb-1.5 block text-[11px] font-bold uppercase leading-4 tracking-[0.06em] text-text-muted">
                               {t("Name")}
                             </span>
                             <input
@@ -306,12 +306,12 @@ export function WebhooksSection({ server }: SectionProps) {
                                 }))
                               }
                               maxLength={80}
-                              className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none focus:border-[#00a8fc]"
+                              className="h-10 w-full rounded-md border border-border-subtle bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none focus:border-brand"
                             />
                           </label>
 
                           <label className="block">
-                            <span className="mb-1.5 block text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">
+                            <span className="mb-1.5 block text-[11px] font-bold uppercase leading-4 tracking-[0.06em] text-text-muted">
                               {t("Channel")}
                             </span>
                             <select
@@ -322,7 +322,7 @@ export function WebhooksSection({ server }: SectionProps) {
                                   [hook.id]: { ...draft, channelId: e.target.value },
                                 }))
                               }
-                              className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2 text-[14px] text-text-normal outline-none focus:border-[#00a8fc]"
+                              className="h-10 w-full rounded-md border border-border-subtle bg-bg-tertiary px-2 text-[14px] text-text-normal outline-none focus:border-brand"
                             >
                               {textChannels.map((channel) => (
                                 <option key={channel.id} value={channel.id}>
@@ -348,7 +348,7 @@ export function WebhooksSection({ server }: SectionProps) {
                             </button>
                           </div>
 
-                          <p className="break-all rounded-[3px] bg-bg-tertiary px-3 py-2 font-mono text-[12px] leading-5 text-text-muted">
+                          <p className="break-all rounded-md bg-bg-tertiary px-3 py-2 font-mono text-[12px] leading-5 text-text-muted">
                             {hook.url}
                           </p>
                           {hook.last_used_at && (
@@ -360,7 +360,7 @@ export function WebhooksSection({ server }: SectionProps) {
                       </div>
 
                       {dirty && (
-                        <div className="view-enter mt-5 flex items-center justify-between gap-3 border-t border-divider pt-4">
+                        <div className="view-enter mt-5 flex items-center justify-between gap-3 border-t border-border-subtle pt-4">
                           <p className="text-[14px] text-text-muted">{t("Careful — you have unsaved changes!")}</p>
                           <div className="flex gap-2">
                             <button

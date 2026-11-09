@@ -1,5 +1,6 @@
 "use client";
 
+import { AuthorizeAppButton } from "@/components/ui/AuthorizeAppButton";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 
@@ -21,7 +22,6 @@ import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { ListeningCard } from "@/components/ui/ListeningCard";
 import { UserBadges } from "@/components/ui/UserBadges";
-import { USER_NOTE_MAX, useUserNote } from "@/hooks/useUserNote";
 import type { Profile, Server, ServerRole } from "@/lib/supabase/types";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import { useI18n } from "@/contexts/I18nContext";
@@ -60,6 +60,8 @@ interface UserProfileModalProps {
   isSelf?: boolean;
   plan?: SubscriptionPlan;
   isServerMember?: boolean;
+  /** Their roles are still loading: hold the section's place. */
+  rolesPending?: boolean;
   serverRoles?: ServerRole[];
   /** Roles the signed-in member is allowed to hand out (already rank-filtered). */
   assignableRoles?: ServerRole[];
@@ -74,12 +76,12 @@ interface UserProfileModalProps {
 
 // Classic profile buttons: green "Send Message", blurple, grey; 3px corners.
 const BTN_BASE =
-  "inline-flex h-8 items-center justify-center gap-1.5 rounded-[3px] px-4 text-[14px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-4 text-[14px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-50";
 const BTN_SOLID = `${BTN_BASE} bg-button-green text-white hover:bg-button-green-hover`;
 const BTN_BRAND = `${BTN_BASE} bg-brand text-white hover:bg-brand-hover`;
 const BTN_QUIET = `${BTN_BASE} bg-button-secondary text-white hover:bg-button-secondary-hover`;
 const BTN_ICON =
-  "inline-flex h-8 w-8 items-center justify-center rounded-[3px] bg-button-secondary text-white transition-colors hover:bg-button-secondary-hover";
+  "inline-flex h-8 w-8 items-center justify-center rounded-md bg-button-secondary text-white transition-colors hover:bg-button-secondary-hover";
 
 function relativeAge(timestamp: number): string {
   const days = Math.floor((Date.now() - timestamp) / 86_400_000);
@@ -171,7 +173,7 @@ function OverflowMenu({ items }: { items: { label: string; onClick: () => void; 
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-20 mt-1.5 w-44 overflow-hidden rounded-[4px] bg-bg-floating p-1 shadow-[var(--elevation-high)]"
+          className="absolute right-0 top-full z-20 mt-1.5 w-44 overflow-hidden rounded-lg bg-bg-floating p-1 shadow-[var(--elevation-high)]"
         >
           {items.map((item) => (
             <button
@@ -222,6 +224,7 @@ export function UserProfileModal({
   isSelf,
   plan,
   isServerMember,
+  rolesPending,
   serverRoles,
   assignableRoles: assignableRolesProp,
   canManageRoles,
@@ -249,7 +252,6 @@ export function UserProfileModal({
   const [statusReplyOpen, setStatusReplyOpen] = useState(false);
   const [statusReplyText, setStatusReplyText] = useState("");
   const [statusReplySending, setStatusReplySending] = useState(false);
-  const note = useUserNote(open ? user?.id : null, open && !isSelf ? profile?.id : null);
 
   useEffect(() => {
     setTab("about");
@@ -446,7 +448,7 @@ export function UserProfileModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-[3px] bg-black/60 text-white transition-colors hover:bg-black/75"
+          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-md bg-black/60 text-white transition-colors hover:bg-black/75"
           aria-label={t("Close profile")}
         >
           <IconClose size={16} />
@@ -500,6 +502,7 @@ export function UserProfileModal({
                 </span>
               )}
             </p>
+            {isBot && <AuthorizeAppButton userId={profile.id} className="mt-3 max-w-[260px]" />}
 
             {statusNote && (
               // A speech bubble whose notch points back up at the name.
@@ -606,6 +609,15 @@ export function UserProfileModal({
                     </Section>
                   )}
 
+                  {rolesPending && !isServerMember && (
+                    <Section label={t("Roles")}>
+                      <div className="flex flex-wrap gap-1" aria-busy="true" aria-label="Loading roles">
+                        {[64, 88, 52].map((w) => (
+                          <span key={w} className="skeleton-glimmer h-6 rounded-full" style={{ width: w }} />
+                        ))}
+                      </div>
+                    </Section>
+                  )}
                   {isServerMember && (
                     <Section label={t("Roles")}>
                       {memberIsOwner ? (
@@ -619,7 +631,7 @@ export function UserProfileModal({
                           {memberRoles.map((role) => (
                             <span
                               key={role.id}
-                              className={`inline-flex items-center gap-1.5 rounded-[3px] border border-divider py-0.5 pl-2 ${canManageRoles && onSetRoles ? "pr-1" : "pr-2"} text-[12px] font-medium ${roleIsGradientAnimated(role) ? "animate-role-gradient" : ""}`}
+                              className={`inline-flex items-center gap-1.5 rounded-md border border-divider py-0.5 pl-2 ${canManageRoles && onSetRoles ? "pr-1" : "pr-2"} text-[12px] font-medium ${roleIsGradientAnimated(role) ? "animate-role-gradient" : ""}`}
                               style={
                                 role.gradient_to?.trim()
                                   ? {
@@ -638,7 +650,7 @@ export function UserProfileModal({
                                   onClick={() => toggleRole(role.id)}
                                   aria-label={t("Remove the {name} role", { name: role.name })}
                                   title={t("Remove {name}", { name: role.name })}
-                                  className="-mr-0.5 ml-0.5 flex h-5 w-5 items-center justify-center rounded-[2px] text-text-muted transition-colors hover:bg-black/20 hover:text-text-normal"
+                                  className="-mr-0.5 ml-0.5 flex h-5 w-5 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-black/20 hover:text-text-normal"
                                 >
                                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
                                     <path d="M18 6 6 18M6 6l12 12" />
@@ -659,22 +671,6 @@ export function UserProfileModal({
                       )}
                     </Section>
                   )}
-
-                  {!isSelf && !isBot && note.state !== "unavailable" && (
-                    <Section label={t("Note (only you can see it)")}>
-                      <textarea
-                        value={note.note}
-                        onChange={(e) => note.setNote(e.target.value.slice(0, USER_NOTE_MAX))}
-                        onBlur={() => void note.save()}
-                        disabled={note.state === "loading"}
-                        rows={2}
-                        maxLength={USER_NOTE_MAX}
-                        placeholder={t("Click to add a note")}
-                        aria-label={t("Private note about {title}", { title })}
-                        className="block w-full resize-none rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 py-2.5 text-[14px] leading-relaxed text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand disabled:opacity-60"
-                      />
-                    </Section>
-                  )}
                 </>
               )}
 
@@ -686,12 +682,12 @@ export function UserProfileModal({
                     {mutualServers.map((s) => {
                       const icon = safeImageUrl(s.icon_url);
                       return (
-                        <li key={s.id} className="flex items-center gap-3 rounded-[4px] px-2 py-2">
+                        <li key={s.id} className="flex items-center gap-3 rounded-lg px-2 py-2">
                           {icon ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={icon} alt="" className="h-9 w-9 shrink-0 rounded-[4px] object-cover" />
+                            <img src={icon} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
                           ) : (
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] bg-bg-accent text-[12px] font-semibold">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-bg-accent text-[12px] font-semibold">
                               {serverInitials(s.name)}
                             </span>
                           )}
@@ -708,7 +704,7 @@ export function UserProfileModal({
                 ) : (
                   <ul className="-mx-2 space-y-0.5">
                     {mutualFriends.map((f) => (
-                      <li key={f.id} className="flex items-center gap-3 rounded-[4px] px-2 py-2">
+                      <li key={f.id} className="flex items-center gap-3 rounded-lg px-2 py-2">
                         <Avatar profile={f} size="sm" className="h-9 w-9" />
                         <span className="min-w-0">
                           <span className="block truncate text-[14px] font-medium">{displayName(f)}</span>

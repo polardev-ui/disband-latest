@@ -67,7 +67,7 @@ export function StandingPanel() {
 
       {standing.restrictions.length > 0 && (
         <SettingsSection title={t("Active limits")} description={t("What you can't do right now, and until when.")}>
-          <ul className="divide-y divide-divider">
+          <ul className="divide-y divide-border-subtle">
             {standing.restrictions.map((r) => (
               <li key={r.restriction} className="px-5 py-3">
                 <p className="font-semibold text-status-dnd">{RESTRICTION_LABELS[r.restriction] ?? r.restriction}</p>
@@ -84,7 +84,7 @@ export function StandingPanel() {
         {standing.strikes.length === 0 ? (
           <p className="px-5 py-4 text-[14px] text-text-muted">{t("No strikes. Keep it up.")}</p>
         ) : (
-          <ul className="divide-y divide-divider">
+          <ul className="divide-y divide-border-subtle">
             {standing.strikes.map((s) => (
               <li key={s.id} className={`flex items-start gap-3 px-5 py-3 ${s.active ? "" : "opacity-50"}`}>
                 <span className="mt-0.5 rounded px-1.5 py-0.5 text-[11px] font-bold text-white" style={{ background: TIERS[Math.min(4, s.severity + 1)].colour }}>
@@ -104,7 +104,7 @@ export function StandingPanel() {
       </SettingsSection>
 
       <SettingsSection title={t("How standing works")}>
-        <ul className="divide-y divide-divider">
+        <ul className="divide-y divide-border-subtle">
           {TIERS.map((tier) => (
             <li key={tier.id} className="flex gap-3 px-5 py-3">
               <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: tier.colour }} />

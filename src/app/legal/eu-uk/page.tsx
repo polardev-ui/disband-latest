@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { MarketingFooter, MarketingNav } from "@/components/marketing/MarketingLayout";
+import { LegalShell } from "@/components/marketing/LegalShell";
 
 export const metadata: Metadata = {
   title: "EU and UK Information",
@@ -13,13 +13,9 @@ const link = "text-brand hover:underline";
 
 export default function EuUkPage() {
   return (
-    <div className="min-h-screen bg-[#1e1f22] text-[#dbdee1]">
-      <MarketingNav />
-      <main className="mx-auto max-w-3xl px-6 pb-16 pt-24">
-        <h1 className="text-3xl font-bold text-white">EU and UK Information</h1>
-        <p className="mt-2 text-sm text-[#949ba4]">Last updated: November 6, 2026</p>
+    <LegalShell title="EU and UK Information" updated="November 6, 2026" path="/legal/eu-uk">
 
-        <div className="mt-8 space-y-6 text-[15px] leading-relaxed text-[#b5bac1]">
+        <div className="mt-8 space-y-6 text-[15px] leading-relaxed text-interactive-normal">
           <p>
             This page sets out information we make available under the EU Digital Services Act
             (Regulation (EU) 2022/2065, the “DSA”) and the UK Online Safety Act 2023. It supplements
@@ -28,14 +24,14 @@ export default function EuUkPage() {
             <Link href="/copyright" className={link}>Copyright Policy</Link>.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">1. Who We Are</h2>
+          <h2 className="text-lg font-semibold text-header-primary">1. Who We Are</h2>
           <p>
             Disband is provided by Genysis IQ LLC, a Florida limited liability company established in
             the United States, at 10524 Moss Park Rd, Suite 204-653, Orlando, Florida 32832, United
             States.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">2. Points of Contact</h2>
+          <h2 className="text-lg font-semibold text-header-primary">2. Points of Contact</h2>
           <p>
             <strong>For authorities.</strong> Authorities of EU Member States, the European Commission,
             and the European Board for Digital Services can contact us at{" "}
@@ -47,7 +43,7 @@ export default function EuUkPage() {
           </p>
           <p>We accept communications in English.</p>
 
-          <h2 className="text-lg font-semibold text-white">3. Reporting Illegal Content</h2>
+          <h2 className="text-lg font-semibold text-header-primary">3. Reporting Illegal Content</h2>
           <p>
             Anyone can tell us about content on Disband that they believe is illegal, whether or not
             they have an account.
@@ -97,7 +93,7 @@ export default function EuUkPage() {
             (see Section 6).
           </p>
 
-          <h2 className="text-lg font-semibold text-white">4. How We Moderate</h2>
+          <h2 className="text-lg font-semibold text-header-primary">4. How We Moderate</h2>
           <p>
             Our rules are in Section 4 of our Terms of Service. Section 7 explains how we enforce them,
             including:
@@ -118,7 +114,7 @@ export default function EuUkPage() {
             <li>How you can appeal, and when a person reviews a decision.</li>
           </ul>
 
-          <h2 className="text-lg font-semibold text-white">5. What We Tell You When We Act</h2>
+          <h2 className="text-lg font-semibold text-header-primary">5. What We Tell You When We Act</h2>
           <p>
             If we remove or restrict your content or limit or suspend your account, we tell you, unless
             we do not have a way to contact you or the law prevents it. We explain:
@@ -141,7 +137,7 @@ export default function EuUkPage() {
             <strong>Settings → Account Standing</strong>.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">6. Appeals and Complaints</h2>
+          <h2 className="text-lg font-semibold text-header-primary">6. Appeals and Complaints</h2>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
               <strong>Suspended accounts:</strong> appeal from the screen you see when you sign in.
@@ -163,7 +159,7 @@ export default function EuUkPage() {
             Services Coordinator of the Member State where you live or are established.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">7. Threats to Life or Safety</h2>
+          <h2 className="text-lg font-semibold text-header-primary">7. Threats to Life or Safety</h2>
           <p>
             If we become aware of information that gives rise to a suspicion that a criminal offense
             involving a threat to the life or safety of a person has taken place, is taking place, or
@@ -173,13 +169,13 @@ export default function EuUkPage() {
             other countries.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">8. Platform Size</h2>
+          <h2 className="text-lg font-semibold text-header-primary">8. Platform Size</h2>
           <p>
             Disband has far fewer than 45 million average monthly active recipients in the EU and is
             not a very large online platform under the DSA.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">9. United Kingdom: Online Safety</h2>
+          <h2 className="text-lg font-semibold text-header-primary">9. United Kingdom: Online Safety</h2>
           <p>
             People in the UK can report content they believe is illegal, or harmful to children, as
             described in Section 3. You can also complain to us about:
@@ -209,7 +205,7 @@ export default function EuUkPage() {
             can tell Ofcom about a concern on its website, ofcom.org.uk.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">10. Your Privacy Rights</h2>
+          <h2 className="text-lg font-semibold text-header-primary">10. Your Privacy Rights</h2>
           <p>
             Under the EU and UK General Data Protection Regulation you have rights over your personal
             data, including the right to ask for a person to review automated decisions. Our{" "}
@@ -217,7 +213,7 @@ export default function EuUkPage() {
             them, and how to complain to a data protection authority.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">11. Your Consumer Rights</h2>
+          <h2 className="text-lg font-semibold text-header-primary">11. Your Consumer Rights</h2>
           <p>
             If you are a consumer in the EU, the EEA, or the UK, you can usually withdraw from a
             purchase made directly from us within 14 days. Consumers there and in Switzerland also keep
@@ -229,8 +225,6 @@ export default function EuUkPage() {
         <Link href="/legal" className="mt-10 inline-block text-sm text-brand hover:underline">
           ← All legal documents
         </Link>
-      </main>
-      <MarketingFooter />
-    </div>
+    </LegalShell>
   );
 }

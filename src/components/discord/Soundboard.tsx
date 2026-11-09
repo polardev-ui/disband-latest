@@ -145,7 +145,7 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
           aria-expanded={open}
           aria-haspopup="dialog"
           aria-label={t("Open soundboard")}
-          className={`flex h-8 flex-1 items-center justify-center rounded-[4px] transition-colors ${
+          className={`flex h-8 flex-1 items-center justify-center rounded-lg transition-colors ${
             open ? "bg-interactive-selected text-interactive-active" : "bg-bg-secondary text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active"
           }`}
         >

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { MarketingFooter, MarketingNav } from "@/components/marketing/MarketingLayout";
+import { LegalShell } from "@/components/marketing/LegalShell";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
@@ -11,13 +11,9 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-[#1e1f22] text-[#dbdee1]">
-      <MarketingNav />
-      <main className="mx-auto max-w-3xl px-6 pb-16 pt-24">
-        <h1 className="text-3xl font-bold text-white">Terms of Service</h1>
-        <p className="mt-2 text-sm text-[#949ba4]">Last updated: November 6, 2026</p>
+    <LegalShell title="Terms of Service" updated="November 6, 2026" path="/terms">
 
-        <div className="mt-8 space-y-6 text-[15px] leading-relaxed text-[#b5bac1]">
+        <div className="mt-8 space-y-6 text-[15px] leading-relaxed text-interactive-normal">
           <p>
             These Terms of Service (“Terms”) form a legal agreement between you and{" "}
             <strong>Genysis IQ LLC</strong> (“Genysis IQ,” “Disband,” “we,” “us,” or “our”).
@@ -27,7 +23,7 @@ export default function TermsPage() {
             Terms. If you do not agree, do not use the Service.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">1. The Service</h2>
+          <h2 className="text-lg font-semibold text-header-primary">1. The Service</h2>
           <p>Disband provides online communications and community features, including:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>Spaces and channels;</li>
@@ -44,7 +40,7 @@ export default function TermsPage() {
             platform, region, account type, or subscription.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">2. Eligibility</h2>
+          <h2 className="text-lg font-semibold text-header-primary">2. Eligibility</h2>
           <p>
             You must be at least 13 years old to use Disband, unless a higher minimum age applies
             where you live.
@@ -55,7 +51,7 @@ export default function TermsPage() {
             it reasonably current.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">3. Your Account</h2>
+          <h2 className="text-lg font-semibold text-header-primary">3. Your Account</h2>
           <p>You are responsible for activity conducted through your account.</p>
           <p>You must:</p>
           <ul className="list-disc space-y-1.5 pl-5">
@@ -71,7 +67,7 @@ export default function TermsPage() {
           </p>
           <p>Contact <strong>legal@disband.dev</strong> if you believe your account has been compromised.</p>
 
-          <h2 className="text-lg font-semibold text-white">4. Acceptable Use</h2>
+          <h2 className="text-lg font-semibold text-header-primary">4. Acceptable Use</h2>
           <p>You may not use Disband to:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>Break the law;</li>
@@ -101,7 +97,7 @@ export default function TermsPage() {
             channels and do not involve unauthorized access, disruption, data extraction, or disclosure.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">5. Encryption and Privacy</h2>
+          <h2 className="text-lg font-semibold text-header-primary">5. Encryption and Privacy</h2>
           <p>
             Disband messages and media are not end-to-end encrypted. They may be stored in
             server-readable form and accessed by authorized Disband personnel for moderation, abuse
@@ -117,7 +113,7 @@ export default function TermsPage() {
             protected confidential communications system.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">6. User Content</h2>
+          <h2 className="text-lg font-semibold text-header-primary">6. User Content</h2>
           <p>
             You retain ownership of content you post or upload, subject to the rights of other people
             and entities that may own or control that content.
@@ -145,14 +141,14 @@ export default function TermsPage() {
             lawfully retained by other users.
           </p>
 
-          <h3 className="text-base font-semibold text-white">Copyright</h3>
+          <h3 className="text-base font-semibold text-header-primary">Copyright</h3>
           <p>
             We respond to notices of alleged copyright infringement and, in appropriate circumstances,
             terminate the accounts of repeat infringers, as described in our{" "}
             <Link href="/copyright" className="text-brand hover:underline">Copyright Policy</Link>.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">7. Moderation</h2>
+          <h2 className="text-lg font-semibold text-header-primary">7. Moderation</h2>
           <p>Space owners and moderators may establish additional rules for their communities.</p>
           <p>We may, but are not required to:</p>
           <ul className="list-disc space-y-1.5 pl-5">
@@ -166,7 +162,7 @@ export default function TermsPage() {
           </ul>
           <p>We do not guarantee that all unlawful, harmful, or rule-breaking content will be detected or removed.</p>
 
-          <h3 className="text-base font-semibold text-white">How we enforce these Terms</h3>
+          <h3 className="text-base font-semibold text-header-primary">How we enforce these Terms</h3>
           <p>We use a combination of automated tools and human review:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
@@ -203,7 +199,7 @@ export default function TermsPage() {
             everyone involved, including freedom of expression.
           </p>
 
-          <h3 className="text-base font-semibold text-white">Reporting</h3>
+          <h3 className="text-base font-semibold text-header-primary">Reporting</h3>
           <p>
             You can report messages, profiles, and spaces in the app. Anyone, including people without
             an account, can report illegal content by email to legal@disband.dev. See our{" "}
@@ -213,14 +209,14 @@ export default function TermsPage() {
             copyright complaints.
           </p>
 
-          <h3 className="text-base font-semibold text-white">Notice of decisions</h3>
+          <h3 className="text-base font-semibold text-header-primary">Notice of decisions</h3>
           <p>
             When we act on your content or account, we tell you what we did and why, whether automated
             means were involved, and how to appeal, unless we cannot contact you or the law prevents
             it.
           </p>
 
-          <h3 className="text-base font-semibold text-white">Appeals and complaints</h3>
+          <h3 className="text-base font-semibold text-header-primary">Appeals and complaints</h3>
           <p>
             You can appeal a suspension from the screen you see when you sign in. To appeal any other
             decision, or a decision on something you reported, email legal@disband.dev with the
@@ -228,7 +224,7 @@ export default function TermsPage() {
             People in the UK can also make the complaints described on our EU and UK Information page.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">8. Suspension and Termination</h2>
+          <h2 className="text-lg font-semibold text-header-primary">8. Suspension and Termination</h2>
           <p>We may suspend or terminate accounts, spaces, or content when we reasonably believe that:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>These Terms or applicable law were violated;</li>
@@ -245,7 +241,7 @@ export default function TermsPage() {
             information required for security or compliance.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">9. Paid Services</h2>
+          <h2 className="text-lg font-semibold text-header-primary">9. Paid Services</h2>
           <p>Disband may offer paid products, including:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li><strong>Disband Lite:</strong> currently $2.99 per month;</li>
@@ -254,7 +250,7 @@ export default function TermsPage() {
           </ul>
           <p>Prices, features, taxes, and availability may change. Applicable taxes may be calculated and collected by Stripe or the relevant app store.</p>
 
-          <h3 className="text-base font-semibold text-white">Subscriptions</h3>
+          <h3 className="text-base font-semibold text-header-primary">Subscriptions</h3>
           <p>
             Subscriptions automatically renew unless canceled before the renewal deadline shown by the
             applicable payment platform.
@@ -270,7 +266,7 @@ export default function TermsPage() {
             unless your account is suspended or terminated.
           </p>
 
-          <h3 className="text-base font-semibold text-white">Refunds</h3>
+          <h3 className="text-base font-semibold text-header-primary">Refunds</h3>
           <p>
             Except where required by law, or where Genysis IQ cannot provide the paid service, payments
             are non-refundable.
@@ -284,7 +280,7 @@ export default function TermsPage() {
             for unused time to the extent permitted by law.
           </p>
 
-          <h3 className="text-base font-semibold text-white">Server Catalysts</h3>
+          <h3 className="text-base font-semibold text-header-primary">Server Catalysts</h3>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>Are one-time purchases;</li>
             <li>Apply only to the selected space;</li>
@@ -293,7 +289,7 @@ export default function TermsPage() {
             <li>May not have cash value outside the Service.</li>
           </ul>
 
-          <h3 className="text-base font-semibold text-white">Consumers in the EU, the EEA, and the UK</h3>
+          <h3 className="text-base font-semibold text-header-primary">Consumers in the EU, the EEA, and the UK</h3>
           <p>
             If you are a consumer in the European Union, the European Economic Area, or the United
             Kingdom, the following applies in addition to the rest of this Section.
@@ -353,7 +349,7 @@ export default function TermsPage() {
             fixed or receiving a price reduction or refund. These Terms do not limit those rights.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">10. Availability and Changes</h2>
+          <h2 className="text-lg font-semibold text-header-primary">10. Availability and Changes</h2>
           <p>
             The Service is provided on an “as available” basis. We do not guarantee uninterrupted,
             timely, secure, or error-free operation.
@@ -363,7 +359,7 @@ export default function TermsPage() {
             necessary for legal, technical, business, security, or operational reasons.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">11. Disclaimers</h2>
+          <h2 className="text-lg font-semibold text-header-primary">11. Disclaimers</h2>
           <p>
             To the maximum extent permitted by law, the Service is provided “as is” and “as
             available,” without warranties of any kind, express or implied.
@@ -380,7 +376,7 @@ export default function TermsPage() {
           </ul>
           <p>Nothing in these Terms excludes a warranty or consumer right that cannot legally be excluded.</p>
 
-          <h2 className="text-lg font-semibold text-white">12. Limitation of Liability</h2>
+          <h2 className="text-lg font-semibold text-header-primary">12. Limitation of Liability</h2>
           <p>
             To the maximum extent permitted by law, Genysis IQ, its owners, employees, contractors,
             advisors, affiliates, and service providers will not be liable for indirect, incidental,
@@ -412,7 +408,7 @@ export default function TermsPage() {
             live.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">13. Indemnification</h2>
+          <h2 className="text-lg font-semibold text-header-primary">13. Indemnification</h2>
           <p>
             To the maximum extent permitted by law, you agree to defend, indemnify, and hold harmless
             Genysis IQ, its owners, employees, contractors, advisors, affiliates, and service
@@ -429,7 +425,7 @@ export default function TermsPage() {
           </ul>
           <p>This provision does not require you to indemnify Genysis IQ for Genysis IQ’s own unlawful conduct.</p>
 
-          <h2 className="text-lg font-semibold text-white">14. Governing Law and Courts</h2>
+          <h2 className="text-lg font-semibold text-header-primary">14. Governing Law and Courts</h2>
           <p>These Terms are governed by the laws of the State of Florida, without regard to conflict-of-law rules.</p>
           <p>
             Any dispute arising from these Terms or the Service must be brought exclusively in the
@@ -445,7 +441,7 @@ export default function TermsPage() {
             you only in the courts of the country where you live.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">15. Changes to These Terms</h2>
+          <h2 className="text-lg font-semibold text-header-primary">15. Changes to These Terms</h2>
           <p>
             We may update these Terms. When material changes are made, we may update the “Last
             updated” date and provide notice where reasonably practical.
@@ -460,7 +456,7 @@ export default function TermsPage() {
             account before then.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">16. General Provisions</h2>
+          <h2 className="text-lg font-semibold text-header-primary">16. General Provisions</h2>
           <p>
             If a court finds part of these Terms unenforceable, the remaining provisions will remain
             in effect.
@@ -480,7 +476,7 @@ export default function TermsPage() {
             requirements.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">17. Contact</h2>
+          <h2 className="text-lg font-semibold text-header-primary">17. Contact</h2>
           <p>Genysis IQ LLC</p>
           <p>10524 Moss Park Rd, Suite 204-653</p>
           <p>Orlando, Florida 32832</p>
@@ -492,8 +488,6 @@ export default function TermsPage() {
         <Link href="/home" className="mt-10 inline-block text-sm text-brand hover:underline">
           ← Back to home
         </Link>
-      </main>
-      <MarketingFooter />
-    </div>
+    </LegalShell>
   );
 }

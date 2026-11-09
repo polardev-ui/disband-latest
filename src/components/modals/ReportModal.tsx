@@ -142,7 +142,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="report-modal-title"
-        className="modal-pop relative flex max-h-[calc(100vh-3rem)] w-full max-w-[460px] flex-col overflow-hidden rounded-lg bg-bg-secondary-alt text-text-normal shadow-[var(--elevation-high)]"
+        className="modal-pop relative flex max-h-[calc(100vh-3rem)] w-full max-w-[460px] flex-col overflow-hidden rounded-xl border border-border-subtle bg-bg-secondary-alt text-text-normal shadow-[var(--elevation-high)]"
       >
         <div className="flex items-center justify-between border-b border-divider px-5 py-4">
           <div className="flex items-center gap-2.5">
@@ -155,7 +155,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
             type="button"
             onClick={onClose}
             aria-label={t("Close report")}
-            className="flex h-8 w-8 items-center justify-center rounded-[3px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
           >
             <IconClose size={16} />
           </button>
@@ -175,7 +175,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="mt-6 flex h-9 w-full items-center justify-center rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
+              className="mt-6 flex h-9 w-full items-center justify-center rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
             >
               {t("Done")}
             </button>
@@ -183,7 +183,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
         ) : (
           <>
             <div className="channel-scroll min-h-0 flex-1 overflow-y-auto px-5 py-4">
-              <div className="flex items-start gap-3 rounded-[3px] border border-divider bg-bg-tertiary px-3 py-2.5">
+              <div className="flex items-start gap-3 rounded-md border border-divider bg-bg-tertiary px-3 py-2.5">
                 {author && (
                   <Avatar profile={author} size="sm" className="!h-8 !w-8 shrink-0" />
                 )}
@@ -204,7 +204,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
                   return (
                     <label
                       key={option.id}
-                      className={`flex cursor-pointer items-start gap-3 rounded-[3px] border px-3 py-2.5 transition-colors ${
+                      className={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 transition-colors ${
                         selected
                           ? "border-brand bg-brand/10"
                           : "border-transparent bg-bg-tertiary hover:bg-interactive-hover"
@@ -252,7 +252,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
                   rows={3}
                   maxLength={MAX_REPORT_DETAILS}
                   placeholder={t("Add context that helps us understand what happened.")}
-                  className="block w-full resize-none rounded-[3px] border border-transparent bg-bg-tertiary px-3 py-2.5 text-[14px] leading-[19px] text-text-normal outline-none transition-[border-color] placeholder:text-text-muted/80 focus:border-brand"
+                  className="block w-full resize-none rounded-md border border-transparent bg-bg-tertiary px-3 py-2.5 text-[14px] leading-[19px] text-text-normal outline-none transition-[border-color] placeholder:text-text-muted/80 focus:border-brand"
                 />
               </label>
 
@@ -268,7 +268,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
                 type="button"
                 onClick={onClose}
                 disabled={submitting}
-                className="inline-flex h-9 items-center justify-center rounded-[3px] px-4 text-[14px] font-medium text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-50"
+                className="inline-flex h-9 items-center justify-center rounded-md px-4 text-[14px] font-medium text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-50"
               >
                 {t("Cancel")}
               </button>
@@ -276,7 +276,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
                 type="button"
                 onClick={() => void submit()}
                 disabled={!reason || submitting}
-                className="inline-flex h-9 items-center justify-center rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-9 items-center justify-center rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? t("Sending…") : t("Submit report")}
               </button>

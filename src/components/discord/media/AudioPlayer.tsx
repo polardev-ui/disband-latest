@@ -165,7 +165,7 @@ export function AudioPlayer({
   return (
     <div
       ref={cardRef}
-      className="mt-1 w-full max-w-[520px] rounded-[4px] border border-divider bg-bg-secondary p-3"
+      className="mt-1 w-full max-w-[520px] rounded-lg border border-divider bg-bg-secondary p-3"
       onKeyDown={(e) => {
         // Space/K play-pause when focus is inside the card but not on a control.
         if ((e.key === " " || e.key === "k") && e.target === e.currentTarget) {
@@ -218,7 +218,7 @@ export function AudioPlayer({
           type="button"
           onClick={cycleRate}
           title="Playback speed"
-          className="h-7 min-w-[38px] rounded-[3px] px-1.5 text-[12px] font-medium tabular-nums text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+          className="h-7 min-w-[38px] rounded-md px-1.5 text-[12px] font-medium tabular-nums text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
         >
           {rate}×
         </button>
@@ -227,7 +227,7 @@ export function AudioPlayer({
           onClick={() => el && (el.muted = !el.muted)}
           aria-label={muted ? "Unmute" : "Mute"}
           title={muted ? "Unmute" : "Mute"}
-          className="flex h-7 w-7 items-center justify-center rounded-[3px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
         >
           {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
         </button>
@@ -237,7 +237,7 @@ export function AudioPlayer({
             onClick={() => void saveMedia(src, fileName)}
             aria-label="Download"
             title="Download"
-            className="flex h-7 w-7 items-center justify-center rounded-[3px] text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
           >
             <Download size={15} />
           </button>

@@ -55,9 +55,10 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
   }, []);
 
   return (
+    <div className="shrink-0 px-2 pb-3 pt-1">
     <div
       ref={panelRef}
-      className="flex h-[52px] shrink-0 items-center gap-0.5 bg-bg-secondary-alt px-2"
+      className="flex h-[52px] items-center gap-0.5 rounded-xl border border-border-subtle bg-bg-secondary-alt px-1.5"
       onContextMenu={onContextMenu}
     >
       {popupMounted && (
@@ -73,7 +74,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
         type="button"
         onClick={handleAvatarClick}
         aria-label={t("Open your profile")}
-        className="-ml-0.5 mr-1 flex min-w-[120px] flex-1 items-center gap-2 rounded-[4px] py-1 pl-0.5 pr-2 text-left transition-colors duration-100 hover:bg-interactive-selected"
+        className="mr-1 flex min-w-[120px] flex-1 items-center gap-2.5 rounded-lg py-1 pl-1 pr-2 text-left transition-colors duration-100 hover:bg-interactive-hover"
       >
         <div className="relative shrink-0">
           <Avatar profile={profile ?? { display_name: name }} size="sm" />
@@ -87,7 +88,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
             <GuildTag userId={profile?.id} size="sm" />
             <SubscriptionBadge plan={plan} tooltip />
           </div>
-          <p className="truncate text-[12px] leading-[13px] text-header-secondary">
+          <p className="truncate text-[12px] leading-[15px] text-text-muted">
             {liveNote ?? statusLabelText}
           </p>
         </div>
@@ -117,6 +118,7 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
         <IconSettings size={20} />
       </PanelIconButton>
     </div>
+    </div>
   );
 }
 
@@ -144,8 +146,10 @@ function PanelIconButton({
         aria-label={t(label)}
         aria-pressed={pressed}
         onClick={onClick}
-        className={`group flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] transition-colors duration-100 hover:bg-interactive-selected ${
-          danger ? "text-status-dnd" : "text-interactive-normal hover:text-interactive-active"
+        className={`group flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-100 ${
+          danger
+            ? "bg-status-dnd/15 text-status-dnd hover:bg-status-dnd/25"
+            : "text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active"
         }`}
       >
         <span className={spin ? "transition-transform duration-500 group-hover:rotate-90" : undefined}>{children}</span>

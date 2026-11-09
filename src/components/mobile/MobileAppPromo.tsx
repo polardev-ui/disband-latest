@@ -45,7 +45,7 @@ export function MobileAppPromo() {
       onClick={dismiss}
     >
       <div
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-sm rounded-2xl bg-bg-secondary p-6 text-center shadow-2xl`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} w-full max-w-sm rounded-2xl border border-border-subtle bg-bg-secondary p-6 text-center shadow-[var(--elevation-high)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-4 flex justify-center">

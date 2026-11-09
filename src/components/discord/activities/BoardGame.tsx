@@ -60,7 +60,7 @@ export function BoardGame({
           return (
             <div
               key={i}
-              className={`flex min-w-0 items-center gap-2 rounded-[4px] border-2 p-2 ${board.turn === i + 1 && !activity.expired ? "border-brand bg-bg-secondary" : "border-transparent bg-bg-secondary"}`}
+              className={`flex min-w-0 items-center gap-2 rounded-lg border-2 p-2 ${board.turn === i + 1 && !activity.expired ? "border-brand bg-bg-secondary" : "border-transparent bg-bg-secondary"}`}
             >
               <span
                 aria-hidden
@@ -102,7 +102,7 @@ export function BoardGame({
               aria-label={`Drop counter in column ${col + 1}`}
               disabled={!playable || !board.legalMoves.includes(col)}
               onClick={() => void onMove(col)}
-              className="h-8 rounded-[3px] bg-button-secondary text-white hover:bg-brand disabled:opacity-30"
+              className="h-8 rounded-md bg-button-secondary text-white hover:bg-brand disabled:opacity-30"
             >
               ↓
             </button>
@@ -112,7 +112,7 @@ export function BoardGame({
       <div
         role="group"
         aria-label={reversi ? "Reversi board" : "Four in a Row board"}
-        className="mx-auto grid max-w-[420px] gap-1 rounded-[4px] bg-bg-tertiary p-2"
+        className="mx-auto grid max-w-[420px] gap-1 rounded-lg bg-bg-tertiary p-2"
         style={{ gridTemplateColumns: `repeat(${width},minmax(0,1fr))` }}
       >
         {board.cells.map((disc, index) => {
@@ -140,7 +140,7 @@ export function BoardGame({
               aria-label={label}
               disabled={!playable || !legal}
               onClick={() => void onMove(index)}
-              className="aspect-square min-w-0 rounded-[3px] p-1 enabled:hover:bg-interactive-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+              className="aspect-square min-w-0 rounded-md p-1 enabled:hover:bg-interactive-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
             >
               {content}
             </button>
@@ -174,7 +174,7 @@ export function BoardGame({
           <button
             onClick={onRematch}
             disabled={busy}
-            className="h-9 rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white hover:bg-brand-hover disabled:opacity-50"
+            className="h-9 rounded-md bg-brand px-4 text-[14px] font-medium text-white hover:bg-brand-hover disabled:opacity-50"
           >
             Play again
           </button>
@@ -193,7 +193,7 @@ export function BoardGame({
               onClick={() =>
                 confirmResign ? void onResign() : setConfirmResign(true)
               }
-              className="rounded-[3px] px-3 py-2 text-[13px] text-status-dnd hover:bg-interactive-hover disabled:opacity-50"
+              className="rounded-md px-3 py-2 text-[13px] text-status-dnd hover:bg-interactive-hover disabled:opacity-50"
             >
               {confirmResign ? "Confirm resignation" : "Resign"}
             </button>

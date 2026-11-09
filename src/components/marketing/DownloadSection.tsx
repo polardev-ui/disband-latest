@@ -122,7 +122,7 @@ export function DownloadSection() {
           Official Platform Downloads
         </h2>
 
-        <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-[#9aa0a8]">
+        <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-text-muted">
           Download Disband from the official App Store or Google Play, or get
           the native desktop builds below. You can also use Disband directly
           in your browser.
@@ -133,7 +133,7 @@ export function DownloadSection() {
           {/* iOS download card */}
           <div className="flex min-w-0 flex-col justify-between gap-6 rounded-lg border border-white/[0.08] bg-white/[0.02] p-6">
             <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-text-muted">
                 iOS
               </p>
 
@@ -141,7 +141,7 @@ export function DownloadSection() {
                 Get Disband on iPhone
               </h3>
 
-              <p className="mt-1.5 text-[15px] leading-relaxed text-[#9aa0a8]">
+              <p className="mt-1.5 text-[15px] leading-relaxed text-text-muted">
                 Chat, voice calls, and communities on the go — synced across
                 your devices.
               </p>
@@ -168,7 +168,7 @@ export function DownloadSection() {
           {/* Android download card */}
           <div className="flex min-w-0 flex-col justify-between gap-6 rounded-lg border border-white/[0.08] bg-white/[0.02] p-6">
             <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-text-muted">
                 Android
               </p>
 
@@ -176,7 +176,7 @@ export function DownloadSection() {
                 Get Disband on Android
               </h3>
 
-              <p className="mt-1.5 text-[15px] leading-relaxed text-[#9aa0a8]">
+              <p className="mt-1.5 text-[15px] leading-relaxed text-text-muted">
                 Chat, make voice calls, and connect with your communities on
                 the go.
               </p>
@@ -203,7 +203,7 @@ export function DownloadSection() {
           {/* Microsoft Store download card */}
           <div className="flex min-w-0 flex-col justify-between gap-6 rounded-lg border border-white/[0.08] bg-white/[0.02] p-6">
             <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-text-muted">
                 Windows
               </p>
 
@@ -211,7 +211,7 @@ export function DownloadSection() {
                 Get Disband on Windows
               </h3>
 
-              <p className="mt-1.5 text-[15px] leading-relaxed text-[#9aa0a8]">
+              <p className="mt-1.5 text-[15px] leading-relaxed text-text-muted">
                 Install Disband through the official Microsoft Store.
               </p>
             </div>
@@ -236,7 +236,7 @@ export function DownloadSection() {
 
         {/* Desktop downloads */}
         {loading ? (
-          <p className="mt-10 text-sm text-[#6e727a]">
+          <p className="mt-10 text-sm text-text-muted">
             Loading releases…
           </p>
         ) : downloadOptions.length > 0 ? (
@@ -254,16 +254,16 @@ export function DownloadSection() {
                 </a>
 
                 {versionLabel && (
-                  <p className="mt-3 font-mono text-[11px] tracking-[0.1em] text-[#6e727a]">
+                  <p className="mt-3 font-mono text-[11px] tracking-[0.1em] text-text-muted">
                     {versionLabel}
                   </p>
                 )}
 
                 {platform === "macos" && (
-                  <p className="mt-5 max-w-sm text-[13px] leading-relaxed text-[#6e727a]">
+                  <p className="mt-5 max-w-sm text-[13px] leading-relaxed text-text-muted">
                     First launch blocked by macOS? Right-click the app and
                     choose Open, or run{" "}
-                    <code className="text-[#9aa0a8]">
+                    <code className="text-text-muted">
                       xattr -cr /Applications/Disband.app
                     </code>{" "}
                     in Terminal.
@@ -273,7 +273,7 @@ export function DownloadSection() {
             )}
 
             <div>
-              <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">
+              <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.14em] text-text-muted">
                 All platforms
               </p>
 
@@ -294,13 +294,13 @@ export function DownloadSection() {
                             {asset.label}
                           </span>
 
-                          <span className="block truncate font-mono text-[11px] text-[#6e727a]">
+                          <span className="block truncate font-mono text-[11px] text-text-muted">
                             {asset.name}
                           </span>
                         </span>
                       </span>
 
-                      <span className="shrink-0 text-[13px] text-[#6e727a] transition-colors group-hover:text-white">
+                      <span className="shrink-0 text-[13px] text-text-muted transition-colors group-hover:text-white">
                         Download
                       </span>
                     </a>
@@ -311,7 +311,7 @@ export function DownloadSection() {
           </div>
         ) : (
           <div className="mt-10 space-y-4">
-            <p className="max-w-md text-[15px] leading-relaxed text-[#9aa0a8]">
+            <p className="max-w-md text-[15px] leading-relaxed text-text-muted">
               Desktop builds are published on GitHub Releases.
             </p>
 
@@ -324,13 +324,13 @@ export function DownloadSection() {
           </div>
         )}
 
-        <p className="mt-10 max-w-xl text-[13px] leading-relaxed text-[#6e727a]">
+        <p className="mt-10 max-w-xl text-[13px] leading-relaxed text-text-muted">
           By downloading, installing or using Disband, you agree to the{" "}
-          <Link href="/eula" className="text-[#9aa0a8] underline underline-offset-2 hover:text-white">
+          <Link href="/eula" className="text-text-muted underline underline-offset-2 hover:text-white">
             End User License Agreement
           </Link>{" "}
           and the{" "}
-          <Link href="/terms" className="text-[#9aa0a8] underline underline-offset-2 hover:text-white">
+          <Link href="/terms" className="text-text-muted underline underline-offset-2 hover:text-white">
             Terms of Service
           </Link>
           .

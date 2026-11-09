@@ -55,7 +55,7 @@ export function LinkPreviewCard({ url, onLoad }: LinkPreviewCardProps) {
     return (
       <div
         aria-label={t("Loading preview")}
-        className="mt-1 w-full max-w-[432px] animate-pulse overflow-hidden rounded-[4px] border border-divider border-l-4 border-l-brand bg-bg-secondary"
+        className="mt-1 w-full max-w-[432px] animate-pulse overflow-hidden rounded-lg border border-divider border-l-4 border-l-brand bg-bg-secondary"
       >
         <div className="space-y-2 p-3">
           <div className="h-2.5 w-1/4 rounded-[1px] bg-bg-accent" />
@@ -82,7 +82,7 @@ export function LinkPreviewCard({ url, onLoad }: LinkPreviewCardProps) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="mt-1 block w-full max-w-[432px] overflow-hidden rounded-[4px] border border-divider border-l-4 border-l-brand bg-bg-secondary transition-colors hover:border-[#4f545c] hover:border-l-brand hover:bg-bg-secondary-alt"
+      className="mt-1 block w-full max-w-[432px] overflow-hidden rounded-lg border border-divider border-l-4 border-l-brand bg-bg-secondary transition-colors hover:border-[#4f545c] hover:border-l-brand hover:bg-bg-secondary-alt"
     >
       <div className="p-3">
         <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-text-muted">

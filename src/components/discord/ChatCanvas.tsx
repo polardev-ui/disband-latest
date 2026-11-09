@@ -1,5 +1,6 @@
 "use client";
 
+import { alertDialog } from "@/lib/dialogs";
 import {
   useCallback,
   useEffect,
@@ -45,7 +46,7 @@ function NewMessagesDivider({ animate = true }: { animate?: boolean }) {
       role="separator"
       aria-label={t("New messages")}
     >
-      <span className="absolute -top-[9px] right-0 rounded-[8px] rounded-l-none bg-status-dnd py-px pl-1 pr-1.5 text-[10px] font-bold uppercase leading-[13px] text-white before:absolute before:-left-[5px] before:top-0 before:h-full before:w-[6px] before:bg-status-dnd before:[clip-path:polygon(100%_0,100%_100%,0_50%)]">
+      <span className="absolute -top-[9px] right-0 rounded-full bg-status-dnd px-2 py-px text-[10px] font-bold uppercase leading-[15px] tracking-[0.04em] text-white">
         {t("New")}
       </span>
     </div>
@@ -64,8 +65,8 @@ function AtIcon() {
 /** The date rule between days, centred text on a hairline. */
 function DayDivider({ label }: { label: string }) {
   return (
-    <div role="separator" aria-label={label} className="relative mx-4 mb-0.5 mt-6 flex h-0 items-center justify-center border-t border-divider">
-      <span className="bg-bg-primary px-1 text-[12px] font-semibold leading-[13px] text-text-muted">{label}</span>
+    <div role="separator" aria-label={label} className="relative mx-4 mb-1 mt-6 flex h-0 items-center justify-center border-t border-divider">
+      <span className="rounded-full border border-divider bg-bg-primary px-2.5 py-0.5 text-[11px] font-semibold leading-[14px] text-text-muted">{label}</span>
     </div>
   );
 }
@@ -392,6 +393,8 @@ interface ChatCanvasProps {
   channelIcon?: React.ReactNode;
 
   introText?: string;
+  /** The channel topic: shown beside the name and under the intro. */
+  topic?: string | null;
 
   placeholder?: string;
 
@@ -440,6 +443,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     callPanel,
     channelIcon,
     introText,
+    topic = null,
     placeholder,
     composerLockedReason,
     composerNotice,
@@ -1043,13 +1047,26 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   }
 
   return (
-    <main className="view-enter relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
-      <header className="relative z-30 flex h-12 shrink-0 items-center gap-2 px-4 shadow-[var(--elevation-low)]">
+    <main className="chat-wallpaper-host view-enter relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
+      <header className="relative z-30 flex h-14 shrink-0 items-center gap-2 border-b border-column-border px-4">
         {headerLeading}
-        <span className="flex shrink-0 items-center text-channels-default [&_svg]:h-6 [&_svg]:w-6">
-          {channelIcon ?? (messageContext === "dm" ? <AtIcon /> : <IconHash size={24} />)}
+        <span className="flex shrink-0 items-center text-channels-default [&_svg]:h-[22px] [&_svg]:w-[22px]">
+          {channelIcon ?? (messageContext === "dm" ? <AtIcon /> : <IconHash size={22} />)}
         </span>
-        <h1 className="min-w-0 flex-1 truncate text-[16px] font-semibold leading-5 text-header-primary">{channelName}</h1>
+        <h1 className={`min-w-0 truncate text-[16px] font-semibold leading-5 text-header-primary ${topic ? "shrink" : "flex-1"}`}>{channelName}</h1>
+        {topic && (
+          <>
+            <span aria-hidden className="mx-1 hidden h-5 w-px shrink-0 bg-divider md:block" />
+            <button
+              type="button"
+              onClick={() => void alertDialog(topic, channelName)}
+              title={topic}
+              className="hidden min-w-0 flex-1 truncate text-left text-[14px] text-text-muted transition-colors hover:text-text-normal md:block"
+            >
+              {topic}
+            </button>
+          </>
+        )}
         {headerExtra}
         {headerTrailing}
       </header>
@@ -1067,7 +1084,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                   <button
                     type="button"
                     onClick={() => void requestLoadMore()}
-                    className="rounded-full bg-bg-accent px-4 py-1.5 text-xs font-medium text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+                    className="rounded-full border border-border-subtle bg-bg-secondary-alt px-4 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-border-strong hover:text-text-normal"
                   >
                     {t("Load earlier messages")}
                   </button>
@@ -1076,14 +1093,17 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
 
               {/* The channel intro, only at the true start of history. */}
               {!hasMore && (
-                <div className="mx-4 mb-2 mt-4 flex flex-col items-start">
-                  <span className="mb-2 flex h-[68px] w-[68px] items-center justify-center rounded-full bg-button-secondary text-white [&_svg]:h-10 [&_svg]:w-10">
+                <div className="mx-4 mb-4 mt-6 flex flex-col items-start">
+                  <span className="mb-3 flex h-[72px] w-[72px] items-center justify-center rounded-[22px] bg-bg-tertiary text-header-primary [&_svg]:h-10 [&_svg]:w-10">
                     {messageContext === "channel" ? <IconHash size={42} /> : (channelIcon ?? <IconHash size={42} />)}
                   </span>
-                  <h3 className="my-2 text-[32px] font-bold leading-10 text-header-primary">
+                  <h3 className="mb-1.5 text-[30px] font-bold leading-9 tracking-[-0.01em] text-header-primary">
                     {messageContext === "channel" ? t("Welcome to #{channelName}!", { channelName }) : channelName}
                   </h3>
-                  <p className="text-[16px] leading-5 text-header-secondary">
+                  {topic && (
+                    <p className="mb-2 max-w-[720px] whitespace-pre-wrap break-words text-[15px] leading-[22px] text-text-normal">{topic}</p>
+                  )}
+                  <p className="text-[15px] leading-5 text-text-muted">
                     {introText ?? (messageContext === "channel"
                       ? t("This is the start of the #{channelName} channel.", { channelName })
                       : messageContext === "dm"
@@ -1159,7 +1179,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
             <button
               type="button"
               onClick={() => { scrollToBottom("smooth", true); setShowNewMessages(false); setShowScrollDown(false); }}
-              className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-bg-secondary text-text-normal shadow-lg transition-transform hover:scale-105"
+              className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-bg-floating text-text-normal shadow-[var(--elevation-high)] transition-transform hover:scale-105"
               aria-label={t("Scroll to bottom")}
             >
               ↓
@@ -1168,10 +1188,10 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
         </div>
       )}
 
-      <div className="shrink-0">
+      <div className="relative shrink-0 pb-3">
         {composerNotice}
         {composerLockedReason ? (
-          <div className="mx-4 flex min-h-[44px] items-center gap-2 rounded-lg bg-bg-composer px-4 py-2">
+          <div className="mx-4 flex min-h-[52px] items-center gap-2 rounded-xl border border-border-subtle bg-bg-composer px-4 py-2">
             <IconShield size={15} className="shrink-0 text-text-muted" />
             <p className="text-[14px] text-text-muted">{composerLockedReason}</p>
           </div>
@@ -1198,11 +1218,15 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           allowGifts={messageContext !== "notes"}
         />
         )}
-        <TypingIndicator
-          typers={typers}
-          members={renderMembers}
-          groupContext={messageContext === "channel" || messageContext === "group"}
-        />
+        {/* Sits just above the composer instead of taking a row under it, so the
+            composer keeps a small, even gap to the bottom (matching the user panel). */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-full">
+          <TypingIndicator
+            typers={typers}
+            members={renderMembers}
+            groupContext={messageContext === "channel" || messageContext === "group"}
+          />
+        </div>
       </div>
       <ActivityModal activityId={activeActivityId} onClose={() => setActiveActivityId(null)} />
     </main>

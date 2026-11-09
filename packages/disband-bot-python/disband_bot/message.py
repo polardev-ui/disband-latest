@@ -32,6 +32,10 @@ class Message:
         """Replies to this message in the same channel."""
         return self.client.send_message(self.channel_id, content, reply_to_id=self.id)
 
+    def delete(self):
+        """Deletes this message (messages.delete; Manage Messages for others' messages)."""
+        return self.client.delete_message(self.channel_id, self.id)
+
     def __repr__(self):
         return "<Message id=%s channel=%s content=%r>" % (
             self.id,

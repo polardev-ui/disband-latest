@@ -32,7 +32,7 @@ export function PinnedMessagesPanel({
   const content = (
     <>
       <div className={`fixed inset-0 z-40 bg-transparent overlay-fade${exiting ? " overlay-fade-out" : ""}`} onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-label={t("Pinned messages")} className={`menu-pop${exiting ? " modal-pop-out" : ""} fixed right-2 top-[56px] z-50 flex max-h-[calc(100dvh-72px)] w-[420px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-[4px] bg-bg-secondary shadow-[var(--elevation-high)]`}>
+      <div role="dialog" aria-modal="true" aria-label={t("Pinned messages")} className={`menu-pop${exiting ? " modal-pop-out" : ""} fixed right-2 top-[56px] z-50 flex max-h-[calc(100dvh-72px)] w-[420px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border border-border-subtle bg-bg-secondary shadow-[var(--elevation-high)]`}>
         <div className="flex h-12 shrink-0 items-center justify-between bg-bg-primary px-4 shadow-[var(--elevation-low)]">
           <h3 className="flex items-center gap-2 text-[16px] font-semibold text-text-normal">
             <IconPin size={16} className="text-text-muted" />
@@ -61,7 +61,7 @@ export function PinnedMessagesPanel({
             pins.map((pin) => (
               <div
                 key={pin.id}
-                className="group mb-2 flex items-start gap-3 rounded-[4px] bg-bg-primary px-3 py-3 transition-colors hover:bg-interactive-hover"
+                className="group mb-2 flex items-start gap-3 rounded-lg bg-bg-primary px-3 py-3 transition-colors hover:bg-interactive-hover"
               >
                 <span className="mt-0.5 shrink-0 text-brand">
                   <IconPin size={14} />

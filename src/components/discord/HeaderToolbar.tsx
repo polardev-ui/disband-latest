@@ -5,7 +5,11 @@ import { useApp } from "@/contexts/AppContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
-import { IconBell, IconBellOff, IconCheckAll, IconPin, IconSearch, IconFriends, IconInbox, IconHelp } from "@/components/icons";
+import { IconBell, IconBellOff, IconCheckAll, IconPin, IconSearch, IconFriends, IconInbox, IconHelp, IconStar, IconBookmark } from "@/components/icons";
+import { useSavedMessages } from "@/lib/saved-messages";
+import { SavedPanel } from "./SavedMessages";
+import { toggleFavorite, useFavorites, type FavoriteKind } from "@/lib/favorites";
+import { alertDialog } from "@/lib/dialogs";
 import { Tooltip } from "./Tooltip";
 
 type MuteLevel = "all" | "mentions" | "nothing";
@@ -30,6 +34,8 @@ export interface HeaderToolbarProps {
   showMembersToggle?: boolean;
   showSearch?: boolean;
   className?: string;
+  /** Adds a star that favorites this channel or conversation (migration 0237). */
+  favoriteTarget?: { kind: FavoriteKind; id: string } | null;
 }
 
 export function HeaderToolbar({
@@ -50,15 +56,27 @@ export function HeaderToolbar({
   showMembersToggle = true,
   showSearch = true,
   className,
+  favoriteTarget = null,
 }: HeaderToolbarProps) {
   const app = useApp();
   const { t } = useI18n();
+  const favorites = useFavorites(app.user?.id);
+  const starred = !!favoriteTarget && favorites.items.some((f) => f.kind === favoriteTarget.kind && f.target_id === favoriteTarget.id);
+  const showStar = !!favoriteTarget && favorites.loaded && !favorites.unavailable;
+  const toggleStar = async () => {
+    if (!favoriteTarget || !app.user?.id) return;
+    const err = await toggleFavorite(app.user.id, favoriteTarget.kind, favoriteTarget.id);
+    if (err) void alertDialog(err, t("Favorites"));
+  };
   const [muteLevel, setMuteLevel] = useState<MuteLevel>("all");
   const [muteOpen, setMuteOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
+  const [savedOpen, setSavedOpen] = useState(false);
+  const saved = useSavedMessages(app.user?.id);
 
   useOverlayDismiss(() => setMuteOpen(false), muteOpen);
   useOverlayDismiss(() => setInboxOpen(false), inboxOpen);
+  useOverlayDismiss(() => setSavedOpen(false), savedOpen);
 
   const canMute = scopeKind === "channel" || scopeKind === "dm";
 
@@ -96,13 +114,30 @@ export function HeaderToolbar({
   const inboxCount = unreads.length;
 
   const iconBtn = (on: boolean) =>
-    `flex h-6 w-6 shrink-0 items-center justify-center transition-colors ${
-      on ? "text-interactive-active" : "text-interactive-normal hover:text-interactive-active"
+    `flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors [&_svg]:h-[21px] [&_svg]:w-[21px] ${
+      on ? "bg-interactive-selected text-interactive-active" : "text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active"
     }`;
 
   return (
-    <div className={`flex items-center gap-4 ${className ?? ""}`}>
+    <div className={`flex items-center gap-1 ${className ?? ""}`}>
       {leading}
+      {showStar && (
+        <Tooltip label={starred ? t("Remove from Favorites") : t("Add to Favorites")} side="bottom">
+          <button
+            type="button"
+            aria-label={starred ? t("Remove from Favorites") : t("Add to Favorites")}
+            aria-pressed={starred}
+            onClick={() => void toggleStar()}
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors [&_svg]:h-[21px] [&_svg]:w-[21px] ${
+              starred ? "text-status-idle hover:bg-interactive-hover" : "text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active"
+            }`}
+          >
+            <span className={starred ? "[&_svg]:fill-current" : undefined}>
+              <IconStar size={21} />
+            </span>
+          </button>
+        </Tooltip>
+      )}
       {canMute && (
         <div className="relative">
           <Tooltip label={t("Notification Settings")} side="bottom">
@@ -116,17 +151,17 @@ export function HeaderToolbar({
             </button>
           </Tooltip>
           {muteOpen && (
-            <div className="menu-pop absolute right-0 top-9 z-50 w-[220px] origin-top-right rounded-[4px] bg-bg-floating px-1.5 py-1.5 shadow-[var(--elevation-high)]">
+            <div className="menu-pop absolute right-0 top-10 z-50 w-[220px] origin-top-right rounded-xl border border-border-subtle bg-bg-floating px-1.5 py-1.5 shadow-[var(--elevation-high)]">
               {(["all", "mentions", "nothing"] as MuteLevel[]).map((l) => (
                 <button
                   key={l}
                   type="button"
                   onClick={() => { void setLevel(l); setMuteOpen(false); }}
-                  className="group/opt flex w-full items-center justify-between rounded-[2px] px-2 py-1.5 text-left text-[14px] font-medium text-interactive-normal hover:bg-brand-hover hover:text-white"
+                  className="group/opt flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[14px] font-medium text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active"
                 >
                   {l === "all" ? t("All Messages") : l === "mentions" ? t("Only @mentions") : t("Nothing")}
-                  <span className={`flex h-[18px] w-[18px] items-center justify-center rounded-full border-2 ${muteLevel === l ? "border-brand group-hover/opt:border-white" : "border-current"}`}>
-                    {muteLevel === l && <span className="h-2 w-2 rounded-full bg-brand group-hover/opt:bg-white" />}
+                  <span className={`flex h-[18px] w-[18px] items-center justify-center rounded-full border-2 ${muteLevel === l ? "border-brand" : "border-current"}`}>
+                    {muteLevel === l && <span className="h-2 w-2 rounded-full bg-brand" />}
                   </span>
                 </button>
               ))}
@@ -182,16 +217,45 @@ export function HeaderToolbar({
                 onCloseSearch?.();
               }
             }}
-            placeholder={t("Search")}
+            placeholder={t("Search messages")}
             aria-label={t("Search")}
             autoComplete="off"
             spellCheck={false}
-            className={`h-6 rounded-[4px] bg-bg-tertiary pl-1.5 pr-7 text-[14px] text-text-normal outline-none transition-[width] duration-200 ease-out placeholder:text-text-muted ${searchOpen || searchQuery ? "w-60" : "w-36 focus:w-60"}`}
+            className={`mx-1 h-8 rounded-lg border border-border-subtle bg-bg-secondary-alt pl-8 pr-7 text-[14px] text-text-normal outline-none transition-[width,border-color] duration-200 ease-out placeholder:text-text-muted focus:border-border-strong ${searchOpen || searchQuery ? "w-64" : "w-48 focus:w-64"}`}
           />
-          {searchOpen && onCloseSearch ? (
-            <button type="button" aria-label={t("Clear search")} onClick={onCloseSearch} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-interactive-normal hover:text-interactive-active">×</button>
-          ) : (
-            <IconSearch size={16} className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-text-muted" />
+          <IconSearch size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+          {searchOpen && onCloseSearch && (
+            <button type="button" aria-label={t("Clear search")} onClick={onCloseSearch} className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] leading-none text-interactive-normal hover:text-interactive-active">×</button>
+          )}
+        </div>
+      )}
+
+      {saved.loaded && !saved.unavailable && (
+        <div className="relative">
+          <Tooltip label={t("Saved")} side="bottom">
+            <button
+              type="button"
+              aria-label={t("Saved")}
+              aria-expanded={savedOpen}
+              onClick={() => {
+                setSavedOpen((v) => !v);
+                setInboxOpen(false);
+              }}
+              className={iconBtn(savedOpen)}
+            >
+              <IconBookmark size={22} />
+            </button>
+          </Tooltip>
+          {savedOpen && (
+            <div className="menu-pop absolute right-0 top-10 z-50 w-[440px] max-w-[calc(100vw-24px)] origin-top-right overflow-hidden rounded-xl border border-border-subtle bg-bg-floating shadow-[var(--elevation-high)]">
+              <SavedPanel
+                onClose={() => setSavedOpen(false)}
+                onJump={(link, at) => {
+                  setSavedOpen(false);
+                  void app.routeToNotification(link, at);
+                }}
+              />
+            </div>
           )}
         </div>
       )}
@@ -201,14 +265,14 @@ export function HeaderToolbar({
           <button type="button" aria-label={t("Inbox")} onClick={() => setInboxOpen((v) => !v)} className={`relative ${iconBtn(inboxOpen)}`}>
             <IconInbox size={24} />
             {inboxCount > 0 && (
-              <span className="absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border-[3px] border-bg-primary bg-status-dnd px-0.5 text-[10px] font-bold text-white">
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-bg-primary bg-status-dnd px-0.5 text-[10px] font-bold text-white">
                 {inboxCount > 99 ? "99+" : inboxCount}
               </span>
             )}
           </button>
         </Tooltip>
         {inboxOpen && (
-          <div className="menu-pop absolute right-0 top-9 z-50 w-[480px] origin-top-right overflow-hidden rounded-lg bg-bg-secondary shadow-[var(--elevation-high)]">
+          <div className="menu-pop absolute right-0 top-10 z-50 w-[480px] origin-top-right overflow-hidden rounded-xl border border-border-subtle bg-bg-floating shadow-[var(--elevation-high)]">
             <InboxPopover
               mentions={mentions}
               unreads={unreads}
@@ -245,7 +309,7 @@ function InboxPopover({
   useOverlayDismiss(onClose, true);
   return (
     <div className="flex max-h-[480px] flex-col">
-      <div className="bg-bg-tertiary px-4 pt-4">
+      <div className="border-b border-border-subtle bg-bg-secondary-alt px-4 pt-4">
         <div className="flex items-center gap-2">
           <IconInbox size={24} className="text-header-primary" />
           <h3 className="flex-1 text-[20px] font-semibold leading-6 text-header-primary">{t("Inbox")}</h3>
@@ -254,7 +318,7 @@ function InboxPopover({
             onClick={onReadAll}
             disabled={unreads.length === 0}
             title={t("Mark all as read")}
-            className="flex h-7 items-center gap-1 rounded-[4px] bg-bg-secondary px-2 text-[12px] font-semibold text-interactive-normal transition-colors hover:text-interactive-active disabled:cursor-default disabled:opacity-40"
+            className="flex h-7 items-center gap-1 rounded-lg bg-bg-secondary px-2 text-[12px] font-semibold text-interactive-normal transition-colors hover:text-interactive-active disabled:cursor-default disabled:opacity-40"
           >
             <IconCheckAll size={14} />
             {t("Read all")}

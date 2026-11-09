@@ -8,7 +8,7 @@ import { usePresence } from "@/hooks/usePresence";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { IconHash, IconMegaphone, IconSpeaker, IconTrash } from "@/components/icons";
+import { IconClose, IconForum, IconHash, IconMegaphone, IconSpeaker, IconTrash } from "@/components/icons";
 import type { Channel } from "@/lib/supabase/types";
 import { useI18n } from "@/contexts/I18nContext";
 
@@ -55,6 +55,10 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
   const [readOnly, setReadOnly] = useState(false);
   const [userLimit, setUserLimit] = useState(0);
   const [locked, setLocked] = useState(false);
+  const [topic, setTopic] = useState("");
+  const [slowMode, setSlowMode] = useState(0);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   const [rows, setRows] = useState<RolePermRow[] | null>(null);
   const [draft, setDraft] = useState<Draft>({});
   const [saving, setSaving] = useState(false);
@@ -86,6 +90,10 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     setReadOnly(!!channel.read_only);
     setUserLimit(channel.user_limit ?? 0);
     setLocked(!!channel.locked);
+    setTopic(channel.topic ?? "");
+    setSlowMode(channel.slow_mode_seconds ?? 0);
+    setTags(channel.available_tags ?? []);
+    setTagInput("");
     setRows(null);
     setDraft({});
     setSaved(false);
@@ -157,6 +165,9 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     readOnly !== !!channel.read_only ||
     userLimit !== (channel.user_limit ?? 0) ||
     locked !== !!channel.locked ||
+    topic.trim() !== (channel.topic ?? "") ||
+    slowMode !== (channel.slow_mode_seconds ?? 0) ||
+    tags.join("\u0000") !== (channel.available_tags ?? []).join("\u0000") ||
     (rows ?? []).some((r) => ACTIONS.some((a) => (draft[r.role_id]?.[a.key] ?? null) !== r[a.key]));
 
   const save = async () => {
@@ -181,6 +192,15 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
           .eq("id", channel.id);
         if (limitErr) throw new Error(limitErr.message);
       }
+      // Topic, slow mode (migration 0239) and forum tags (0240).
+      const extra: Record<string, unknown> = {};
+      if (topic.trim() !== (channel.topic ?? "")) extra.topic = topic.trim() || null;
+      if (slowMode !== (channel.slow_mode_seconds ?? 0)) extra.slow_mode_seconds = slowMode;
+      if (channel.type === "forum" && tags.join("\u0000") !== (channel.available_tags ?? []).join("\u0000")) extra.available_tags = tags;
+      if (Object.keys(extra).length > 0) {
+        const { error: extraErr } = await supabase.from("channels").update(extra).eq("id", channel.id);
+        if (extraErr) throw new Error(extraErr.message);
+      }
       for (const row of rows ?? []) {
         const cell = draft[row.role_id] ?? { can_view: null, can_post: null, can_react: null, can_attach: null };
         const { error: rpcErr } = await supabase.rpc("set_channel_role_permission", {
@@ -204,9 +224,9 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
   };
 
   const lockSwitch = (
-    <label className="flex cursor-pointer items-center justify-between gap-4 border-b border-divider/60 py-4">
+    <label className="flex cursor-pointer items-center justify-between gap-4 border-b border-border-subtle py-4">
       <span>
-        <span className="block text-[16px] font-medium text-header-primary">{t("Lock channel")}</span>
+        <span className="block text-[15px] font-semibold text-header-primary">{t("Lock channel")}</span>
         <span className="mt-1 block text-[14px] text-text-muted">
           {t("Nobody new can join. People already in stay, and admins can still join.")}
         </span>
@@ -216,7 +236,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
         role="switch"
         aria-checked={locked}
         onClick={() => setLocked(!locked)}
-        className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${locked ? "bg-status-online" : "bg-[#80848e]"}`}
+        className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${locked ? "bg-brand" : "bg-bg-tertiary ring-1 ring-border-strong"}`}
       >
         <span
           className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white transition-all ${locked ? "left-[19px]" : "left-[3px]"}`}
@@ -237,7 +257,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
           value={section}
           onChange={(e) => setSection(e.target.value as typeof section)}
           aria-label={t("Channel settings section")}
-          className="w-full rounded-[4px] bg-bg-tertiary px-2 py-2 text-[16px] font-semibold text-text-normal outline-none"
+          className="w-full rounded-lg bg-bg-tertiary px-2 py-2 text-[16px] font-semibold text-text-normal outline-none"
         >
           <option value="overview">{t("Overview")}</option>
           <option value="permissions">{t("Permissions")}</option>
@@ -246,8 +266,8 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
       }
       sidebar={
         <>
-          <div className="flex items-center gap-1 px-2.5 pb-1.5 text-channels-default">
-            {channel.type === "text" ? (readOnly ? <IconMegaphone size={16} /> : <IconHash size={16} />) : <IconSpeaker size={16} />}
+          <div className="flex items-center gap-1.5 px-3 pb-2 pt-1 text-channels-default">
+            {channel.type === "text" ? (readOnly ? <IconMegaphone size={16} /> : <IconHash size={16} />) : channel.type === "forum" ? <IconForum size={16} /> : <IconSpeaker size={16} />}
             <h2 className="truncate text-[12px] font-bold uppercase leading-4 tracking-[0.02em]">{channel.name}</h2>
           </div>
           <SettingsNavItem active={section === "overview"} onClick={() => setSection("overview")}>{t("Overview")}</SettingsNavItem>
@@ -259,7 +279,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
         </>
       }
     >
-      <h2 className="mb-5 text-[20px] font-semibold leading-6 text-header-primary">
+      <h2 className="mb-6 text-[26px] font-bold leading-8 text-header-primary">
         {section === "overview" ? t("Overview") : section === "permissions" ? t("Channel Permissions") : t("Delete Channel")}
       </h2>
       {section === "overview" && (
@@ -267,7 +287,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
           <section>
             <div className="mt-2 space-y-3">
               <label className="block">
-                <span className="text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">{t("Channel name")}</span>
+                <span className="text-[11px] font-bold uppercase leading-4 tracking-[0.06em] text-text-muted">{t("Channel name")}</span>
                 <div className="mt-1 flex items-center">
                   <span className="mr-2 text-text-muted">
                     {channel.type === "text" ? (
@@ -276,6 +296,8 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                       ) : (
                         <IconHash size={14} />
                       )
+                    ) : channel.type === "forum" ? (
+                      <IconForum size={14} />
                     ) : (
                       <IconSpeaker size={14} />
                     )}
@@ -283,15 +305,102 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal outline-none focus:border-[#00a8fc]"
+                    className="h-10 w-full rounded-lg border border-border-subtle bg-bg-tertiary px-3 text-[15px] text-text-normal outline-none focus:border-brand"
                     maxLength={32}
                   />
                 </div>
               </label>
 
+              {channel.type !== "voice" && (
+                <label className="block pt-2">
+                  <span className="text-[13px] font-semibold leading-4 text-header-secondary">{t("Channel topic")}</span>
+                  <textarea
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value.slice(0, 1024))}
+                    rows={3}
+                    placeholder={channel.type === "forum" ? t("What should people post here?") : t("Let everyone know what this channel is for")}
+                    className="mt-1.5 w-full resize-y rounded-lg border border-border-subtle bg-bg-tertiary px-3 py-2.5 text-[15px] leading-[22px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-brand"
+                  />
+                  <span className="block text-right text-[12px] tabular-nums text-text-muted">{topic.length}/1024</span>
+                </label>
+              )}
+
+              {channel.type === "text" && (
+                <label className="block border-t border-border-subtle py-4">
+                  <span className="flex items-center justify-between gap-4">
+                    <span className="text-[15px] font-semibold text-header-primary">{t("Slow mode")}</span>
+                    <select
+                      value={slowMode}
+                      onChange={(e) => setSlowMode(Number(e.target.value))}
+                      className="h-9 rounded-lg border border-border-subtle bg-bg-tertiary px-2.5 text-[14px] text-text-normal outline-none focus:border-brand"
+                    >
+                      {[
+                        [0, t("Off")], [5, "5s"], [10, "10s"], [15, "15s"], [30, "30s"], [60, "1m"],
+                        [120, "2m"], [300, "5m"], [600, "10m"], [900, "15m"], [1800, "30m"],
+                        [3600, "1h"], [7200, "2h"], [21600, "6h"],
+                      ].map(([v, l]) => (
+                        <option key={v} value={v}>{l}</option>
+                      ))}
+                    </select>
+                  </span>
+                  <span className="mt-1 block text-[14px] text-text-muted">
+                    {t("Members wait this long between messages. People who can manage messages or channels are exempt.")}
+                  </span>
+                </label>
+              )}
+
+              {channel.type === "forum" && (
+                <div className="border-t border-border-subtle py-4">
+                  <span className="block text-[15px] font-semibold text-header-primary">{t("Post tags")}</span>
+                  <span className="mt-1 block text-[14px] text-text-muted">
+                    {t("Tags people can put on posts, up to 20. Each post can carry five.")}
+                  </span>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {tags.map((tag) => (
+                      <span key={tag} className="flex h-7 items-center gap-1 rounded-full border border-border-subtle bg-bg-tertiary pl-3 pr-1 text-[12px] font-semibold text-text-normal">
+                        {tag}
+                        <button
+                          type="button"
+                          aria-label={t("Remove tag {tag}", { tag })}
+                          onClick={() => setTags((list) => list.filter((x) => x !== tag))}
+                          className="flex h-5 w-5 items-center justify-center rounded-full text-text-muted hover:bg-interactive-hover hover:text-text-normal"
+                        >
+                          <IconClose size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <form
+                    className="mt-3 flex max-w-sm gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const tag = tagInput.trim().slice(0, 24);
+                      if (!tag || tags.includes(tag) || tags.length >= 20) return;
+                      setTags((list) => [...list, tag]);
+                      setTagInput("");
+                    }}
+                  >
+                    <input
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value.slice(0, 24))}
+                      placeholder={t("New tag")}
+                      disabled={tags.length >= 20}
+                      className="h-9 min-w-0 flex-1 rounded-lg border border-border-subtle bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none focus:border-brand disabled:opacity-50"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!tagInput.trim() || tags.length >= 20}
+                      className="h-9 shrink-0 rounded-lg bg-button-secondary px-3 text-[13px] font-semibold text-header-primary hover:bg-button-secondary-hover disabled:opacity-50"
+                    >
+                      {t("Add")}
+                    </button>
+                  </form>
+                </div>
+              )}
+
 {channel.type === "voice" ? (
                 <>
-                  <div className="border-y border-divider/60 py-4">
+                  <div className="border-y border-border-subtle py-4">
                     <div className="flex items-center justify-between gap-4">
                       <span className="text-[16px] font-medium text-header-primary">{t("User limit")}</span>
                       <span className="text-[14px] font-semibold text-text-normal">
@@ -314,9 +423,9 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                   {lockSwitch}
                 </>
               ) : (
-                              <label className="flex cursor-pointer items-center justify-between gap-4 border-y border-divider/60 py-4">
+                              <label className="flex cursor-pointer items-center justify-between gap-4 border-y border-border-subtle py-4">
                 <span>
-                  <span className="block text-[16px] font-medium text-header-primary">{t("Announcement Channel")}</span>
+                  <span className="block text-[15px] font-semibold text-header-primary">{t("Announcement Channel")}</span>
                   <span className="mt-1 block text-[14px] text-text-muted">
                     {t("Only people who can manage channels may post here.")}
                   </span>
@@ -326,7 +435,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                   role="switch"
                   aria-checked={readOnly}
                   onClick={() => setReadOnly(!readOnly)}
-                  className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${readOnly ? "bg-status-online" : "bg-[#80848e]"}`}
+                  className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${readOnly ? "bg-brand" : "bg-bg-tertiary ring-1 ring-border-strong"}`}
                 >
                   <span
                     className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white transition-all ${readOnly ? "left-[19px]" : "left-[3px]"}`}
@@ -349,7 +458,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                 520px minimum would force sideways scrolling. */}
             <div className="mt-2 hidden overflow-x-auto sm:block">
               <div className="min-w-[520px]">
-                <div className="grid grid-cols-[1fr_repeat(4,72px)] items-center gap-1 border-b border-divider pb-1">
+                <div className="grid grid-cols-[1fr_repeat(4,72px)] items-center gap-1 border-b border-border-subtle pb-1">
                   <span className="text-[11px] font-bold uppercase text-text-muted">{t("Role")}</span>
                   {ACTIONS.map((a) => (
                     <span key={a.key} className="text-center text-[11px] font-bold uppercase text-text-muted">
@@ -360,7 +469,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                 {rows === null ? (
                   <p className="py-4 text-center text-sm text-text-muted">{t("Loading permissions…")}</p>
                 ) : (
-                  <div className="divide-y divide-divider/60">
+                  <div className="divide-y divide-border-subtle">
                     {rows.map((r) => (
                       <div key={r.role_id} className="grid grid-cols-[1fr_repeat(4,72px)] items-center gap-1 py-1.5">
                         <span className="min-w-0 truncate text-sm" style={{ color: r.role_color }}>
@@ -380,7 +489,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                 <p className="py-4 text-center text-sm text-text-muted">{t("Loading permissions…")}</p>
               ) : (
                 rows.map((r) => (
-                  <div key={r.role_id} className="rounded-lg border border-divider bg-bg-secondary p-3">
+                  <div key={r.role_id} className="rounded-lg border border-border-subtle bg-bg-secondary p-3">
                     <p className="mb-2 truncate text-sm font-semibold" style={{ color: r.role_color }}>
                       {r.role_name}
                     </p>
@@ -412,7 +521,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
               <button
                 type="button"
                 onClick={() => setConfirmDelete(true)}
-                className="h-[38px] shrink-0 rounded-[3px] bg-button-danger px-4 text-[14px] font-medium text-white hover:bg-button-danger-hover"
+                className="h-[38px] shrink-0 rounded-md bg-button-danger px-4 text-[14px] font-medium text-white hover:bg-button-danger-hover"
               >
                 {t("Delete Channel")}
               </button>
@@ -443,7 +552,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
             type="button"
             onClick={() => void save()}
             disabled={saving}
-            className="h-8 shrink-0 rounded-[3px] bg-button-green px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:opacity-50"
+            className="h-8 shrink-0 rounded-md bg-button-green px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:opacity-50"
           >
             {saving ? t("Saving…") : t("Save Changes")}
           </button>

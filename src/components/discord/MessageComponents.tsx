@@ -50,7 +50,7 @@ export function MessageComponents({ messageId, rows }: { messageId: string; rows
                 type="button"
                 disabled={b.disabled || busy}
                 onClick={() => (b.style === "link" && b.url ? safeWindowOpen(b.url) : b.custom_id && void press(b.custom_id))}
-                className={`flex h-8 min-w-[60px] items-center justify-center gap-1.5 rounded-[3px] px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${STYLE_CLASS[b.style]}`}
+                className={`flex h-8 min-w-[60px] items-center justify-center gap-1.5 rounded-md px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${STYLE_CLASS[b.style]}`}
               >
                 {b.emoji && <span aria-hidden>{b.emoji}</span>}
                 {busy ? <span className="animate-pulse">•••</span> : b.label}

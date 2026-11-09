@@ -73,7 +73,7 @@ const FAQ = [
 
 export default function DonatePage() {
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#1e1f22] text-[#dbdee1]">
+    <div className="min-h-screen overflow-x-hidden bg-bg-secondary text-text-normal">
       <MarketingNav />
       <main className="mx-auto max-w-6xl px-4 pb-20 pt-24 sm:px-6 sm:pt-28">
         {/* Hero */}
@@ -83,7 +83,7 @@ export default function DonatePage() {
             <h1 className="mt-4 text-4xl font-semibold tracking-[-0.03em] text-white sm:text-5xl">
               Help keep Disband running.
             </h1>
-            <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-[#b5bac1]">
+            <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-interactive-normal">
               Disband is built and run by a small team. Every message, call and
               upload runs on servers we pay for each month, and right now what Disband earns
               doesn&rsquo;t cover the bill. If Disband matters to you, a donation helps keep it online.
@@ -97,7 +97,7 @@ export default function DonatePage() {
               </a>
               <a
                 href="#costs"
-                className="inline-flex h-12 items-center rounded-xl border border-white/10 px-6 text-[15px] font-semibold text-[#dbdee1] transition-colors hover:border-white/25 hover:text-white"
+                className="inline-flex h-12 items-center rounded-xl border border-white/10 px-6 text-[15px] font-semibold text-text-normal transition-colors hover:border-white/25 hover:text-white"
               >
                 Where the money goes
               </a>
@@ -109,7 +109,7 @@ export default function DonatePage() {
         {/* Why */}
         <section className="mt-24 grid gap-10 border-t border-white/[0.06] pt-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
           <h2 className="text-2xl font-semibold tracking-[-0.02em] text-white sm:text-3xl">Why we&rsquo;re asking</h2>
-          <div className="space-y-5 text-[16px] leading-relaxed text-[#b5bac1]">
+          <div className="space-y-5 text-[16px] leading-relaxed text-interactive-normal">
             <p>
               Running a chat platform isn&rsquo;t cheap. Messages have to be stored, files and images
               served, calls relayed, and harmful content caught before it spreads. Those costs grow with
@@ -130,19 +130,19 @@ export default function DonatePage() {
         {/* Costs */}
         <section id="costs" className="mt-20 scroll-mt-24">
           <h2 className="text-2xl font-semibold tracking-[-0.02em] text-white sm:text-3xl">Where the money goes</h2>
-          <p className="mt-2 max-w-2xl text-[15px] text-[#949ba4]">
+          <p className="mt-2 max-w-2xl text-[15px] text-text-muted">
             Donations pay for the services that keep Disband working, day and night.
           </p>
           <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {COSTS.map((c) => (
-              <div key={c.title} className="rounded-2xl border border-white/[0.06] bg-[#232428] p-5">
+              <div key={c.title} className="rounded-2xl border border-white/[0.06] bg-bg-secondary-alt p-5">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#86dca3]/10 text-[#86dca3]">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                     <path d={c.icon} />
                   </svg>
                 </span>
                 <h3 className="mt-4 text-[16px] font-semibold text-white">{c.title}</h3>
-                <p className="mt-1.5 text-[14px] leading-relaxed text-[#949ba4]">{c.body}</p>
+                <p className="mt-1.5 text-[14px] leading-relaxed text-text-muted">{c.body}</p>
               </div>
             ))}
           </div>
@@ -160,7 +160,7 @@ export default function DonatePage() {
             {FAQ.map((f) => (
               <div key={f.q}>
                 <dt className="text-[16px] font-semibold text-white">{f.q}</dt>
-                <dd className="mt-2 text-[15px] leading-relaxed text-[#949ba4]">{f.a}</dd>
+                <dd className="mt-2 text-[15px] leading-relaxed text-text-muted">{f.a}</dd>
               </div>
             ))}
           </dl>

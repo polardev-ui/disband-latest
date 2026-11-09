@@ -83,7 +83,7 @@ export function WebUpdateWatcher() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-5 right-5 z-[200] flex w-[300px] items-center gap-3 rounded-[4px] border border-divider bg-bg-secondary p-3 shadow-[var(--elevation-high)]"
+      className="fixed bottom-5 right-5 z-[200] flex w-[300px] items-center gap-3 rounded-lg border border-divider bg-bg-secondary p-3 shadow-[var(--elevation-high)]"
     >
       <div className="min-w-0 flex-1">
         <p className="text-[14px] font-semibold text-text-normal">{t("Disband has updated")}</p>
@@ -92,7 +92,7 @@ export function WebUpdateWatcher() {
       <button
         type="button"
         onClick={() => window.location.reload()}
-        className="shrink-0 rounded-[3px] bg-brand px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover"
+        className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover"
       >
         {t("Reload")}
       </button>

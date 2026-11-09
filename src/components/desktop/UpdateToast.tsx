@@ -201,7 +201,7 @@ export function UpdateToast() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-5 right-5 z-[200] w-[320px] rounded-[4px] border border-divider bg-bg-secondary p-4 shadow-[var(--elevation-high)]"
+      className="fixed bottom-5 right-5 z-[200] w-[320px] rounded-lg border border-divider bg-bg-secondary p-4 shadow-[var(--elevation-high)]"
     >
       {phase === "offering" && (
         <>
@@ -215,14 +215,14 @@ export function UpdateToast() {
             <button
               type="button"
               onClick={() => void install()}
-              className="flex-1 rounded-[3px] bg-brand py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover"
+              className="flex-1 rounded-md bg-brand py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover"
             >
               Update now
             </button>
             <button
               type="button"
               onClick={postpone}
-              className="rounded-[3px] border border-divider px-3 py-2 text-[13px] font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+              className="rounded-md border border-divider px-3 py-2 text-[13px] font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
             >
               Not now
             </button>
@@ -265,7 +265,7 @@ export function UpdateToast() {
             <button
               type="button"
               onClick={postpone}
-              className="rounded-[3px] border border-divider px-3 py-2 text-[13px] font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
+              className="rounded-md border border-divider px-3 py-2 text-[13px] font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
             >
               Later
             </button>

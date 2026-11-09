@@ -72,6 +72,16 @@ export function middleware(_request: NextRequest) {
     }
   }
 
+  // Discord-style app URLs: /channels/@me, /channels/@me/<conversation>,
+  // /channels/<space>/<channel>. They are all the one app page; the client
+  // reads the path and opens that place (see useUrlRoutes).
+  if (pathname === "/channels" || pathname.startsWith("/channels/")) {
+    if (isMobilePageView(_request)) {
+      return NextResponse.redirect(new URL("/mobile", _request.url), 302);
+    }
+    return withPageHeaders(_request, NextResponse.rewrite(new URL("/app", _request.url)));
+  }
+
   if (MOBILE_REDIRECT_PATHS.has(pathname) && isMobilePageView(_request)) {
     return NextResponse.redirect(new URL("/mobile", _request.url), 302);
   }
@@ -96,8 +106,10 @@ export function middleware(_request: NextRequest) {
 
 function middlewareForPages(_request: NextRequest) {
   const requestHeaders = new Headers(_request.headers);
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  return withPageHeaders(_request, NextResponse.next({ request: { headers: requestHeaders } }));
+}
 
+function withPageHeaders(_request: NextRequest, response: NextResponse) {
   response.headers.set("Content-Security-Policy", _request.nextUrl.pathname === "/rewards/ad" ? adCsp : csp);
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");

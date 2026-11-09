@@ -52,7 +52,7 @@ export function DangerousDownloadModal({
           aria-modal="true"
           aria-labelledby="download-warning-title"
           aria-describedby="download-warning-body"
-          className="relative z-10 rounded-[4px] border border-divider bg-bg-secondary p-5 shadow-[var(--elevation-high)]"
+          className="relative z-10 rounded-lg border border-divider bg-bg-secondary p-5 shadow-[var(--elevation-high)]"
         >
           <h2 id="download-warning-title" className="text-[18px] font-semibold leading-6 text-header-primary">
             {t("This file might be unsafe")}
@@ -66,14 +66,14 @@ export function DangerousDownloadModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-[3px] px-4 py-2 text-[14px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
+              className="rounded-md px-4 py-2 text-[14px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
             >
               {t("Cancel")}
             </button>
             <button
               type="button"
               onClick={onContinue}
-              className="rounded-[3px] bg-brand px-4 py-2 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
+              className="rounded-md bg-brand px-4 py-2 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover"
             >
               {t("Continue")}
             </button>

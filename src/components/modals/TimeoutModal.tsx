@@ -111,7 +111,7 @@ export function TimeoutModal({ open, profile: profileProp, onClose, onSubmit }: 
         role="dialog"
         aria-modal="true"
         aria-label={t("Time out {name}", { name: displayName(profile) })}
-        className={`classic-modal${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[440px] overflow-y-auto rounded-lg bg-bg-primary p-4 pt-5 shadow-[var(--elevation-high)]`}
+        className={`classic-modal${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[440px] overflow-y-auto rounded-xl border border-border-subtle bg-bg-primary p-4 pt-5 shadow-[var(--elevation-high)]`}
       >
         <button
           type="button"
@@ -177,13 +177,13 @@ export function TimeoutModal({ open, profile: profileProp, onClose, onSubmit }: 
                 autoFocus
                 onChange={(e) => setAmount(e.target.value)}
                 aria-label={t("Timeout length")}
-                className="w-28 rounded-[3px] border border-transparent bg-bg-tertiary px-3 py-2 text-sm text-text-normal outline-none focus:border-[#00a8fc]"
+                className="w-28 rounded-md border border-transparent bg-bg-tertiary px-3 py-2 text-sm text-text-normal outline-none focus:border-[#00a8fc]"
               />
               <select
                 value={unit.id}
                 onChange={(e) => setUnit(UNITS.find((u) => u.id === e.target.value) ?? UNITS[0])}
                 aria-label={t("Timeout unit")}
-                className="flex-1 rounded-[3px] border border-transparent bg-bg-tertiary px-3 py-2 text-sm text-text-normal outline-none focus:border-[#00a8fc]"
+                className="flex-1 rounded-md border border-transparent bg-bg-tertiary px-3 py-2 text-sm text-text-normal outline-none focus:border-[#00a8fc]"
               >
                 {UNITS.map((u) => (
                   <option key={u.id} value={u.id}>
@@ -204,11 +204,11 @@ export function TimeoutModal({ open, profile: profileProp, onClose, onSubmit }: 
             maxLength={200}
             onChange={(e) => setReason(e.target.value)}
             placeholder={t("Shown in the audit log")}
-            className="w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3 py-2 text-sm text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
+            className="w-full rounded-md border border-transparent bg-bg-tertiary px-3 py-2 text-sm text-text-normal outline-none placeholder:text-text-muted focus:border-[#00a8fc]"
           />
         </label>
 
-        <div className="mt-4 rounded-[4px] bg-bg-secondary px-3 py-2 text-[14px]">
+        <div className="mt-4 rounded-lg bg-bg-secondary px-3 py-2 text-[14px]">
           {tooLong ? (
             <span className="text-status-dnd">{t("Timeouts cannot be longer than 28 days.")}</span>
           ) : valid && expiresAt ? (
@@ -246,7 +246,7 @@ export function TimeoutModal({ open, profile: profileProp, onClose, onSubmit }: 
             type="button"
             onClick={() => void submit()}
             disabled={!valid || busy}
-            className="h-[38px] rounded-[3px] bg-button-danger px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-button-danger-hover disabled:opacity-50"
+            className="h-[38px] rounded-md bg-button-danger px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-button-danger-hover disabled:opacity-50"
           >
             {busy ? t("Timing out…") : t("Time out")}
           </button>

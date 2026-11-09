@@ -20,9 +20,9 @@ type AuthMode = "login" | "signup" | "reset";
 type AnonView = "create" | "login";
 
 const fieldClass =
-  "h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 py-2.5 text-[15px] text-text-normal " +
+  "h-11 w-full rounded-lg border border-border-subtle bg-bg-tertiary px-3.5 py-2.5 text-[15px] text-text-normal " +
   "outline-none transition-colors placeholder:text-text-muted " +
-  "focus:border-[#00a8fc]";
+  "focus:border-brand";
 
 function Field({
   label,
@@ -36,7 +36,7 @@ function Field({
   return (
     <label className="block">
       <span className="mb-1.5 flex items-baseline justify-between">
-        <span className="text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">{label}</span>
+        <span className="text-[13px] font-semibold text-header-secondary">{label}</span>
         {hint}
       </span>
       {children}
@@ -86,8 +86,8 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
 
   if (!configured) {
     return (
-      <div className="flex app-screen items-center justify-center bg-bg-tertiary p-6">
-        <div className="max-w-md rounded-[3px] bg-bg-secondary p-8 text-center">
+      <div className="flex app-screen items-center justify-center bg-bg-secondary p-6">
+        <div className="max-w-md rounded-md bg-bg-secondary p-8 text-center">
           <h1 className="text-xl font-semibold text-text-normal">Disband</h1>
           <p className="mt-3 text-sm leading-relaxed text-text-muted">
             {isTauri()
@@ -241,7 +241,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
       className={
         overlay
           ? "fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-overlay-scrim overlay-fade p-4"
-          : "relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#404eed] px-4 py-8"
+          : "aero-hero relative flex min-h-dvh items-center justify-center overflow-hidden px-4 py-8"
       }
       onClick={overlay ? onClose : undefined}
     >
@@ -253,7 +253,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
         </div>
       )}
       <div
-        className={`${overlay ? "modal-pop" : "z-10"} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[480px] overflow-y-auto rounded-[5px] bg-bg-primary p-6 shadow-[var(--elevation-high)] sm:p-8`}
+        className={`${overlay ? "modal-pop" : "z-10"} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[480px] overflow-y-auto rounded-2xl border border-border-subtle bg-bg-secondary p-6 shadow-[0_40px_90px_-30px_rgba(10,6,40,0.85)] sm:p-9`}
         onClick={overlay ? (e) => e.stopPropagation() : undefined}
       >
         {overlay && (
@@ -271,7 +271,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
 
         <div className="mb-5 flex flex-col items-center text-center">
           {overlay && <Logo adaptive size={40} className="mb-4 h-10 w-10" priority />}
-          <h1 className="text-[24px] font-semibold leading-[30px] text-header-primary">{title}</h1>
+          <h1 className="text-[26px] font-bold leading-8 tracking-[-0.01em] text-header-primary">{title}</h1>
           <p className="mt-2 text-[16px] leading-5 text-header-secondary">{subtitle}</p>
         </div>
 
@@ -287,7 +287,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                 return (
                   <div
                     key={acct.user_id}
-                    className="group flex items-center gap-2.5 rounded-[3px] bg-bg-secondary px-2.5 py-2 transition-colors hover:border-text-muted hover:bg-interactive-hover"
+                    className="group flex items-center gap-2.5 rounded-lg border border-border-subtle bg-bg-secondary-alt px-2.5 py-2 transition-colors hover:border-text-muted hover:bg-interactive-hover"
                   >
                     <button
                       type="button"
@@ -339,7 +339,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
         >
           {success ? (
             <div className="space-y-4">
-              <p className="rounded-[3px] border border-status-online/25 bg-status-online/[0.08] px-3.5 py-3 text-[14px] leading-relaxed text-text-normal">
+              <p className="rounded-md border border-status-online/25 bg-status-online/[0.08] px-3.5 py-3 text-[14px] leading-relaxed text-text-normal">
                 {success}
               </p>
               {mode === "reset" ? (
@@ -352,7 +352,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
               <button
                 type="button"
                 onClick={() => switchMode("login")}
-                className="w-full rounded-[3px] border border-divider py-2.5 text-[15px] font-medium text-text-normal transition-colors hover:border-text-muted hover:bg-interactive-hover"
+                className="w-full rounded-lg border border-border-subtle py-2.5 text-[15px] font-medium text-text-normal transition-colors hover:border-text-muted hover:bg-interactive-hover"
               >
                 {t("Back to sign in")}
               </button>
@@ -404,7 +404,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                       <button
                         type="button"
                         onClick={() => switchMode("reset")}
-                        className="text-[12px] text-[#00a8fc] hover:underline"
+                        className="text-[12px] text-text-link hover:underline"
                       >
                         {t("Forgot your password?")}
                       </button>
@@ -546,7 +546,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
 
               {(mode === "signup" || challengeRequired) && turnstileFailed && (
                 <p
-                  className="rounded-[3px] border border-divider bg-bg-tertiary px-3.5 py-2.5 text-[13px] leading-relaxed text-text-muted"
+                  className="rounded-md border border-divider bg-bg-tertiary px-3.5 py-2.5 text-[13px] leading-relaxed text-text-muted"
                 >
                   {t("The verification couldn’t load.")}{" "}
                   <button
@@ -566,7 +566,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
               {error && (
                 <p
                   role="alert"
-                  className="rounded-[3px] border border-status-dnd/30 bg-status-dnd/[0.08] px-3.5 py-2.5 text-[13px] leading-relaxed text-status-dnd"
+                  className="rounded-md border border-status-dnd/30 bg-status-dnd/[0.08] px-3.5 py-2.5 text-[13px] leading-relaxed text-status-dnd"
                 >
                   {error}
                 </p>
@@ -583,7 +583,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex h-11 w-full items-center justify-center rounded-[3px] bg-brand py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-11 w-full items-center justify-center rounded-lg bg-brand py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? (
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
@@ -604,7 +604,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                 <button
                   type="button"
                   onClick={() => switchMode("login")}
-                  className="font-medium text-[#00a8fc] hover:underline"
+                  className="font-medium text-text-link hover:underline"
                 >
                   {t("Log In")}
                 </button>
@@ -615,7 +615,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                 <button
                   type="button"
                   onClick={() => switchMode("signup")}
-                  className="font-medium text-[#00a8fc] hover:underline"
+                  className="font-medium text-text-link hover:underline"
                 >
                   {t("Register")}
                 </button>
@@ -626,7 +626,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
                 <button
                   type="button"
                   onClick={() => switchMode("login")}
-                  className="font-medium text-[#00a8fc] hover:underline"
+                  className="font-medium text-text-link hover:underline"
                 >
                   {t("Log In")}
                 </button>

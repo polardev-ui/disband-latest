@@ -43,7 +43,7 @@ export function highlightCmd(text: string, term: string): React.ReactNode[] {
   if (!term.trim()) return [text];
   const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
   const parts = text.split(regex);
-  return parts.map((chunk, i) => regex.test(chunk) ? <mark key={i} className="rounded-[2px] bg-[#f0b232]/40 text-text-normal">{chunk}</mark> : <span key={i}>{chunk}</span>);
+  return parts.map((chunk, i) => regex.test(chunk) ? <mark key={i} className="rounded-md bg-[#f0b232]/40 text-text-normal">{chunk}</mark> : <span key={i}>{chunk}</span>);
 }
 
 interface Props {
@@ -214,13 +214,13 @@ export default function SearchPanel({ scopeKind, serverId, containerId, onJump, 
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void runSearch(true); } if (e.key === "Escape") { e.preventDefault(); inputRef.current?.blur(); onClose(); } }}
           aria-label={t("Search messages")}
           placeholder={t("Search")}
-          className="h-8 w-full rounded-[4px] border border-transparent bg-bg-tertiary px-2 text-[14px] text-text-normal placeholder:text-text-muted outline-none focus:border-[#00a8fc]"
+          className="h-8 w-full rounded-lg border border-transparent bg-bg-tertiary px-2 text-[14px] text-text-normal placeholder:text-text-muted outline-none focus:border-[#00a8fc]"
         />
       </div>
 
       <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {!searching ? (
-          <div className="rounded-[4px] bg-bg-floating py-2 shadow-[var(--elevation-low)]">
+          <div className="rounded-lg bg-bg-floating py-2 shadow-[var(--elevation-low)]">
             <p className="px-3 pb-1 pt-1 text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">{t("Search Options")}</p>
             {OPTIONS.map((o) => (
               <button
@@ -230,7 +230,7 @@ export default function SearchPanel({ scopeKind, serverId, containerId, onJump, 
                   setQuery((q) => (q ? `${q} ${o.token}` : o.token));
                   focusInput();
                 }}
-                className="mx-2 flex h-8 w-[calc(100%-16px)] items-center gap-1.5 rounded-[3px] px-2 text-left text-[14px] hover:bg-interactive-hover"
+                className="mx-2 flex h-8 w-[calc(100%-16px)] items-center gap-1.5 rounded-md px-2 text-left text-[14px] hover:bg-interactive-hover"
               >
                 <span className="font-semibold text-header-primary">{o.token}</span>
                 <span className="text-header-secondary">{o.hint}</span>
@@ -245,7 +245,7 @@ export default function SearchPanel({ scopeKind, serverId, containerId, onJump, 
         ) : error ? (
           <div className="py-10 text-center">
             <p className="text-[14px] text-status-dnd">{error}</p>
-            <button type="button" onClick={() => void runSearch(true)} className="mt-3 h-8 rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white hover:bg-button-secondary-hover">
+            <button type="button" onClick={() => void runSearch(true)} className="mt-3 h-8 rounded-md bg-button-secondary px-4 text-[14px] font-medium text-white hover:bg-button-secondary-hover">
               {t("Try Again")}
             </button>
           </div>
@@ -269,7 +269,7 @@ export default function SearchPanel({ scopeKind, serverId, containerId, onJump, 
                 <button
                   type="button"
                   onClick={() => onJump(r.message_id, r.container_id, r.source_kind)}
-                  className="absolute right-2 top-2 h-6 rounded-[3px] bg-bg-secondary px-2 text-[12px] font-medium text-text-normal opacity-0 transition-opacity hover:bg-interactive-selected focus-visible:opacity-100 group-hover:opacity-100"
+                  className="absolute right-2 top-2 h-6 rounded-md bg-bg-secondary px-2 text-[12px] font-medium text-text-normal opacity-0 transition-opacity hover:bg-interactive-selected focus-visible:opacity-100 group-hover:opacity-100"
                 >
                   {t("Jump")}
                 </button>
@@ -280,7 +280,7 @@ export default function SearchPanel({ scopeKind, serverId, containerId, onJump, 
                 type="button"
                 onClick={() => void runSearch(false)}
                 disabled={loading}
-                className="mt-2 h-8 w-full rounded-[3px] bg-button-secondary text-[14px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-60"
+                className="mt-2 h-8 w-full rounded-md bg-button-secondary text-[14px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-60"
               >
                 {loading ? t("Loading…") : t("Load More")}
               </button>

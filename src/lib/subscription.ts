@@ -188,6 +188,18 @@ export const ENTITLEMENTS: Record<SubscriptionPlan, {
   },
 };
 
+/** Yearly prices in cents, as charged by the live Stripe yearly prices. */
+export const YEARLY_PRICE_CENTS: Record<"aero" | "lite", number> = {
+  aero: 8999,
+  lite: 2900,
+};
+
+/** Whole-percent saving of yearly billing over twelve monthly payments. */
+export function yearlySavingsPercent(monthlyCents: number, yearlyCents: number): number {
+  if (monthlyCents <= 0) return 0;
+  return Math.max(0, Math.round((1 - yearlyCents / (monthlyCents * 12)) * 100));
+}
+
 export const PLANS: PlanTier[] = [
   {
     id: "free",

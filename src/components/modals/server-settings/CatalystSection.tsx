@@ -42,7 +42,7 @@ export function CatalystSection({ catalystCount, onBoost }: SectionProps) {
             </button>
           )}
         </div>
-        <div className="border-t border-divider px-5 py-4">
+        <div className="border-t border-border-subtle px-5 py-4">
           <div className="flex items-baseline justify-between text-[13px]">
             <span className="text-text-muted">
               {catalystCount} {catalystCount === 1 ? "Catalyst" : t("Catalysts")}
@@ -62,7 +62,7 @@ export function CatalystSection({ catalystCount, onBoost }: SectionProps) {
           const unlocked = current.level >= l.level;
           const lvl = l.level as 1 | 2 | 3;
           return (
-            <div key={l.level} className="view-enter flex gap-4 border-b border-divider px-5 py-4 last:border-b-0" style={{ animationDelay: `${i * 50}ms` }}>
+            <div key={l.level} className="view-enter flex gap-4 border-b border-border-subtle px-5 py-4 last:border-b-0" style={{ animationDelay: `${i * 50}ms` }}>
               <div className="flex w-[84px] shrink-0 flex-col">
                 <span className={`text-[14px] font-semibold ${unlocked ? "text-text-normal" : "text-text-muted"}`}>{l.name}</span>
                 <span className="text-[12px] text-text-muted">{l.min} {l.min === 1 ? "Catalyst" : t("Catalysts")}</span>

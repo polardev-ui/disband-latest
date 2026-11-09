@@ -44,7 +44,7 @@ export function BansSection(_props: SectionProps) {
             {shown.map((b, i) => {
               const name = b.profile ? displayName(b.profile) : "Banned user";
               return (
-                <li key={b.user_id} className="view-enter flex items-center gap-3 border-b border-divider px-4 py-3 last:border-b-0" style={enterStyle(i)}>
+                <li key={b.user_id} className="view-enter flex items-center gap-3 border-b border-border-subtle px-4 py-3 last:border-b-0" style={enterStyle(i)}>
                   <Avatar profile={b.profile ?? { display_name: name }} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[14px] font-medium text-text-normal">{name}</p>
@@ -56,7 +56,7 @@ export function BansSection(_props: SectionProps) {
                   <button
                     type="button"
                     onClick={() => setLifting({ userId: b.user_id, name })}
-                    className="inline-flex h-8 shrink-0 items-center rounded-[8px] border border-divider px-3 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
+                    className="inline-flex h-8 shrink-0 items-center rounded-xl border border-border-subtle px-3 text-[13px] font-medium text-text-normal transition-colors hover:bg-interactive-hover"
                   >
                     {t("Lift ban")}
                   </button>

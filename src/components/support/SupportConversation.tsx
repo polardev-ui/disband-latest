@@ -84,7 +84,7 @@ function EmailFixForm() {
   }
 
   const box = "mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-[14px]";
-  const input = "mt-1 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-[14px] outline-none focus:border-[#00a8fc]/60";
+  const input = "mt-1 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-[14px] outline-none focus:border-brand/60";
 
   if (doneEmail !== null) {
     return (
@@ -93,7 +93,7 @@ function EmailFixForm() {
         <p className="mt-1 opacity-80">
           Your account&apos;s email is now {doneEmail}. Log in with it and your usual password.
         </p>
-        <a href="/login" className="mt-2 inline-block font-semibold text-[#00a8fc] hover:underline">Log in</a>
+        <a href="/login" className="mt-2 inline-block font-semibold text-text-link hover:underline">Log in</a>
       </div>
     );
   }
@@ -114,7 +114,7 @@ function EmailFixForm() {
         <input className={input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" maxLength={200} required />
       </label>
       {error && <p role="alert" className="mt-2 text-[#f23f43]">{error}</p>}
-      <button type="submit" disabled={busy || !username.trim() || !password} className="mt-3 rounded-md bg-[#5865f2] px-4 py-2 font-semibold text-white hover:bg-[#4752c4] disabled:opacity-50">
+      <button type="submit" disabled={busy || !username.trim() || !password} className="mt-3 rounded-md bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-hover disabled:opacity-50">
         {busy ? "Changing…" : "Change email"}
       </button>
     </form>

@@ -84,6 +84,11 @@ import {
   RadioTower,
   Hand,
   ArrowDownToLine,
+  MessagesSquare,
+  Bookmark,
+  BookmarkCheck,
+  AlarmClock,
+  Gauge,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -221,3 +226,13 @@ export const IconVerified = function IconVerified({ size = 16, className }: Icon
 };
 
 
+
+/** Forum channels (Nov 2026). */
+export const IconForum = icon(MessagesSquare);
+/** Saved messages. */
+export const IconBookmark = icon(Bookmark);
+export const IconBookmarkCheck = icon(BookmarkCheck);
+/** Message reminders. */
+export const IconAlarm = icon(AlarmClock);
+/** Slow mode. */
+export const IconGauge = icon(Gauge);

@@ -113,7 +113,7 @@ export function Tooltip({ label, children, side = "right", disabled = false, as:
           >
             <div
               data-side={side}
-              className="tooltip-content relative max-w-[196px] rounded-[5px] bg-bg-floating px-3 py-2 text-[14px] font-semibold leading-[18px] text-text-normal shadow-[0_8px_16px_rgba(0,0,0,0.24)]"
+              className="tooltip-content relative max-w-[220px] rounded-lg border border-border-subtle bg-bg-floating px-2.5 py-1.5 text-[13px] font-semibold leading-[18px] text-header-primary shadow-[var(--elevation-high)]"
             >
               {typeof label === "string" ? t(label) : label}
               {side === "right" && (

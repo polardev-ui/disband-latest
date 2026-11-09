@@ -293,7 +293,7 @@ export function SlashCommandComposer({ command, members, serverId, initial = {},
                     pickMember(p);
                     advance();
                   }}
-                  className={`mx-2 flex h-[34px] w-[calc(100%-16px)] items-center gap-3 rounded-[4px] px-2 text-left ${
+                  className={`mx-2 flex h-[34px] w-[calc(100%-16px)] items-center gap-3 rounded-lg px-2 text-left ${
                     i === pickIdx ? "bg-interactive-hover" : ""
                   }`}
                 >
@@ -317,7 +317,7 @@ export function SlashCommandComposer({ command, members, serverId, initial = {},
                     setValues((prev) => ({ ...prev, duration: d.value }));
                     advance();
                   }}
-                  className={`mx-2 flex h-[34px] w-[calc(100%-16px)] items-center gap-3 rounded-[4px] px-2 text-left ${
+                  className={`mx-2 flex h-[34px] w-[calc(100%-16px)] items-center gap-3 rounded-lg px-2 text-left ${
                     i === pickIdx ? "bg-interactive-hover" : ""
                   }`}
                 >
@@ -355,7 +355,7 @@ export function SlashCommandComposer({ command, members, serverId, initial = {},
       </div>
 
       <div className="flex min-h-[44px] flex-wrap items-center gap-x-1.5 gap-y-1 rounded-b-lg bg-bg-composer py-[7px] pl-4 pr-3">
-        <span aria-hidden className="mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] bg-interactive-normal text-bg-composer">
+        <span aria-hidden className="mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-interactive-normal text-bg-composer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M15.5 3 8.5 21" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" />
           </svg>
@@ -371,7 +371,7 @@ export function SlashCommandComposer({ command, members, serverId, initial = {},
             <label
               key={name}
               onMouseDown={() => focusOption(i)}
-              className={`flex h-[26px] cursor-text items-stretch overflow-hidden rounded-[4px] bg-bg-tertiary text-[16px] leading-[24px] ring-1 transition-shadow ${
+              className={`flex h-[26px] cursor-text items-stretch overflow-hidden rounded-lg bg-bg-tertiary text-[16px] leading-[24px] ring-1 transition-shadow ${
                 bad ? "ring-status-dnd" : focused ? "ring-[#00a8fc]" : "ring-transparent"
               } ${opt.kind === "text" ? "min-w-[160px] flex-1" : ""}`}
             >

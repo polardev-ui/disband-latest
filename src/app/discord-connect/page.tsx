@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function DiscordConnectPage() {
   return (
-    <div className="min-h-screen bg-[#1e1f22]">
+    <div className="min-h-screen bg-bg-secondary">
       <MarketingNav />
       <main className="pt-14">
         <Suspense>

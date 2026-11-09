@@ -41,7 +41,7 @@ export function PlatformBanScreen() {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-bg-tertiary p-6">
+    <div className="flex min-h-full items-center justify-center bg-bg-secondary p-6">
       <div className="w-full max-w-md rounded-xl border border-status-danger/40 bg-bg-secondary p-8 text-center shadow-2xl">
         <div className="mb-4 flex justify-center">
           <Logo adaptive size={48} />
@@ -75,7 +75,7 @@ export function PlatformBanScreen() {
               rows={4}
               maxLength={2000}
               placeholder={t("Explain why this ban should be lifted…")}
-              className="w-full resize-y rounded-[3px] border border-divider bg-bg-tertiary p-3 text-sm text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc]"
+              className="w-full resize-y rounded-md border border-divider bg-bg-tertiary p-3 text-sm text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-brand"
             />
             <div className="flex gap-2">
               <button

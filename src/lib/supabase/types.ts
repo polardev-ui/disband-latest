@@ -5,7 +5,8 @@ export type ThemePreference = "light" | "dark" | "midnight" | "sunset" | string;
 export type UserStatus = "online" | "idle" | "dnd" | "offline";
 export type FriendshipStatus = "pending" | "accepted" | "blocked";
 export type MemberRole = "owner" | "admin" | "moderator" | "member";
-export type ChannelType = "text" | "voice";
+/** "forum" splits the conversation into titled posts (migration 0240). */
+export type ChannelType = "text" | "voice" | "forum";
 
 export interface Profile {
   id: string;
@@ -145,6 +146,8 @@ export interface ServerRole {
   is_default: boolean;
   /** Members may add or remove this role from their own profile. */
   self_assignable?: boolean;
+  /** Numeric id bots and the API use (migration 0242). Under 2^53, so a number is exact. */
+  display_id?: number | string | null;
   created_at: string;
 }
 
@@ -237,6 +240,22 @@ export interface Channel {
   stage_started_at?: string | null;
   /** Whether the audience can raise their hands. */
   stage_requests_enabled?: boolean;
+  /** What the channel is for, shown in its header (migration 0239). */
+  topic?: string | null;
+  /** Seconds each member waits between messages; 0 = off (migration 0239). */
+  slow_mode_seconds?: number;
+  /** Set on a forum post: the forum it belongs to (migration 0240). */
+  parent_id?: string | null;
+  /** Forum posts: who started it, its tags, whether moderators pinned it. */
+  post_author_id?: string | null;
+  post_tags?: string[];
+  post_pinned?: boolean;
+  /** Forum posts: messages in the post, the opening one included. */
+  message_count?: number;
+  /** Forums: the tags people can put on posts. */
+  available_tags?: string[];
+  /** Newest message in the channel (migration 0229). */
+  last_message_at?: string | null;
   created_at: string;
 }
 

@@ -81,12 +81,12 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
   // still-loading. Show a skeleton, then an honest invalid state.
   if (loading) {
     return (
-      <div aria-label="Loading gift" role="status" className="@container mt-1.5 w-[580px] max-w-full animate-pulse overflow-hidden rounded-[4px] bg-bg-secondary">
+      <div aria-label="Loading gift" role="status" className="@container mt-1.5 w-[580px] max-w-full animate-pulse overflow-hidden rounded-lg bg-bg-secondary">
         <div className="grid grid-cols-1 @[480px]:grid-cols-[1.15fr_1fr]">
           <div className="order-2 flex min-h-[180px] flex-col p-4 @[480px]:order-1">
             <div className="h-4 w-5/6 rounded bg-bg-accent" />
             <div className="mt-3 h-3 w-3/4 rounded bg-bg-accent" />
-            <div className="mt-auto h-8 w-20 rounded-[3px] bg-bg-accent" />
+            <div className="mt-auto h-8 w-20 rounded-md bg-bg-accent" />
           </div>
           <div className="order-1 h-[160px] bg-bg-accent @[480px]:order-2 @[480px]:h-full" />
         </div>
@@ -96,7 +96,7 @@ export function GiftCard({ code, onLoad }: { code: string; onLoad?: () => void }
 
   if (!gift) {
     return (
-      <div className="mt-1.5 w-[580px] max-w-full rounded-[4px] bg-bg-secondary px-4 py-3">
+      <div className="mt-1.5 w-[580px] max-w-full rounded-lg bg-bg-secondary px-4 py-3">
         <p className="text-[13px] text-text-muted">
           This gift link is invalid or has expired.
         </p>
@@ -177,7 +177,7 @@ export function GiftCardContent({ gift, buyerName, mine, claimedByMe, claiming, 
   const expires = new Date(gift.expires_at);
   const expiryLabel = Number.isNaN(expires.getTime()) ? null : expires.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   return (
-    <div className="@container mt-1.5 w-[580px] max-w-full overflow-hidden rounded-[4px] bg-bg-secondary">
+    <div className="@container mt-1.5 w-[580px] max-w-full overflow-hidden rounded-lg bg-bg-secondary">
       <div className="grid grid-cols-1 @[480px]:grid-cols-[1.15fr_1fr]">
         <div className="order-2 flex min-h-[165px] min-w-0 flex-col p-4 @[480px]:order-1">
           <h3 className="text-[16px] font-bold leading-5 text-header-primary">
@@ -198,12 +198,12 @@ export function GiftCardContent({ gift, buyerName, mine, claimedByMe, claiming, 
                 <p role="status" className="flex min-w-0 flex-1 items-center gap-2 text-[12px] leading-4 text-text-muted">
                   <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted/40 border-t-text-muted" aria-hidden />Waiting for payment to clear…
                 </p>
-                <button type="button" disabled={refreshing} onClick={onRefresh} className="rounded-[3px] bg-button-secondary px-3 py-1.5 text-[12px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-50">{refreshing ? "Checking…" : "Refresh"}</button>
+                <button type="button" disabled={refreshing} onClick={onRefresh} className="rounded-md bg-button-secondary px-3 py-1.5 text-[12px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-50">{refreshing ? "Checking…" : "Refresh"}</button>
               </div>
             ) : (
               <div className="flex flex-wrap items-end justify-between gap-2">
                 {mine ? <p className="text-[13px] text-text-muted">Waiting to be accepted</p> : (
-                  <button type="button" disabled={claiming} onClick={onClaim} className="h-8 rounded-[3px] bg-button-green px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:cursor-wait disabled:opacity-60">{claiming ? "Accepting…" : "Accept"}</button>
+                  <button type="button" disabled={claiming} onClick={onClaim} className="h-8 rounded-md bg-button-green px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:cursor-wait disabled:opacity-60">{claiming ? "Accepting…" : "Accept"}</button>
                 )}
                 {expiryLabel && <time dateTime={gift.expires_at} title={expires.toLocaleString("en-GB")} className="pb-1 text-[11px] text-text-muted">Expires {expiryLabel}</time>}
               </div>

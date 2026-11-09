@@ -87,7 +87,7 @@ export function DiscoverSidebar({ tab, onTabChange }: DiscoverSidebarProps) {
               type="button"
               onClick={() => onTabChange(sort.id)}
               aria-current={active ? "page" : undefined}
-              className={`mb-0.5 flex h-11 w-full items-center gap-3 rounded-[4px] px-2 text-left text-[16px] font-medium transition-colors duration-100 ${
+              className={`mb-0.5 flex h-11 w-full items-center gap-3 rounded-lg px-2 text-left text-[16px] font-medium transition-colors duration-100 ${
                 active ? "bg-brand text-white" : "text-channels-default hover:bg-interactive-hover hover:text-interactive-active"
               }`}
             >
@@ -156,7 +156,7 @@ function JoinButton({
       type="button"
       disabled={joining}
       onClick={onJoin}
-      className="inline-flex h-8 shrink-0 items-center justify-center rounded-[3px] bg-button-green px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:opacity-50"
+      className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-button-green px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:opacity-50"
     >
       {joining ? t("Joining…") : t("Join")}
     </button>
@@ -238,7 +238,7 @@ export function DiscoverView({
                 }}
                 placeholder={t("Explore spaces")}
                 aria-label={t("Search spaces")}
-                className="h-11 w-full rounded-[4px] bg-white pl-4 pr-11 text-[16px] text-[#060607] outline-none placeholder:text-[#5c5e66] shadow-[var(--elevation-high)]"
+                className="h-11 w-full rounded-lg bg-white pl-4 pr-11 text-[16px] text-[#060607] outline-none placeholder:text-[#5c5e66] shadow-[var(--elevation-high)]"
               />
               {query ? (
                 <button
@@ -300,7 +300,7 @@ export function DiscoverView({
             <button
               type="button"
               onClick={onRetry}
-              className="mt-4 inline-flex h-8 items-center rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white hover:bg-button-secondary-hover"
+              className="mt-4 inline-flex h-8 items-center rounded-md bg-button-secondary px-4 text-[14px] font-medium text-white hover:bg-button-secondary-hover"
             >
               {t("Try Again")}
             </button>

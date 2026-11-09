@@ -165,8 +165,8 @@ function MenuAction({ danger, onClick, children }: { danger?: boolean; onClick: 
       type="button"
       role="menuitem"
       onClick={onClick}
-      className={`flex w-full items-center rounded-[4px] px-2 py-1.5 text-left font-medium ${
-        danger ? "text-status-dnd hover:bg-status-dnd hover:text-white" : "text-text-normal hover:bg-brand hover:text-white"
+      className={`flex w-full items-center rounded-lg px-2 py-1.5 text-left font-medium ${
+        danger ? "text-status-dnd hover:bg-status-dnd/12" : "text-text-normal hover:bg-interactive-hover hover:text-interactive-active"
       }`}
     >
       {children}
@@ -189,7 +189,7 @@ function MenuRadio({ label, checked, locked, onSelect }: {
       disabled={!!locked}
       onClick={onSelect}
       title={locked ? `${locked}` : undefined}
-      className="group flex w-full items-center justify-between rounded-[4px] px-2 py-1.5 text-left text-text-normal enabled:hover:bg-brand enabled:hover:text-white disabled:cursor-not-allowed disabled:text-text-muted"
+      className="group flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-text-normal enabled:hover:bg-brand enabled:hover:text-white disabled:cursor-not-allowed disabled:text-text-muted"
     >
       <span>{label}</span>
       {locked ? (

@@ -38,6 +38,8 @@ export class Message {
   displayId: number | null;
   readonly authorIsBot: boolean;
   reply(content: string, options?: MessageSendOptions): Promise<Message>;
+  /** Delete this message (messages.delete; Manage Messages for others' messages). */
+  delete(): Promise<void>;
 }
 
 export interface MessageSendOptions {

@@ -16,10 +16,10 @@ interface AttachmentDraft {
 }
 
 const inputClass =
-  "w-full rounded-lg border border-white/10 bg-[#2b2d31] px-3.5 py-2.5 text-[15px] text-[#dbdee1] " +
-  "outline-none transition-colors placeholder:text-[#72767d] focus:border-[#00a8fc]/60";
+  "w-full rounded-lg border border-white/10 bg-bg-secondary-alt px-3.5 py-2.5 text-[15px] text-text-normal " +
+  "outline-none transition-colors placeholder:text-text-muted focus:border-brand/60";
 
-const labelClass = "mb-1.5 block text-[13px] font-semibold text-[#b5bac1]";
+const labelClass = "mb-1.5 block text-[13px] font-semibold text-interactive-normal";
 
 let nextId = 0;
 
@@ -112,12 +112,12 @@ export function BugReportForm() {
 
   if (done) {
     return (
-      <div className="mx-auto max-w-2xl rounded-[8px] border border-[#23a55a]/30 bg-[#2b2d31] p-8 text-center">
+      <div className="mx-auto max-w-2xl rounded-[8px] border border-[#23a55a]/30 bg-bg-secondary-alt p-8 text-center">
         <span className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#23a55a]/15 text-[#23a55a]">
           <IconBounty size={32} />
         </span>
         <h2 className="text-xl font-bold text-white">Bug report sent</h2>
-        <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[#b5bac1]">
+        <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-interactive-normal">
           Thanks for helping make Disband better. Our team will look into it, and you can
           follow its status from Settings.
         </p>
@@ -130,7 +130,7 @@ export function BugReportForm() {
             setSteps("");
             setAttachments([]);
           }}
-          className="mt-6 rounded-lg bg-[#5865f2] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#4752c4]"
+          className="mt-6 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
         >
           Report another bug
         </button>
@@ -143,18 +143,18 @@ export function BugReportForm() {
     description.trim().length >= BUG_REPORT_LIMITS.descriptionMin;
 
   if (signedIn === null) {
-    return <p className="text-center text-sm text-[#949ba4]">Loading…</p>;
+    return <p className="text-center text-sm text-text-muted">Loading…</p>;
   }
   if (!signedIn) {
     return (
-      <div className="mx-auto max-w-2xl rounded-[8px] border border-white/10 bg-[#2b2d31] p-8 text-center">
+      <div className="mx-auto max-w-2xl rounded-[8px] border border-white/10 bg-bg-secondary-alt p-8 text-center">
         <h2 className="text-xl font-bold text-white">Log in to report a bug</h2>
-        <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[#b5bac1]">
+        <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-interactive-normal">
           Bug reports are tied to your account so we can follow up with you. Can&apos;t log in?
           Contact Support instead.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <a href="/login?next=/bug-report" className="rounded-lg bg-[#5865f2] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#4752c4]">Log in</a>
+          <a href="/login?next=/bug-report" className="rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover">Log in</a>
           <a href="/support" className="rounded-lg border border-white/15 px-5 py-2.5 text-sm font-medium text-[#e6e7eb] hover:border-white/30">Open Support</a>
         </div>
       </div>
@@ -169,7 +169,7 @@ export function BugReportForm() {
         </span>
         <div>
           <p className="text-[14px] font-semibold text-[#23a55a]">Found a bug?</p>
-          <p className="mt-0.5 text-[13px] leading-relaxed text-[#b5bac1]">
+          <p className="mt-0.5 text-[13px] leading-relaxed text-interactive-normal">
             Tell us what happened and how to make it happen again. One bug per report, please:
             a clear report with steps gets fixed fastest.
           </p>
@@ -200,7 +200,7 @@ export function BugReportForm() {
           className={`${inputClass} resize-none`}
           placeholder="What happened? What did you expect to happen instead?"
         />
-        <span className="mt-1 block text-right text-[11px] text-[#72767d]">
+        <span className="mt-1 block text-right text-[11px] text-text-muted">
           {description.length}/{BUG_REPORT_LIMITS.descriptionMax}
         </span>
       </label>
@@ -224,7 +224,7 @@ export function BugReportForm() {
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={attachments.length >= BUG_REPORT_LIMITS.attachmentsMax}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/15 bg-[#2b2d31] px-4 py-3 text-sm font-semibold text-[#b5bac1] transition-colors hover:border-white/25 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/15 bg-bg-secondary-alt px-4 py-3 text-sm font-semibold text-interactive-normal transition-colors hover:border-white/25 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           <IconUpload size={16} />
           {attachments.length > 0
@@ -234,19 +234,19 @@ export function BugReportForm() {
         {attachments.length > 0 && (
           <ul className="mt-2 space-y-1.5">
             {attachments.map((a) => (
-              <li key={a.id} className="flex items-center gap-2 rounded-lg bg-[#2b2d31] px-3 py-2 text-sm">
-                <span className="min-w-0 flex-1 truncate text-[#dbdee1]">{a.name}</span>
+              <li key={a.id} className="flex items-center gap-2 rounded-lg bg-bg-secondary-alt px-3 py-2 text-sm">
+                <span className="min-w-0 flex-1 truncate text-text-normal">{a.name}</span>
                 {a.error ? (
                   <span className="shrink-0 text-[12px] text-[#f23f43]">{a.error}</span>
                 ) : a.url ? (
                   <span className="shrink-0 text-[12px] text-[#23a55a]">Uploaded ✓</span>
                 ) : (
-                  <span className="shrink-0 text-[12px] text-[#949ba4]">Uploading…</span>
+                  <span className="shrink-0 text-[12px] text-text-muted">Uploading…</span>
                 )}
                 <button
                   type="button"
                   onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
-                  className="shrink-0 text-[#72767d] hover:text-white"
+                  className="shrink-0 text-text-muted hover:text-white"
                   aria-label={`Remove ${a.name}`}
                 >
                   <IconClose size={16} />
@@ -260,13 +260,13 @@ export function BugReportForm() {
       {error && <p className="text-sm text-[#f23f43]">{error}</p>}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-[12px] text-[#72767d]">
+        <p className="text-[12px] text-text-muted">
           Sent from your account, with your browser and device details.
         </p>
         <button
           type="submit"
           disabled={!ready || submitting}
-          className="rounded-lg bg-[#5865f2] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg bg-brand px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? "Submitting…" : "Submit bug report"}
         </button>

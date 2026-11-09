@@ -55,7 +55,7 @@ export function PublicActivityLobby({
       {loading ? (
         <p className="py-3 text-[14px] text-text-muted">Finding games…</p>
       ) : !rooms.length ? (
-        <p className="rounded-[4px] bg-bg-secondary p-3 text-[14px] text-text-muted">
+        <p className="rounded-lg bg-bg-secondary p-3 text-[14px] text-text-muted">
           No public games yet. Choose a game above to host the first room.
         </p>
       ) : (
@@ -63,7 +63,7 @@ export function PublicActivityLobby({
           <button
             key={room.id}
             onClick={() => onOpen(room.id)}
-            className="flex w-full items-center gap-3 rounded-[4px] bg-bg-secondary p-3 text-left hover:bg-interactive-hover focus-visible:outline-brand"
+            className="flex w-full items-center gap-3 rounded-lg bg-bg-secondary p-3 text-left hover:bg-interactive-hover focus-visible:outline-brand"
           >
             <ActivityGlyph kind={room.kind} />
             <span className="min-w-0 flex-1">
@@ -75,7 +75,7 @@ export function PublicActivityLobby({
                 {room.capacity} players
               </span>
             </span>
-            <span className="rounded-[3px] bg-button-secondary px-3 py-1.5 text-[13px] font-medium text-white">
+            <span className="rounded-md bg-button-secondary px-3 py-1.5 text-[13px] font-medium text-white">
               {room.participantCount >= room.capacity ? "Watch" : "Join"}
             </span>
           </button>

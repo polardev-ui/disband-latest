@@ -131,7 +131,7 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
           <button type="button" onClick={() => void create()} disabled={creating} className={`${btn.secondary} mb-3 w-full`}>
             <IconPlus size={15} /> {creating ? t("Creating…") : t("Create role")}
           </button>
-          <ul className="overflow-hidden rounded-lg bg-bg-secondary p-1.5">
+          <ul className="overflow-hidden rounded-xl border border-border-subtle bg-surface-raised p-1.5">
             {sorted.map((r, i) => {
               const active = selected?.id === r.id;
               const dropTarget = overId === r.id && dragId && dragId !== r.id;
@@ -169,7 +169,7 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
                     type="button"
                     onClick={() => setSelectedId(r.id)}
                     aria-current={active ? "true" : undefined}
-                    className={`group flex h-9 w-full items-center gap-2 rounded-[4px] px-2 text-left transition-colors duration-150 ${
+                    className={`group flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left transition-colors duration-150 ${
                       active ? "bg-interactive-selected" : "hover:bg-interactive-hover"
                     }`}
                   >
@@ -278,6 +278,7 @@ function RoleHeader({
           {role.is_default && " · everyone in the space has this role"}
         </p>
       </div>
+      {role.display_id != null && <CopyRoleIdButton id={String(role.display_id)} />}
       {!role.is_default && (
         <div className="flex items-center gap-0.5">
           <button type="button" onClick={() => onMove(1)} disabled={!canMoveUp} className={iconBtn} aria-label={t("Move role up")} title={t("Move up")}>
@@ -292,6 +293,30 @@ function RoleHeader({
         </div>
       )}
     </div>
+  );
+}
+
+/** Copies the role's numeric id (migration 0242), the one bots and the API take. */
+function CopyRoleIdButton({ id }: { id: string }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(id);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        } catch {
+          setCopied(false);
+        }
+      }}
+      title={id}
+      className="h-8 shrink-0 rounded-lg border border-border-subtle px-2.5 text-[12px] font-semibold text-interactive-normal transition-colors hover:border-border-strong hover:text-interactive-active"
+    >
+      {copied ? t("Copied") : t("Copy Role ID")}
+    </button>
   );
 }
 
@@ -386,7 +411,7 @@ function DisplayTab({
                 }
               }}
               aria-label={t("Role name")}
-              className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 text-[14px] text-text-normal outline-none focus:border-[#00a8fc]"
+              className="h-10 w-full rounded-md border border-border-subtle bg-bg-tertiary px-3.5 text-[14px] text-text-normal outline-none focus:border-brand"
             />
           </div>
         </SettingsSection>
@@ -411,10 +436,10 @@ function DisplayTab({
             );
           })}
           <label
-            className="relative flex h-8 items-center gap-2 rounded-[3px] border border-divider pl-1 pr-3 text-[13px] text-text-muted transition-colors hover:bg-interactive-hover"
+            className="relative flex h-8 items-center gap-2 rounded-md border border-border-subtle pl-1 pr-3 text-[13px] text-text-muted transition-colors hover:bg-interactive-hover"
             title={t("Custom colour")}
           >
-            <span className="h-6 w-6 rounded-full border border-divider" style={{ backgroundColor: color }} />
+            <span className="h-6 w-6 rounded-full border border-border-subtle" style={{ backgroundColor: color }} />
             <span className="font-mono">{color.toLowerCase()}</span>
             <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label={t("Custom colour")} />
           </label>
@@ -441,8 +466,8 @@ function DisplayTab({
             {role.gradient_to && (
               <>
                 <SettingRow label={t("Second colour")}>
-                  <label className="relative flex h-8 items-center gap-2 rounded-[3px] border border-divider pl-1 pr-3 text-[13px] text-text-muted hover:bg-interactive-hover">
-                    <span className="h-6 w-6 rounded-full border border-divider" style={{ backgroundColor: gradient }} />
+                  <label className="relative flex h-8 items-center gap-2 rounded-md border border-border-subtle pl-1 pr-3 text-[13px] text-text-muted hover:bg-interactive-hover">
+                    <span className="h-6 w-6 rounded-full border border-border-subtle" style={{ backgroundColor: gradient }} />
                     <span className="font-mono">{gradient.toLowerCase()}</span>
                     <input type="color" value={gradient} onChange={(e) => setGradient(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label={t("Gradient end colour")} />
                   </label>
@@ -553,7 +578,7 @@ function RoleIconCard({
         <>
           <LevelLock level={2} count={catalystCount} perk="Role icons" onBoost={onBoost} />
           {role.icon && (
-            <div className="flex items-center justify-between gap-3 border-t border-divider px-5 py-3">
+            <div className="flex items-center justify-between gap-3 border-t border-border-subtle px-5 py-3">
               <span className="flex items-center gap-2 text-[13px] text-text-muted">
                 {t("Current icon")}{" "}<RoleIcon icon={role.icon} name={role.name} size={16} />
               </span>
@@ -565,7 +590,7 @@ function RoleIconCard({
         </>
       ) : (
         <div className="flex flex-wrap items-center gap-4 px-5 py-4">
-          <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-[4px] border border-divider bg-bg-accent ${uploading ? "animate-pulse" : ""}`}>
+          <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-bg-accent ${uploading ? "animate-pulse" : ""}`}>
             {role.icon ? <RoleIcon icon={role.icon} name={role.name} size={30} /> : <IconShield size={20} className="text-text-muted" />}
           </div>
           <div className="min-w-0 flex-1 space-y-2.5">
@@ -581,7 +606,7 @@ function RoleIconCard({
                     if (e.key === "Enter") commitEmoji();
                   }}
                   placeholder="🛡️"
-                  className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3 text-center text-[20px] outline-none placeholder:opacity-40 focus:border-[#00a8fc]"
+                  className="h-10 w-full rounded-md border border-border-subtle bg-bg-tertiary px-3 text-center text-[20px] outline-none placeholder:opacity-40 focus:border-brand"
                 />
               </div>
               <span className="mt-6 text-[13px] text-text-muted">or</span>
@@ -610,7 +635,7 @@ function PermissionsTab({ role, run, update }: { role: ServerRole; run: Run; upd
   return (
     <div>
       {role.is_default && (
-        <p className="mb-5 rounded-[4px] border border-divider bg-bg-secondary px-4 py-3 text-[13px] leading-relaxed text-text-muted">
+        <p className="mb-5 rounded-lg border border-border-subtle bg-bg-secondary px-4 py-3 text-[13px] leading-relaxed text-text-muted">
           {t("@everyone can’t hold moderation powers. Its message permissions are the default for every channel.")}
         </p>
       )}

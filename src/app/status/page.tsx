@@ -7,7 +7,7 @@ export const revalidate = 30;
 export default async function StatusPage() {
   const snapshot = await getStatusSnapshot();
   return (
-    <div className="min-h-screen bg-bg-tertiary text-text-normal">
+    <div className="min-h-screen bg-bg-secondary text-text-normal">
       <MarketingNav />
       <StatusView initial={snapshot} />
       <MarketingFooter />

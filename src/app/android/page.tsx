@@ -58,7 +58,7 @@ const highlights = [
 
 export default function AndroidPage() {
   return (
-    <div className="min-h-screen bg-[#1e1f22]">
+    <div className="min-h-screen bg-bg-secondary">
       <MarketingNav />
       <main className="pt-14">
         {/* Hero */}
@@ -82,7 +82,7 @@ export default function AndroidPage() {
             <h1 className="mt-5 text-4xl font-bold tracking-[-0.02em] text-white sm:text-5xl">
               Disband is on Android
             </h1>
-            <p className="mx-auto mt-4 max-w-xl text-[16px] leading-relaxed text-[#b5bac1]">
+            <p className="mx-auto mt-4 max-w-xl text-[16px] leading-relaxed text-interactive-normal">
               Disband is out now on Google Play. Same account, same people, same
               conversations — now in your pocket.
             </p>
@@ -103,7 +103,7 @@ export default function AndroidPage() {
                 Continue on the web
               </Link>
             </div>
-            <p className="mt-4 text-[13px] text-[#6e727a]">
+            <p className="mt-4 text-[13px] text-text-muted">
               Free. Requires Android 8.0 or later.
             </p>
           </div>
@@ -125,7 +125,7 @@ export default function AndroidPage() {
                     {s.n}
                   </p>
                   <h3 className="mt-4 text-lg font-semibold text-white">{s.title}</h3>
-                  <p className="mt-1.5 text-[15px] leading-relaxed text-[#9aa0a8]">{s.body}</p>
+                  <p className="mt-1.5 text-[15px] leading-relaxed text-text-muted">{s.body}</p>
                 </div>
               ))}
             </div>
@@ -138,7 +138,7 @@ export default function AndroidPage() {
             <h2 className="text-2xl font-semibold tracking-[-0.02em] text-white sm:text-[2rem]">
               What&apos;s in the app
             </h2>
-            <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-[#9aa0a8]">
+            <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-text-muted">
               It is the real app, not a demo — built to match the iPhone release feature for
               feature.
             </p>
@@ -152,7 +152,7 @@ export default function AndroidPage() {
                     <Check />
                     {h.title}
                   </h3>
-                  <p className="mt-1.5 text-[15px] leading-relaxed text-[#9aa0a8]">{h.body}</p>
+                  <p className="mt-1.5 text-[15px] leading-relaxed text-text-muted">{h.body}</p>
                 </div>
               ))}
             </div>
@@ -165,7 +165,7 @@ export default function AndroidPage() {
             <h2 className="text-2xl font-semibold tracking-[-0.02em] text-white">
               Something not right? Tell us
             </h2>
-            <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-[#9aa0a8]">
+            <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-text-muted">
               If something looks wrong, crashes, or just feels off next to the iPhone
               app, send a bug report and we&apos;ll fix it in the next update.
             </p>
@@ -192,7 +192,7 @@ export default function AndroidPage() {
         {/* Other platforms */}
         <section className="border-t border-white/[0.06] px-6 py-16 sm:py-20">
           <div className="mx-auto max-w-6xl text-center">
-            <p className="text-[15px] text-[#9aa0a8]">
+            <p className="text-[15px] text-text-muted">
               On iPhone instead?{" "}
               <Link href="/mobile" className="font-semibold text-white hover:underline">
                 Get Disband on the App Store

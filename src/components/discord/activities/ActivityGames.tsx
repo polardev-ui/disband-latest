@@ -52,7 +52,7 @@ function WordleTile({
 }) {
   return (
     <span
-      className={`flex h-11 w-11 items-center justify-center rounded-[3px] border text-[20px] font-bold uppercase leading-none ${
+      className={`flex h-11 w-11 items-center justify-center rounded-md border text-[20px] font-bold uppercase leading-none ${
         mark
           ? "border-transparent text-white"
           : draft
@@ -155,7 +155,7 @@ export function WordleGame({
             {wordle?.solvedBy.length ?? 0} solved
           </p>
         </div>
-        <span className="rounded-[3px] bg-bg-accent px-2 py-1 text-[11px] text-text-muted">
+        <span className="rounded-md bg-bg-accent px-2 py-1 text-[11px] text-text-muted">
           {guesses.length}/{maxGuesses} guesses
         </span>
       </div>
@@ -177,7 +177,7 @@ export function WordleGame({
         </div>
 
         {finished ? (
-          <div className="mt-4 w-full max-w-[360px] rounded-[3px] border border-divider bg-bg-secondary px-3 py-2.5 text-center">
+          <div className="mt-4 w-full max-w-[360px] rounded-md border border-divider bg-bg-secondary px-3 py-2.5 text-center">
             <p className="text-[14px] font-semibold text-text-normal">
               {activity.mine.won
                 ? `Solved in ${guesses.length}`
@@ -208,7 +208,7 @@ export function WordleGame({
                         type="button"
                         onClick={() => void submit()}
                         disabled={busy}
-                        className="h-9 min-w-[48px] rounded-[3px] bg-bg-accent px-2 text-[10px] font-semibold uppercase text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-50"
+                        className="h-9 min-w-[48px] rounded-md bg-bg-accent px-2 text-[10px] font-semibold uppercase text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-50"
                       >
                         Enter
                       </button>
@@ -221,7 +221,7 @@ export function WordleGame({
                           type="button"
                           onClick={() => press(letter)}
                           disabled={busy}
-                          className="flex h-9 min-w-[25px] flex-1 items-center justify-center rounded-[3px] text-[12px] font-bold uppercase text-white transition-[filter] hover:brightness-110 disabled:opacity-50"
+                          className="flex h-9 min-w-[25px] flex-1 items-center justify-center rounded-md text-[12px] font-bold uppercase text-white transition-[filter] hover:brightness-110 disabled:opacity-50"
                           style={{
                             backgroundColor: mark
                               ? TILE_COLOURS[mark]
@@ -237,7 +237,7 @@ export function WordleGame({
                         type="button"
                         onClick={() => setDraft((value) => value.slice(0, -1))}
                         disabled={busy}
-                        className="h-9 min-w-[42px] rounded-[3px] bg-bg-accent px-2 text-[10px] font-semibold uppercase text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-50"
+                        className="h-9 min-w-[42px] rounded-md bg-bg-accent px-2 text-[10px] font-semibold uppercase text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-50"
                       >
                         Del
                       </button>
@@ -294,7 +294,7 @@ export function EightBallGame({
             Everyone sees every answer in this chat.
           </p>
         </div>
-        <span className="rounded-[3px] bg-bg-accent px-2 py-1 text-[11px] text-text-muted">
+        <span className="rounded-md bg-bg-accent px-2 py-1 text-[11px] text-text-muted">
           {asked}/{maxAsks} asks
         </span>
       </div>
@@ -304,7 +304,7 @@ export function EightBallGame({
           ball.feed.map((entry) => (
             <div
               key={entry.id}
-              className="rounded-[3px] border border-divider bg-bg-secondary px-3 py-2.5"
+              className="rounded-md border border-divider bg-bg-secondary px-3 py-2.5"
             >
               <div className="flex items-center gap-2">
                 <Avatar
@@ -325,14 +325,14 @@ export function EightBallGame({
               <p className="mt-1.5 text-[13px] text-text-normal">
                 “{entry.question}”
               </p>
-              <p className="mt-1 border-l-2 border-[#5865f2] pl-2 text-[13px] font-medium text-[#b9bbff]">
+              <p className="mt-1 border-l-2 border-brand pl-2 text-[13px] font-medium text-[#b9bbff]">
                 {entry.answer}
               </p>
             </div>
           ))
         ) : (
           <div className="flex min-h-[180px] flex-col items-center justify-center text-center">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#111214] text-[24px] font-black text-white shadow-[inset_0_0_0_2px_#2e2f34]">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#111214] text-[24px] font-black text-white shadow-[inset_0_0_0_2px_var(--border-subtle)]">
               8
             </span>
             <p className="mt-3 text-[14px] font-semibold text-text-normal">
@@ -361,12 +361,12 @@ export function EightBallGame({
               : "Will I pass my driving test?"
           }
           aria-label="Your question for the Magic 8-Ball"
-          className="h-9 min-w-0 flex-1 rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-[#00a8fc] disabled:opacity-60"
+          className="h-9 min-w-0 flex-1 rounded-md border border-transparent bg-bg-tertiary px-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-brand disabled:opacity-60"
         />
         <button
           type="submit"
           disabled={disabled || !question.trim()}
-          className="flex h-9 shrink-0 items-center gap-1.5 rounded-[3px] bg-brand px-3 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-brand px-3 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           <IconSend size={14} />
           Ask
@@ -386,7 +386,7 @@ function TriviaReview({ activity }: { activity: ActivitySession }) {
   if (!trivia) return null;
   return (
     <div className="px-4 py-4">
-      <div className="rounded-[4px] border border-divider bg-bg-secondary px-4 py-5 text-center">
+      <div className="rounded-lg border border-divider bg-bg-secondary px-4 py-5 text-center">
         <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted">
           Round complete
         </p>
@@ -404,7 +404,7 @@ function TriviaReview({ activity }: { activity: ActivitySession }) {
           return (
             <div
               key={question.index}
-              className="rounded-[3px] border border-divider bg-bg-secondary px-3 py-2.5"
+              className="rounded-md border border-divider bg-bg-secondary px-3 py-2.5"
             >
               <p className="text-[13px] font-medium text-text-normal">
                 {question.question}
@@ -486,7 +486,7 @@ export function TriviaGame({
         </p>
       )}
 
-      <div className="rounded-[4px] border border-divider bg-bg-secondary p-4">
+      <div className="rounded-lg border border-divider bg-bg-secondary p-4">
         <p className="text-[17px] font-semibold leading-snug text-header-primary">
           {current.question}
         </p>
@@ -497,9 +497,9 @@ export function TriviaGame({
               type="button"
               disabled={busy}
               onClick={() => void onAnswer(current.index, index)}
-              className="flex w-full items-center gap-2.5 rounded-[3px] border border-divider bg-bg-accent px-3 py-2 text-left text-[14px] text-text-normal transition-colors hover:border-[#4f545c] hover:bg-bg-secondary-alt disabled:cursor-wait disabled:opacity-60"
+              className="flex w-full items-center gap-2.5 rounded-md border border-divider bg-bg-accent px-3 py-2 text-left text-[14px] text-text-normal transition-colors hover:border-border-strong hover:bg-bg-secondary-alt disabled:cursor-wait disabled:opacity-60"
             >
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[2px] border border-[#72767d] text-[10px] font-bold text-text-muted">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-[#72767d] text-[10px] font-bold text-text-muted">
                 {String.fromCharCode(65 + index)}
               </span>
               <span className="min-w-0 flex-1">{option}</span>
@@ -568,7 +568,7 @@ export function WouldYouRatherGame({
           return (
             <div
               key={prompt.index}
-              className="rounded-[4px] border border-divider bg-bg-secondary p-3"
+              className="rounded-lg border border-divider bg-bg-secondary p-3"
             >
               <div className="flex items-center justify-between">
                 <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-text-muted">
@@ -587,10 +587,10 @@ export function WouldYouRatherGame({
                       type="button"
                       disabled={busy || selected !== null || activity.expired}
                       onClick={() => void onVote(prompt.index, option.choice)}
-                      className={`relative overflow-hidden rounded-[3px] border px-3 py-2.5 text-left transition-colors ${
+                      className={`relative overflow-hidden rounded-md border px-3 py-2.5 text-left transition-colors ${
                         mine
                           ? "border-[#eb459e]"
-                          : "border-divider hover:border-[#4f545c]"
+                          : "border-divider hover:border-border-strong"
                       } bg-bg-accent disabled:cursor-default disabled:hover:border-divider`}
                     >
                       {selected !== null && (
@@ -651,11 +651,11 @@ export function ActivityLeaderboard({
           </span>
         </div>
         {session.length === 0 ? (
-          <p className="rounded-[3px] border border-divider bg-bg-secondary px-3 py-4 text-[13px] text-text-muted">
+          <p className="rounded-md border border-divider bg-bg-secondary px-3 py-4 text-[13px] text-text-muted">
             No one has joined yet.
           </p>
         ) : (
-          <div className="overflow-hidden rounded-[4px] border border-divider">
+          <div className="overflow-hidden rounded-lg border border-divider">
             {session.map((player, index) => (
               <div
                 key={player.userId}
@@ -700,11 +700,11 @@ export function ActivityLeaderboard({
           <span className="text-[11px] text-text-muted">Top 10</span>
         </div>
         {activity.leaderboard.length === 0 ? (
-          <p className="rounded-[3px] border border-divider bg-bg-secondary px-3 py-4 text-[13px] text-text-muted">
+          <p className="rounded-md border border-divider bg-bg-secondary px-3 py-4 text-[13px] text-text-muted">
             No scores yet. Finish a round to take the first spot.
           </p>
         ) : (
-          <div className="overflow-hidden rounded-[4px] border border-divider">
+          <div className="overflow-hidden rounded-lg border border-divider">
             {activity.leaderboard.map((player, index) => (
               <div
                 key={player.userId}

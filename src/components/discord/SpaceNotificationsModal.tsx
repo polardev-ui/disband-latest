@@ -117,7 +117,7 @@ export function SpaceNotificationsModal({ server, onClose }: { server: Server | 
         role="dialog"
         aria-modal="true"
         aria-label={t("Notification settings for {name}", { name: shown.name })}
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} flex max-h-[85vh] w-full max-w-md flex-col rounded-lg bg-bg-secondary shadow-[var(--elevation-high)]`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} flex max-h-[85vh] w-full max-w-md flex-col rounded-xl border border-border-subtle bg-bg-secondary shadow-[var(--elevation-high)]`}
       >
         <div className="flex items-start justify-between gap-4 px-5 pb-3 pt-5">
           <div className="min-w-0">

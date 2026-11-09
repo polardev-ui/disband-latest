@@ -81,7 +81,7 @@ const INLINE: { re: RegExp; leaf?: boolean; render: (inner: ReactNode, marker: s
     render: (inner, _m, k) => (
       // The ampersand stays visible here because the overlay must have the
       // same advance widths as the textarea; the sent message drops it.
-      <span key={k} className="rounded-[3px] bg-[rgb(88_101_242/0.3)] text-[#c9cdfb] shadow-[0_0_0_1px_rgb(88_101_242/0.3)]">
+      <span key={k} className="rounded-md bg-[rgb(88_101_242/0.3)] text-[#c9cdfb] shadow-[0_0_0_1px_rgb(88_101_242/0.3)]">
         {inner}
       </span>
     ),
@@ -93,7 +93,7 @@ const INLINE: { re: RegExp; leaf?: boolean; render: (inner: ReactNode, marker: s
       // No horizontal padding: it widens this layer past the textarea and
       // pushes the caret behind every character after the chip. The ring
       // fakes the padding in paint instead.
-      <span key={k} className="rounded-[3px] bg-[rgb(88_101_242/0.3)] text-[#c9cdfb] shadow-[0_0_0_1px_rgb(88_101_242/0.3)]">
+      <span key={k} className="rounded-md bg-[rgb(88_101_242/0.3)] text-[#c9cdfb] shadow-[0_0_0_1px_rgb(88_101_242/0.3)]">
         {inner}
       </span>
     ),

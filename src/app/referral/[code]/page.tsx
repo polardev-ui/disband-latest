@@ -37,7 +37,7 @@ export default async function ReferralPage({
 
   return (
     <ThemeProvider>
-      <div className="flex min-h-screen items-center justify-center bg-bg-tertiary px-6 py-12">
+      <div className="flex min-h-screen items-center justify-center bg-bg-secondary px-6 py-12">
         <div className="w-full max-w-[400px] text-center">
           <div className="mb-8 flex flex-col items-center">
             <Logo adaptive size={44} className="h-11 w-11" priority />

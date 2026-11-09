@@ -117,7 +117,7 @@ export function ConnectionScreen() {
             type="button"
             onClick={() => void retry()}
             disabled={checking}
-            className="mt-4 rounded-[4px] border border-divider px-4 py-2 text-[14px] font-medium text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-60"
+            className="mt-4 rounded-lg border border-divider px-4 py-2 text-[14px] font-medium text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-60"
           >
             Try again
           </button>

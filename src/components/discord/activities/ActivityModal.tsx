@@ -227,7 +227,7 @@ export function ActivityModal({
         role="dialog"
         aria-modal="true"
         aria-label={def ? `${def.name} activity` : "Activity"}
-        className={`classic-modal${exiting ? " modal-pop-out" : ""} flex max-h-[calc(100dvh-32px)] w-full max-w-[720px] flex-col overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
+        className={`classic-modal${exiting ? " modal-pop-out" : ""} flex max-h-[calc(100dvh-32px)] w-full max-w-[720px] flex-col overflow-hidden rounded-xl border border-border-subtle bg-bg-primary shadow-[var(--elevation-high)]`}
         onClick={(event) => event.stopPropagation()}
       >
         <div
@@ -251,7 +251,7 @@ export function ActivityModal({
               muted={activity.expired}
             />
           ) : (
-            <span className="h-11 w-11 shrink-0 animate-pulse rounded-[4px] bg-bg-accent" />
+            <span className="h-11 w-11 shrink-0 animate-pulse rounded-lg bg-bg-accent" />
           )}
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted">
@@ -277,7 +277,7 @@ export function ActivityModal({
             type="button"
             onClick={onClose}
             aria-label="Close activity"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[2px] text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
           >
             <IconClose size={20} />
           </button>
@@ -343,9 +343,9 @@ export function ActivityModal({
 
           {loading && !activity && (
             <div className="space-y-3 px-4 py-4">
-              <div className="h-6 w-1/3 animate-pulse rounded-[2px] bg-bg-accent" />
-              <div className="h-28 animate-pulse rounded-[3px] bg-bg-accent" />
-              <div className="h-10 animate-pulse rounded-[3px] bg-bg-accent" />
+              <div className="h-6 w-1/3 animate-pulse rounded-md bg-bg-accent" />
+              <div className="h-28 animate-pulse rounded-md bg-bg-accent" />
+              <div className="h-10 animate-pulse rounded-md bg-bg-accent" />
             </div>
           )}
 
@@ -357,7 +357,7 @@ export function ActivityModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="mt-3 h-9 rounded-[3px] bg-brand px-4 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover"
+                className="mt-3 h-9 rounded-md bg-brand px-4 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover"
               >
                 Close
               </button>
@@ -415,7 +415,7 @@ export function ActivityModal({
                     type="button"
                     disabled={busy}
                     onClick={() => void join()}
-                    className="mt-3 h-9 rounded-[3px] bg-brand px-4 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
+                    className="mt-3 h-9 rounded-md bg-brand px-4 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                   >
                     {busy ? "Joining…" : "Join activity"}
                   </button>

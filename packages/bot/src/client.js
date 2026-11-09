@@ -169,6 +169,15 @@ export class Client {
     return (messages ?? []).map((m) => new Message(m, this));
   }
 
+  /**
+   * Deletes a message (messages.delete scope). The bot's own messages always;
+   * anyone's when one of the bot's roles has Manage Messages. `messageId` may
+   * be the message id or its numeric display_id.
+   */
+  async deleteMessage(channelId, messageId) {
+    await this._rest.delete(`/api/v1/channels/${pathSegment(channelId)}/messages/${pathSegment(messageId)}`);
+  }
+
   async listChannels(serverId) {
     const { channels } = await this._rest.get(`/api/v1/servers/${pathSegment(serverId)}/channels`);
     return channels ?? [];

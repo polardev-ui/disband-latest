@@ -208,11 +208,11 @@ export function StagePanel({ channel }: { channel: Channel }) {
             {isModerator && open && (
               <>
                 <button type="button" onClick={() => { setTopicDraft(stage.stage_topic ?? ""); setEditingTopic(true); }}
-                  className="rounded-[4px] px-2 py-1 font-medium text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active">
+                  className="rounded-lg px-2 py-1 font-medium text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active">
                   {t("Edit Topic")}
                 </button>
                 <button type="button" onClick={() => void run(() => endStage(channel.id))}
-                  className="rounded-[4px] px-2 py-1 font-medium text-status-dnd hover:bg-status-dnd/15">
+                  className="rounded-lg px-2 py-1 font-medium text-status-dnd hover:bg-status-dnd/15">
                   {t("End Stage")}
                 </button>
               </>
@@ -224,11 +224,11 @@ export function StagePanel({ channel }: { channel: Channel }) {
           <div className="flex shrink-0 items-center justify-center gap-3 bg-status-online px-4 py-2 text-[14px] font-medium text-white">
             {t("You've been invited to speak.")}
             <button type="button" onClick={() => void run(() => respondToInvite(channel.id, true))}
-              className="rounded-[3px] bg-white px-3 py-0.5 text-[13px] font-semibold text-[#1a6334] hover:bg-white/90">
+              className="rounded-md bg-white px-3 py-0.5 text-[13px] font-semibold text-[#1a6334] hover:bg-white/90">
               {t("Accept")}
             </button>
             <button type="button" onClick={() => void run(() => respondToInvite(channel.id, false))}
-              className="rounded-[3px] bg-black/20 px-3 py-0.5 text-[13px] font-semibold hover:bg-black/30">
+              className="rounded-md bg-black/20 px-3 py-0.5 text-[13px] font-semibold hover:bg-black/30">
               {t("Decline")}
             </button>
           </div>
@@ -281,22 +281,22 @@ export function StagePanel({ channel }: { channel: Channel }) {
                       maxLength={TOPIC_MAX}
                       onChange={(e) => setTopicDraft(e.target.value)}
                       placeholder={t("Topic")}
-                      className="h-10 w-full rounded-[4px] bg-bg-tertiary px-3 text-[15px] text-text-normal outline-none placeholder:text-text-muted focus:ring-2 focus:ring-brand"
+                      className="h-10 w-full rounded-lg bg-bg-tertiary px-3 text-[15px] text-text-normal outline-none placeholder:text-text-muted focus:ring-2 focus:ring-brand"
                     />
                     <div className="mt-3 flex items-center justify-end gap-2">
                       {editingTopic ? (
                         <button type="button" onClick={() => setEditingTopic(false)}
-                          className="h-9 rounded-[4px] px-4 text-[14px] font-medium text-text-normal hover:underline">
+                          className="h-9 rounded-lg px-4 text-[14px] font-medium text-text-normal hover:underline">
                           {t("Cancel")}
                         </button>
                       ) : (
                         <button type="button" onClick={() => setSkipStart(true)}
-                          className="h-9 rounded-[4px] px-4 text-[14px] font-medium text-text-normal hover:underline">
+                          className="h-9 rounded-lg px-4 text-[14px] font-medium text-text-normal hover:underline">
                           {t("Continue without starting")}
                         </button>
                       )}
                       <button type="submit" disabled={!topicDraft.trim()}
-                        className="h-9 rounded-[4px] bg-button-green px-4 text-[14px] font-medium text-white hover:bg-button-green-hover disabled:opacity-50">
+                        className="h-9 rounded-lg bg-button-green px-4 text-[14px] font-medium text-white hover:bg-button-green-hover disabled:opacity-50">
                         {editingTopic ? t("Save") : t("Start the Stage")}
                       </button>
                     </div>
@@ -358,7 +358,7 @@ export function StagePanel({ channel }: { channel: Channel }) {
           )}
 
           {(error || session.error) && (
-            <p role="alert" className="mt-2 max-w-md rounded-[4px] bg-status-dnd/15 px-3 py-2 text-center text-[14px] text-status-dnd">
+            <p role="alert" className="mt-2 max-w-md rounded-lg bg-status-dnd/15 px-3 py-2 text-center text-[14px] text-status-dnd">
               {error ?? session.error}
             </p>
           )}
@@ -449,7 +449,7 @@ export function StagePanel({ channel }: { channel: Channel }) {
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
             {hands.length === 0 && <p className="px-2 text-[13px] text-text-muted">{t("No raised hands right now.")}</p>}
             {hands.map((r) => (
-              <div key={r.user_id} className="flex items-center gap-2.5 rounded-[4px] px-2 py-1.5 hover:bg-interactive-hover">
+              <div key={r.user_id} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-interactive-hover">
                 <Avatar size="sm" profile={r.profile ?? { display_name: nameOf(r), avatar_url: null }} className="h-8 w-8" />
                 <span className="min-w-0 flex-1 truncate text-[14px] text-text-normal">{nameOf(r)}</span>
                 <button type="button" title={t("Invite to Speak")} onClick={() => void run(() => inviteToSpeak(channel.id, r.user_id))}

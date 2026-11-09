@@ -77,7 +77,7 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
       {/* A live invite card, so changes are judged where people see them. */}
       <SettingsSection title={t("Preview")} description={t("How your space looks on an invite.")}>
         <div className="p-5">
-          <div className="mx-auto max-w-[400px] overflow-hidden rounded-[14px] border border-divider bg-bg-primary">
+          <div className="mx-auto max-w-[400px] overflow-hidden rounded-[14px] border border-border-subtle bg-bg-primary">
             <div className="relative h-[120px] bg-bg-accent">
               {banner ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -97,7 +97,7 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
                   {shownCount} {shownCount === 1 ? "member" : "members"}
                 </p>
               </div>
-              <span className="ml-auto rounded-[3px] bg-status-online px-3 py-1.5 text-[13px] font-semibold text-white">{t("Join")}</span>
+              <span className="ml-auto rounded-md bg-status-online px-3 py-1.5 text-[13px] font-semibold text-white">{t("Join")}</span>
             </div>
           </div>
         </div>

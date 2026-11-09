@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import type { ChannelType } from "@/lib/supabase/types";
-import { IconEdit, IconHash, IconMegaphone, IconPlus, IconSettings, IconSpeaker, IconStage, IconTrash } from "@/components/icons";
+import { IconEdit, IconHash, IconMegaphone, IconPlus, IconSettings, IconSpeaker, IconStage, IconTrash, IconForum } from "@/components/icons";
 import { ConfirmDialog, EmptyState, InlineError, Segmented, btn, enterStyle, iconBtn, iconBtnDanger } from "./ui";
 import type { SectionProps } from "./types";
 import { useI18n } from "@/contexts/I18nContext";
@@ -14,7 +14,9 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
   onEditChannel?: (channel: { id: string; name: string; type: string }) => void;
 }) {
   const { t } = useI18n();
-  const { channels, categories, createChannel, renameChannel, deleteChannel, createCategory } = useApp();
+  const { channels: allChannels, categories, createChannel, renameChannel, deleteChannel, createCategory } = useApp();
+  // Forum posts are channels too, but they live inside their forum, not here.
+  const channels = allChannels.filter((ch) => !ch.parent_id);
   const [name, setName] = useState("");
   const [categoryName, setCategoryName] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
@@ -74,6 +76,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
             onChange={setType}
             options={[
               { value: "text", label: <><IconHash size={14} /> {t("Text")}</> },
+              { value: "forum", label: <><IconForum size={14} /> {t("Forum")}</> },
               { value: "voice", label: <><IconSpeaker size={14} /> {t("Voice")}</> },
               { value: "stage", label: <><IconStage size={14} /> {t("Stage")}</> },
             ]}
@@ -83,7 +86,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
               aria-label={t("Category")}
-              className="h-9 rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[14px] text-text-normal outline-none focus:border-[#00a8fc]"
+              className="h-9 rounded-md border border-border-subtle bg-bg-tertiary px-2.5 text-[14px] text-text-normal outline-none focus:border-brand"
             >
               <option value="">{t("No category")}</option>
               {categories.map((c) => (
@@ -92,10 +95,10 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
             </select>
           )}
         </div>
-        <div className="flex gap-2 border-t border-divider px-5 py-4">
+        <div className="flex gap-2 border-t border-border-subtle px-5 py-4">
           <label className="relative flex-1">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
-              {type === "text" ? <IconHash size={15} /> : type === "stage" ? <IconStage size={15} /> : <IconSpeaker size={15} />}
+              {type === "text" ? <IconHash size={15} /> : type === "forum" ? <IconForum size={15} /> : type === "stage" ? <IconStage size={15} /> : <IconSpeaker size={15} />}
             </span>
             <input
               value={name}
@@ -103,9 +106,9 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
               onKeyDown={(e) => {
                 if (e.key === "Enter") void create();
               }}
-              placeholder={type === "text" ? "new-channel" : t("Lounge")}
+              placeholder={type === "text" ? "new-channel" : type === "forum" ? "help-desk" : t("Lounge")}
               aria-label={t("New channel name")}
-              className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary pl-9 pr-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-[#00a8fc]"
+              className="h-10 w-full rounded-md border border-border-subtle bg-bg-tertiary pl-9 pr-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-brand"
             />
           </label>
           <button type="button" onClick={() => void create()} disabled={creating || !name.trim()} className={`${btn.primary} h-10`}>
@@ -116,7 +119,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
 
       <section className="mb-8 overflow-hidden rounded-lg bg-bg-secondary">
         <div className="px-5 py-4">
-          <h3 className="text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">{t("Categories")}</h3>
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-muted">{t("Categories")}</h3>
           <div className="mt-3 flex gap-2">
             <input
               value={categoryName}
@@ -126,7 +129,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
               }}
               placeholder={t("New category")}
               aria-label={t("New category name")}
-              className="h-10 min-w-0 flex-1 rounded-[3px] border border-transparent bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-[#00a8fc]"
+              className="h-10 min-w-0 flex-1 rounded-md border border-border-subtle bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none placeholder:text-text-muted/70 focus:border-brand"
             />
             <button
               type="button"
@@ -159,11 +162,11 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
             <ul className="overflow-hidden rounded-lg bg-bg-secondary">
               {group.items.map((c) => {
                 const index = row++;
-                const Icon = c.is_stage ? IconStage : c.type === "voice" ? IconSpeaker : c.read_only ? IconMegaphone : IconHash;
+                const Icon = c.is_stage ? IconStage : c.type === "forum" ? IconForum : c.type === "voice" ? IconSpeaker : c.read_only ? IconMegaphone : IconHash;
                 return (
                   <li
                     key={c.id}
-                    className="view-enter group flex h-[52px] items-center gap-3 border-b border-divider px-4 last:border-b-0 hover:bg-interactive-hover/40"
+                    className="view-enter group flex h-[52px] items-center gap-3 border-b border-border-subtle px-4 last:border-b-0 hover:bg-interactive-hover/40"
                     style={enterStyle(index)}
                   >
                     <Icon size={17} className="shrink-0 text-text-muted" />
@@ -181,7 +184,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
                           }
                         }}
                         aria-label={t("Rename {name}", { name: c.name })}
-                        className="h-8 min-w-0 flex-1 rounded-[8px] border border-brand bg-bg-accent px-2.5 text-[14px] text-text-normal outline-none"
+                        className="h-8 min-w-0 flex-1 rounded-xl border border-brand bg-bg-accent px-2.5 text-[14px] text-text-normal outline-none"
                       />
                     ) : (
                       <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-text-normal">{c.name}</span>

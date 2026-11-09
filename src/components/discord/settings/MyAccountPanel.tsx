@@ -27,7 +27,7 @@ import { useI18n } from "@/contexts/I18nContext";
    ACCOUNT REMOVAL
 */
 
-const HEADING = "text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary";
+const HEADING = "text-[11px] font-bold uppercase leading-4 tracking-[0.06em] text-text-muted";
 
 /** "j••••••@gmail.com" style: the local part hidden, the domain kept. */
 function maskEmail(email: string) {
@@ -169,7 +169,7 @@ export function MyAccountPanel({
             {t("Edit User Profile")}
           </button>
         </div>
-        <div className="mx-4 mb-4 space-y-6 rounded-lg bg-bg-secondary p-4">
+        <div className="mx-4 mb-4 space-y-6 rounded-xl border border-border-subtle bg-surface-raised p-4">
           {rows.map((r) => (
             <div key={r.label} className="flex items-center justify-between gap-4">
               <div className="min-w-0">
@@ -250,7 +250,7 @@ export function MyAccountPanel({
           <>
             <div className="flex flex-wrap items-end gap-3">
               <label className="block">
-                <span className="mb-1.5 block text-[12px] font-bold uppercase tracking-[0.02em] text-header-secondary">
+                <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.06em] text-text-muted">
                   {t("Date of birth")}
                 </span>
                 <input

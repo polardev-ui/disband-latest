@@ -17,6 +17,7 @@ import {
   IconPlus,
   IconSpeaker,
   IconStage,
+  IconForum,
 } from "@/components/icons";
 import { displayName } from "@/lib/utils";
 import { getAvatarStyle } from "@/lib/profileColor";
@@ -169,8 +170,12 @@ export function ChannelList({
     active: boolean;
   } | null>(null);
 
+  // Forum posts are channels too, but they belong inside their forum.
+  const listChannels = channels.filter((c) => !c.parent_id);
   const byCategory = (catId: string | null) =>
-    channels.filter((c) => c.category_id === catId).sort((a, b) => a.position - b.position);
+    listChannels.filter((c) => c.category_id === catId).sort((a, b) => a.position - b.position);
+  const activeParentId = channels.find((c) => c.id === activeChannelId)?.parent_id ?? null;
+  const forumPosts = (forumId: string) => channels.filter((c) => c.parent_id === forumId);
 
   const clearDragState = () => {
     setDragChannelId(null);
@@ -342,12 +347,21 @@ export function ChannelList({
   const uncategorized = byCategory(null);
 
   const renderChannel = (ch: Channel) => {
-    const active = ch.id === activeChannelId;
+    const isForum = ch.type === "forum";
+    // A forum stays highlighted while one of its posts is open.
+    const active = ch.id === activeChannelId || (isForum && activeParentId === ch.id);
     const participants = ch.type === "voice" ? voicePresence.get(ch.id) ?? [] : [];
     const stageTopic = ch.is_stage ? stageTopics?.get(ch.id) ?? null : null;
 
-    const unread = !active && (getUnreadCount?.(ch.id) ?? 0) > 0;
-    const mentions = active ? 0 : getMentionCount?.(ch.id) ?? 0;
+    // A forum is unread (and counts mentions) through its posts.
+    const posts = isForum ? forumPosts(ch.id) : [];
+    const unread = !active && (
+      (getUnreadCount?.(ch.id) ?? 0) > 0
+      || posts.some((p) => p.id !== activeChannelId && (getUnreadCount?.(p.id) ?? 0) > 0)
+    );
+    const mentions = active
+      ? 0
+      : (getMentionCount?.(ch.id) ?? 0) + posts.reduce((sum, p) => sum + (p.id === activeChannelId ? 0 : getMentionCount?.(p.id) ?? 0), 0);
     return (
       <div key={ch.id} className="relative">
         {overChannelId === ch.id && <div className="absolute inset-x-2 -top-0.5 h-0.5 rounded bg-brand" />}
@@ -371,7 +385,7 @@ export function ChannelList({
           onPointerUp={releaseDrag}
           onPointerCancel={cancelDrag}
           style={canManageChannels ? { touchAction: "none" } : undefined}
-          className={`group/chan relative flex h-8 w-full items-center gap-1.5 rounded-[4px] px-2 text-[16px] font-medium leading-5 transition-colors duration-75 ${
+          className={`group/chan relative flex h-[34px] w-full items-center gap-2 rounded-lg px-2 text-[15px] font-medium leading-5 transition-colors duration-75 ${
             active
               ? "bg-interactive-selected text-interactive-active"
               : unread
@@ -379,13 +393,16 @@ export function ChannelList({
                 : "text-channels-default hover:bg-interactive-hover hover:text-text-normal"
           }`}
         >
-          <span className={`shrink-0 ${active || unread ? "text-interactive-active/70" : "text-channels-default"}`}>
+          <span className={`shrink-0 ${active || unread ? "text-interactive-active/80" : "text-channels-default"}`}>
+            {/* A heavier stroke than the default so the glyphs read at 18px. */}
             {ch.type === "text" ? (
-              ch.read_only ? <IconMegaphone size={20} /> : <IconHash size={20} />
+              ch.read_only ? <IconMegaphone size={18} strokeWidth={2.25} /> : <IconHash size={18} strokeWidth={2.25} />
+            ) : isForum ? (
+              <IconForum size={18} strokeWidth={2.25} />
             ) : ch.is_stage ? (
-              <IconStage size={20} className={stageTopic ? "text-status-online" : undefined} />
+              <IconStage size={18} strokeWidth={2.25} className={stageTopic ? "text-status-online" : undefined} />
             ) : (
-              <IconSpeaker size={20} />
+              <IconSpeaker size={18} strokeWidth={2.25} />
             )}
           </span>
           <span className="min-w-0 flex-1 truncate text-left">{ch.name}</span>
@@ -399,7 +416,7 @@ export function ChannelList({
           {ch.type === "voice" && ch.user_limit ? (
             <span
               title={participants.length >= ch.user_limit ? t("Full") : t("{count} of {limit}", { count: participants.length, limit: ch.user_limit })}
-              className={`shrink-0 rounded-[3px] px-1 text-[11px] font-semibold tabular-nums leading-4 ${
+              className={`shrink-0 rounded-md px-1 text-[11px] font-semibold tabular-nums leading-4 ${
                 participants.length >= ch.user_limit ? "bg-status-dnd/20 text-status-dnd" : "bg-bg-tertiary text-channels-default"
               }`}
             >
@@ -447,7 +464,7 @@ export function ChannelList({
               <p className="truncate px-2 pb-0.5 text-[12px] font-medium text-status-online" title={stageTopic}>{stageTopic}</p>
             )}
             {participants.filter((vp) => vp.stage_speaker).map((vp) => (
-              <span key={vp.user_id} className="mb-px flex h-[30px] items-center gap-2 rounded-[4px] px-2 text-[14px] text-channels-default">
+              <span key={vp.user_id} className="mb-px flex h-[30px] items-center gap-2 rounded-lg px-2 text-[14px] text-channels-default">
                 <MiniAvatar profile={vp.profile} />
                 <span className="min-w-0 flex-1 truncate">{vp.profile ? displayName(vp.profile) : t("Unknown")}</span>
                 {vp.muted && <IconMicOff size={16} className="shrink-0 text-interactive-normal" />}
@@ -464,11 +481,11 @@ export function ChannelList({
         {ch.type === "voice" && !ch.is_stage && participants.length > 0 && (
           <div className="pb-1 pl-9">
             {participants.map((vp) => (
-              <span key={vp.user_id} className="mb-px flex h-[30px] items-center gap-2 rounded-[4px] px-2 text-[14px] text-channels-default hover:bg-interactive-hover hover:text-text-normal">
+              <span key={vp.user_id} className="mb-px flex h-[30px] items-center gap-2 rounded-lg px-2 text-[14px] text-channels-default hover:bg-interactive-hover hover:text-text-normal">
                 <MiniAvatar profile={vp.profile} />
                 <span className="min-w-0 flex-1 truncate">{vp.profile ? displayName(vp.profile) : t("Unknown")}</span>
                 {vp.sfu_tracks?.includes("screen") && (
-                  <span className="shrink-0 rounded-[4px] bg-status-dnd px-1 text-[10px] font-bold leading-[16px] text-white">{t("LIVE")}</span>
+                  <span className="shrink-0 rounded-lg bg-status-dnd px-1 text-[10px] font-bold leading-[16px] text-white">{t("LIVE")}</span>
                 )}
                 {vp.sfu_tracks?.includes("camera") && (
                   <IconVideo size={16} className="shrink-0 text-interactive-normal" aria-label={t("Camera on")} />
@@ -504,12 +521,12 @@ export function ChannelList({
           onPointerUp={releaseDrag}
           onPointerCancel={cancelDrag}
           style={canManageChannels ? { touchAction: "none" } : undefined}
-          className={`flex min-w-0 flex-1 items-center gap-0.5 pb-1 pt-4 text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] transition-colors duration-100 ${
+          className={`flex min-w-0 flex-1 items-center gap-1 pb-1.5 pl-1 pt-4 text-[13px] font-semibold leading-4 transition-colors duration-100 ${
             overCatId === cat.id ? "text-brand" : "text-channels-default hover:text-text-normal"
           }`}
         >
-          <IconChevron size={12} className={`-ml-0.5 shrink-0 transition-transform duration-100 ${open ? "" : "-rotate-90"}`} />
           <span className="truncate">{cat.name}</span>
+          <IconChevron size={12} className={`shrink-0 transition-transform duration-150 ${open ? "" : "-rotate-90"}`} />
         </button>
         {canManageChannels && (
           <button
@@ -517,9 +534,9 @@ export function ChannelList({
             onClick={() => startAddChannel(cat.id)}
             aria-label={t("Add channel to {name}", { name: cat.name })}
             title={t("Create Channel")}
-            className="mt-3 shrink-0 text-interactive-normal hover:text-interactive-active"
+            className="mt-3 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-interactive-normal opacity-70 transition hover:bg-interactive-hover hover:text-interactive-active hover:opacity-100"
           >
-            <IconPlus size={18} />
+            <IconPlus size={16} />
           </button>
         )}
       </div>
@@ -557,14 +574,14 @@ export function ChannelList({
           </>
         );
         return banner ? (
-          <div className="relative h-[138px] shrink-0 overflow-hidden">
+          <div className="relative h-[138px] shrink-0 overflow-hidden border-b border-column-border">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={banner} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
             <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-black/50 to-transparent" />
             <button
               type="button"
               onClick={openMenu}
-              className="absolute inset-x-0 top-0 flex h-12 min-w-0 items-center justify-between px-4 text-left transition-colors hover:bg-white/5"
+              className="absolute inset-x-0 top-0 flex h-14 min-w-0 items-center justify-between px-4 text-left transition-colors hover:bg-white/5"
             >
               {titleRow}
             </button>
@@ -573,7 +590,7 @@ export function ChannelList({
           <button
             type="button"
             onClick={openMenu}
-            className="relative z-[1] flex h-12 w-full shrink-0 items-center justify-between px-4 text-left shadow-[var(--elevation-low)] transition-colors hover:bg-interactive-hover"
+            className="relative z-[1] flex h-14 w-full shrink-0 items-center justify-between border-b border-column-border px-4 text-left transition-colors hover:bg-interactive-hover"
           >
             {titleRow}
           </button>
@@ -583,9 +600,9 @@ export function ChannelList({
         <button
           type="button"
           onClick={onOpenCatalysts}
-          className="mx-2 mt-2 flex shrink-0 items-center gap-2 rounded-[4px] px-2 py-1.5 text-left transition-colors hover:bg-interactive-hover"
+          className="mx-2 mt-2 flex shrink-0 items-center gap-2 rounded-lg border border-border-subtle bg-bg-secondary-alt px-2.5 py-2 text-left transition-colors hover:border-border-strong"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden className="shrink-0 text-[#ff73fa]">
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden className="shrink-0 text-[#e879f9]">
             <path fill="currentColor" d="M12 2 5 7v10l7 5 7-5V7l-7-5Zm0 3.2 4.5 3.2v7.2L12 18.8l-4.5-3.2V8.4L12 5.2Z" />
           </svg>
           <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-header-secondary">
@@ -615,7 +632,7 @@ export function ChannelList({
                 }
               }}
               placeholder={t("Category name")}
-              className="min-w-0 flex-1 rounded bg-bg-accent px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-brand"
+              className="min-w-0 flex-1 rounded-md border border-border-subtle bg-bg-tertiary px-2 py-1.5 text-xs outline-none focus:border-brand"
             />
             <button type="button" onClick={() => void submitAddCategory()} disabled={busy} className="text-xs text-brand">
               {t("Add")}
@@ -643,7 +660,7 @@ export function ChannelList({
                   {ch.name} · {t("{count} listening", { count })}
                 </span>
               </span>
-              <span className="shrink-0 rounded-[4px] bg-status-online px-1.5 text-[10px] font-bold leading-[16px] text-white">{t("LIVE")}</span>
+              <span className="shrink-0 rounded-lg bg-status-online px-1.5 text-[10px] font-bold leading-[16px] text-white">{t("LIVE")}</span>
             </button>
           );
         })}
@@ -671,17 +688,17 @@ export function ChannelList({
                   e.preventDefault();
                   e.stopPropagation();
                 }}
-                className={`flex min-w-0 flex-1 items-center gap-0.5 pb-1 pt-4 text-[12px] font-semibold uppercase leading-4 tracking-[0.02em] transition-colors duration-100 ${
+                className={`flex min-w-0 flex-1 items-center gap-1 pb-1.5 pl-1 pt-4 text-[13px] font-semibold leading-4 transition-colors duration-100 ${
                   overCatId === "uncategorized" ? "text-brand" : "text-channels-default hover:text-text-normal"
                 }`}
               >
+                <span className="truncate">{t("Uncategorized")}</span>
                 <IconChevron
                   size={12}
                   className={`shrink-0 transition-transform duration-150 ${
                     collapsed[UNCATEGORIZED_KEY] ? "-rotate-90" : ""
                   }`}
                 />
-                <span className="truncate">{t("Uncategorized")}</span>
               </button>
               {canManageChannels && (
                 <button
@@ -689,9 +706,9 @@ export function ChannelList({
                   onClick={() => startAddChannel(null)}
                   aria-label={t("Add uncategorized channel")}
                   title={t("Create Channel")}
-                  className="mt-3 shrink-0 text-interactive-normal hover:text-interactive-active"
+                  className="mt-3 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-interactive-normal opacity-70 transition hover:bg-interactive-hover hover:text-interactive-active hover:opacity-100"
                 >
-                  <IconPlus size={18} />
+                  <IconPlus size={16} />
                 </button>
               )}
             </div>
@@ -712,7 +729,7 @@ export function ChannelList({
       {dragGhost && (
         <div
           aria-hidden
-          className="pointer-events-none fixed z-50 flex translate-x-2 translate-y-2 items-center gap-1.5 whitespace-nowrap rounded-[3px] border border-divider bg-bg-tertiary px-3 py-1.5 text-[14px] font-medium text-text-normal shadow-[var(--elevation-high)]"
+          className="pointer-events-none fixed z-50 flex translate-x-2 translate-y-2 items-center gap-1.5 whitespace-nowrap rounded-md border border-divider bg-bg-tertiary px-3 py-1.5 text-[14px] font-medium text-text-normal shadow-[var(--elevation-high)]"
           style={{ left: dragGhost.x, top: dragGhost.y }}
         >
           {dragGhost.kind === "category" ? (

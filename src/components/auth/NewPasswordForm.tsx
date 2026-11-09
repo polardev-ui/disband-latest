@@ -64,7 +64,7 @@ export function NewPasswordForm({
   ) {
     return (
       <label className="block" htmlFor={id}>
-        <span className="mb-1 block text-xs font-bold uppercase text-text-muted">{label}</span>
+        <span className="mb-1.5 block text-[13px] font-semibold text-header-secondary">{label}</span>
         <span className="relative block">
           <input
             id={id}

@@ -6,7 +6,7 @@
   align-items: center;
   justify-content: center;
   padding: clamp(112px, 20dvh, 168px) 16px 20px;
-  background: rgb(0 0 0 / 85%);
+  background: var(--overlay-scrim);
 }
 
 .dialog {
@@ -36,7 +36,8 @@
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
   background: var(--bg-primary);
   box-shadow: var(--elevation-high);
 }

@@ -157,7 +157,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
         )}
 
         {(voice.error || actionError) && (
-          <p role="alert" className="max-w-md rounded-[4px] bg-status-dnd/15 px-3 py-2 text-center text-[14px] text-status-dnd">
+          <p role="alert" className="max-w-md rounded-lg bg-status-dnd/15 px-3 py-2 text-center text-[14px] text-status-dnd">
             {actionError ?? voice.error}
           </p>
         )}

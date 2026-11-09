@@ -111,7 +111,7 @@ export function MicTest({ deviceId, noiseMode, inputVolume, autoGain, echoCancel
         <button
           type="button"
           onClick={() => (running ? stop() : void start())}
-          className="shrink-0 rounded-md border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+          className="shrink-0 rounded-md border border-border-subtle px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
         >
           {running ? t("Stop test") : t("Test mic")}
         </button>

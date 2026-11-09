@@ -88,7 +88,7 @@ export function InviteGroupModal({ open, groupId, members, onClose }: InviteGrou
         role="dialog"
         aria-modal="true"
         aria-label={t("Add friends to group")}
-        className={`classic-modal${exiting ? " modal-pop-out" : ""} relative flex max-h-[calc(100dvh-32px)] w-full max-w-[440px] flex-col overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
+        className={`classic-modal${exiting ? " modal-pop-out" : ""} relative flex max-h-[calc(100dvh-32px)] w-full max-w-[440px] flex-col overflow-hidden rounded-xl border border-border-subtle bg-bg-primary shadow-[var(--elevation-high)]`}
       >
         <div className="px-4 pt-4">
           <div className="flex items-start justify-between">
@@ -112,7 +112,7 @@ export function InviteGroupModal({ open, groupId, members, onClose }: InviteGrou
                 searchRef.current?.focus();
               }
             }}
-            className="mt-4 flex max-h-[96px] min-h-[40px] cursor-text flex-wrap items-center gap-1 overflow-y-auto rounded-[3px] bg-bg-tertiary px-1.5 py-1"
+            className="mt-4 flex max-h-[96px] min-h-[40px] cursor-text flex-wrap items-center gap-1 overflow-y-auto rounded-md bg-bg-tertiary px-1.5 py-1"
           >
             {picked.map((f) => (
               <button
@@ -120,7 +120,7 @@ export function InviteGroupModal({ open, groupId, members, onClose }: InviteGrou
                 type="button"
                 onClick={() => toggle(f.id)}
                 aria-label={t("Remove {name}", { name: displayName(f) })}
-                className="flex h-[26px] items-center gap-1 rounded-[3px] bg-bg-secondary-alt px-1.5 text-[14px] text-header-primary hover:bg-interactive-hover"
+                className="flex h-[26px] items-center gap-1 rounded-md bg-bg-secondary-alt px-1.5 text-[14px] text-header-primary hover:bg-interactive-hover"
               >
                 {displayName(f)}
                 <IconClose size={12} className="text-interactive-normal" />
@@ -159,7 +159,7 @@ export function InviteGroupModal({ open, groupId, members, onClose }: InviteGrou
               return (
                 <label
                   key={f.id}
-                  className={`flex h-[42px] items-center gap-3 rounded-[4px] px-2 ${blocked ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-interactive-hover"}`}
+                  className={`flex h-[42px] items-center gap-3 rounded-lg px-2 ${blocked ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-interactive-hover"}`}
                 >
                   <span className="relative shrink-0">
                     <Avatar profile={f} size="sm" />
@@ -172,7 +172,7 @@ export function InviteGroupModal({ open, groupId, members, onClose }: InviteGrou
                   <input type="checkbox" className="peer sr-only" checked={on} disabled={blocked} onChange={() => toggle(f.id)} />
                   <span
                     aria-hidden
-                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] border transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#00a8fc] ${
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#00a8fc] ${
                       on ? "border-brand bg-brand text-white" : "border-interactive-normal/60 text-transparent"
                     }`}
                   >
@@ -191,7 +191,7 @@ export function InviteGroupModal({ open, groupId, members, onClose }: InviteGrou
           <button
             type="submit"
             disabled={loading || selected.length === 0}
-            className="h-[38px] w-full rounded-[3px] bg-brand text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-[38px] w-full rounded-md bg-brand text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
               ? t("Adding…")

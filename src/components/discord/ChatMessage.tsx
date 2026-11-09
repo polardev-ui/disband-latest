@@ -162,8 +162,8 @@ function EmbedCard({
 
   return (
     <div
-      className="flex max-w-[520px] overflow-hidden rounded-[4px] border-l-4 bg-bg-secondary px-4 pb-4 pl-3 pt-2"
-      style={{ borderLeftColor: embedColorHex(embed.color) ?? "#1e1f22" }}
+      className="flex max-w-[520px] overflow-hidden rounded-lg border border-l-4 border-border-subtle bg-bg-secondary-alt px-4 pb-4 pl-3 pt-2"
+      style={{ borderLeftColor: embedColorHex(embed.color) ?? "var(--border-strong)" }}
     >
       <div className="min-w-0 flex-1">
         {embed.author && (
@@ -196,7 +196,7 @@ function EmbedCard({
                     href={embed.url}
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="text-[#00a8fc] hover:underline"
+                    className="text-text-link hover:underline"
                   >
                     {embed.title}
                   </a>
@@ -233,7 +233,7 @@ function EmbedCard({
                 alt=""
                 loading="lazy"
                 onLoad={onContentResize}
-                className="mt-3 max-h-[300px] w-full rounded-[4px] object-contain"
+                className="mt-3 max-h-[300px] w-full rounded-lg object-contain"
               />
             )}
           </div>
@@ -244,7 +244,7 @@ function EmbedCard({
               alt=""
               loading="lazy"
               onLoad={onContentResize}
-              className="h-20 w-20 shrink-0 rounded-[4px] object-cover"
+              className="h-20 w-20 shrink-0 rounded-lg object-cover"
             />
           )}
         </div>
@@ -465,7 +465,7 @@ function ReplyQuote({
   const label = reply.author ? displayName(reply.author as Profile) : "Unknown";
   // The spine curls from the avatar column up into the quoted line.
   const spine = (
-    <span aria-hidden className="absolute -left-[38px] top-[9px] h-[13px] w-[33px] rounded-tl-[6px] border-l-2 border-t-2 border-[#4e5058]" />
+    <span aria-hidden className="absolute -left-[38px] top-[9px] h-[13px] w-[33px] rounded-tl-[6px] border-l-2 border-t-2 border-border-strong" />
   );
 
   // The target may be outside the loaded window. Until its preview arrives,
@@ -869,13 +869,13 @@ function ChatMessageImpl({
             type="button"
             onClick={openAuthor}
             onContextMenu={authorContextMenu}
-            className={`text-[16px] font-medium leading-[22px] text-header-primary hover:underline focus:outline-none ${nameFontClass}`}
+            className={`text-[16px] font-semibold leading-[22px] text-header-primary hover:underline focus:outline-none ${nameFontClass}`}
             style={nameStyle}
           >
             {displayName(shownAuthor ?? {})}
           </button>
         ) : (
-          <span className={`text-[16px] font-medium leading-[22px] text-header-primary ${nameFontClass}`} style={nameStyle}>
+          <span className={`text-[16px] font-semibold leading-[22px] text-header-primary ${nameFontClass}`} style={nameStyle}>
             {displayName(shownAuthor ?? {})}
           </span>
         )}
@@ -885,7 +885,7 @@ function ChatMessageImpl({
         )}
         <BotTag profile={shownAuthor} size="sm" />
         {author && !webhook && <PlatformBadge userId={author.id} />}
-        <time className="ml-1 select-none text-[12px] font-medium leading-[22px] text-text-muted" dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()}>
+        <time className="ml-1.5 select-none text-[12px] font-medium leading-[22px] text-text-muted" dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()}>
           {formatMessageTime(message.created_at)}
         </time>
       </h3>

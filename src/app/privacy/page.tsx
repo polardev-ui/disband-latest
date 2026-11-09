@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { MarketingFooter, MarketingNav } from "@/components/marketing/MarketingLayout";
+import { LegalShell } from "@/components/marketing/LegalShell";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
@@ -13,13 +13,9 @@ const link = "text-brand hover:underline";
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-[#1e1f22] text-[#dbdee1]">
-      <MarketingNav />
-      <main className="mx-auto max-w-3xl px-6 pb-16 pt-24">
-        <h1 className="text-3xl font-bold text-white">Privacy Policy</h1>
-        <p className="mt-2 text-sm text-[#949ba4]">Last updated: November 6, 2026</p>
+    <LegalShell title="Privacy Policy" updated="November 6, 2026" path="/privacy">
 
-        <div className="prose-disband mt-8 space-y-6 text-[15px] leading-relaxed text-[#b5bac1]">
+        <div className="prose-disband mt-8 space-y-6 text-[15px] leading-relaxed text-interactive-normal">
           <p>
             Genysis IQ LLC (“Genysis IQ,” “Disband,” “we,” “us,” or “our”) operates Disband, including
             its websites, applications, spaces, messaging, voice and video features, and related
@@ -33,9 +29,9 @@ export default function PrivacyPage() {
             are in Section 13.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">1. Information We Collect</h2>
+          <h2 className="text-lg font-semibold text-header-primary">1. Information We Collect</h2>
 
-          <h3 className="text-base font-semibold text-white">A. Account information</h3>
+          <h3 className="text-base font-semibold text-header-primary">A. Account information</h3>
           <p>When you create an account, we may collect:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>Email address;</li>
@@ -51,7 +47,7 @@ export default function PrivacyPage() {
           </p>
           <p>We do not receive or store your plaintext password.</p>
 
-          <h3 className="text-base font-semibold text-white">B. Content you provide</h3>
+          <h3 className="text-base font-semibold text-header-primary">B. Content you provide</h3>
           <p>We collect and store content you submit through the Service, including:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>Messages;</li>
@@ -74,7 +70,7 @@ export default function PrivacyPage() {
             protected confidential communications system.
           </p>
 
-          <h3 className="text-base font-semibold text-white">C. Technical, device, and security information</h3>
+          <h3 className="text-base font-semibold text-header-primary">C. Technical, device, and security information</h3>
           <p>We collect:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
@@ -107,7 +103,7 @@ export default function PrivacyPage() {
             <li>Crash reports through a dedicated crash-monitoring service.</li>
           </ul>
 
-          <h3 className="text-base font-semibold text-white">D. Activity and connected services</h3>
+          <h3 className="text-base font-semibold text-header-primary">D. Activity and connected services</h3>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
               <strong>Presence.</strong> We process whether you are online, idle, or in a call so we can
@@ -134,7 +130,7 @@ export default function PrivacyPage() {
           </ul>
           <p>You can disconnect these services or change your activity settings at any time.</p>
 
-          <h3 className="text-base font-semibold text-white">E. Voice and video information</h3>
+          <h3 className="text-base font-semibold text-header-primary">E. Voice and video information</h3>
           <p>
             Voice and video calls use WebRTC transport encryption, including DTLS-SRTP. One-to-one
             calls connect directly between devices where possible, or through relay (TURN) servers
@@ -152,7 +148,7 @@ export default function PrivacyPage() {
             <li>Technical information needed to establish and maintain the call.</li>
           </ul>
 
-          <h3 className="text-base font-semibold text-white">F. Payment information</h3>
+          <h3 className="text-base font-semibold text-header-primary">F. Payment information</h3>
           <p>Paid services may be purchased through Stripe, Apple, or Google.</p>
           <p>
             If you make a donation on our donate page, we keep a record of the amount, the time, any
@@ -177,14 +173,14 @@ export default function PrivacyPage() {
             <li>Limited billing information provided by the payment provider.</li>
           </ul>
 
-          <h3 className="text-base font-semibold text-white">G. Information from other people</h3>
+          <h3 className="text-base font-semibold text-header-primary">G. Information from other people</h3>
           <p>
             Other people may give us information about you, for example when they mention you, add you
             to a group chat, or report your content. Space owners and moderators may record moderation
             actions that involve you.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">2. How We Use Information</h2>
+          <h2 className="text-lg font-semibold text-header-primary">2. How We Use Information</h2>
           <p>We use information to:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>Create and manage accounts;</li>
@@ -207,7 +203,7 @@ export default function PrivacyPage() {
             targeted advertising.
           </p>
 
-          <h3 className="text-base font-semibold text-white">Legal bases (EEA, UK, and Switzerland)</h3>
+          <h3 className="text-base font-semibold text-header-primary">Legal bases (EEA, UK, and Switzerland)</h3>
           <p>Where the GDPR or similar laws apply, we rely on these legal bases:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
@@ -245,9 +241,9 @@ export default function PrivacyPage() {
             process it only to provide the Service as you direct and to keep the Service safe.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">3. Moderation, Automated Decisions, and AI</h2>
+          <h2 className="text-lg font-semibold text-header-primary">3. Moderation, Automated Decisions, and AI</h2>
 
-          <h3 className="text-base font-semibold text-white">Access by Disband personnel</h3>
+          <h3 className="text-base font-semibold text-header-primary">Access by Disband personnel</h3>
           <p>
             Because Disband does not provide end-to-end encryption for messages and media, authorized
             personnel may access content when reasonably necessary to:
@@ -263,7 +259,7 @@ export default function PrivacyPage() {
           </ul>
           <p>We do not promise that content is private from Disband personnel.</p>
 
-          <h3 className="text-base font-semibold text-white">Automated safety systems</h3>
+          <h3 className="text-base font-semibold text-header-primary">Automated safety systems</h3>
           <p>We use automated systems to find content that breaks our Terms or the law. They check:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
@@ -293,7 +289,7 @@ export default function PrivacyPage() {
             <Link href="/legal/eu-uk" className={link}>EU and UK Information</Link> page for details.
           </p>
 
-          <h3 className="text-base font-semibold text-white">Tether, our AI assistant</h3>
+          <h3 className="text-base font-semibold text-header-primary">Tether, our AI assistant</h3>
           <p>
             Tether is an AI assistant. When someone writes @tether in a channel, direct message, or
             group chat, or messages Tether directly, the recent messages in that conversation,
@@ -303,14 +299,14 @@ export default function PrivacyPage() {
           </p>
           <p>Disband does not train AI models on your content.</p>
 
-          <h3 className="text-base font-semibold text-white">Child safety</h3>
+          <h3 className="text-base font-semibold text-header-primary">Child safety</h3>
           <p>
             If we find apparent child sexual exploitation material, we remove it, preserve it as the
             law requires, and report it to the U.S. National Center for Missing &amp; Exploited
             Children (NCMEC), which may share reports with law enforcement around the world.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">4. Cookies and Similar Technologies</h2>
+          <h2 className="text-lg font-semibold text-header-primary">4. Cookies and Similar Technologies</h2>
           <p>Disband uses essential cookies and similar technologies for purposes such as:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>Authentication;</li>
@@ -329,16 +325,16 @@ export default function PrivacyPage() {
           </p>
           <p>Disabling essential cookies may prevent portions of the Service from functioning.</p>
 
-          <h2 className="text-lg font-semibold text-white">5. How We Share Information</h2>
+          <h2 className="text-lg font-semibold text-header-primary">5. How We Share Information</h2>
 
-          <h3 className="text-base font-semibold text-white">Other people on Disband</h3>
+          <h3 className="text-base font-semibold text-header-primary">Other people on Disband</h3>
           <p>
             Your profile is visible to other users. Messages and media go to the people, group chats,
             spaces, and channels you send them to. Your status and activity are shown according to
             your settings.
           </p>
 
-          <h3 className="text-base font-semibold text-white">Service providers</h3>
+          <h3 className="text-base font-semibold text-header-primary">Service providers</h3>
           <p>We use independent providers to operate Disband, including:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li><strong>Supabase</strong> — PostgreSQL database, authentication, and storage;</li>
@@ -376,13 +372,13 @@ export default function PrivacyPage() {
             working to replace it with a provider that does.
           </p>
 
-          <h3 className="text-base font-semibold text-white">Services you connect</h3>
+          <h3 className="text-base font-semibold text-header-primary">Services you connect</h3>
           <p>
             When you connect Discord, Spotify, Last.fm, YouTube, TikTok, or Twitch, that service
             handles the connection under its own terms and privacy policy.
           </p>
 
-          <h3 className="text-base font-semibold text-white">Bots</h3>
+          <h3 className="text-base font-semibold text-header-primary">Bots</h3>
           <p>
             Spaces can add bots, including bots built by other developers. A bot can access the
             messages, members, and other information that its permissions allow in that space. Its
@@ -390,7 +386,7 @@ export default function PrivacyPage() {
             Policy.
           </p>
 
-          <h3 className="text-base font-semibold text-white">Legal, safety, and business transfers</h3>
+          <h3 className="text-base font-semibold text-header-primary">Legal, safety, and business transfers</h3>
           <p>We may also disclose information when reasonably necessary to:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>Comply with a subpoena, court order, or other valid legal process;</li>
@@ -403,7 +399,7 @@ export default function PrivacyPage() {
           </ul>
           <p>We do not sell, rent, or trade personal information to data brokers or advertising companies.</p>
 
-          <h2 className="text-lg font-semibold text-white">6. International Transfers</h2>
+          <h2 className="text-lg font-semibold text-header-primary">6. International Transfers</h2>
           <p>
             Genysis IQ is based in the United States, and our main database is hosted in the United
             States. Our providers also process information in other countries, and DeepSeek may
@@ -419,7 +415,7 @@ export default function PrivacyPage() {
             information about these safeguards at privacy@disband.dev.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">7. Data Retention</h2>
+          <h2 className="text-lg font-semibold text-header-primary">7. Data Retention</h2>
           <p>We retain information for as long as reasonably necessary to:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>Provide the Service;</li>
@@ -466,7 +462,7 @@ export default function PrivacyPage() {
             <li>Transaction records that must be retained.</li>
           </ul>
 
-          <h2 className="text-lg font-semibold text-white">8. Your Privacy Rights</h2>
+          <h2 className="text-lg font-semibold text-header-primary">8. Your Privacy Rights</h2>
           <p>
             You can download a copy of your account data and delete your account in{" "}
             <strong>Settings → My Account</strong>. You can update most account and profile information
@@ -504,7 +500,7 @@ export default function PrivacyPage() {
             the chance to address your concern first.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">9. Children</h2>
+          <h2 className="text-lg font-semibold text-header-primary">9. Children</h2>
           <p>
             Disband is not intended for children under 13. You must be at least 13 years old to use the
             Service, unless a higher minimum age applies in your location.
@@ -520,7 +516,7 @@ export default function PrivacyPage() {
             <strong>privacy@disband.dev</strong>.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">10. Security</h2>
+          <h2 className="text-lg font-semibold text-header-primary">10. Security</h2>
           <p>
             We use reasonable technical and organizational safeguards designed to protect information.
             These may include access controls, encryption in transit, authentication safeguards,
@@ -531,7 +527,7 @@ export default function PrivacyPage() {
             accessed, disclosed, altered, or destroyed through unauthorized activity.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">11. Legal Requests</h2>
+          <h2 className="text-lg font-semibold text-header-primary">11. Legal Requests</h2>
           <p>
             We review and respond to valid legal process as required by applicable law.
           </p>
@@ -541,14 +537,14 @@ export default function PrivacyPage() {
             under this Policy and our Terms.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">12. Changes</h2>
+          <h2 className="text-lg font-semibold text-header-primary">12. Changes</h2>
           <p>
             We may update this Privacy Policy from time to time. We will update the “Last updated” date
             when changes are made. If we make material changes, we will tell you in the Service or by
             email before they take effect where reasonably practical.
           </p>
 
-          <h2 className="text-lg font-semibold text-white">13. Contact</h2>
+          <h2 className="text-lg font-semibold text-header-primary">13. Contact</h2>
           <p>Privacy questions and requests may be sent to:</p>
           <p className="whitespace-pre-line">
             Genysis IQ LLC{"\n"}
@@ -562,8 +558,6 @@ export default function PrivacyPage() {
         <Link href="/home" className="mt-10 inline-block text-sm text-brand hover:underline">
           ← Back to home
         </Link>
-      </main>
-      <MarketingFooter />
-    </div>
+    </LegalShell>
   );
 }

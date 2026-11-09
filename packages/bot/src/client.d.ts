@@ -52,6 +52,8 @@ export class Client {
   createChannel(serverId: string, name: string, options?: { type?: "text" | "voice"; categoryId?: string | null }): Promise<string>;
   renameChannel(channelId: string, name: string): Promise<unknown>;
   deleteChannel(channelId: string): Promise<unknown>;
+  /** Delete a message (messages.delete). Others' messages need Manage Messages. Takes the id or display_id. */
+  deleteMessage(channelId: string, messageId: string): Promise<void>;
   leaveServer(serverId: string): Promise<unknown>;
   createInvite(serverId: string, scopes: BotScope[]): Promise<{ code: string; invite_url: string }>;
 }

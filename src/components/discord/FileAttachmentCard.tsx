@@ -23,7 +23,7 @@ export function FileAttachmentCard({
 
   return (
     <>
-      <div className="mt-1 flex w-full max-w-[520px] items-center gap-4 rounded-[4px] border border-divider bg-bg-secondary px-4 py-3 transition-colors hover:bg-bg-secondary-alt">
+      <div className="mt-1 flex w-full max-w-[520px] items-center gap-4 rounded-lg border border-divider bg-bg-secondary px-4 py-3 transition-colors hover:bg-bg-secondary-alt">
         <FileGlyph />
         <div className="min-w-0 flex-1">
           <button

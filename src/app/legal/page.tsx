@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { MarketingNav, MarketingFooter } from "@/components/marketing/MarketingLayout";
+import { LegalShell } from "@/components/marketing/LegalShell";
 
 export const metadata: Metadata = {
   title: "Legal Information",
@@ -11,49 +11,41 @@ export const metadata: Metadata = {
 
 export default function LegalPage() {
   return (
-    <div className="min-h-screen bg-[#1e1f22]">
-      <MarketingNav />
-      <main className="mx-auto max-w-3xl px-6 pb-20 pt-24 sm:pt-28">
-        <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6e727a]">
-          Last updated November 6, 2026
-        </p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-white sm:text-4xl">
-          Legal Information
-        </h1>
-        <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-[#9aa0a8]">
+    <LegalShell title="Legal Information" updated="November 6, 2026" path="/legal">
+        <p className="max-w-2xl text-[15px] leading-relaxed text-text-muted">
           Everything below describes who owns and operates Disband, how your data is handled, and the
           terms under which the service is provided.
         </p>
 
-        <div className="mt-12 space-y-12 text-[15px] leading-relaxed text-[#9aa0a8]">
+        <div className="mt-10 space-y-10 text-[15px] leading-relaxed text-text-muted">
           <section>
-            <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">Legal Documents</h2>
+            <h2 className="text-xl font-semibold tracking-[-0.01em] text-header-primary">Legal Documents</h2>
             <ul className="mt-3 list-disc space-y-1.5 pl-5">
               <li>
-                <Link href="/terms" className="text-brand hover:underline">Terms of Service</Link> — the
+                <Link href="/terms" className="text-text-link hover:underline">Terms of Service</Link> — the
                 rules for using Disband.
               </li>
               <li>
-                <Link href="/privacy" className="text-brand hover:underline">Privacy Policy</Link> — what
+                <Link href="/privacy" className="text-text-link hover:underline">Privacy Policy</Link> — what
                 we collect, how we use it, and your rights.
               </li>
               <li>
-                <Link href="/eula" className="text-brand hover:underline">End User License Agreement</Link>{" "}
+                <Link href="/eula" className="text-text-link hover:underline">End User License Agreement</Link>{" "}
                 — your license to the Disband apps.
               </li>
               <li>
-                <Link href="/copyright" className="text-brand hover:underline">Copyright Policy</Link> —
+                <Link href="/copyright" className="text-text-link hover:underline">Copyright Policy</Link> —
                 reporting infringement, counter-notices, and repeat infringers.
               </li>
               <li>
-                <Link href="/legal/eu-uk" className="text-brand hover:underline">EU and UK Information</Link>{" "}
+                <Link href="/legal/eu-uk" className="text-text-link hover:underline">EU and UK Information</Link>{" "}
                 — Digital Services Act and Online Safety Act contacts, reporting, and appeals.
               </li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">1. Operator</h2>
+            <h2 className="text-xl font-semibold tracking-[-0.01em] text-header-primary">1. Operator</h2>
             <p>
               Disband is owned and operated by <strong>Genysis IQ LLC</strong>, a Florida limited
               liability company, 10524 Moss Park Rd, Suite 204-653, Orlando, Florida 32832, United
@@ -70,7 +62,7 @@ export default function LegalPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">2. Intellectual Property</h2>
+            <h2 className="text-xl font-semibold tracking-[-0.01em] text-header-primary">2. Intellectual Property</h2>
             <p>
               Disband’s name, logos, software, designs, artwork, website content, service
               architecture, features, and other original materials are owned by or licensed to Genysis
@@ -89,14 +81,14 @@ export default function LegalPage() {
             </p>
             <p>
               Your license to install and use the Disband apps is set out in the{" "}
-              <Link href="/eula" className="text-brand hover:underline">
+              <Link href="/eula" className="text-text-link hover:underline">
                 End User License Agreement
               </Link>
               .
             </p>
             <p>
               To report material on Disband that infringes your copyright, see our{" "}
-              <Link href="/copyright" className="text-brand hover:underline">
+              <Link href="/copyright" className="text-text-link hover:underline">
                 Copyright Policy
               </Link>
               .
@@ -104,7 +96,7 @@ export default function LegalPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">3. Security and Encryption</h2>
+            <h2 className="text-xl font-semibold tracking-[-0.01em] text-header-primary">3. Security and Encryption</h2>
             <p>
               Disband messages and media are not end-to-end encrypted. They may be stored in
               server-readable form on infrastructure used by Disband, including Supabase and related
@@ -126,11 +118,11 @@ export default function LegalPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">4. Third-Party Services</h2>
+            <h2 className="text-xl font-semibold tracking-[-0.01em] text-header-primary">4. Third-Party Services</h2>
             <p>
               Disband uses third-party providers, including Supabase, Vercel, Cloudflare, Stripe,
               Resend, Apple, Google, Hive, DeepSeek, and GIPHY. Our{" "}
-              <Link href="/privacy" className="text-brand hover:underline">
+              <Link href="/privacy" className="text-text-link hover:underline">
                 Privacy Policy
               </Link>{" "}
               explains what each one does.
@@ -143,13 +135,13 @@ export default function LegalPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">5. Credits and Open-Source Licenses</h2>
+            <h2 className="text-xl font-semibold tracking-[-0.01em] text-header-primary">5. Credits and Open-Source Licenses</h2>
             <p>
               Emoji graphics are from Twemoji, copyright Twitter, Inc. and other contributors, licensed
               under{" "}
               <a
                 href="https://creativecommons.org/licenses/by/4.0/"
-                className="text-brand hover:underline"
+                className="text-text-link hover:underline"
                 rel="noopener noreferrer"
                 target="_blank"
               >
@@ -162,7 +154,7 @@ export default function LegalPage() {
               Adams and contributors) typefaces are used under the{" "}
               <a
                 href="https://openfontlicense.org"
-                className="text-brand hover:underline"
+                className="text-text-link hover:underline"
                 rel="noopener noreferrer"
                 target="_blank"
               >
@@ -178,7 +170,7 @@ export default function LegalPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">6. No Professional or Emergency Service</h2>
+            <h2 className="text-xl font-semibold tracking-[-0.01em] text-header-primary">6. No Professional or Emergency Service</h2>
             <p>
               Disband is a communications and community platform. It is not an emergency service and
               should not be relied upon for emergency communications, medical advice, legal advice,
@@ -187,16 +179,11 @@ export default function LegalPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold tracking-[-0.01em] text-white">7. Contact</h2>
+            <h2 className="text-xl font-semibold tracking-[-0.01em] text-header-primary">7. Contact</h2>
             <p>Legal questions may be sent to <strong>legal@disband.dev</strong>.</p>
           </section>
         </div>
 
-        <Link href="/home" className="mt-10 inline-block text-sm text-brand hover:underline">
-          ← Back to home
-        </Link>
-      </main>
-      <MarketingFooter />
-    </div>
+    </LegalShell>
   );
 }

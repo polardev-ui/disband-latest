@@ -29,16 +29,16 @@ const BANNER: Record<StatusTone, string> = {
   operational: "border-[#23a55a] bg-[#23a55a]/[0.07]",
   degraded: "border-[#f0b232] bg-[#f0b232]/[0.07]",
   outage: "border-[#f23f43] bg-[#f23f43]/[0.07]",
-  maintenance: "border-[#5865f2] bg-[#5865f2]/[0.07]",
+  maintenance: "border-brand bg-brand/[0.07]",
   unknown: "border-[#80848e] bg-white/[0.03]",
 };
 
 const STATUS_PILL: Record<IncidentStatus, string> = {
   investigating: "bg-[#f23f43]/15 text-[#ff8f91]",
   identified: "bg-[#f0b232]/15 text-[#f6c95f]",
-  monitoring: "bg-[#5865f2]/20 text-[#b4baff]",
+  monitoring: "bg-brand/20 text-[#b4baff]",
   resolved: "bg-[#23a55a]/15 text-[#6bdc96]",
-  scheduled: "bg-[#5865f2]/20 text-[#b4baff]",
+  scheduled: "bg-brand/20 text-[#b4baff]",
   in_progress: "bg-[#f0b232]/15 text-[#f6c95f]",
   completed: "bg-[#23a55a]/15 text-[#6bdc96]",
   published: "bg-white/[0.06] text-text-normal",
@@ -180,7 +180,7 @@ function IncidentRow({ incident, past = false }: { incident: StatusIncident; pas
       className="block border-b border-white/[0.05] px-4 py-3.5 transition-colors last:border-b-0 hover:bg-white/[0.025]"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className={`rounded-[4px] px-1.5 py-0.5 text-[11px] font-semibold ${STATUS_PILL[incident.status]}`}>
+        <span className={`rounded-lg px-1.5 py-0.5 text-[11px] font-semibold ${STATUS_PILL[incident.status]}`}>
           {INCIDENT_STATUS_LABEL[incident.status]}
         </span>
         <span className="text-[11px] uppercase tracking-[0.03em] text-text-muted">
@@ -270,7 +270,7 @@ export function StatusView({ initial }: { initial: StatusSnapshot }) {
             type="button"
             onClick={() => void refresh()}
             disabled={refreshing}
-            className="h-[34px] rounded-[4px] border border-white/[0.08] bg-[#2b2d31] px-3 text-[13px] font-medium text-text-normal transition-colors hover:border-white/[0.15] hover:bg-[#35373c] disabled:opacity-60"
+            className="h-[34px] rounded-lg border border-white/[0.08] bg-bg-secondary-alt px-3 text-[13px] font-medium text-text-normal transition-colors hover:border-white/[0.15] hover:bg-interactive-hover disabled:opacity-60"
           >
             {refreshing ? "Refreshing…" : "Refresh"}
           </button>
@@ -287,7 +287,7 @@ export function StatusView({ initial }: { initial: StatusSnapshot }) {
       </div>
 
       {error && (
-        <p className="mt-3 rounded-[4px] border border-[#f0b232]/25 bg-[#f0b232]/[0.06] px-3 py-2 text-[13px] text-[#f6c95f]">
+        <p className="mt-3 rounded-lg border border-[#f0b232]/25 bg-[#f0b232]/[0.06] px-3 py-2 text-[13px] text-[#f6c95f]">
           {error}
         </p>
       )}
@@ -295,7 +295,7 @@ export function StatusView({ initial }: { initial: StatusSnapshot }) {
       {groups.map(([group, monitors]) => (
         <section key={group} className="mt-8">
           <h2 className="mb-2 text-[12px] font-bold uppercase tracking-[0.03em] text-text-muted">{group}</h2>
-          <div className="overflow-hidden rounded-lg bg-[#2b2d31]">
+          <div className="overflow-hidden rounded-lg bg-bg-secondary-alt">
             {monitors.map((monitor) => (
               <MonitorRow key={monitor.id} monitor={monitor} incidents={snapshot.incidents} />
             ))}
@@ -308,7 +308,7 @@ export function StatusView({ initial }: { initial: StatusSnapshot }) {
           <h2 className="mb-2 text-[12px] font-bold uppercase tracking-[0.03em] text-text-muted">
             Active incidents
           </h2>
-          <div className="overflow-hidden rounded-lg bg-[#2b2d31]">
+          <div className="overflow-hidden rounded-lg bg-bg-secondary-alt">
             {activeIncidents.length === 0 ? (
               <EmptyPanel>No active incidents. If something looks wrong, check back shortly.</EmptyPanel>
             ) : (
@@ -321,7 +321,7 @@ export function StatusView({ initial }: { initial: StatusSnapshot }) {
           <h2 className="mb-2 text-[12px] font-bold uppercase tracking-[0.03em] text-text-muted">
             Announcements
           </h2>
-          <div className="overflow-hidden rounded-lg bg-[#2b2d31]">
+          <div className="overflow-hidden rounded-lg bg-bg-secondary-alt">
             {announcements.length === 0 ? (
               <EmptyPanel>No announcements right now.</EmptyPanel>
             ) : (
@@ -334,11 +334,11 @@ export function StatusView({ initial }: { initial: StatusSnapshot }) {
       <section className="mt-8">
         <div className="mb-2 flex items-end justify-between gap-4">
           <h2 className="text-[12px] font-bold uppercase tracking-[0.03em] text-text-muted">Past incidents</h2>
-          <a href="/status/feed.xml" className="text-[12px] text-[#00a8fc] hover:underline">
+          <a href="/status/feed.xml" className="text-[12px] text-text-link hover:underline">
             Subscribe via RSS
           </a>
         </div>
-        <div className="overflow-hidden rounded-lg bg-[#2b2d31]">
+        <div className="overflow-hidden rounded-lg bg-bg-secondary-alt">
           {pastIncidents.length === 0 ? (
             <EmptyPanel>No incidents in the last 90 days.</EmptyPanel>
           ) : (
@@ -349,7 +349,7 @@ export function StatusView({ initial }: { initial: StatusSnapshot }) {
 
       <p className="mt-10 text-center text-[12px] text-text-muted">
         Checks run automatically every minute. Seeing a problem that isn&apos;t listed?{" "}
-        <Link href="/bug-report" className="text-[#00a8fc] hover:underline">
+        <Link href="/bug-report" className="text-text-link hover:underline">
           Report a bug
         </Link>
         .

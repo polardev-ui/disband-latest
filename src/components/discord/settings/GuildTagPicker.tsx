@@ -15,7 +15,7 @@ import { serverInitials } from "@/lib/utils";
 import { useI18n } from "@/contexts/I18nContext";
 
 const ACTION =
-  "shrink-0 rounded-[3px] px-3 py-1.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50";
+  "shrink-0 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50";
 
 export function GuildTagPicker({ userId }: { userId: string }) {
   const { t } = useI18n();
@@ -74,10 +74,10 @@ export function GuildTagPicker({ userId }: { userId: string }) {
       {loading ? (
         <div className="space-y-1 p-2" aria-hidden>
           {[0, 1, 2].map((row) => (
-            <div key={row} className="flex items-center gap-3 rounded-[4px] px-2 py-3">
+            <div key={row} className="flex items-center gap-3 rounded-lg px-2 py-3">
               <span className="skeleton-glimmer h-8 w-8 shrink-0 rounded-full" />
               <span className="skeleton-glimmer h-3 flex-1 rounded" />
-              <span className="skeleton-glimmer h-7 w-16 rounded-[3px]" />
+              <span className="skeleton-glimmer h-7 w-16 rounded-md" />
             </div>
           ))}
         </div>
@@ -107,7 +107,7 @@ export function GuildTagPicker({ userId }: { userId: string }) {
             return (
               <div
                 key={option.server_id}
-                className="flex items-center gap-3 border-b border-divider/60 px-4 py-3 last:border-b-0"
+                className="flex items-center gap-3 border-b border-border-subtle px-4 py-3 last:border-b-0"
               >
                 {icon ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -154,7 +154,7 @@ export function GuildTagPicker({ userId }: { userId: string }) {
       )}
 
       {error && options.length > 0 && (
-        <div className="flex items-start justify-between gap-3 border-t border-divider/60 px-4 py-3">
+        <div className="flex items-start justify-between gap-3 border-t border-border-subtle px-4 py-3">
           <p role="alert" className="text-[13px] leading-5 text-status-dnd">{error}</p>
           <button
             type="button"

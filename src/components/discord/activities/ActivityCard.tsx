@@ -31,7 +31,7 @@ function WordlePreview({ activity }: { activity: ActivitySession }) {
           return (
             <span
               key={`${letter}-${index}`}
-              className="flex h-6 w-6 items-center justify-center rounded-[2px] text-[10px] font-bold uppercase text-white"
+              className="flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold uppercase text-white"
               style={{
                 background:
                   mark === "correct"
@@ -66,7 +66,7 @@ function EightBallPreview({ activity }: { activity: ActivitySession }) {
       </p>
     );
   return (
-    <div className="mt-2 border-l-2 border-[#5865f2]/60 pl-2.5">
+    <div className="mt-2 border-l-2 border-brand/60 pl-2.5">
       <p className="line-clamp-1 text-[12px] font-medium text-text-normal">
         “{latest.question}”
       </p>
@@ -141,7 +141,7 @@ export function ActivityCard({ activityId, onOpen }: ActivityCardProps) {
 
   if (error && !activity) {
     return (
-      <div className="mt-1 w-full max-w-[480px] rounded-[4px] bg-bg-secondary p-3 text-[14px] text-text-muted">
+      <div className="mt-1 w-full max-w-[480px] rounded-lg bg-bg-secondary p-3 text-[14px] text-text-muted">
         {error}
       </div>
     );
@@ -149,13 +149,13 @@ export function ActivityCard({ activityId, onOpen }: ActivityCardProps) {
 
   if (!activity) {
     return (
-      <div className="mt-1 w-full max-w-[480px] animate-pulse rounded-[4px] bg-bg-secondary p-3">
+      <div className="mt-1 w-full max-w-[480px] animate-pulse rounded-lg bg-bg-secondary p-3">
         <div className="flex gap-3">
-          <div className="h-10 w-10 rounded-[4px] bg-bg-accent" />
+          <div className="h-10 w-10 rounded-lg bg-bg-accent" />
           <div className="flex-1 space-y-2">
-            <div className="h-3 w-16 rounded-[2px] bg-bg-accent" />
-            <div className="h-4 w-2/3 rounded-[2px] bg-bg-accent" />
-            <div className="h-3 w-1/2 rounded-[2px] bg-bg-accent" />
+            <div className="h-3 w-16 rounded-md bg-bg-accent" />
+            <div className="h-4 w-2/3 rounded-md bg-bg-accent" />
+            <div className="h-3 w-1/2 rounded-md bg-bg-accent" />
           </div>
         </div>
       </div>

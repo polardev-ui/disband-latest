@@ -169,7 +169,7 @@ export function VideoPlayer({ src, className = "", onLoad, fileName = "video", s
 
   const controlsVisible = showControls || !playing;
   const iconBtn =
-    "flex h-7 w-7 items-center justify-center rounded-[2px] text-white/85 transition-colors hover:bg-white/10 hover:text-white";
+    "flex h-7 w-7 items-center justify-center rounded-md text-white/85 transition-colors hover:bg-white/10 hover:text-white";
   const VolumeIcon = muted ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
 
   return (
@@ -182,7 +182,7 @@ export function VideoPlayer({ src, className = "", onLoad, fileName = "video", s
       className={`group/video outline-none focus-visible:ring-1 focus-visible:ring-brand ${
         fullscreen
           ? "fixed inset-0 z-[200] flex flex-col bg-black"
-          : "relative w-full max-w-[520px] overflow-hidden rounded-[4px] border border-divider bg-bg-secondary"
+          : "relative w-full max-w-[520px] overflow-hidden rounded-lg border border-divider bg-bg-secondary"
       } ${playing && !showControls ? "cursor-none" : ""} ${className}`}
       onMouseMove={revealControls}
       onMouseLeave={() => !fullscreen && playing && setShowControls(false)}
@@ -222,7 +222,7 @@ export function VideoPlayer({ src, className = "", onLoad, fileName = "video", s
           }}
           aria-label={t("Download video")}
           title={t("Download")}
-          className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-[2px] border border-white/15 bg-[#202225]/90 text-white/85 opacity-0 transition-opacity hover:bg-[#202225] hover:text-white focus-visible:opacity-100 group-hover/video:opacity-100"
+          className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-md border border-white/15 bg-[#202225]/90 text-white/85 opacity-0 transition-opacity hover:bg-[#202225] hover:text-white focus-visible:opacity-100 group-hover/video:opacity-100"
         >
           <Download size={15} />
         </button>
@@ -233,7 +233,7 @@ export function VideoPlayer({ src, className = "", onLoad, fileName = "video", s
             type="button"
             onClick={togglePlay}
             aria-label={ended ? t("Replay") : t("Play")}
-            className="absolute left-1/2 top-1/2 flex h-12 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[2px] border border-white/25 bg-black/65 text-white transition-colors hover:bg-black/80"
+            className="absolute left-1/2 top-1/2 flex h-12 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-md border border-white/25 bg-black/65 text-white transition-colors hover:bg-black/80"
           >
             {ended ? <RotateCcw size={21} strokeWidth={2.2} /> : <Play size={21} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />}
           </button>
@@ -247,7 +247,7 @@ export function VideoPlayer({ src, className = "", onLoad, fileName = "video", s
 
         {/* Before first play, show the length in a flat black tag. */}
         {!started && duration > 0 && (
-          <span className="pointer-events-none absolute bottom-2 right-2 rounded-[2px] bg-black/75 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white">
+          <span className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/75 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white">
             {formatTime(duration)}
           </span>
         )}
@@ -277,7 +277,7 @@ export function VideoPlayer({ src, className = "", onLoad, fileName = "video", s
                 type="button"
                 onClick={cycleRate}
                 title={t("Playback speed")}
-                className="h-7 min-w-[36px] rounded-[2px] px-1 text-[11px] font-medium tabular-nums text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                className="h-7 min-w-[36px] rounded-md px-1 text-[11px] font-medium tabular-nums text-white/80 transition-colors hover:bg-white/10 hover:text-white"
               >
                 {rate}×
               </button>

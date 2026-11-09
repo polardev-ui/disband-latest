@@ -66,14 +66,14 @@ export function DiscordConnectPanel() {
       <h1 className="text-3xl font-semibold text-white sm:text-4xl">
         Connect Discord
       </h1>
-      <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-[#9aa0a8]">
+      <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-text-muted">
         Link your Discord account to Disband. You will get a role in the space carrying your
         Disband username.
       </p>
 
       <div className="mt-8 rounded-[8px] border border-white/[0.08] bg-white/[0.02] p-6">
         {checking ? (
-          <p className="text-sm text-[#6e727a]">Checking…</p>
+          <p className="text-sm text-text-muted">Checking…</p>
         ) : !validGuild ? (
           <p className="text-sm leading-relaxed text-status-dnd">
             This link did not come with a Discord space. Ask for a fresh connect link with
@@ -83,14 +83,14 @@ export function DiscordConnectPanel() {
         ) : linked ? (
           <div>
             <p className="text-lg font-semibold text-status-online">Connected ✓</p>
-            <p className="mt-2 text-sm leading-relaxed text-[#9aa0a8]">
+            <p className="mt-2 text-sm leading-relaxed text-text-muted">
               Your Discord account is linked{existing ? ` as ${existing.discord_username}` : ""} and
               your role is assigned. You can close this page.
             </p>
           </div>
         ) : !userId ? (
           <div>
-            <p className="text-sm leading-relaxed text-[#9aa0a8]">
+            <p className="text-sm leading-relaxed text-text-muted">
               Log in to Disband first, then connect your Discord account.
             </p>
             <Link
@@ -103,7 +103,7 @@ export function DiscordConnectPanel() {
         ) : (
           <div>
             {existing && (
-              <p className="mb-4 rounded-md border border-white/10 bg-[#1e1f22] px-3 py-2 text-[13px] text-[#9aa0a8]">
+              <p className="mb-4 rounded-md border border-white/10 bg-bg-secondary px-3 py-2 text-[13px] text-text-muted">
                 Currently linked as <span className="font-semibold text-white">{existing.discord_username}</span>.
                 Connecting again moves the link to your current Discord account.
               </p>
@@ -117,7 +117,7 @@ export function DiscordConnectPanel() {
             >
               {busy ? "Opening Discord…" : "Connect with Discord"}
             </button>
-            <p className="mt-3 text-xs leading-relaxed text-[#6e727a]">
+            <p className="mt-3 text-xs leading-relaxed text-text-muted">
               Discord will ask you to confirm your identity. Disband only reads your username and
               user ID — nothing else.
             </p>

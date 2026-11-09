@@ -97,7 +97,7 @@ export function MembersSection({ isOwner }: SectionProps) {
               return (
                 <li
                   key={m.user_id}
-                  className="view-enter flex items-center gap-3 border-b border-divider px-4 py-3 last:border-b-0"
+                  className="view-enter flex items-center gap-3 border-b border-border-subtle px-4 py-3 last:border-b-0"
                   style={enterStyle(i)}
                 >
                   <Avatar profile={m.profile} size="sm" />
@@ -117,7 +117,7 @@ export function MembersSection({ isOwner }: SectionProps) {
                           .map((r) => (
                             <span
                               key={r.id}
-                              className="inline-flex h-[22px] items-center gap-1.5 rounded-[6px] border border-divider bg-bg-accent px-1.5 text-[11.5px] font-medium text-text-normal"
+                              className="inline-flex h-[22px] items-center gap-1.5 rounded-[6px] border border-border-subtle bg-bg-accent px-1.5 text-[11.5px] font-medium text-text-normal"
                             >
                               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: r.color }} />
                               {r.name}

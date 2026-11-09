@@ -27,7 +27,7 @@ function FencedCode({ code, language, langLabel }: { code: string; language: str
               </span>
             )}
           </div>
-          <pre className="max-w-[90%] overflow-x-auto rounded-[4px] border border-bg-tertiary bg-bg-secondary p-2 font-mono text-[14px] leading-[18px]">
+          <pre className="max-w-[90%] overflow-x-auto rounded-lg border border-bg-tertiary bg-bg-secondary p-2 font-mono text-[14px] leading-[18px]">
             <code>{code.replace(/\n$/, "")}</code>
           </pre>
         </div>
@@ -61,7 +61,7 @@ export function roleMentionColour(role: { color?: string | null }): string | nul
 }
 
 const MENTION_CHIP_CLASS =
-  "rounded-[3px] bg-[rgb(88_101_242/0.3)] px-0.5 font-medium text-[#c9cdfb] transition-colors hover:bg-brand hover:text-white";
+  "rounded-md bg-[color-mix(in_srgb,var(--text-link)_18%,transparent)] px-0.5 font-medium text-text-link transition-colors hover:bg-[color-mix(in_srgb,var(--text-link)_30%,transparent)]";
 
 function linkFor(url: string): string {
   return url;
@@ -95,7 +95,7 @@ function Spoiler({ children }: { children: ReactNode }) {
           reveal();
         }
       }}
-      className={`cursor-pointer rounded-[3px] px-0.5 transition-colors ${
+      className={`cursor-pointer rounded-md px-0.5 transition-colors ${
         revealed ? "bg-bg-secondary" : "select-none bg-[#202225]"
       }`}
     >
@@ -145,7 +145,7 @@ function renderInlineTokens(
           // Coloured roles ping in their own colour, as on Discord.
           <span
             key={key}
-            className="rounded-[3px] px-0.5 font-medium transition-colors"
+            className="rounded-md px-0.5 font-medium transition-colors"
             style={{ color: colour, backgroundColor: `color-mix(in srgb, ${colour} 18%, transparent)` }}
             title={`Role: ${role.name}`}
           >
@@ -229,7 +229,7 @@ function renderInlineTokens(
       out.push(
         <code
           key={key}
-          className="rounded-[3px] bg-bg-secondary px-[0.2em] py-0 font-mono text-[0.85em] leading-[1.125rem] text-text-normal"
+          className="rounded-md bg-bg-secondary px-[0.2em] py-0 font-mono text-[0.85em] leading-[1.125rem] text-text-normal"
         >
           {token.slice(1, -1)}
         </code>,

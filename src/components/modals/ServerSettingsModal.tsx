@@ -20,6 +20,7 @@ import {
   IconSparkle,
   IconSpeaker,
   IconTag,
+  IconHand,
   IconTrash,
   IconStar,
 } from "@/components/icons";
@@ -40,6 +41,7 @@ import { BansSection } from "./server-settings/BansSection";
 import { EmojiSection } from "./server-settings/EmojiSection";
 import { SoundboardSection } from "./server-settings/SoundboardSection";
 import { GuildTagSection } from "./server-settings/GuildTagSection";
+import { WelcomeSection } from "./server-settings/WelcomeSection";
 import { DangerSection } from "./server-settings/DangerSection";
 import { useI18n } from "@/contexts/I18nContext";
 
@@ -55,6 +57,7 @@ type Section =
   | "overview"
   | "appearance"
   | "guild"
+  | "welcome"
   | "invite"
   | "integrations"
   | "catalysts"
@@ -84,6 +87,7 @@ const NAV: NavItem[] = [
   { id: "overview", label: "Overview", group: "Space", icon: IconSettings, description: "Your space's name, description and whether people can find it." },
   { id: "appearance", label: "Icon & banner", group: "Space", icon: IconImage, ownerOnly: true, description: "The pictures people see in the sidebar, on invites and in Discover." },
   { id: "guild", label: "Guild tag", group: "Space", icon: IconTag, permission: "manage_server", description: "A short tag and pixel icon members can wear next to their name." },
+  { id: "welcome", label: "Welcome messages", group: "Space", icon: IconHand, permission: "manage_server", description: "Have Tether greet new members with a message you write." },
   { id: "invite", label: "Invites", group: "Space", icon: IconLink, description: "Share a link, claim a custom one, or send invites to friends." },
   { id: "integrations", label: "Integrations", group: "Space", icon: IconLink, permission: "manage_webhooks", description: "Webhooks that post into this space from other services." },
   { id: "catalysts", label: "Catalysts", group: "Space", icon: IconSparkle, description: "Perks unlocked by members boosting this space." },
@@ -160,7 +164,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel, onOpenCataly
           value={current.id}
           onChange={(e) => setSection(e.target.value as Section)}
           aria-label={t("Space settings section")}
-          className="w-full rounded-[4px] bg-bg-tertiary px-2 py-2 text-[16px] font-semibold text-text-normal outline-none"
+          className="w-full rounded-lg bg-bg-tertiary px-2 py-2 text-[16px] font-semibold text-text-normal outline-none"
         >
           {allItems.map((n) => (
             <option key={n.id} value={n.id}>{t(n.label)}</option>
@@ -216,6 +220,7 @@ export function ServerSettingsModal({ open, onClose, onEditChannel, onOpenCataly
       {current.id === "overview" && <OverviewSection {...shared} />}
       {current.id === "appearance" && <AppearanceSection {...shared} />}
       {current.id === "guild" && <GuildTagSection {...shared} />}
+      {current.id === "welcome" && <WelcomeSection {...shared} />}
       {current.id === "invite" && <InvitesSection {...shared} />}
       {current.id === "promote" && <PromoteSection {...shared} />}
       {current.id === "integrations" && <WebhooksSection {...shared} />}

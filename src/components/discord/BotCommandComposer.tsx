@@ -280,7 +280,7 @@ export function BotCommandComposer({ command, members, channels, serverId, chann
                 choose(item);
                 advance();
               }}
-              className={`mx-2 flex h-[34px] w-[calc(100%-16px)] items-center gap-3 rounded-[4px] px-2 text-left ${i === pickIdx ? "bg-interactive-hover" : ""}`}
+              className={`mx-2 flex h-[34px] w-[calc(100%-16px)] items-center gap-3 rounded-lg px-2 text-left ${i === pickIdx ? "bg-interactive-hover" : ""}`}
             >
               {item.profile && (
                 <span className="relative shrink-0">
@@ -352,7 +352,7 @@ export function BotCommandComposer({ command, members, channels, serverId, chann
             <label
               key={name}
               onMouseDown={() => focusOption(i)}
-              className={`flex h-[26px] cursor-text items-stretch overflow-hidden rounded-[4px] bg-bg-tertiary text-[16px] leading-[24px] ring-1 transition-shadow ${
+              className={`flex h-[26px] cursor-text items-stretch overflow-hidden rounded-lg bg-bg-tertiary text-[16px] leading-[24px] ring-1 transition-shadow ${
                 bad ? "ring-status-dnd" : focused ? "ring-[#00a8fc]" : "ring-transparent"
               } ${free ? "min-w-[160px] flex-1" : ""}`}
             >

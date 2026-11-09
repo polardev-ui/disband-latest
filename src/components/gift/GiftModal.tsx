@@ -70,7 +70,7 @@ export function GiftModal({ onClose, onPurchased, exiting }: {
       onClick={onClose}
     >
       <div
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[440px] overflow-y-auto rounded-[4px] bg-bg-primary text-text-normal shadow-[var(--elevation-high)]`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[440px] overflow-y-auto rounded-xl border border-border-subtle bg-bg-primary text-text-normal shadow-[var(--elevation-high)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -120,7 +120,7 @@ export function GiftModal({ onClose, onPurchased, exiting }: {
                     role="radio"
                     aria-checked={on}
                     onClick={() => setPlan(p)}
-                    className={`flex items-center gap-3 rounded-[3px] border px-3 py-3 text-left transition-colors ${
+                    className={`flex items-center gap-3 rounded-md border px-3 py-3 text-left transition-colors ${
                       on ? "border-brand bg-interactive-selected" : "border-transparent bg-bg-secondary hover:bg-interactive-hover"
                     }`}
                   >
@@ -156,7 +156,7 @@ export function GiftModal({ onClose, onPurchased, exiting }: {
                     role="radio"
                     aria-checked={on}
                     onClick={() => setMonths(m)}
-                    className={`flex flex-col items-center rounded-[3px] border px-2 py-2.5 transition-colors ${
+                    className={`flex flex-col items-center rounded-md border px-2 py-2.5 transition-colors ${
                       on ? "border-brand bg-interactive-selected" : "border-transparent bg-bg-secondary hover:bg-interactive-hover"
                     }`}
                   >
@@ -192,7 +192,7 @@ export function GiftModal({ onClose, onPurchased, exiting }: {
                   type="button"
                   disabled={busy}
                   onClick={() => void startCheckout()}
-                  className="h-[38px] rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
+                  className="h-[38px] rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                 >
                   {busy ? "Starting checkout…" : `Continue to payment · ${formatPrice(price)}`}
                 </button>

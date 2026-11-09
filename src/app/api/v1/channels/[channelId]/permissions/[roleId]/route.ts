@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, botJsonError } from "@/lib/bot-auth";
 import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
+import { resolveRoleId } from "@/lib/bot-ids";
 
 type Params = { params: Promise<{ channelId: string; roleId: string }> };
 type Override = { can_view: boolean | null; can_post: boolean | null; can_react: boolean | null; can_attach: boolean | null };
@@ -16,10 +17,12 @@ async function set(request: NextRequest, { params }: Params, override: Override)
   if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
   const gate = await checkBotRateLimit(service, "write", bot.botId);
   if (gate.limited) return botRateLimited(gate.retryAfterSeconds);
+  const role = await resolveRoleId(service, roleId);
+  if (!role) return NextResponse.json({ error: "Role not found" }, { status: 404 });
   const { error } = await service.rpc("bot_set_channel_permission", {
     p_bot_id: bot.botId,
     p_channel_id: channelId,
-    p_role_id: roleId,
+    p_role_id: role,
     p_can_view: override.can_view,
     p_can_post: override.can_post,
     p_can_react: override.can_react,

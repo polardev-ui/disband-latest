@@ -194,7 +194,7 @@ export function ImageLightbox({
           )}
         </div>
 
-        <div className="pointer-events-auto flex shrink-0 items-center gap-1 ml-auto rounded-[4px] bg-bg-floating p-1">
+        <div className="pointer-events-auto flex shrink-0 items-center gap-1 ml-auto rounded-lg bg-bg-floating p-1">
           <ToolbarButton label={t("Zoom out (−)")} onClick={zoomOut} disabled={zoomIndex === 0}>
             <IconZoomOut size={18} />
           </ToolbarButton>
@@ -202,7 +202,7 @@ export function ImageLightbox({
             type="button"
             onClick={() => setZoomIndex(0)}
             title={t("Reset zoom (0)")}
-            className="h-8 w-12 rounded-[3px] text-[12px] tabular-nums text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            className="h-8 w-12 rounded-md text-[12px] tabular-nums text-white/70 transition-colors hover:bg-white/10 hover:text-white"
           >
             {Math.round(zoom * 100)}%
           </button>
@@ -278,7 +278,7 @@ export function ImageLightbox({
       {toast && (
         <div
           role="status"
-          className="absolute bottom-14 left-1/2 -translate-x-1/2 rounded-[3px] border border-white/10 bg-[#141519] px-3.5 py-2 text-[14px] text-white"
+          className="absolute bottom-14 left-1/2 -translate-x-1/2 rounded-md border border-white/10 bg-[#141519] px-3.5 py-2 text-[14px] text-white"
         >
           {toast}
         </div>
@@ -306,7 +306,7 @@ function ToolbarButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center rounded-[3px] text-white/80 transition-colors hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-30"
+      className="flex h-8 w-8 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-30"
     >
       {children}
     </button>

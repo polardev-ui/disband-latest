@@ -261,7 +261,7 @@ function MemberTile({ member, onFocus }: { member: StageMember; onFocus?: () => 
             <MemberAvatar member={member} speaking={false} />
           </span>
         )}
-        <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-[3px] bg-black/65 px-2 py-1 text-[13px] font-medium text-white">
+        <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/65 px-2 py-1 text-[13px] font-medium text-white">
           {member.muted && <IconMicOff size={12} className="shrink-0 text-status-dnd" />}
           <span className="truncate">{member.label}</span>
           {member.ringing && <span className="shrink-0 text-[11px] text-white/50">{t("Ringing…")}</span>}
@@ -315,7 +315,7 @@ export function ParticipantMenu({ member, at, onClose }: { member: StageMember; 
     onClose();
     fn();
   };
-  const row = "flex w-full items-center justify-between rounded-[4px] px-2 py-1.5 text-left text-[14px] font-medium text-text-normal hover:bg-brand hover:text-white";
+  const row = "flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-[14px] font-medium text-text-normal hover:bg-interactive-hover hover:text-interactive-active";
 
   return createPortal(
     <>
@@ -383,7 +383,7 @@ export function ParticipantMenu({ member, at, onClose }: { member: StageMember; 
               >
                 <span>{item.label}</span>
                 <span
-                  className={`flex h-[18px] w-[18px] items-center justify-center rounded-[4px] border-2 ${
+                  className={`flex h-[18px] w-[18px] items-center justify-center rounded-lg border-2 ${
                     controls[item.key] ? "border-brand bg-brand group-hover:border-white" : "border-interactive-normal group-hover:border-white"
                   }`}
                 >
@@ -487,7 +487,7 @@ function ScreenTile({
 
       {hasAudio && <audio ref={audioRef} autoPlay playsInline className="hidden" />}
 
-      <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-[3px] bg-black/65 px-2 py-1 text-[13px] font-medium text-white">
+      <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/65 px-2 py-1 text-[13px] font-medium text-white">
         <span className="truncate">{screen.label}</span>
         <span className="shrink-0 rounded bg-status-dnd px-1 text-[10px] font-bold uppercase tracking-wide text-white">
           {t("Live")}

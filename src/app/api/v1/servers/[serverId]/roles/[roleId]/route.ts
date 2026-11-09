@@ -3,6 +3,7 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import { authenticateBot, botJsonError } from "@/lib/bot-auth";
 import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
 import { readRoleBody } from "../role-body";
+import { resolveRoleId } from "@/lib/bot-ids";
 
 type Params = { params: Promise<{ serverId: string; roleId: string }> };
 
@@ -17,10 +18,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
   const gate = await checkBotRateLimit(service, "write", bot.botId);
   if (gate.limited) return botRateLimited(gate.retryAfterSeconds);
-  if (!(await roleInServer(service, roleId, serverId))) return NextResponse.json({ error: "Role not found" }, { status: 404 });
+  const role = await resolveRoleId(service, roleId);
+  if (!role || !(await roleInServer(service, role, serverId))) return NextResponse.json({ error: "Role not found" }, { status: 404 });
   const { data, error } = await service.rpc("bot_update_role", {
     p_bot_id: bot.botId,
-    p_role_id: roleId,
+    p_role_id: role,
     p_name: body.name ?? null,
     p_color: body.color ?? null,
     p_permissions: body.permissions ?? null,
@@ -40,8 +42,9 @@ export async function DELETE(request: NextRequest, { params }: Params) {
   if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
   const gate = await checkBotRateLimit(service, "write", bot.botId);
   if (gate.limited) return botRateLimited(gate.retryAfterSeconds);
-  if (!(await roleInServer(service, roleId, serverId))) return NextResponse.json({ error: "Role not found" }, { status: 404 });
-  const { error } = await service.rpc("bot_delete_role", { p_bot_id: bot.botId, p_role_id: roleId });
+  const role = await resolveRoleId(service, roleId);
+  if (!role || !(await roleInServer(service, role, serverId))) return NextResponse.json({ error: "Role not found" }, { status: 404 });
+  const { error } = await service.rpc("bot_delete_role", { p_bot_id: bot.botId, p_role_id: role });
   if (error) return NextResponse.json({ error: error.message }, { status: botJsonError(error) });
   return NextResponse.json({ ok: true });
 }

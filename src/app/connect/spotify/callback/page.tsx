@@ -83,14 +83,14 @@ function CallbackInner() {
         {state === "app" && (
           <a
             href={`disband://spotify-callback?code=${encodeURIComponent(code)}`}
-            className="mt-4 block w-full rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
+            className="mt-4 block w-full rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
           >
             Open Disband
           </a>
         )}
         {state === "manual" && (
           <div className="mt-4 space-y-3">
-            <code className="block break-all rounded-[4px] border border-divider bg-bg-tertiary px-3 py-2 text-left font-mono text-[13px] text-text-normal">
+            <code className="block break-all rounded-lg border border-divider bg-bg-tertiary px-3 py-2 text-left font-mono text-[13px] text-text-normal">
               {code}
             </code>
             <button
@@ -104,7 +104,7 @@ function CallbackInner() {
                   () => setCopied(false),
                 );
               }}
-              className="w-full rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
+              className="w-full rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
             >
               {copied ? "Copied" : "Copy code"}
             </button>
@@ -118,7 +118,7 @@ function CallbackInner() {
           <button
             type="button"
             onClick={() => window.close()}
-            className="mt-6 rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
+            className="mt-6 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
           >
             Close this tab
           </button>

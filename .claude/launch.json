@@ -41,8 +41,29 @@
     {
       "name": "disband-hotfix",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "../disband-hotfix", "exec", "next", "dev", "--port", "3021"],
+      "runtimeArgs": [
+        "--dir",
+        "../disband-hotfix",
+        "exec",
+        "next",
+        "dev",
+        "--port",
+        "3021"
+      ],
       "port": 3021,
+      "autoPort": false
+    },
+    {
+      "name": "disband-preview",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "exec",
+        "next",
+        "dev",
+        "--port",
+        "3040"
+      ],
+      "port": 3040,
       "autoPort": false
     }
   ]

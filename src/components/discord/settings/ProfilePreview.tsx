@@ -10,6 +10,8 @@ import { safeImageUrl } from "@/lib/safe-url";
 import type { Profile, UserStatus } from "@/lib/supabase/types";
 import { useI18n } from "@/contexts/I18nContext";
 import { ProfileOverlay, SkinFloor } from "@/components/shop/ProfileOverlay";
+import { useState } from "react";
+import { ImageCropModal, type CropShape } from "@/components/modals/ImageCropModal";
 
 const STATUS_BG: Record<UserStatus, string> = {
   online: "bg-status-online",
@@ -56,6 +58,14 @@ export function ProfilePreview({
   onChangeBanner?: (file: File) => void;
 }) {
   const { t } = useI18n();
+  // Pictures go through the cropper first; animated GIFs upload as they are.
+  const [cropping, setCropping] = useState<{ file: File; shape: CropShape } | null>(null);
+  const pick = (file: File, shape: CropShape) => {
+    const send = shape === "avatar" ? onChangeAvatar : onChangeBanner;
+    if (!send) return;
+    if (file.type === "image/gif") return send(file);
+    setCropping({ file, shape });
+  };
   const name = displayName.trim() || username.trim() || "Your name";
   const banner = safeImageUrl(profile.banner_url);
   const pronouns = profile.pronouns?.trim();
@@ -67,11 +77,22 @@ export function ProfilePreview({
 
   return (
     <div
-      className={`fx-overlay-host relative isolate overflow-hidden rounded-lg border border-divider ${theme ? "" : "bg-overlay-panel"} text-text-normal`}
+      className={`fx-overlay-host relative isolate overflow-hidden rounded-lg border border-border-subtle ${theme ? "" : "bg-overlay-panel"} text-text-normal`}
       style={theme?.style}
     >
       {/* The equipped profile effect, as everyone else sees it. */}
       <ProfileOverlay itemId={profile.equipped_overlay_effect} />
+      <ImageCropModal
+        file={cropping?.file ?? null}
+        shape={cropping?.shape ?? "avatar"}
+        onCancel={() => setCropping(null)}
+        onDone={(cropped) => {
+          const shape = cropping?.shape;
+          setCropping(null);
+          if (shape === "avatar") onChangeAvatar?.(cropped);
+          else if (shape === "banner") onChangeBanner?.(cropped);
+        }}
+      />
       <label className="group relative block cursor-pointer" title={onChangeBanner ? t("Change banner") : undefined}>
         <div className="relative h-[136px] w-full overflow-hidden" style={{ background: bannerBg }}>
           {banner && (
@@ -95,7 +116,7 @@ export function ProfilePreview({
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) onChangeBanner(file);
+                if (file) pick(file, "banner");
                 e.target.value = "";
               }}
             />
@@ -122,7 +143,7 @@ export function ProfilePreview({
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) onChangeAvatar(file);
+                    if (file) pick(file, "avatar");
                     e.target.value = "";
                   }}
                 />
@@ -161,12 +182,12 @@ export function ProfilePreview({
 
         {note && (
           <div className="relative mt-3.5 w-fit max-w-full">
-            <span aria-hidden className="absolute -top-[5px] left-5 h-2.5 w-2.5 rotate-45 border-l border-t border-divider bg-bg-accent" />
-            <p className="break-words rounded-lg border border-divider bg-bg-accent px-3.5 py-2 text-[14px] leading-snug">{note}</p>
+            <span aria-hidden className="absolute -top-[5px] left-5 h-2.5 w-2.5 rotate-45 border-l border-t border-border-subtle bg-bg-accent" />
+            <p className="break-words rounded-lg border border-border-subtle bg-bg-accent px-3.5 py-2 text-[14px] leading-snug">{note}</p>
           </div>
         )}
 
-        <div className="mt-4 border-t border-divider pt-3.5">
+        <div className="mt-4 border-t border-border-subtle pt-3.5">
           <p className="text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">{t("About me")}</p>
           <p className={`mt-1.5 whitespace-pre-wrap break-words text-[14px] leading-relaxed ${bio.trim() ? "" : "text-text-muted"}`}>
             {bio.trim() || t("Your bio will appear here.")}

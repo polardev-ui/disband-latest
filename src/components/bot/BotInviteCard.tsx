@@ -122,7 +122,7 @@ export function BotInviteCard({ code }: { code: string }) {
 
   return (
     <ThemeProvider>
-      <div className="flex min-h-screen flex-col items-center justify-center bg-bg-tertiary px-4 py-12">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-bg-secondary px-4 py-12">
         <Link href="/home" className="mb-8 flex items-center gap-2.5">
           <Logo size={28} />
           <span className="text-xl font-bold tracking-tight text-text-normal">Disband</span>
@@ -139,7 +139,7 @@ export function BotInviteCard({ code }: { code: string }) {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="mt-6 inline-block rounded-[3px] bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+              className="mt-6 inline-block rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
             >
               Try again
             </button>
@@ -153,7 +153,7 @@ export function BotInviteCard({ code }: { code: string }) {
             </p>
             <Link
               href="/home"
-              className="mt-6 inline-block rounded-[3px] bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+              className="mt-6 inline-block rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
             >
               Back to Disband
             </Link>
@@ -199,7 +199,7 @@ export function BotInviteCard({ code }: { code: string }) {
                   <select
                     value={selectedServerId}
                     onChange={(e) => setSelectedServerId(e.target.value)}
-                    className="w-full rounded-[3px] border border-divider bg-bg-secondary px-3 py-2 text-sm text-text-normal outline-none"
+                    className="w-full rounded-md border border-divider bg-bg-secondary px-3 py-2 text-sm text-text-normal outline-none"
                   >
                     <option value="">Pick a space…</option>
                     {userServers.map((s) => (
@@ -215,7 +215,7 @@ export function BotInviteCard({ code }: { code: string }) {
                 </p>
                 <div className="space-y-2">
                   {invite.scopes.map((scope) => (
-                    <div key={scope} className="flex items-start gap-2.5 rounded-[3px] bg-bg-secondary px-3 py-2.5">
+                    <div key={scope} className="flex items-start gap-2.5 rounded-md bg-bg-secondary px-3 py-2.5">
                       <span className="mt-0.5 text-status-online">✓</span>
                       <div className="min-w-0">
                         <p className="text-[14px] font-medium text-text-normal">
@@ -235,7 +235,7 @@ export function BotInviteCard({ code }: { code: string }) {
               </div>
 
               {error && (
-                <p className="mt-4 rounded-[3px] bg-status-dnd/10 px-3 py-2 text-[13px] text-status-dnd">
+                <p className="mt-4 rounded-md bg-status-dnd/10 px-3 py-2 text-[13px] text-status-dnd">
                   {error}
                 </p>
               )}
@@ -249,7 +249,7 @@ export function BotInviteCard({ code }: { code: string }) {
                       type="button"
                       onClick={() => void act("decline")}
                       disabled={busy}
-                      className="flex items-center justify-center gap-1.5 rounded-[3px] border border-divider px-4 py-2 text-sm font-semibold text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-60"
+                      className="flex items-center justify-center gap-1.5 rounded-md border border-divider px-4 py-2 text-sm font-semibold text-text-normal transition-colors hover:bg-interactive-hover disabled:opacity-60"
                     >
                       <IconClose size={15} />
                       Decline
@@ -258,7 +258,7 @@ export function BotInviteCard({ code }: { code: string }) {
                       type="button"
                       onClick={() => void act("approve")}
                       disabled={busy}
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-[3px] bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                     >
                       <span aria-hidden>✓</span>
                       {busy ? "Working…" : `Add to ${invite.server?.name ?? "space"}`}
@@ -267,7 +267,7 @@ export function BotInviteCard({ code }: { code: string }) {
                 ) : (
                   <Link
                     href="/login"
-                    className="block w-full rounded-[3px] bg-brand px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
+                    className="block w-full rounded-md bg-brand px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
                   >
                     Sign in to approve
                   </Link>
@@ -275,7 +275,7 @@ export function BotInviteCard({ code }: { code: string }) {
               ) : (
                 <Link
                   href="/home"
-                  className="block w-full rounded-[3px] bg-brand px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
+                  className="block w-full rounded-md bg-brand px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
                 >
                   Back to Disband
                 </Link>

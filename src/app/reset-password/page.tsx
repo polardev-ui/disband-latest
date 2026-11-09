@@ -36,7 +36,7 @@ function ResetPasswordGate() {
 
   if (!configured) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg-tertiary p-6 text-center text-text-muted">
+      <div className="flex min-h-screen items-center justify-center bg-bg-secondary p-6 text-center text-text-muted">
         Supabase is not configured.
       </div>
     );
@@ -44,7 +44,7 @@ function ResetPasswordGate() {
 
   if (!ready || !linkReady) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg-tertiary text-text-muted">
+      <div className="flex min-h-screen items-center justify-center bg-bg-secondary text-text-muted">
         Loading…
       </div>
     );
@@ -53,17 +53,17 @@ function ResetPasswordGate() {
   const canReset = !!session && !linkError;
 
   return (
-    <div className="relative min-h-screen bg-bg-tertiary">
+    <div className="aero-hero relative min-h-screen">
       {!isTauri() && (
         <Link
           href="/login"
-          className="absolute left-6 top-6 z-10 flex items-center gap-2 text-sm font-semibold text-text-muted hover:text-text-normal"
+          className="absolute left-6 top-6 z-10 flex items-center gap-2 text-sm font-semibold text-white/80 hover:text-white"
         >
           ← Back to log in
         </Link>
       )}
       <div className="flex min-h-screen items-center justify-center p-6">
-        <div className="w-full max-w-sm rounded-[8px] bg-bg-secondary p-8 shadow-[var(--elevation-high)]">
+        <div className="w-full max-w-sm rounded-2xl border border-border-subtle bg-bg-secondary p-8 shadow-[0_40px_90px_-30px_rgba(10,6,40,0.85)]">
           <div className="mb-6 text-center">
             <div className="mx-auto mb-3 flex justify-center">
               <Logo adaptive size={56} className="h-14 w-14" priority />

@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
-import { IconClose, IconHash, IconMegaphone, IconSpeaker, IconStage } from "@/components/icons";
+import { IconClose, IconForum, IconHash, IconMegaphone, IconSpeaker, IconStage } from "@/components/icons";
 import type { ChannelCategory } from "@/lib/supabase/types";
 import { useI18n } from "@/contexts/I18nContext";
 
-export type NewChannelKind = "text" | "announcement" | "voice" | "stage";
+export type NewChannelKind = "text" | "announcement" | "forum" | "voice" | "stage";
 
 interface CreateChannelModalProps {
   /** Open with this category preselected (null = no category); undefined closes. */
@@ -21,6 +21,7 @@ interface CreateChannelModalProps {
 const KINDS: { kind: NewChannelKind; title: string; hint: string; icon: (size: number) => ReactNode }[] = [
   { kind: "text", title: "Text", hint: "Send messages, images, GIFs, polls and files", icon: (s) => <IconHash size={s} /> },
   { kind: "announcement", title: "Announcement", hint: "Important updates only moderators can post", icon: (s) => <IconMegaphone size={s} /> },
+  { kind: "forum", title: "Forum", hint: "Organised posts with titles and tags, each with its own replies", icon: (s) => <IconForum size={s} /> },
   { kind: "voice", title: "Voice", hint: "Hang out together with voice, video and screen share", icon: (s) => <IconSpeaker size={s} /> },
   { kind: "stage", title: "Stage", hint: "Host events with speakers and an audience", icon: (s) => <IconStage size={s} /> },
 ];
@@ -28,12 +29,13 @@ const KINDS: { kind: NewChannelKind; title: string; hint: string; icon: (size: n
 const PLACEHOLDER: Record<NewChannelKind, string> = {
   text: "new-channel",
   announcement: "announcements",
+  forum: "help-desk",
   voice: "Lounge",
   stage: "Town hall",
 };
 
 /**
- * Create a channel: pick what kind it is from four described options, name it
+ * Create a channel: pick what kind it is from the described options, name it
  * with a live preview of how it will look in the list, and choose where it
  * goes. Replaces the tiny inline box in the channel list.
  */
@@ -86,7 +88,7 @@ export function CreateChannelModal({ target, categories, onClose, onCreate }: Cr
         role="dialog"
         aria-modal="true"
         aria-label={t("Create Channel")}
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} flex max-h-[90vh] w-full max-w-[460px] flex-col overflow-hidden rounded-lg bg-bg-secondary shadow-[var(--elevation-high)]`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} flex max-h-[90vh] w-full max-w-[460px] flex-col overflow-hidden rounded-xl border border-border-subtle bg-bg-secondary shadow-[var(--elevation-high)]`}
       >
         <div className="flex items-start justify-between gap-4 px-5 pb-2 pt-5">
           <div className="min-w-0">
@@ -180,7 +182,7 @@ export function CreateChannelModal({ target, categories, onClose, onCreate }: Cr
           )}
 
           <p className="mb-2 mt-5 text-[12px] font-bold uppercase tracking-wide text-header-secondary">{t("Preview")}</p>
-          <div className="flex h-9 items-center gap-1.5 rounded-[4px] bg-bg-tertiary px-2 text-[16px] font-medium text-interactive-active">
+          <div className="flex h-9 items-center gap-1.5 rounded-lg bg-bg-tertiary px-2 text-[16px] font-medium text-interactive-active">
             <span className="shrink-0 text-interactive-active/70">{current.icon(20)}</span>
             <span className="truncate">{trimmed || t(PLACEHOLDER[kind])}</span>
           </div>
@@ -196,7 +198,7 @@ export function CreateChannelModal({ target, categories, onClose, onCreate }: Cr
             type="button"
             onClick={() => void submit()}
             disabled={!trimmed || busy}
-            className="rounded-[4px] bg-brand px-4 py-2 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? t("Creating…") : t("Create Channel")}
           </button>

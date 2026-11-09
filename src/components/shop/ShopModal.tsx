@@ -209,7 +209,7 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
         role="dialog"
         aria-modal="true"
         aria-label="Disband Shop"
-        className={`classic-modal${exiting ? " classic-modal-out" : ""} relative flex max-h-[85vh] w-full max-w-[860px] flex-col overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
+        className={`classic-modal${exiting ? " classic-modal-out" : ""} relative flex max-h-[85vh] w-full max-w-[860px] flex-col overflow-hidden rounded-xl border border-border-subtle bg-bg-primary shadow-[var(--elevation-high)]`}
       >
         <header className="flex items-center gap-3 px-4 pb-2 pt-4">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-white">
@@ -225,7 +225,7 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-[4px] text-interactive-normal transition-colors hover:text-interactive-active"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-interactive-normal transition-colors hover:text-interactive-active"
           >
             <IconClose size={24} />
           </button>
@@ -310,12 +310,12 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
                 })()}
               </ul>
               <div className="mt-3 flex items-center justify-end gap-2 border-t border-divider pt-3">
-                <button type="button" onClick={() => { setGiftItem(null); setGiftTo(null); setError(null); }} className="h-[38px] rounded-[3px] px-4 text-[14px] font-medium text-text-normal hover:underline">Back</button>
+                <button type="button" onClick={() => { setGiftItem(null); setGiftTo(null); setError(null); }} className="h-[38px] rounded-md px-4 text-[14px] font-medium text-text-normal hover:underline">Back</button>
                 <button
                   type="button"
                   disabled={!giftTo || busyId === giftItem.id}
                   onClick={() => giftTo && void startPurchase(giftItem, giftTo)}
-                  className="h-[38px] min-w-[160px] rounded-[3px] bg-brand px-4 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  className="h-[38px] min-w-[160px] rounded-md bg-brand px-4 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {busyId === giftItem.id
                     ? "Opening…"
@@ -445,12 +445,12 @@ function ShopCard({
             type="button"
             disabled={busy}
             onClick={onBuy}
-            className="h-[38px] w-full rounded-[3px] bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+            className="h-[38px] w-full rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
           >
             {busy ? "Opening…" : `Buy ${formatPrice(effectivePriceCents(item.priceCents, item.salePriceCents))}`}
           </button>
         ) : equipped ? (
-          <div className="flex h-[38px] w-full items-center justify-center rounded-[3px] border border-status-online/60 text-[14px] font-medium text-status-online">
+          <div className="flex h-[38px] w-full items-center justify-center rounded-md border border-status-online/60 text-[14px] font-medium text-status-online">
             Equipped
           </div>
         ) : (
@@ -458,7 +458,7 @@ function ShopCard({
             type="button"
             disabled={busy}
             onClick={onEquip}
-            className="h-[38px] w-full rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover disabled:opacity-50"
+            className="h-[38px] w-full rounded-md bg-button-secondary px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover disabled:opacity-50"
           >
             {busy ? "…" : "Equip"}
           </button>
@@ -470,7 +470,7 @@ function ShopCard({
             onClick={onGift}
             aria-label={`Gift ${item.name}`}
             title="Gift to a friend"
-            className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[3px] bg-button-secondary text-white transition-colors hover:bg-button-secondary-hover"
+            className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md bg-button-secondary text-white transition-colors hover:bg-button-secondary-hover"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden><path fill="currentColor" d="M20 7h-2.2A3 3 0 0 0 12 3.8 3 3 0 0 0 6.2 7H4a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Zm-5-2a1 1 0 1 1 0 2h-2a1 1 0 0 1 2-2ZM9 5a1 1 0 0 1 1 1v1H9a1 1 0 0 1 0-2Zm2 15H6v-8h5v8Zm0-10H5V9h6v1Zm7 10h-5v-8h5v8Zm1-10h-6V9h6v1Z" /></svg>
           </button>

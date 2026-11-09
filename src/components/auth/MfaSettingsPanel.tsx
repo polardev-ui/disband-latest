@@ -198,8 +198,8 @@ export function MfaSettingsPanel() {
   const pending = factors.filter((f) => f.status !== "verified");
   const hasPasskeyMethod = passkeys.length > 0 && secretConfigured;
 
-  const HEADING = "text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary";
-  const BTN = "inline-flex h-8 min-w-[60px] items-center justify-center rounded-[3px] px-4 text-[14px] font-medium leading-4 text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+  const HEADING = "text-[11px] font-bold uppercase leading-4 tracking-[0.06em] text-text-muted";
+  const BTN = "inline-flex h-8 min-w-[60px] items-center justify-center rounded-md px-4 text-[14px] font-medium leading-4 text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50";
   const enabled = verified.length > 0 || hasPasskeyMethod;
 
   return (
@@ -349,10 +349,10 @@ export function MfaSettingsPanel() {
       </div>
 
       {totpSetup && (
-        <form onSubmit={confirmTotpSetup} className="mt-5 rounded-lg bg-bg-secondary p-4">
+        <form onSubmit={confirmTotpSetup} className="mt-5 rounded-xl border border-border-subtle bg-surface-raised p-4">
           <h4 className="text-[16px] font-semibold text-header-primary">{t("Set up an authenticator app")}</h4>
           <div className="mt-4 flex flex-wrap gap-5">
-            <div className="shrink-0 rounded-[4px] bg-white p-2">
+            <div className="shrink-0 rounded-lg bg-white p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={totpQrSrc(totpSetup.qrCode)} alt={t("Authenticator QR code")} className="h-36 w-36" />
             </div>
@@ -368,7 +368,7 @@ export function MfaSettingsPanel() {
                     value={totpSetup.secret}
                     aria-label={t("Manual entry key")}
                     onFocus={(e) => e.target.select()}
-                    className="h-8 min-w-0 flex-1 rounded-[3px] bg-bg-tertiary px-2.5 font-mono text-[12px] text-text-normal outline-none"
+                    className="h-8 min-w-0 flex-1 rounded-md bg-bg-tertiary px-2.5 font-mono text-[12px] text-text-normal outline-none"
                   />
                   <button type="button" onClick={() => void copyManualKey()} className={`${BTN} bg-button-secondary hover:bg-button-secondary-hover`}>
                     {copiedKey ? t("Copied") : t("Copy")}
@@ -385,7 +385,7 @@ export function MfaSettingsPanel() {
                   maxLength={6}
                   value={totpCode}
                   onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  className="h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[16px] tracking-[0.3em] text-text-normal outline-none focus:border-[#00a8fc]"
+                  className="h-10 w-full rounded-md border border-border-subtle bg-bg-tertiary px-2.5 text-[16px] tracking-[0.3em] text-text-normal outline-none focus:border-brand"
                   placeholder="000000"
                 />
               </label>

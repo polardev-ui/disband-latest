@@ -19,8 +19,8 @@ export function MarketingNav() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-[#1e1f22]/80 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-6">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#1a181e]/70 backdrop-blur-md">
+      <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-6">
         <Link href="/home" className="flex items-center gap-2.5 font-bold text-white">
           <Logo size={32} className="h-8 w-8" priority />
           Disband
@@ -31,7 +31,7 @@ export function MarketingNav() {
               key={l.href}
               href={l.href}
               className={`text-sm transition-colors ${
-                pathname === l.href ? "text-white" : "text-[#b5bac1] hover:text-white"
+                pathname === l.href ? "text-white" : "text-white/70 hover:text-white"
               }`}
             >
               {l.label}
@@ -41,7 +41,7 @@ export function MarketingNav() {
         <div className="ml-auto flex items-center gap-2">
           <Link
             href="/login"
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-[#2b2290] transition-transform hover:-translate-y-px"
           >
             Log in
           </Link>
@@ -52,7 +52,7 @@ export function MarketingNav() {
             onClick={() => setMenuOpen((v) => !v)}
             aria-expanded={menuOpen}
             aria-label={menuOpen ? "Close menu" : "Open menu"}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-[#b5bac1] transition-colors hover:bg-white/10 hover:text-white sm:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-interactive-normal transition-colors hover:bg-white/10 hover:text-white sm:hidden"
           >
             {menuOpen ? (
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -74,7 +74,7 @@ export function MarketingNav() {
               href={l.href}
               onClick={() => setMenuOpen(false)}
               className={`block rounded-md px-2 py-2.5 text-[15px] transition-colors ${
-                pathname === l.href ? "text-white" : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
+                pathname === l.href ? "text-white" : "text-interactive-normal hover:bg-white/5 hover:text-white"
               }`}
             >
               {l.label}
@@ -103,25 +103,25 @@ const FOOTER_COLUMNS: { title: string; links: [string, string][] }[] = [
 
 export function MarketingFooter() {
   return (
-    <footer className="border-t border-white/5 bg-[#1e1f22] px-6 pb-8 pt-14">
+    <footer className="border-t border-border-subtle bg-bg-secondary px-6 pb-8 pt-14">
       <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-[1.4fr_repeat(3,1fr)]">
         <div className="max-w-xs">
           <div className="flex items-center gap-2.5">
             <Logo size={28} className="h-7 w-7" />
-            <p className="text-lg font-semibold text-white">Disband</p>
+            <p className="text-lg font-semibold text-header-primary">Disband</p>
           </div>
-          <p className="mt-3 text-sm leading-relaxed text-[#949ba4]">
+          <p className="mt-3 text-sm leading-relaxed text-text-muted">
             Chat, voice, and communities — built for privacy.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 md:contents">
           {FOOTER_COLUMNS.map((col) => (
             <nav key={col.title} aria-label={col.title}>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#6e727a]">{col.title}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">{col.title}</p>
               <ul className="mt-4 space-y-2.5 text-sm">
                 {col.links.map(([label, href]) => (
                   <li key={href}>
-                    <Link href={href} className="text-[#b5bac1] transition-colors hover:text-white">
+                    <Link href={href} className="text-interactive-normal transition-colors hover:text-header-primary">
                       {label}
                     </Link>
                   </li>
@@ -131,7 +131,7 @@ export function MarketingFooter() {
           ))}
         </div>
       </div>
-      <div className="mx-auto mt-12 flex max-w-6xl flex-col gap-2 border-t border-white/5 pt-6 text-xs text-[#72767d] sm:flex-row sm:justify-between">
+      <div className="mx-auto mt-12 flex max-w-6xl flex-col gap-2 border-t border-white/5 pt-6 text-xs text-text-muted sm:flex-row sm:justify-between">
         <p>© {new Date().getFullYear()} Genysis IQ LLC. All rights reserved.</p>
         <p>Disband is operated by Genysis IQ LLC, Orlando, Florida.</p>
       </div>

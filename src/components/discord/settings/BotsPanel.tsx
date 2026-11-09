@@ -133,15 +133,17 @@ export function BotsPanel() {
       title: t("Revoke {name}", { name: bot.name }),
       body: t("Its token stops working immediately and can't be recovered."),
       confirmLabel: t("Revoke Bot"),
+      action: async () => {
+        setError(null);
+        try {
+          const { ok, data } = await postJson("/api/bot/revoke", { botId: bot.id });
+          if (!ok) throw new Error(data.error ?? "Could not revoke the bot.");
+          await loadBots();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : t("Could not revoke the bot."));
+        }
+      },
     }))) return;
-    setError(null);
-    try {
-      const { ok, data } = await postJson("/api/bot/revoke", { botId: bot.id });
-      if (!ok) throw new Error(data.error ?? "Could not revoke the bot.");
-      await loadBots();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("Could not revoke the bot."));
-    }
   }
 
   const [editingBot, setEditingBot] = useState<ManagedBot | null>(null);
@@ -254,7 +256,7 @@ export function BotsPanel() {
             <button
               type="button"
               onClick={() => setCreatedToken(null)}
-              className="rounded-[3px] bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover"
+              className="rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover"
             >
               {t("New bot")}
             </button>
@@ -262,14 +264,14 @@ export function BotsPanel() {
         }
       >
         {isAnonymous && (
-          <div className="border-b border-divider px-4 py-4">
+          <div className="border-b border-border-subtle px-4 py-4">
             <p className="text-[14px] leading-relaxed text-text-muted">
               {t("Anonymous accounts can’t create bots. Bots you were invited to can still be managed here.")}
             </p>
           </div>
         )}
         {createdToken && (
-          <div className="border-b border-divider bg-bg-accent/60 px-4 py-4">
+          <div className="border-b border-border-subtle bg-bg-accent/60 px-4 py-4">
             <p className="text-[14px] font-medium text-text-normal">
               {createdToken.name} created — this is your token:
             </p>
@@ -277,13 +279,13 @@ export function BotsPanel() {
               {t("Copy it now. It's only shown once and can't be retrieved later.")}
             </p>
             <div className="mt-3 flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded-[3px] border border-divider bg-bg-tertiary px-3 py-2 text-[13px] text-text-normal">
+              <code className="min-w-0 flex-1 truncate rounded-md border border-border-subtle bg-bg-tertiary px-3 py-2 text-[13px] text-text-normal">
                 {createdToken.token}
               </code>
               <button
                 type="button"
                 onClick={() => void copyText(createdToken.token, setTokenCopied)}
-                className="shrink-0 rounded-[3px] border border-divider px-3 py-2 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+                className="shrink-0 rounded-md border border-border-subtle px-3 py-2 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
               >
                 {tokenCopied ? t("Copied") : t("Copy")}
               </button>
@@ -306,7 +308,7 @@ export function BotsPanel() {
         )}
 
         {!createdToken && !isAnonymous && (
-          <div className="border-b border-divider px-4 py-4">
+          <div className="border-b border-border-subtle px-4 py-4">
             <SettingRow label={t("Name")} stacked htmlFor="bot-new-name">
               <div className="flex items-start gap-2">
                 <input
@@ -321,7 +323,7 @@ export function BotsPanel() {
                   type="button"
                   onClick={() => void createBot()}
                   disabled={creating}
-                  className="shrink-0 rounded-[3px] bg-brand px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
+                  className="shrink-0 rounded-md bg-brand px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                 >
                   {creating ? t("Creating…") : t("Create")}
                 </button>
@@ -336,7 +338,7 @@ export function BotsPanel() {
                     type="button"
                     aria-pressed={newScopes.includes(scope)}
                     onClick={() => toggleNewScope(scope)}
-                    className="rounded-[3px] border px-2.5 py-1.5 text-[12px] font-medium transition-colors"
+                    className="rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition-colors"
                     style={
                       newScopes.includes(scope)
                         ? { borderColor: "var(--brand, #5865f2)", color: "var(--brand, #5865f2)" }
@@ -363,7 +365,7 @@ export function BotsPanel() {
         ) : (
           <>
             {activeBots.map((bot) => (
-              <div key={bot.id} className="border-b border-divider px-4 py-3.5 last:border-b-0">
+              <div key={bot.id} className="border-b border-border-subtle px-4 py-3.5 last:border-b-0">
                 <div className="flex items-center gap-2">
                   <BotTag profile={{ is_bot: true }} size="sm" />
                   <span className="truncate text-[14px] font-semibold text-text-normal">{bot.name}</span>
@@ -373,21 +375,21 @@ export function BotsPanel() {
                     <button
                       type="button"
                       onClick={() => openEdit(bot)}
-                      className="rounded-[3px] border border-divider px-2.5 py-1 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+                      className="rounded-md border border-border-subtle px-2.5 py-1 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
                     >
                       {t("Edit")}
                     </button>
                     <button
                       type="button"
                       onClick={() => openInvite(bot)}
-                      className="rounded-[3px] border border-divider px-2.5 py-1 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+                      className="rounded-md border border-border-subtle px-2.5 py-1 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
                     >
                       {t("Invite")}
                     </button>
                     <button
                       type="button"
                       onClick={() => void revokeBot(bot)}
-                      className="rounded-[3px] border border-status-dnd/40 px-2.5 py-1 text-[13px] font-semibold text-status-dnd transition-colors hover:bg-status-dnd/10"
+                      className="rounded-md border border-status-dnd/40 px-2.5 py-1 text-[13px] font-semibold text-status-dnd transition-colors hover:bg-status-dnd/10"
                     >
                       {t("Revoke")}
                     </button>
@@ -430,7 +432,7 @@ export function BotsPanel() {
             className={`absolute inset-0 bg-overlay-scrim overlay-fade${inviteExiting ? " overlay-fade-out" : ""}`}
             onClick={() => setInvitingBot(null)}
           />
-          <div className={`modal-pop${inviteExiting ? " modal-pop-out" : ""} relative w-full max-w-md rounded-lg bg-bg-primary p-5 shadow-[var(--elevation-high)]`}>
+          <div className={`modal-pop${inviteExiting ? " modal-pop-out" : ""} relative w-full max-w-md rounded-xl border border-border-subtle bg-bg-primary p-5 shadow-[var(--elevation-high)]`}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-[16px] font-semibold text-text-normal">
@@ -457,7 +459,7 @@ export function BotsPanel() {
                     type="checkbox"
                     checked={inviteGeneral}
                     onChange={(e) => setInviteGeneral(e.target.checked)}
-                    className="h-4 w-4 rounded border-divider"
+                    className="h-4 w-4 rounded border-border-subtle"
                   />
                   {t("General invite (recipient picks the space)")}
                 </label>
@@ -500,7 +502,7 @@ export function BotsPanel() {
                           prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope],
                         )
                       }
-                      className="rounded-[3px] border px-2.5 py-1.5 text-[12px] font-medium transition-colors"
+                      className="rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition-colors"
                       style={
                         inviteScopes.includes(scope)
                           ? { borderColor: "var(--brand, #5865f2)", color: "var(--brand, #5865f2)" }
@@ -524,13 +526,13 @@ export function BotsPanel() {
                     {t("Invite link")}
                   </label>
                   <div className="flex items-center gap-2">
-                    <code className="min-w-0 flex-1 truncate rounded-[3px] border border-divider bg-bg-tertiary px-3 py-2 text-[12px] text-text-normal">
+                    <code className="min-w-0 flex-1 truncate rounded-md border border-border-subtle bg-bg-tertiary px-3 py-2 text-[12px] text-text-normal">
                       {inviteUrl}
                     </code>
                     <button
                       type="button"
                       onClick={() => void copyText(inviteUrl, setInviteCopied)}
-                      className="flex shrink-0 items-center gap-1.5 rounded-[3px] border border-divider px-3 py-2 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+                      className="flex shrink-0 items-center gap-1.5 rounded-md border border-border-subtle px-3 py-2 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
                     >
                       <IconCopy size={14} />
                       {inviteCopied ? t("Copied") : t("Copy")}
@@ -548,7 +550,7 @@ export function BotsPanel() {
                 <button
                   type="button"
                   onClick={() => setInvitingBot(null)}
-                  className="rounded-[3px] border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
+                  className="rounded-md border border-border-subtle px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover"
                 >
                   {t("Close")}
                 </button>
@@ -557,7 +559,7 @@ export function BotsPanel() {
                     type="button"
                     onClick={() => void generateInvite()}
                     disabled={inviteLoading}
-                    className="rounded-[3px] bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
+                    className="rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                   >
                     {inviteLoading ? t("Generating…") : t("Generate invite link")}
                   </button>
@@ -570,7 +572,7 @@ export function BotsPanel() {
 
       {editingBot && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-lg border border-divider bg-bg-primary p-6 shadow-[var(--elevation-high)]">
+          <div className="w-full max-w-md rounded-lg border border-border-subtle bg-bg-primary p-6 shadow-[var(--elevation-high)]">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold text-text-normal">{t("Edit bot")}</h3>
               <button type="button" onClick={() => setEditingBot(null)} className="text-text-muted hover:text-text-normal" aria-label={t("Close")}>
@@ -603,7 +605,7 @@ export function BotsPanel() {
                       type="button"
                       aria-pressed={editScopes.includes(scope)}
                       onClick={() => toggleEditScope(scope)}
-                      className="rounded-[3px] border px-2.5 py-1.5 text-[12px] font-medium transition-colors"
+                      className="rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition-colors"
                       style={
                         editScopes.includes(scope)
                           ? { borderColor: "var(--brand, #5865f2)", color: "var(--brand, #5865f2)" }
@@ -618,14 +620,14 @@ export function BotsPanel() {
               {editError && <p className="text-[13px] text-status-dnd">{editError}</p>}
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => setEditingBot(null)} className="rounded-[3px] border border-divider px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover">
+              <button type="button" onClick={() => setEditingBot(null)} className="rounded-md border border-border-subtle px-3 py-1.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover">
                 {t("Cancel")}
               </button>
               <button
                 type="button"
                 onClick={() => void saveEdit()}
                 disabled={editSaving || !editName.trim() || editScopes.length === 0}
-                className="rounded-[3px] bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
+                className="rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
               >
                 {editSaving ? t("Saving…") : t("Save")}
               </button>

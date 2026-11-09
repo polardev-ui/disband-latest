@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function VerificationPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg-tertiary">
+    <div className="flex min-h-screen items-center justify-center bg-bg-secondary">
       <Suspense>
         <VerificationPanel />
       </Suspense>

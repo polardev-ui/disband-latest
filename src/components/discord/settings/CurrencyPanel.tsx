@@ -72,25 +72,26 @@ export function CurrencyPanel() {
       return;
     }
     const friend = rewardId === "decoration" && giftTo ? friends.find((f) => f.id === giftTo) : null;
+    const run = async () => {
+      setBusy(rewardId);
+      setNote(null);
+      const { error } = friend
+        ? await getSupabaseClient().rpc("wallet_gift_decoration", { p_item: pick, p_recipient: friend.id })
+        : await getSupabaseClient().rpc("wallet_redeem", { p_reward: rewardId, p_item: rewardId === "decoration" ? pick : null });
+      setBusy(null);
+      if (error) setNote({ tone: "error", text: error.message });
+      else {
+        setNote({ tone: "ok", text: friend ? `Sent! ${friend.display_name || friend.username} has it now.` : rewardId === "aero_week" ? "Aero is yours for the next seven days." : "Decoration added. Wear it from Profiles." });
+        setPick("");
+        void load();
+      }
+    };
     const ok = await confirmDialog({
       title: friend ? t("Gift this decoration to {value}?", { value: friend.display_name || friend.username || "" }) : t("Redeem {label}?", { label: reward.label }),
       body: t("This spends {value}.", { value: formatCurrency(reward.cost) }),
       confirmLabel: friend ? t("Send gift") : t("Redeem"),
-      tone: "primary",
-    });
+      tone: "primary", action: run });
     if (!ok) return;
-    setBusy(rewardId);
-    setNote(null);
-    const { error } = friend
-      ? await getSupabaseClient().rpc("wallet_gift_decoration", { p_item: pick, p_recipient: friend.id })
-      : await getSupabaseClient().rpc("wallet_redeem", { p_reward: rewardId, p_item: rewardId === "decoration" ? pick : null });
-    setBusy(null);
-    if (error) setNote({ tone: "error", text: error.message });
-    else {
-      setNote({ tone: "ok", text: friend ? `Sent! ${friend.display_name || friend.username} has it now.` : rewardId === "aero_week" ? "Aero is yours for the next seven days." : "Decoration added. Wear it from Profiles." });
-      setPick("");
-      void load();
-    }
   }
 
   return (
@@ -116,7 +117,7 @@ export function CurrencyPanel() {
       )}
 
       <SettingsSection title={t("Spend")} description={t("Trade {plural} for perks.", { plural: CURRENCY.plural })}>
-        <div className="divide-y divide-divider">
+        <div className="divide-y divide-border-subtle">
           {REWARDS.map((r) => (
             <div key={r.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
               <div className="min-w-0 flex-1">
@@ -125,7 +126,7 @@ export function CurrencyPanel() {
                 {r.id === "decoration" && friends.length > 0 && (
                   <label className="mt-2 flex items-center gap-2 text-[13px] text-text-muted">
                     {t("For")}
-                    <select value={giftTo} onChange={(e) => { setGiftTo(e.target.value); setPick(""); }} className="rounded-[3px] bg-bg-tertiary px-2 py-1 text-[14px] text-text-normal">
+                    <select value={giftTo} onChange={(e) => { setGiftTo(e.target.value); setPick(""); }} className="rounded-md bg-bg-tertiary px-2 py-1 text-[14px] text-text-normal">
                       <option value="">{t("Me")}</option>
                       {friends.map((f) => <option key={f.id} value={f.id}>{f.display_name || f.username}</option>)}
                     </select>
@@ -136,7 +137,7 @@ export function CurrencyPanel() {
                     {decorations.length === 0 && <p className="text-[13px] text-text-muted">{t("You own every decoration already.")}</p>}
                     {decorations.map((d) => (
                       <button key={d.id} type="button" role="radio" aria-checked={pick === d.id} onClick={() => setPick(d.id)}
-                        className={`group flex flex-col items-center gap-2 rounded-lg border-2 bg-bg-secondary px-2 pb-2 pt-4 transition-colors ${pick === d.id ? "border-brand" : "border-transparent hover:border-divider"}`}>
+                        className={`group flex flex-col items-center gap-2 rounded-lg border-2 bg-bg-secondary px-2 pb-2 pt-4 transition-colors ${pick === d.id ? "border-brand" : "border-transparent hover:border-border-subtle"}`}>
                         <span className="relative h-12 w-12">
                           {profile?.avatar_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -178,7 +179,7 @@ export function CurrencyPanel() {
       </SettingsSection>
 
       <SettingsSection title={t("Ways to earn")} description={t("Just use Disband. Rewards land automatically.")}>
-        <ul className="divide-y divide-divider">
+        <ul className="divide-y divide-border-subtle">
           {EARN_RULES.map((r) => (
             <li key={r.id} className="flex items-center justify-between gap-3 px-5 py-3">
               <div>
@@ -195,7 +196,7 @@ export function CurrencyPanel() {
         {ledger.length === 0 ? (
           <p className="px-5 py-4 text-[14px] text-text-muted">{t("Nothing yet. Send a few messages and it starts adding up.")}</p>
         ) : (
-          <ul className="divide-y divide-divider">
+          <ul className="divide-y divide-border-subtle">
             {ledger.map((row) => (
               <li key={row.id} className="flex items-center justify-between gap-3 px-5 py-2.5 text-[14px]">
                 <span className="text-text-normal">{LEDGER_LABELS[row.reason] ?? row.reason}</span>

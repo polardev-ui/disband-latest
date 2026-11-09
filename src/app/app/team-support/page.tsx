@@ -67,7 +67,7 @@ function StatusBadge({ status }: { status: string }) {
           : "bg-bg-tertiary text-text-muted ";
 
   return (
-    <span className={`shrink-0 rounded-[3px] px-2.5 py-0.5 text-[11px] font-medium ${tone}`}>
+    <span className={`shrink-0 rounded-md px-2.5 py-0.5 text-[11px] font-medium ${tone}`}>
       {status.replace("_", " ")}
     </span>
   );
@@ -488,47 +488,49 @@ export default function TeamSupportPage() {
 
   const resolveTicket = async () => {
     if (!selectedId || replying) return;
+    const run = async () => {
+      setReplying(true);
+      setReplyStatus(null);
+      try {
+        const res = await apiFetch(`/api/support/team/tickets/${selectedId}/resolve`, { method: "POST" });
+        const json = await res.json() as { error?: string };
+        if (!res.ok) throw new Error(json.error ?? "Could not resolve.");
+        setReplyStatus("Ticket marked resolved.");
+        await loadTicket(selectedId);
+        await loadTickets();
+      } catch (err) {
+        setReplyStatus(err instanceof Error ? err.message : "Could not resolve.");
+      } finally {
+        setReplying(false);
+      }
+    };
     const answer = await confirmDialog({
       title: "Resolve this request?",
       body: "The thread is marked resolved and closed.",
       confirmLabel: "Resolve",
-      tone: "primary",
-    });
+      tone: "primary", action: run });
     if (!answer) return;
-    setReplying(true);
-    setReplyStatus(null);
-    try {
-      const res = await apiFetch(`/api/support/team/tickets/${selectedId}/resolve`, { method: "POST" });
-      const json = await res.json() as { error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Could not resolve.");
-      setReplyStatus("Ticket marked resolved.");
-      await loadTicket(selectedId);
-      await loadTickets();
-    } catch (err) {
-      setReplyStatus(err instanceof Error ? err.message : "Could not resolve.");
-    } finally {
-      setReplying(false);
-    }
   };
 
   const unban = async (userId: string) => {
+    const run = async () => {
+      const res = await apiFetch("/api/moderation/platform-ban", {
+        method: "POST",
+        body: JSON.stringify({ action: "unban", userId }),
+      });
+      if (res.ok) {
+        void loadBans();
+        return;
+      }
+      const json = (await res.json().catch(() => null)) as { error?: string } | null;
+      setError(json?.error ?? "Could not lift the ban.");
+    };
     const ok = await confirmDialog({
       title: "Lift this platform ban?",
       body: "They can sign in and use Disband again straight away.",
       confirmLabel: "Unban",
-      tone: "danger",
-    });
+      tone: "danger", action: run });
     if (!ok) return;
-    const res = await apiFetch("/api/moderation/platform-ban", {
-      method: "POST",
-      body: JSON.stringify({ action: "unban", userId }),
-    });
-    if (res.ok) {
-      void loadBans();
-      return;
-    }
-    const json = (await res.json().catch(() => null)) as { error?: string } | null;
-    setError(json?.error ?? "Could not lift the ban.");
   };
 
   const decideAppeal = async (id: string, approve: boolean) => {
@@ -557,7 +559,7 @@ export default function TeamSupportPage() {
 
   if (phase === "checking") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg-tertiary text-[14px] text-text-muted">
+      <div className="flex min-h-screen items-center justify-center bg-bg-secondary text-[14px] text-text-muted">
         Checking staff access…
       </div>
     );
@@ -565,8 +567,8 @@ export default function TeamSupportPage() {
 
   if (phase === "denied") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg-tertiary px-4">
-        <div className="classic-modal w-full max-w-[440px] overflow-hidden rounded-lg bg-bg-primary text-center shadow-[var(--elevation-high)]">
+      <div className="flex min-h-screen items-center justify-center bg-bg-secondary px-4">
+        <div className="classic-modal w-full max-w-[440px] overflow-hidden rounded-xl border border-border-subtle bg-bg-primary text-center shadow-[var(--elevation-high)]">
           <div className="px-6 pb-6 pt-8">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-status-dnd/15 text-status-dnd">
               <IconLock size={26} />
@@ -634,7 +636,7 @@ export default function TeamSupportPage() {
                   onClick={() => setActiveTab(item.id)}
                   aria-current={active ? "page" : undefined}
                   title={item.label}
-                  className={`flex h-[38px] w-full items-center justify-center gap-3 rounded-[4px] px-2.5 text-[15px] font-medium transition-colors md:justify-start ${
+                  className={`flex h-[38px] w-full items-center justify-center gap-3 rounded-lg px-2.5 text-[15px] font-medium transition-colors md:justify-start ${
                     active
                       ? "bg-interactive-hover text-header-primary"
                       : "text-text-muted hover:bg-interactive-hover/60 hover:text-text-normal"
@@ -714,7 +716,7 @@ export default function TeamSupportPage() {
                           role="tab"
                           aria-selected={filter === id}
                           onClick={() => setFilter(id)}
-                          className={`flex h-7 flex-1 items-center justify-center gap-1.5 rounded-[4px] text-[13px] font-medium transition-colors ${
+                          className={`flex h-7 flex-1 items-center justify-center gap-1.5 rounded-lg text-[13px] font-medium transition-colors ${
                             filter === id ? "bg-bg-primary text-header-primary shadow-sm" : "text-text-muted hover:text-text-normal"
                           }`}
                         >
@@ -743,7 +745,7 @@ export default function TeamSupportPage() {
                             type="button"
                             onClick={() => setSelectedId(item.id)}
                             aria-current={selected ? "true" : undefined}
-                            className={`group flex w-full items-start gap-3 rounded-[4px] px-2.5 py-2 text-left transition-colors ${
+                            className={`group flex w-full items-start gap-3 rounded-lg px-2.5 py-2 text-left transition-colors ${
                               selected ? "bg-interactive-hover" : "hover:bg-interactive-hover/50"
                             }`}
                           >
@@ -959,7 +961,7 @@ export default function TeamSupportPage() {
                           </div>
                         )}
                         {appeal.decision && (
-                          <p className="mt-3 rounded-[4px] bg-bg-tertiary px-3 py-2 text-[13px] text-text-muted">
+                          <p className="mt-3 rounded-lg bg-bg-tertiary px-3 py-2 text-[13px] text-text-muted">
                             <span className="font-semibold text-text-normal">Decision:</span> {appeal.decision}
                           </p>
                         )}
@@ -1006,11 +1008,11 @@ export default function TeamSupportPage() {
                             {flag.reviewed_at ? ` · ${formatTime(flag.reviewed_at)}` : ""}
                           </p>
                         )}
-                        {flag.last_error && <p className="mt-2 rounded-[4px] bg-status-dnd/10 px-3 py-2 text-[13px] text-status-dnd">{flag.last_error}</p>}
+                        {flag.last_error && <p className="mt-2 rounded-lg bg-status-dnd/10 px-3 py-2 text-[13px] text-status-dnd">{flag.last_error}</p>}
                         {flag.snapshot && (
                           <details className="mt-3">
                             <summary className="cursor-pointer text-[13px] font-medium text-text-link hover:underline">Show snapshot</summary>
-                            <pre className="mt-2 max-h-48 overflow-auto rounded-[4px] bg-bg-tertiary p-3 font-mono text-[12px] text-text-muted">{JSON.stringify(flag.snapshot, null, 2)}</pre>
+                            <pre className="mt-2 max-h-48 overflow-auto rounded-lg bg-bg-tertiary p-3 font-mono text-[12px] text-text-muted">{JSON.stringify(flag.snapshot, null, 2)}</pre>
                           </details>
                         )}
                         {open && (
@@ -1146,7 +1148,7 @@ export default function TeamSupportPage() {
                         key={sv.id}
                         type="button"
                         onClick={() => void loadServerDetail(sv.id)}
-                        className={`flex w-full items-center gap-3 rounded-[4px] px-2.5 py-2 text-left transition-colors ${
+                        className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors ${
                           selectedServerId === sv.id ? "bg-interactive-hover" : "hover:bg-interactive-hover/50"
                         }`}
                       >
@@ -1324,7 +1326,7 @@ export default function TeamSupportPage() {
                 ] as const).map(([id, label, body]) => (
                   <label
                     key={id}
-                    className={`flex cursor-pointer items-start gap-3 rounded-[4px] px-3 py-2.5 transition-colors ${
+                    className={`flex cursor-pointer items-start gap-3 rounded-lg px-3 py-2.5 transition-colors ${
                       actionType === id ? "bg-interactive-hover" : "bg-bg-secondary hover:bg-interactive-hover/60"
                     }`}
                   >
@@ -1382,7 +1384,7 @@ type TabId = "tickets" | "users" | "bans" | "appeals" | "flags" | "bugs" | "serv
 type Tone = "neutral" | "brand" | "warn" | "good" | "danger" | "purple";
 
 const btnBase =
-  "inline-flex items-center justify-center gap-1.5 rounded-[4px] px-3.5 text-[14px] font-medium leading-4 transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 text-[14px] font-medium leading-4 transition-colors disabled:cursor-not-allowed disabled:opacity-50";
 
 const ui = {
   btnPrimary: `${btnBase} bg-brand text-white hover:bg-brand-hover`,
@@ -1392,10 +1394,10 @@ const ui = {
   btnSuccess: `${btnBase} bg-[#248046] text-white hover:bg-[#1a6334]`,
   btnGhost: `${btnBase} text-text-muted hover:bg-interactive-hover hover:text-text-normal`,
   input:
-    "h-9 w-full rounded-[4px] border border-transparent bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc]",
+    "h-9 w-full rounded-lg border border-transparent bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none transition-colors placeholder:text-text-muted focus:border-brand",
   card: "overflow-hidden rounded-lg border border-divider/60 bg-bg-secondary",
   eyebrow: "text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary",
-  kbd: "rounded-[3px] border border-divider bg-bg-tertiary px-1 font-sans text-[11px] text-text-normal",
+  kbd: "rounded-md border border-divider bg-bg-tertiary px-1 font-sans text-[11px] text-text-normal",
 };
 
 const toneClass: Record<Tone, string> = {
@@ -1409,7 +1411,7 @@ const toneClass: Record<Tone, string> = {
 
 function Pill({ tone = "neutral", children }: { tone?: Tone; children: React.ReactNode }) {
   return (
-    <span className={`inline-flex h-[18px] shrink-0 items-center rounded-[4px] px-1.5 text-[11px] font-semibold capitalize leading-none ${toneClass[tone]}`}>
+    <span className={`inline-flex h-[18px] shrink-0 items-center rounded-lg px-1.5 text-[11px] font-semibold capitalize leading-none ${toneClass[tone]}`}>
       {children}
     </span>
   );
@@ -1522,7 +1524,7 @@ function ListSkeleton() {
   return (
     <div className="space-y-1 p-1" aria-hidden>
       {Array.from({ length: 5 }, (_, i) => (
-        <div key={i} className="flex items-center gap-3 rounded-[4px] px-2.5 py-2">
+        <div key={i} className="flex items-center gap-3 rounded-lg px-2.5 py-2">
           <span className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-bg-tertiary" />
           <span className="flex-1 space-y-2">
             <span className="block h-3 w-2/3 animate-pulse rounded bg-bg-tertiary" />

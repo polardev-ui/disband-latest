@@ -150,6 +150,7 @@ await client.connect();`}</pre>
                       ["GET /channels/{id}/permissions", "The channel's role overrides."],
                       ["PUT /channels/{id}/permissions/{roleId}", "Set can_view, can_post, can_react and can_attach: true, false or null (inherit)."],
                       ["DELETE /channels/{id}/permissions/{roleId}", "Remove a role's override."],
+                      ["DELETE /channels/{id}/messages/{messageId}", "Delete a message (messages.delete). Your own always; anyone's with Manage Messages. Returns 204."],
                     ].map(([req, desc]) => (
                       <tr key={req} className="border-t border-divider">
                         <td className="px-4 py-2 font-mono text-xs">{req}</td>
@@ -164,6 +165,12 @@ await client.connect();`}</pre>
                 <code>roles.manage</code>. Setting <code>@everyone</code> to <code>can_view: false</code> and a Verified role to{" "}
                 <code>can_view: true</code> hides a channel until someone is verified. Members from{" "}
                 <code>GET /servers/&#123;id&#125;/members</code> list their <code>roles</code>.
+              </p>
+              <p className="text-sm text-text-muted mb-2">
+                Every role has a numeric <code>display_id</code> (a string, like <code>&quot;113456789012345678&quot;</code>), and
+                messages have one too. Any <code>&#123;roleId&#125;</code> or <code>&#123;messageId&#125;</code> in a path takes
+                either the id or the numeric <code>display_id</code>. Space owners can copy a role&apos;s number from Space
+                Settings › Roles.
               </p>
               <div className="rounded-lg border border-divider bg-bg-secondary p-4">
                 <pre className="text-sm overflow-x-auto whitespace-pre-wrap">{`curl -X POST https://www.disband.dev/api/v1/servers/$SERVER/roles \\

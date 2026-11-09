@@ -50,7 +50,7 @@ export function PromoteSection({ server }: SectionProps) {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" role="radiogroup" aria-label={t("Promotion length")}>
             {PROMOTION_PLANS.map((p) => (
               <button key={p.days} type="button" role="radio" aria-checked={days === p.days} onClick={() => setDays(p.days)}
-                className={`rounded-lg border px-3 py-3 text-left transition-colors ${days === p.days ? "border-brand bg-brand/15" : "border-divider hover:bg-interactive-hover"}`}>
+                className={`rounded-lg border px-3 py-3 text-left transition-colors ${days === p.days ? "border-brand bg-brand/15" : "border-border-subtle hover:bg-interactive-hover"}`}>
                 <span className="block text-[14px] font-semibold text-header-primary">{p.label}</span>
                 <span className="block text-[13px] text-text-muted">{formatPrice(p.cents)}</span>
               </button>

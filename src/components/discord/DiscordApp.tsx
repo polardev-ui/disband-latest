@@ -1,5 +1,15 @@
 "use client";
 
+import type { AeroCheckoutRequest } from "@/components/subscription/AeroPage";
+import { AppearanceEffect } from "./AppearanceEffect";
+import { favoritesAvailable, isFavorite, toggleFavorite, useFavorites, type FavoriteKind } from "@/lib/favorites";
+import { ReminderDialog, type ReminderTarget } from "./SavedMessages";
+import { findSaved, saveMessage, savedAvailable, unsaveMessage, useSavedMessages } from "@/lib/saved-messages";
+import { appearanceEntitled } from "@/lib/appearance";
+import { FavoritesPanel } from "./FavoritesPanel";
+import { ForumView } from "./ForumView";
+import { SlowModeNotice } from "./SlowModeNotice";
+import { isTauri } from "@/lib/platform";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { isThemeId } from "@/lib/theme/themes";
@@ -9,6 +19,7 @@ import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audi
 import { useApp } from "@/contexts/AppContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useUrlRoutes } from "@/hooks/useUrlRoutes";
 import { useZoom, ZOOM_STEP } from "@/hooks/useZoom";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
 import { useCallManager } from "@/hooks/useCallManager";
@@ -69,6 +80,10 @@ import {
   IconStar,
   IconNotes,
   IconMegaphone,
+  IconForum,
+  IconChevronLeft,
+  IconBookmark,
+  IconAlarm,
   IconPin,
   IconPinOff,
   IconMenu,
@@ -81,6 +96,7 @@ import {
   IconVerified,
 } from "@/components/icons";
 const SubscriptionModal = dynamic(() => import("@/components/subscription/SubscriptionModal").then(m => m.SubscriptionModal));
+const AeroPage = dynamic(() => import("@/components/subscription/AeroPage").then(m => m.AeroPage));
 const ShopModal = dynamic(() => import("@/components/shop/ShopModal").then(m => m.ShopModal));
 import { displayName, getInviteUrl, normalizeMessageContent } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
@@ -103,6 +119,21 @@ import { UserProfilePopout } from "./UserProfilePopout";
 
 export function DiscordApp() {
   const app = useApp();
+  // Discord-style addresses (/channels/@me, /channels/<space>/<channel>) on the web.
+  useUrlRoutes({
+    viewMode: app.viewMode,
+    activeServerId: app.activeServerId,
+    activeChannelId: app.activeChannelId,
+    activeDmThreadId: app.activeDmThreadId,
+    activeGroupChatId: app.activeGroupChatId,
+    isDmThread: (id) => app.dmThreads.some((t) => t.id === id),
+    isGroupChat: (id) => app.groupChats.some((g) => g.id === id),
+    setViewHome: app.setViewHome,
+    setViewNotes: app.setViewNotes,
+    setViewDiscover: app.setViewDiscover,
+    selectServer: app.selectServer,
+    routeToNotification: app.routeToNotification,
+  });
   const { t } = useI18n();
   const { openMenu } = useContextMenu();
   const { theme, setTheme } = useTheme();
@@ -122,6 +153,18 @@ export function DiscordApp() {
   const [discoverTab, setDiscoverTab] = useState<DiscoverTab>("popular");
   const [discoverQuery, setDiscoverQuery] = useState("");
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
+  // Checkout the Aero page asked for, handed to SubscriptionModal.
+  const [checkoutStart, setCheckoutStart] = useState<AeroCheckoutRequest | null>(null);
+  // What the main column shows in the home view: friends, or the Aero page.
+  const [homePage, setHomePage] = useState<"friends" | "aero">("friends");
+  // The rail's star: the sidebar lists favorites in place of channels/DMs.
+  const [favoritesView, setFavoritesView] = useState(false);
+  // "Remind me…" on a message (Lite and Aero).
+  const [reminderTarget, setReminderTarget] = useState<ReminderTarget | null>(null);
+  // Loads saved messages once per account, so the menu knows what's saved.
+  useSavedMessages(app.user?.id);
+  // Loads the favorites list once per account, so menus know what's starred.
+  useFavorites(app.user?.id);
   const [shopOpen, setShopOpen] = useState(false);
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   // Ctrl/⌘+K opens the Quick Switcher from anywhere in the app.
@@ -219,6 +262,18 @@ export function DiscordApp() {
 
 
   const [catalystServerId, setCatalystServerId] = useState<string | null>(null);
+  // Shown in place of the chat while you are in that space; leaving it closes the page.
+  const catalystPage = catalystServerId !== null && app.viewMode === "space" && app.activeServerId === catalystServerId;
+  // Picking another channel in the same space closes it (a switch to the
+  // space itself, when the page was opened from elsewhere, does not).
+  const catalystOpenedAt = useRef(0);
+  const catalystWhereRef = useRef({ server: app.activeServerId, channel: app.activeChannelId });
+  useEffect(() => {
+    const prev = catalystWhereRef.current;
+    const settling = Date.now() - catalystOpenedAt.current < 2000;
+    if (!settling && prev.server === app.activeServerId && prev.channel !== app.activeChannelId && prev.channel) setCatalystServerId(null);
+    catalystWhereRef.current = { server: app.activeServerId, channel: app.activeChannelId };
+  }, [app.activeServerId, app.activeChannelId]);
   const { plan: subPlan, entitlements } = useSubscription(app.user?.id);
 
   // Back from connecting YouTube, TikTok or Twitch: open the Creator Program
@@ -435,11 +490,25 @@ export function DiscordApp() {
     const savedId = getLastChannelId(serverId);
     const target =
       (savedId ? serverChannels.find((c) => c.id === savedId) : undefined)
-      ?? serverChannels.find((c) => c.type === "text")
+      ?? serverChannels.find((c) => c.type === "text" && !c.parent_id)
+      ?? serverChannels.find((c) => !c.parent_id)
       ?? serverChannels[0];
     if (target) app.selectChannel(target.id);
   }, [app.viewMode, app.activeServerId, app.activeChannelId, app.channels, app.selectChannel]);
   const isVoice = activeChannel?.type === "voice";
+  // A forum post renders as a chat with a way back to its forum.
+  const activeParentForum = activeChannel?.parent_id
+    ? app.channels.find((c) => c.id === activeChannel.parent_id) ?? null
+    : null;
+  const lastOwnChannelMessageAt = useMemo(() => {
+    const me = app.user?.id;
+    if (!me) return null;
+    for (let i = app.messages.length - 1; i >= 0; i--) {
+      const m = app.messages[i];
+      if (m.author_id === me && !m.sending) return m.created_at;
+    }
+    return null;
+  }, [app.messages, app.user?.id]);
   const dmFriend =
     app.dmThreads.find((t) => t.id === app.activeDmThreadId)?.friend ??
     (() => {
@@ -535,7 +604,7 @@ export function DiscordApp() {
     : undefined;
   // Bumped after a role edit so a fetched membership row re-reads its roles.
   const [profileMemberRefresh, setProfileMemberRefresh] = useState(0);
-  const fetchedProfileMember = useProfileMember(
+  const { row: fetchedProfileMember, pending: profileMemberPending } = useProfileMember(
     app.viewMode === "space" ? app.activeServerId : null,
     profileTarget?.id,
     !!loadedProfileMember,
@@ -776,7 +845,8 @@ export function DiscordApp() {
                     title: t("Delete {name}", { name: server.name }),
                     body: t("This deletes the space, its channels and messages for everyone. It can't be undone."),
                     confirmLabel: t("Delete Space"),
-                  }).then((ok) => { if (ok) void app.deleteServer(server.id); });
+                    action: () => app.deleteServer(server.id),
+                  });
                 },
               },
             ]
@@ -809,7 +879,8 @@ export function DiscordApp() {
               title: t("Delete {name}", { name: folder.name }),
               body: "The folder goes; the spaces in it stay where they are.",
               confirmLabel: t("Delete Folder"),
-            }).then((ok) => { if (ok) void app.deleteFolder(folder.id); });
+              action: () => app.deleteFolder(folder.id),
+            });
           },
         },
       ]);
@@ -836,15 +907,35 @@ export function DiscordApp() {
 
   const boostServer = useCallback(
     (serverId: string) => {
-
+      // The Catalyst page fills that space's chat area.
+      catalystOpenedAt.current = Date.now();
+      if (app.activeServerId !== serverId || app.viewMode !== "space") void app.selectServer(serverId);
       setCatalystServerId(serverId);
     },
-    [],
+    [app],
   );
+
+  // "Add to Favorites" for any menu that names a channel or conversation.
+  const favoriteMenuItem = useCallback((kind: FavoriteKind, id: string): ContextMenuItem[] => {
+    const userId = app.user?.id;
+    if (!userId || !favoritesAvailable()) return [];
+    const on = isFavorite(kind, id);
+    return [{
+      id: "favorite",
+      label: on ? t("Remove from Favorites") : t("Add to Favorites"),
+      icon: <IconStar size={16} />,
+      onClick: () => {
+        void toggleFavorite(userId, kind, id).then((err) => {
+          if (err) void alertDialog(err, t("Favorites"));
+        });
+      },
+    }];
+  }, [app.user?.id, t]);
 
   const handleChannelContext = useCallback(
     (channel: Channel, x: number, y: number) => {
       const items: ContextMenuItem[] = [
+        ...favoriteMenuItem("channel", channel.id),
         {
           id: "copy",
           label: t("Copy Channel ID"),
@@ -870,14 +961,15 @@ export function DiscordApp() {
                 title: t("Delete #{name}", { name: channel.name }),
                 body: t("Its messages go with it. This can't be undone."),
                 confirmLabel: t("Delete Channel"),
-              }).then((ok) => { if (ok) void app.deleteChannel(channel.id); });
+                action: () => app.deleteChannel(channel.id),
+              });
             },
           },
         );
       }
       openMenu(x, y, items);
     },
-    [openMenu, canManageChannels, app],
+    [openMenu, canManageChannels, app, favoriteMenuItem],
   );
 
   const handleCategoryContext = useCallback(
@@ -928,7 +1020,8 @@ export function DiscordApp() {
                 title: t("Delete {name}", { name: category.name }),
                 body: t("The channels inside are kept and moved out of the category."),
                 confirmLabel: t("Delete Category"),
-              }).then((ok) => { if (ok) void app.deleteCategory(category.id); });
+                action: () => app.deleteCategory(category.id),
+              });
             },
           },
         );
@@ -1025,7 +1118,8 @@ export function DiscordApp() {
               title: t("Delete Note"),
               body: t("This can't be undone."),
               confirmLabel: t("Delete"),
-            }).then((ok) => { if (ok) void app.deleteNote(message.id); });
+              action: () => app.deleteNote(message.id),
+            });
           },
         },
       ]);
@@ -1047,6 +1141,42 @@ export function DiscordApp() {
           ? app.pinnedBySource[`channel:${app.activeChannelId}`]
           : undefined;
       const isPinned = pinnedForSource?.some((p) => p.message_id === message.id) ?? false;
+      // Saving and reminders need a real, delivered message and its container.
+      const savedContext = context === "notes" ? null : context;
+      const containerId =
+        context === "channel" ? app.activeChannelId : context === "dm" ? app.activeDmThreadId : context === "group" ? app.activeGroupChatId : null;
+      const userId = app.user?.id;
+      const canSave = !!savedContext && !!containerId && !!userId && !message.sending && !message.id.startsWith("opt-") && savedAvailable();
+      const savedRow = canSave ? findSaved(savedContext!, message.id) : undefined;
+      const saveItems: ContextMenuItem[] = canSave
+        ? [
+            {
+              id: "save",
+              label: savedRow ? t("Remove from saved") : t("Save message"),
+              icon: <IconBookmark size={16} />,
+              onClick: () => {
+                const run = savedRow
+                  ? unsaveMessage(userId!, savedRow.id)
+                  : saveMessage(userId!, { context: savedContext!, messageId: message.id, containerId: containerId! });
+                void run.then((err) => {
+                  if (err) void alertDialog(err, t("Saved messages"));
+                });
+              },
+            },
+            {
+              id: "remind",
+              label: appearanceEntitled(app.subscriptionPlan) ? t("Remind me…") : t("Remind me… (Lite and Aero)"),
+              icon: <IconAlarm size={16} />,
+              onClick: () => {
+                if (!appearanceEntitled(app.subscriptionPlan)) {
+                  setSubscriptionOpen(true);
+                  return;
+                }
+                setReminderTarget({ context: savedContext!, messageId: message.id, containerId: containerId! });
+              },
+            },
+          ]
+        : [];
       const canPin = app.activeServer?.owner_id === app.user?.id || !!app.serverPermissions.pin_messages;
 
       openMenu(x, y, [
@@ -1070,6 +1200,7 @@ export function DiscordApp() {
           icon: <IconCopy size={16} />,
           onClick: () => chatRef.current?.openReactionPicker(message.id, x, y),
         },
+        ...saveItems,
         ...(context === "dm" && app.activeDmThreadId
           ? [
               {
@@ -1205,12 +1336,11 @@ export function DiscordApp() {
               title: t("Remove {name}", { name: displayName(member) }),
               body: t("They'll leave \"{name}\".", { name: activeGroup.name }),
               confirmLabel: t("Remove"),
-            }).then((ok) => {
-              if (!ok) return;
-              void app.removeGroupMember(activeGroup.id, member.id).then((err) => {
+              action: async () => {
+                const err = await app.removeGroupMember(activeGroup.id, member.id);
                 if (err) void alertDialog(err);
-                else void app.refreshGroupChats();
-              });
+                else await app.refreshGroupChats();
+              },
             });
           },
         });
@@ -1224,6 +1354,7 @@ export function DiscordApp() {
     (group: NonNullable<typeof activeGroup>, x: number, y: number) => {
       const isOwner = group.owner_id === app.user?.id;
       openMenu(x, y, [
+        ...favoriteMenuItem("group", group.id),
         {
           id: "call",
           label: groupCall.joined ? t("In voice") : t("Start voice call"),
@@ -1274,16 +1405,16 @@ export function DiscordApp() {
               title: t("Leave {name}", { name: group.name }),
               body: t("You won't get its messages until someone adds you back."),
               confirmLabel: t("Leave Group"),
-            }).then((ok) => {
-              if (!ok) return;
-              if (groupCall.groupId === group.id && groupCall.joined) void groupCall.endGroupCall();
-              void app.leaveGroupChat(group.id);
+              action: async () => {
+                if (groupCall.groupId === group.id && groupCall.joined) void groupCall.endGroupCall();
+                await app.leaveGroupChat(group.id);
+              },
             });
           },
         },
       ]);
     },
-    [app, openMenu, groupCall.joined, call.phase, startGroupVoiceCall],
+    [app, openMenu, groupCall.joined, call.phase, startGroupVoiceCall, favoriteMenuItem],
   );
 
   const handleUserPanelContext = useCallback(
@@ -1344,8 +1475,10 @@ export function DiscordApp() {
                 title: t("Kick {name}", { name: displayName(member.profile) }),
                 body: t("They can rejoin with an invite."),
                 confirmLabel: t("Kick"),
-              }).then((ok) => {
-                if (ok) void app.kickMember(member.user_id).then((err) => { if (err) void alertDialog(err); });
+                action: async () => {
+                  const err = await app.kickMember(member.user_id);
+                  if (err) void alertDialog(err);
+                },
               });
             },
           });
@@ -1361,8 +1494,10 @@ export function DiscordApp() {
                 title: t("Ban {name}", { name: displayName(member.profile) }),
                 body: t("This deletes all their messages and stops them rejoining."),
                 confirmLabel: t("Ban"),
-              }).then((ok) => {
-                if (ok) void app.banMember(member.user_id).then((err) => { if (err) void alertDialog(err); });
+                action: async () => {
+                  const err = await app.banMember(member.user_id);
+                  if (err) void alertDialog(err);
+                },
               });
             },
           });
@@ -1510,7 +1645,8 @@ export function DiscordApp() {
               title: t("Remove {name}", { name: displayName(friend) }),
               body: t("They'll be removed from your friends."),
               confirmLabel: t("Remove Friend"),
-            }).then((ok) => { if (ok) void app.removeFriend(friend.id); });
+              action: () => app.removeFriend(friend.id),
+            });
           },
         },
         {
@@ -1523,7 +1659,8 @@ export function DiscordApp() {
               title: t("Block {name}", { name: displayName(friend) }),
               body: t("They won't be able to message you."),
               confirmLabel: t("Block"),
-            }).then((ok) => { if (ok) void app.blockUser(friend.id); });
+              action: () => app.blockUser(friend.id),
+            });
           },
         },
       ];
@@ -1746,6 +1883,26 @@ export function DiscordApp() {
     return null;
   };
 
+  // The Aero page lives in the home view's main column; leaving home (a
+  // space, a DM, Discover) puts the friends page back for next time.
+  const openAeroPage = useCallback(() => {
+    setFavoritesView(false);
+    app.setViewHome();
+    setHomePage("aero");
+    setMobileMenuOpen(false);
+  }, [app]);
+  const openFriendsPage = useCallback(() => {
+    app.setViewHome();
+    setHomePage("friends");
+  }, [app]);
+  useEffect(() => {
+    if (app.viewMode !== "home") setHomePage("friends");
+  }, [app.viewMode]);
+
+  // Rail shortcuts. Downloads only on the web — the desktop app is the download.
+  const railDownloads = isTauri() ? undefined : () => window.open("/downloads", "_blank", "noopener,noreferrer");
+  const openHelpCentre = () => window.open("/support", "_blank", "noopener,noreferrer");
+
   // On phones a chat view carries the menu button in its own header, as
   // Discord did, instead of stacking a second bar above it.
   const mobileChatHeader =
@@ -1759,7 +1916,7 @@ export function DiscordApp() {
       type="button"
       aria-label={t("Open navigation")}
       onClick={() => setMobileMenuOpen((v) => !v)}
-      className="-ml-2 mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] text-interactive-normal hover:text-interactive-active"
+      className="-ml-2 mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-interactive-normal hover:text-interactive-active"
     >
       <IconMenu size={22} />
     </button>
@@ -1767,6 +1924,7 @@ export function DiscordApp() {
 
   return (
     <div className="app-base-layer h-full w-full overflow-hidden bg-bg-primary">
+      <AppearanceEffect userId={app.user?.id} plan={app.subscriptionPlan} />
       <div
         className="h-full w-full origin-top-left"
         style={{ transform: `scale(${zoom})`, width: `${100 / zoom}%`, height: `${100 / zoom}%` }}
@@ -1866,7 +2024,8 @@ export function DiscordApp() {
               className="absolute inset-0 bg-overlay-scrim overlay-fade"
               onClick={() => setMobileMenuOpen(false)}
             />
-            <div className="relative flex h-full w-[min(86vw,22rem)] shadow-[var(--elevation-high)]">
+            <div className="relative flex h-full w-[min(88vw,22rem)] flex-col bg-bg-secondary shadow-[var(--elevation-high)]">
+              <div className="flex min-h-0 flex-1">
               <ServerList
                 servers={app.servers}
                 catalystCounts={app.catalystCounts}
@@ -1881,20 +2040,26 @@ export function DiscordApp() {
                 serverMentionCounts={app.serverMentionCounts}
                 folders={app.serverFolders}
                 listState={app.serverListState}
-                onSelectHome={app.setViewHome}
-                onSelectServer={(id) => void app.selectServer(id)}
+                onSelectHome={() => { setFavoritesView(false); app.setViewHome(); }}
+                onSelectServer={(id) => { setFavoritesView(false); void app.selectServer(id); }}
                 onSelectDmThread={(id) => void app.selectDmThread(id)}
                 onCreateServer={() => setCreateServerOpen(true)}
-                onDiscover={app.setViewDiscover}
+                onDiscover={() => { setFavoritesView(false); app.setViewDiscover(); }}
+                favoritesActive={favoritesView}
+                onSelectFavorites={() => setFavoritesView(true)}
                 onServerContext={handleServerContext}
                 onFolderContext={handleFolderContext}
                 onReorderServers={handleReorderServers}
                 onReorderFolders={handleReorderFolders}
+                onOpenDownloads={railDownloads}
+                onOpenHelp={openHelpCentre}
               />
 
               <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-bg-secondary">
               <div className="flex min-h-0 flex-1">
-              {app.viewMode === "discover" ? (
+              {favoritesView ? (
+                <div className="flex min-h-0 w-full"><FavoritesPanel /></div>
+              ) : app.viewMode === "discover" ? (
                 <DiscoverSidebar
                   tab={discoverTab}
                   onTabChange={setDiscoverTab}
@@ -1910,7 +2075,9 @@ export function DiscordApp() {
                     if (f) openProfile(f);
                   }}
                   onGroupContext={handleGroupContext}
-                  onOpenSubscription={() => setSubscriptionOpen(true)}
+                  onOpenSubscription={openAeroPage}
+                  aeroActive={app.viewMode === "home" && homePage === "aero"}
+                  onOpenFriends={openFriendsPage}
                   onOpenShop={() => setShopOpen(true)}
                     onOpenQuickSwitcher={() => setQuickSwitcherOpen(true)}
                 />
@@ -1945,20 +2112,21 @@ export function DiscordApp() {
                 />
               )}
               </div>
+              </div>
+              </div>
               <CallIndicator />
               <UserPanel onOpenSettings={() => setSettingsOpen(true)} onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined} onContextMenu={handleUserPanelContext} />
-              </div>
             </div>
           </div>
         )
       ) : (
         <>
-          {/* The rail runs full height; beside it a 240px column holds the
-              channel or DM list, then the Voice Connected card and the user
-              panel — the classic arrangement. The column has a definite width
-              so the user panel's long names and statuses truncate instead of
-              widening the sidebar. */}
-          <div className="relative flex h-full min-h-0 shrink-0">
+          {/* One sidebar block: the rail and the channel or DM list side by
+              side, then the Voice Connected card and the user area running
+              under both. The list has a definite width so long names and
+              statuses truncate instead of widening the sidebar. */}
+          <div className="relative flex h-full min-h-0 shrink-0 flex-col border-r border-column-border bg-bg-secondary">
+            <div className="flex min-h-0 flex-1">
               <ServerList
                 servers={app.servers}
                 catalystCounts={app.catalystCounts}
@@ -1973,22 +2141,26 @@ export function DiscordApp() {
                 serverMentionCounts={app.serverMentionCounts}
                 folders={app.serverFolders}
                 listState={app.serverListState}
-                onSelectHome={app.setViewHome}
-                onSelectServer={(id) => void app.selectServer(id)}
+                onSelectHome={() => { setFavoritesView(false); app.setViewHome(); }}
+                onSelectServer={(id) => { setFavoritesView(false); void app.selectServer(id); }}
                 onSelectDmThread={(id) => void app.selectDmThread(id)}
                 onCreateServer={() => setCreateServerOpen(true)}
-                onDiscover={app.setViewDiscover}
+                onDiscover={() => { setFavoritesView(false); app.setViewDiscover(); }}
+                favoritesActive={favoritesView}
+                onSelectFavorites={() => setFavoritesView(true)}
                 onServerContext={handleServerContext}
                 onFolderContext={handleFolderContext}
                 onReorderServers={handleReorderServers}
                 onReorderFolders={handleReorderFolders}
+                onOpenDownloads={railDownloads}
+                onOpenHelp={openHelpCentre}
               />
 
-            {/* The 240px column: channels or DMs on top, then the Voice
-                Connected card and the user panel, exactly as wide as the list. */}
-            <div className="flex h-full min-h-0 w-60 flex-col bg-bg-secondary">
+            <div className="flex h-full min-h-0 w-[256px] flex-col">
             <div className="flex min-h-0 flex-1">
-              {app.viewMode === "discover" ? (
+              {favoritesView ? (
+                <div className="flex min-h-0 w-full"><FavoritesPanel /></div>
+              ) : app.viewMode === "discover" ? (
                 <div className="flex min-h-0 w-full">
                   <DiscoverSidebar
                     tab={discoverTab}
@@ -2007,7 +2179,9 @@ export function DiscordApp() {
                       if (f) openProfile(f);
                     }}
                     onGroupContext={handleGroupContext}
-                    onOpenSubscription={() => setSubscriptionOpen(true)}
+                    onOpenSubscription={openAeroPage}
+                    aeroActive={app.viewMode === "home" && homePage === "aero"}
+                    onOpenFriends={openFriendsPage}
                     onOpenShop={() => setShopOpen(true)}
                     onOpenQuickSwitcher={() => setQuickSwitcherOpen(true)}
                   />
@@ -2045,9 +2219,10 @@ export function DiscordApp() {
                 </div>
               )}
             </div>
+            </div>
+            </div>
             <CallIndicator />
             <UserPanel onOpenSettings={() => setSettingsOpen(true)} onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined} onContextMenu={handleUserPanelContext} />
-            </div>
           </div>
         </>
       )}
@@ -2079,6 +2254,7 @@ export function DiscordApp() {
               !dmCallActive ? (
 	                <HeaderToolbar
 	                    scopeKind="dm"
+	                    favoriteTarget={app.activeDmThreadId ? { kind: "dm", id: app.activeDmThreadId } : null}
 	                    serverId={null}
 	                    containerId={app.activeDmThreadId}
 	                    pinnedOpen={pinnedOpen}
@@ -2205,6 +2381,7 @@ export function DiscordApp() {
                 headerTrailing={
 	                  <HeaderToolbar
 	                      scopeKind="group"
+	                      favoriteTarget={app.activeGroupChatId ? { kind: "group", id: app.activeGroupChatId } : null}
 	                      serverId={null}
 	                      containerId={app.activeGroupChatId}
 	                      pinnedOpen={pinnedOpen}
@@ -2330,7 +2507,15 @@ export function DiscordApp() {
         />
       )}
 
-      {app.viewMode === "home" && (
+      {app.viewMode === "home" && homePage === "aero" && (
+        <AeroPage
+          onCheckout={(request) => {
+            setCheckoutStart(request);
+            setSubscriptionOpen(true);
+          }}
+        />
+      )}
+      {app.viewMode === "home" && homePage !== "aero" && (
         <>
           <FriendsPanel onOpenProfile={openProfile} onFriendContext={handleFriendContext} />
           <ActiveNowPanel />
@@ -2339,11 +2524,18 @@ export function DiscordApp() {
 
       {app.viewMode === "discover" && <DiscoverPanel tab={discoverTab} onTabChange={setDiscoverTab} query={discoverQuery} onQueryChange={setDiscoverQuery} />}
 
-      {app.viewMode === "space" && activeChannel && isVoice && activeChannel.is_stage && (
+      {catalystPage && (
+        <CatalystModal
+          server={app.servers.find((s) => s.id === catalystServerId) ?? null}
+          open
+          onClose={() => setCatalystServerId(null)}
+        />
+      )}
+      {!catalystPage && app.viewMode === "space" && activeChannel && isVoice && activeChannel.is_stage && (
         <StagePanel channel={activeChannel} />
       )}
 
-      {app.viewMode === "space" && activeChannel && isVoice && !activeChannel.is_stage && (
+      {!catalystPage && app.viewMode === "space" && activeChannel && isVoice && !activeChannel.is_stage && (
         <VoicePanel
           channelId={activeChannel.id}
           channelName={activeChannel.name}
@@ -2351,16 +2543,79 @@ export function DiscordApp() {
         />
       )}
 
-      {app.viewMode === "space" && activeChannel && !isVoice && (
+      {!catalystPage && app.viewMode === "space" && activeChannel && activeChannel.type === "forum" && (
+        <ForumView
+          key={activeChannel.id}
+          forum={activeChannel}
+          canManage={canManageChannels}
+          headerLeading={mobileMenuButton}
+          headerTrailing={
+            <HeaderToolbar
+              scopeKind="server"
+              serverId={activeChannel.server_id}
+              containerId={null}
+              searchOpen={searchOpen}
+              onOpenSearch={() => setSearchOpen(true)}
+              onCloseSearch={closeSearch}
+              searchQuery={searchQuery}
+              onSearchQueryChange={setSearchQuery}
+              showMembersToggle
+              membersVisible={membersVisible}
+              onToggleMembers={() => persistMembersVisible(!membersVisible)}
+              favoriteTarget={{ kind: "channel", id: activeChannel.id }}
+            />
+          }
+        />
+      )}
+
+      {!catalystPage && app.viewMode === "space" && activeChannel && !isVoice && activeChannel.type !== "forum" && (
         <ChatCanvas
           key={app.activeChannelId}
           ref={channelChatRef}
-          headerLeading={mobileMenuButton}
+          headerLeading={
+            activeParentForum ? (
+              <>
+                {mobileMenuButton}
+                <button
+                  type="button"
+                  onClick={() => app.selectChannel(activeParentForum.id)}
+                  aria-label={t("Back to #{name}", { name: activeParentForum.name })}
+                  title={t("Back to #{name}", { name: activeParentForum.name })}
+                  className="-ml-1 flex h-8 shrink-0 items-center gap-1 rounded-lg pl-1 pr-2 text-[14px] font-semibold text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
+                >
+                  <IconChevronLeft size={18} />
+                  <span className="hidden max-w-[160px] truncate sm:inline">{activeParentForum.name}</span>
+                </button>
+              </>
+            ) : (
+              mobileMenuButton
+            )
+          }
           channelName={activeChannel.name}
+          topic={activeParentForum ? null : activeChannel.topic ?? null}
+          introText={
+            activeParentForum
+              ? t("This is the start of “{title}”, a post in #{forum}.", { title: activeChannel.name, forum: activeParentForum.name })
+              : undefined
+          }
+          headerExtra={
+            activeParentForum && (activeChannel.post_tags?.length ?? 0) > 0 ? (
+              <span className="hidden shrink-0 items-center gap-1 md:flex">
+                {activeChannel.post_tags!.map((tag) => (
+                  <span key={tag} className="rounded-full border border-border-subtle bg-bg-tertiary px-2 py-px text-[11px] font-semibold text-text-muted">
+                    {tag}
+                  </span>
+                ))}
+              </span>
+            ) : undefined
+          }
           // Announcement channels (read-only + managers only) carry the
-          // megaphone so the header matches the rail.
+          // megaphone so the header matches the rail; forum posts carry the
+          // forum glyph.
           channelIcon={
-            activeChannel.read_only ? <IconMegaphone size={18} className="text-brand" /> : undefined
+            activeParentForum
+              ? <IconForum size={18} />
+              : activeChannel.read_only ? <IconMegaphone size={18} className="text-brand" /> : undefined
           }
           composerLockedReason={
             myTimeoutLabel
@@ -2412,7 +2667,17 @@ export function DiscordApp() {
               showMembersToggle
               membersVisible={membersVisible}
               onToggleMembers={() => persistMembersVisible(!membersVisible)}
+              favoriteTarget={{ kind: "channel", id: activeChannel.id }}
             />
+          }
+          composerNotice={
+            activeChannel.slow_mode_seconds && activeChannel.slow_mode_seconds > 0 ? (
+              <SlowModeNotice
+                seconds={activeChannel.slow_mode_seconds}
+                exempt={canManageChannels || app.hasServerPermission("manage_messages")}
+                lastOwnMessageAt={lastOwnChannelMessageAt}
+              />
+            ) : undefined
           }
           hasMore={app.channelHasMore}
           onLoadMore={app.loadMoreChannelMessages}
@@ -2465,6 +2730,7 @@ export function DiscordApp() {
         isSelf={profileTarget?.id === app.user?.id}
         plan={profileTarget?.id === app.user?.id ? subPlan : undefined}
         isServerMember={!!profileServerMember}
+        rolesPending={app.viewMode === "space" && !profileServerMember && profileMemberPending}
         memberJoinedAt={profileServerMember?.joined_at ?? null}
         serverName={app.activeServer?.name ?? null}
         serverIcon={app.activeServer?.icon_url ?? null}
@@ -2559,8 +2825,10 @@ export function DiscordApp() {
                   title: t("Remove {name}", { name: displayName(profileTarget) }),
                   body: t("They'll be removed from your friends."),
                   confirmLabel: t("Remove Friend"),
-                }).then((ok) => {
-                  if (ok) void app.removeFriend(profileTarget.id).then(() => setProfileTarget(null));
+                  action: async () => {
+                    await app.removeFriend(profileTarget.id);
+                    setProfileTarget(null);
+                  },
                 });
               }
             : undefined
@@ -2572,12 +2840,11 @@ export function DiscordApp() {
                   title: t("Block {name}", { name: displayName(profileTarget) }),
                   body: t("They won't be able to message you."),
                   confirmLabel: t("Block"),
-                }).then((ok) => {
-                  if (!ok) return;
-                  void app.blockUser(profileTarget.id).then((err) => {
+                  action: async () => {
+                    const err = await app.blockUser(profileTarget.id);
                     if (err) void alertDialog(err);
                     else setProfileTarget(null);
-                  });
+                  },
                 });
               }
             : undefined
@@ -2597,6 +2864,7 @@ export function DiscordApp() {
             : undefined
         }
         isServerMember={!!profileServerMember}
+        rolesPending={app.viewMode === "space" && !profileServerMember && profileMemberPending}
         serverRoles={app.serverRoles}
         assignableRoles={assignableServerRoles}
         canManageRoles={profileCanManageRoles}
@@ -2638,15 +2906,15 @@ export function DiscordApp() {
         onClose={() => { setSettingsOpen(false); setSettingsInitialTab(null); }}
         initialTab={settingsInitialTab ?? undefined}
       />
-      <CatalystModal
-        server={app.servers.find((s) => s.id === catalystServerId) ?? null}
-        open={catalystServerId !== null}
-        onClose={() => setCatalystServerId(null)}
-      />
+      <ReminderDialog target={reminderTarget} onClose={() => setReminderTarget(null)} />
       <SubscriptionModal
         open={subscriptionOpen}
-        onClose={() => setSubscriptionOpen(false)}
+        onClose={() => {
+          setSubscriptionOpen(false);
+          setCheckoutStart(null);
+        }}
         userId={app.user?.id}
+        startWith={checkoutStart}
       />
       <ShopModal
         open={shopOpen}

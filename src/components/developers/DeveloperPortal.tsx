@@ -64,7 +64,7 @@ const GROUPS: { label: string; scopes: BotScope[] }[] = [
   { label: "Roles", scopes: ["roles.manage"] },
 ];
 
-const INPUT = "w-full rounded-[3px] bg-bg-tertiary px-3 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-[#00a8fc]";
+const INPUT = "w-full rounded-md bg-bg-tertiary px-3 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-[#00a8fc]";
 const PRIMARY = "rounded bg-brand px-4 py-2 text-[14px] font-semibold text-white hover:bg-brand-hover disabled:opacity-50";
 const SECONDARY = "rounded bg-button-secondary px-4 py-2 text-[14px] font-semibold text-header-primary hover:bg-button-secondary-hover disabled:opacity-50";
 
@@ -291,12 +291,13 @@ export function DeveloperPortal() {
 
   async function resetToken() {
     if (!selected) return;
-    const ok = await confirmDialog({ title: "Reset the token?", body: "The current token stops working straight away. Any running copy of your bot disconnects until you give it the new one.", confirmLabel: "Reset token" });
+    const ok = await confirmDialog({ title: "Reset the token?", body: "The current token stops working straight away. Any running copy of your bot disconnects until you give it the new one.", confirmLabel: "Reset token", action: async () => {
+      const { ok: done, data } = await call<{ token?: string }>("/api/bot/reset-token", { botId: selected.id });
+      if (!done || !data.token) return setError(data.error ?? "Couldn't reset the token.");
+      setToken(data.token);
+      await load();
+    } });
     if (!ok) return;
-    const { ok: done, data } = await call<{ token?: string }>("/api/bot/reset-token", { botId: selected.id });
-    if (!done || !data.token) return setError(data.error ?? "Couldn't reset the token.");
-    setToken(data.token);
-    void load();
   }
 
   async function makeLink() {
@@ -309,20 +310,22 @@ export function DeveloperPortal() {
 
   async function deleteCommand(name: string) {
     if (!selected) return;
-    const ok = await confirmDialog({ title: `Delete /${name}?`, body: "It disappears from every space. Your bot can register it again at any time.", confirmLabel: "Delete" });
+    const ok = await confirmDialog({ title: `Delete /${name}?`, body: "It disappears from every space. Your bot can register it again at any time.", confirmLabel: "Delete", action: async () => {
+      const res = await apiFetch(`/api/bot/commands?botId=${encodeURIComponent(selected.id)}&name=${encodeURIComponent(name)}`, { method: "DELETE" });
+      if (!res.ok) setError("Couldn't delete that command.");
+      await loadCommands(selected.id);
+    } });
     if (!ok) return;
-    const res = await apiFetch(`/api/bot/commands?botId=${encodeURIComponent(selected.id)}&name=${encodeURIComponent(name)}`, { method: "DELETE" });
-    if (!res.ok) setError("Couldn't delete that command.");
-    void loadCommands(selected.id);
   }
 
   async function revoke(bot: Bot) {
-    const ok = await confirmDialog({ title: `Delete ${bot.name}?`, body: "Its token stops working immediately and the bot leaves every space. This can't be undone.", confirmLabel: "Delete application" });
+    const ok = await confirmDialog({ title: `Delete ${bot.name}?`, body: "Its token stops working immediately and the bot leaves every space. This can't be undone.", confirmLabel: "Delete application", action: async () => {
+      const res = await call("/api/bot/revoke", { botId: bot.id });
+      if (!res.ok) return setError(res.data.error ?? "Couldn't delete.");
+      await load();
+      setSelectedId(null);
+    } });
     if (!ok) return;
-    const res = await call("/api/bot/revoke", { botId: bot.id });
-    if (!res.ok) return setError(res.data.error ?? "Couldn't delete.");
-    setSelectedId(null);
-    void load();
   }
 
   if (!user) return <p className="py-20 text-center text-text-muted">Sign in to Disband to manage your applications.</p>;
@@ -429,7 +432,7 @@ export function DeveloperPortal() {
           {PAGES.map((p) => (
             <button key={p.id} type="button" onClick={() => { setPage(p.id); setNotice(null); setError(null); }}
               aria-current={page === p.id ? "page" : undefined}
-              className={`flex w-full items-center justify-between rounded-[4px] px-2.5 py-1.5 text-left text-[15px] font-medium transition-colors ${
+              className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[15px] font-medium transition-colors ${
                 page === p.id ? "bg-interactive-hover text-header-primary" : p.id === "danger" ? "text-status-dnd hover:bg-interactive-hover" : "text-text-muted hover:bg-interactive-hover hover:text-text-normal"
               }`}>
               {p.label}

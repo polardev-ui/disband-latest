@@ -12,6 +12,7 @@ import {
 } from "@/lib/dialogs";
 import { handleTopmostEscape, pushEscapeHandler } from "@/lib/overlay";
 import { useI18n } from "@/contexts/I18nContext";
+import { BUSY_BUTTON, BusyLabel } from "@/components/ui/LoadingDots";
 
 /**
  * Draws the dialogs from `@/lib/dialogs` (confirm, prompt, alert), one at a
@@ -29,14 +30,30 @@ function DialogCard({ request }: { request: DialogRequest }) {
   const [value, setValue] = useState(request.kind === "prompt" ? request.defaultValue : "");
   const confirmRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
 
-  const cancel = () =>
+  const cancel = () => {
+    if (busy) return;
     settleDialog(request.id, (r) => {
       if (r.kind === "confirm") r.resolve(false);
       else if (r.kind === "prompt") r.resolve(null);
       else r.resolve();
     });
-  const accept = () =>
+  };
+  const accept = async () => {
+    if (busy) return;
+    // With an action, stay open and show it working until it is done.
+    if (request.kind === "confirm" && request.action) {
+      setBusy(true);
+      try {
+        await request.action();
+      } catch {
+        // The caller's action reports its own errors.
+      }
+    }
+    settleNow();
+  };
+  const settleNow = () =>
     settleDialog(request.id, (r) => {
       if (r.kind === "confirm") r.resolve(true);
       else if (r.kind === "prompt") r.resolve(value);
@@ -75,23 +92,23 @@ function DialogCard({ request }: { request: DialogRequest }) {
         type="button"
         aria-label={t("Cancel")}
         tabIndex={-1}
-        className="overlay-fade absolute inset-0 bg-overlay-scrim-strong"
+        className="overlay-fade absolute inset-0 bg-overlay-scrim"
         onClick={cancel}
       />
       <form
         role={request.kind === "prompt" ? "dialog" : "alertdialog"}
         aria-modal="true"
         aria-label={request.title}
-        className="classic-modal relative w-full max-w-[440px] overflow-hidden rounded-lg bg-bg-primary shadow-[var(--elevation-high)]"
+        className="classic-modal relative w-full max-w-[440px] overflow-hidden rounded-xl border border-border-subtle bg-bg-primary shadow-[var(--elevation-high)]"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!blocked) accept();
+          if (!blocked) void accept();
         }}
       >
-        <div className="px-6 pb-5 pt-6">
-          <h2 className="break-words text-[20px] font-semibold leading-6 text-header-primary">{request.title}</h2>
+        <div className="px-5 pb-5 pt-5">
+          <h2 className="break-words text-[20px] font-bold leading-7 text-header-primary">{request.title}</h2>
           {request.body && (
-            <p className="mt-2 whitespace-pre-line break-words text-[16px] leading-5 text-text-normal">{request.body}</p>
+            <p className="mt-2.5 whitespace-pre-line break-words text-[15px] leading-[22px] text-text-normal">{request.body}</p>
           )}
           {request.kind === "prompt" && (
             <div className="mt-4">
@@ -104,19 +121,25 @@ function DialogCard({ request }: { request: DialogRequest }) {
                 placeholder={request.placeholder}
                 maxLength={request.maxLength}
                 autoComplete="off"
-                className="w-full rounded-[3px] border border-transparent bg-bg-tertiary px-3.5 py-2.5 text-[14px] text-text-normal outline-none placeholder:text-text-muted/80 focus:border-[#00a8fc]"
+                className="w-full rounded-lg border border-border-subtle bg-bg-tertiary px-3.5 py-2.5 text-[15px] text-text-normal outline-none transition-colors placeholder:text-text-muted/80 focus:border-brand"
               />
             </div>
           )}
         </div>
-        <div className="flex justify-end gap-2 bg-bg-secondary p-4">
+        <div className="flex justify-end gap-2 px-5 pb-5">
           {request.kind !== "alert" && (
-            <button type="button" onClick={cancel} className={btn.ghost}>
+            <button type="button" onClick={cancel} disabled={busy} className={`${btn.ghost} disabled:opacity-50`}>
               {t("Cancel")}
             </button>
           )}
-          <button ref={confirmRef} type="submit" disabled={blocked} className={primaryClass}>
-            {primaryLabel}
+          <button
+            ref={confirmRef}
+            type="submit"
+            disabled={blocked || busy}
+            aria-busy={busy}
+            className={`${primaryClass} ${busy ? BUSY_BUTTON : ""}`}
+          >
+            <BusyLabel busy={busy}>{primaryLabel}</BusyLabel>
           </button>
         </div>
       </form>

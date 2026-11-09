@@ -151,61 +151,66 @@ function ReactionListDialog({
         role="dialog"
         aria-modal="true"
         aria-label={t("Reactions")}
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex max-h-[70vh] w-full max-w-sm overflow-hidden rounded-lg bg-bg-secondary shadow-[var(--elevation-high)] ring-1 ring-divider`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} relative flex max-h-[min(520px,75vh)] w-full max-w-[400px] flex-col overflow-hidden rounded-2xl border border-border-subtle bg-bg-primary shadow-[var(--elevation-high)]`}
       >
-        {}
-        <div className="flex w-[104px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-divider p-2">
-          {reactions.map((r) => (
-            <button
-              key={r.emoji}
-              type="button"
-              onClick={() => setActive(r.emoji)}
-              className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
-                r.emoji === active
-                  ? "bg-interactive-selected text-text-normal"
-                  : "text-text-muted hover:bg-interactive-hover"
-              }`}
-            >
-              <EmojiImg emoji={r.emoji} size="1.35em" />
-              <span className="min-w-[9px] text-center font-semibold tabular-nums">{r.count}</span>
-            </button>
-          ))}
+        <div className="flex items-center gap-3 px-4 pb-3 pt-4">
+          <h2 className="flex-1 text-[16px] font-bold leading-5 text-header-primary">{t("Reactions")}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t("Close")}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
+          >
+            <IconClose size={16} />
+          </button>
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center justify-between border-b border-divider px-4 py-3">
-            <p className="text-sm font-semibold text-text-normal">
-              {current.count} {current.count === 1 ? "reaction" : "reactions"}
-            </p>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label={t("Close")}
-              className="text-text-muted hover:text-text-normal"
-            >
-              <IconClose size={16} />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-2">
-            {current.userIds.map((id) => {
-              const p = profiles.get(id);
-              return (
-                <div key={id} className="flex items-center gap-2.5 rounded-md px-2 py-1.5">
-                  {p
-                    ? <Avatar profile={p} size="sm" />
-                    : <span className="h-8 w-8 shrink-0 rounded-full bg-bg-accent" />}
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-text-normal">
-                      {p ? displayName(p) : t("Unknown user")}
-                    </span>
-                    {p?.username && (
-                      <span className="block truncate text-xs text-text-muted">@{p.username}</span>
-                    )}
+        {/* One pill per emoji, the same shape as the reactions under a message. */}
+        <div className="channel-scroll flex shrink-0 gap-1.5 overflow-x-auto px-4 pb-3" role="tablist" aria-label={t("Reactions")}>
+          {reactions.map((r) => {
+            const on = r.emoji === current.emoji;
+            return (
+              <button
+                key={r.emoji}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => setActive(r.emoji)}
+                className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[14px] font-semibold tabular-nums transition-colors ${
+                  on
+                    ? "border-brand bg-brand-soft text-header-primary"
+                    : "border-border-subtle bg-bg-secondary text-text-muted hover:border-border-strong hover:text-text-normal"
+                }`}
+              >
+                <EmojiImg emoji={r.emoji} size="1.25em" />
+                {r.count}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="border-t border-border-subtle px-4 pb-1 pt-3 text-[11px] font-bold uppercase tracking-[0.06em] text-text-muted">
+          {current.count === 1 ? t("1 person") : `${current.count} ${t("people")}`}
+        </div>
+        <div className="channel-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2" role="tabpanel">
+          {current.userIds.map((id) => {
+            const p = profiles.get(id);
+            return (
+              <div key={id} className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-interactive-hover">
+                {p
+                  ? <Avatar profile={p} size="sm" />
+                  : <span className="h-8 w-8 shrink-0 rounded-full bg-bg-tertiary" />}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14px] font-semibold leading-[18px] text-text-normal">
+                    {p ? displayName(p) : t("Unknown user")}
                   </span>
-                </div>
-              );
-            })}
-          </div>
+                  {p?.username && (
+                    <span className="block truncate text-[12px] leading-4 text-text-muted">@{p.username}</span>
+                  )}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>,
@@ -258,10 +263,10 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
             setHovered({ emoji: r.emoji, el: e.currentTarget });
           }}
           onMouseLeave={scheduleClose}
-          className={`reaction-pill inline-flex h-6 items-center gap-1.5 rounded-[8px] border px-1.5 text-[14px] transition-colors ${
+          className={`reaction-pill inline-flex h-7 items-center gap-1.5 rounded-full border px-2 text-[14px] transition-colors ${
             r.reacted
-              ? "border-brand bg-brand/15 text-[#c9cdfb]"
-              : "border-transparent bg-bg-secondary text-interactive-normal hover:border-[#4e5058]"
+              ? "border-brand bg-brand-soft text-header-primary"
+              : "border-border-subtle bg-bg-secondary-alt text-interactive-normal hover:border-border-strong"
           }`}
         >
           <EmojiImg emoji={r.emoji} />
@@ -272,7 +277,7 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
         <button
           type="button"
           onClick={onOpenPicker}
-          className="inline-flex h-6 w-8 items-center justify-center rounded-[8px] border border-transparent bg-bg-secondary text-base text-interactive-normal opacity-0 transition-opacity hover:border-[#4e5058] group-hover:opacity-100"
+          className="inline-flex h-7 w-9 items-center justify-center rounded-full border border-border-subtle bg-bg-secondary-alt text-base text-interactive-normal opacity-0 transition-opacity hover:border-border-strong group-hover:opacity-100"
           aria-label={t("Add reaction")}
         >
           +

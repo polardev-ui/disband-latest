@@ -22,6 +22,11 @@ export class Message {
     return Boolean(this.author?.is_bot);
   }
 
+  /** Deletes this message (messages.delete; Manage Messages for others' messages). */
+  async delete() {
+    return this.client.deleteMessage(this.channelId, this.id);
+  }
+
   /** Replies to this message in the same channel. */
   async reply(content, options = {}) {
     return this.client.sendMessage(this.channelId, content, {

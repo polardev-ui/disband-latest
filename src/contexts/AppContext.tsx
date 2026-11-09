@@ -4992,7 +4992,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const snap = spaceSnapshotsRef.current.get(serverId)!;
       const savedId = getLastChannelId(serverId);
       const target = snap.channels.find((c) => c.id === savedId)
-        ?? snap.channels.find((c) => c.type === "text") ?? snap.channels[0];
+        ?? snap.channels.find((c) => c.type === "text" && !c.parent_id) ?? snap.channels[0];
       if (target) {
         activeChannelRef.current = target.id;
         setActiveChannelId(target.id);
@@ -5011,7 +5011,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const savedId = getLastChannelId(serverId);
     const target = channelRows.find(c => c.id === activeChannelRef.current)
       ?? channelRows.find(c => c.id === savedId)
-      ?? channelRows.find(c => c.type === "text") ?? channelRows[0];
+      ?? channelRows.find(c => c.type === "text" && !c.parent_id) ?? channelRows[0];
     if (target) {
       // The fallback selector may already have loaded this channel while the
       // server details request was pending. Never clear that loaded result.
@@ -7419,4 +7419,15 @@ export function useApp() {
  */
 export function useOptionalApp() {
   return useContext(AppContext);
+}
+
+export type { AppContextValue };
+
+/**
+ * Development only: mounts the app over a hand-built context value, so the
+ * signed-in UI can be reviewed with sample data and no account or network.
+ * Used by /dev/preview, which 404s in production builds.
+ */
+export function AppPreviewProvider({ value, children }: { value: AppContextValue; children: ReactNode }) {
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

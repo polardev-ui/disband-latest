@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 import { useApp } from "@/contexts/AppContext";
 import { useSubscription } from "@/hooks/useSubscription";
-import { PLANS, isGranting, type BillingInterval, type SubscriptionPlan } from "@/lib/subscription";
+import { PLANS, YEARLY_PRICE_CENTS, isGranting, type BillingInterval, type SubscriptionPlan } from "@/lib/subscription";
 import { MONTHLY_GRANT, monthlyRemaining, monthStartIso } from "@/lib/catalysts";
 import { IconClose } from "@/components/icons";
 import { StripeEmbeddedCheckout } from "./StripeEmbeddedCheckout";
@@ -15,6 +15,12 @@ interface SubscriptionModalProps {
   open: boolean;
   onClose: () => void;
   userId: string | undefined;
+  /**
+   * Go straight to checkout for this plan and interval when the modal opens
+   * (the Aero page's "Get yearly" / "Get monthly" buttons). Ignored on mobile,
+   * where purchases are not offered.
+   */
+  startWith?: { plan: "aero" | "lite"; interval: BillingInterval } | null;
 }
 
 function CheckIcon() {
@@ -25,10 +31,7 @@ function CheckIcon() {
   );
 }
 
-const YEARLY_PRICE: Record<string, number> = {
-  aero: 8999,
-  lite: 2900,
-};
+const YEARLY_PRICE: Record<string, number> = YEARLY_PRICE_CENTS;
 
 function PlanCard({ tier, interval, currentPlan, onSubscribe }: {
   tier: (typeof PLANS)[number];
@@ -43,9 +46,9 @@ function PlanCard({ tier, interval, currentPlan, onSubscribe }: {
   const accent = tier.highlighted;
 
   return (
-    <div className={`relative flex flex-col rounded-[4px] border p-6 ${accent ? "border-brand bg-bg-secondary" : "border-transparent bg-bg-secondary"}`}>
+    <div className={`relative flex flex-col rounded-xl border p-6 ${accent ? "border-brand bg-bg-secondary-alt" : "border-border-subtle bg-bg-secondary-alt"}`}>
       {tier.highlighted && !isCurrentPlan && (
-        <span className="absolute -top-2.5 left-5 rounded-[3px] bg-brand px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+        <span className="absolute -top-2.5 left-5 rounded-md bg-brand px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
           Best deal
         </span>
       )}
@@ -81,10 +84,10 @@ function PlanCard({ tier, interval, currentPlan, onSubscribe }: {
         type="button"
         disabled={isCurrentPlan}
         onClick={() => onSubscribe(tier.id)}
-        className={`w-full h-[38px] rounded-[3px] py-2 text-sm font-semibold transition-all ${
+        className={`h-10 w-full rounded-lg py-2 text-sm font-semibold transition-all ${
           isCurrentPlan
             ? "cursor-not-allowed bg-text-normal/5 text-text-muted"
-            : "bg-brand text-white hover:bg-brand-hover"
+            : "bg-brand text-brand-foreground hover:bg-brand-hover"
         }`}
       >
         {isCurrentPlan ? "Current plan" : "Subscribe"}
@@ -117,7 +120,7 @@ function MobileNotice() {
       <button
         type="button"
         onClick={() => void copyLink()}
-        className="h-[38px] rounded-[3px] bg-button-secondary px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover"
+        className="h-[38px] rounded-md bg-button-secondary px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover"
       >
         {copied ? "Copied" : "Copy page link"}
       </button>
@@ -160,7 +163,7 @@ function ActivationScreen({
   if (state === "stalled") {
     return (
       <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-[3px] bg-brand/20 text-2xl text-[#fee75c]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-md bg-brand/20 text-2xl text-[#fee75c]">
           !
         </div>
         <p className="text-base font-semibold">Payment received</p>
@@ -226,7 +229,7 @@ function ActivationScreen({
       </div>
 
       {tier && (
-        <div className="mt-6 rounded-[4px] border border-transparent bg-bg-secondary p-4">
+        <div className="mt-6 rounded-lg border border-transparent bg-bg-secondary p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
             Now unlocked
           </p>
@@ -244,7 +247,7 @@ function ActivationScreen({
       <button
         type="button"
         onClick={onClose}
-        className="mt-5 w-full rounded-[3px] bg-brand py-2.5 text-sm font-bold text-white hover:bg-brand-hover"
+        className="mt-5 w-full rounded-md bg-brand py-2.5 text-sm font-bold text-white hover:bg-brand-hover"
       >
         Start using Disband Aero
       </button>
@@ -252,7 +255,7 @@ function ActivationScreen({
   );
 }
 
-export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalProps) {
+export function SubscriptionModal({ open, onClose, userId, startWith = null }: SubscriptionModalProps) {
   const { plan, loading, startCheckout, subscription, openPortal, activate } =
     useSubscription(userId);
   const { myCatalysts } = useApp();
@@ -273,13 +276,13 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
     setActivation(granted === "free" ? "stalled" : "active");
   }, [activate]);
 
-  const handleSubscribe = useCallback(async (tierId: string) => {
+  const handleSubscribe = useCallback(async (tierId: string, billing: BillingInterval = interval) => {
     // Double-clicking the plan card used to open two checkout sessions.
     if (startingCheckout.current) return;
     startingCheckout.current = true;
     setCheckoutError(null);
     try {
-      const result = await startCheckout(tierId as "aero" | "lite", interval);
+      const result = await startCheckout(tierId as "aero" | "lite", billing);
       if (result && (result.startsWith("cs_") || result.startsWith("seti_"))) {
         setCheckoutClientSecret(result);
       } else if (result) {
@@ -289,6 +292,22 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
       startingCheckout.current = false;
     }
   }, [startCheckout, interval]);
+
+  // Opened from a "Get yearly/monthly" button: start that checkout once per
+  // opening. Waits for the subscription to load so a current subscriber sees
+  // their plan instead of a second checkout.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      autoStarted.current = false;
+      return;
+    }
+    if (!startWith || autoStarted.current || loading || mobile) return;
+    if (isGranting(subscription?.status) && plan === startWith.plan) return;
+    autoStarted.current = true;
+    setInterval(startWith.interval);
+    void handleSubscribe(startWith.plan, startWith.interval);
+  }, [open, startWith, loading, mobile, subscription?.status, plan, handleSubscribe]);
 
   const handleCheckoutSuccess = useCallback(() => {
     setCheckoutClientSecret(null);
@@ -307,12 +326,12 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
   if (!mounted || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 z-[80] flex items-center justify-center bg-black/85`} onClick={onClose}>
+    <div className={`overlay-fade${exiting ? " overlay-fade-out" : ""} fixed inset-0 z-[80] flex items-center justify-center bg-overlay-scrim`} onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Upgrade subscription"
-        className={`modal-pop${exiting ? " modal-pop-out" : ""} mx-4 flex max-h-[90vh] w-full max-w-xl flex-col overflow-y-auto rounded-lg bg-bg-primary shadow-[var(--elevation-high)]`}
+        className={`modal-pop${exiting ? " modal-pop-out" : ""} mx-4 flex max-h-[90vh] w-full max-w-xl flex-col overflow-y-auto rounded-xl border border-border-subtle bg-bg-primary shadow-[var(--elevation-high)]`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 pt-5 pb-2">
@@ -327,7 +346,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
               </p>
             )}
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-[3px] p-1.5 text-text-muted hover:bg-interactive-hover hover:text-text-normal">
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-md p-1.5 text-text-muted hover:bg-interactive-hover hover:text-text-normal">
             <IconClose size={18} />
           </button>
         </div>
@@ -360,7 +379,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
               </div>
             )}
             {isAero ? (
-              <div className="rounded-[4px] border border-transparent bg-bg-secondary p-5">
+              <div className="rounded-xl border border-border-subtle bg-bg-secondary-alt p-5">
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-bold">Disband Aero</h3>
                   <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${subscription?.cancel_at_period_end ? "bg-super/20 text-super" : "bg-status-online/15 text-status-online"}`}>
@@ -393,14 +412,14 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
               </div>
             ) : (
               <>
-                <div className="mb-4 flex items-center justify-center gap-1 rounded-full bg-bg-secondary p-1">
+                <div className="mb-4 flex items-center justify-center gap-1 rounded-full border border-border-subtle bg-bg-secondary-alt p-1">
                   {(["month", "year"] as BillingInterval[]).map((i) => (
                     <button
                       key={i}
                       type="button"
                       onClick={() => setInterval(i)}
                       className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                        interval === i ? "bg-brand text-white" : "text-text-muted hover:text-text-normal"
+                        interval === i ? "bg-brand text-brand-foreground" : "text-text-muted hover:text-text-normal"
                       }`}
                     >
                       {i === "month" ? "Monthly" : "Yearly"}
@@ -430,7 +449,7 @@ export function SubscriptionModal({ open, onClose, userId }: SubscriptionModalPr
             )}
           </div>
         )}
-        {!checkoutClientSecret && !activation && <div className="flex justify-end bg-bg-secondary p-4"><button type="button" onClick={onClose} className="h-[38px] px-4 text-[14px] text-header-primary hover:underline">Cancel</button></div>}
+        {!checkoutClientSecret && !activation && <div className="flex justify-end px-6 pb-5"><button type="button" onClick={onClose} className="h-10 rounded-lg bg-button-secondary px-4 text-[14px] font-semibold text-header-primary transition-colors hover:bg-button-secondary-hover">Cancel</button></div>}
       </div>
     </div>,
     document.body,

@@ -22,15 +22,15 @@ type View = "create" | "login";
 type Step = "form" | "reveal" | "expired" | "purge-confirm" | "purged";
 
 const inputClass =
-  "h-10 w-full rounded-[3px] border border-transparent bg-bg-tertiary px-2.5 text-[16px] text-text-normal " +
-  "outline-none transition-colors placeholder:text-text-muted focus:border-[#00a8fc]";
+  "h-11 w-full rounded-lg border border-border-subtle bg-bg-tertiary px-2.5 text-[16px] text-text-normal " +
+  "outline-none transition-colors placeholder:text-text-muted focus:border-brand";
 
-const LABEL = "mb-2 block text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary";
+const LABEL = "mb-2 block text-[13px] font-semibold leading-4 text-header-secondary";
 const PRIMARY =
-  "flex h-11 w-full items-center justify-center rounded-[3px] bg-brand text-[16px] font-medium text-white " +
+  "flex h-11 w-full items-center justify-center rounded-lg bg-brand text-[16px] font-medium text-white " +
   "transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50";
 const SECONDARY =
-  "flex h-11 w-full items-center justify-center rounded-[3px] bg-button-secondary text-[16px] font-medium text-white " +
+  "flex h-11 w-full items-center justify-center rounded-md bg-button-secondary text-[16px] font-medium text-white " +
   "transition-colors hover:bg-button-secondary-hover";
 
 /**
@@ -320,9 +320,9 @@ export function AnonymousAuthPanel({
         className="flex min-h-[65px] justify-center"
       />
       {turnstileError !== null && (
-        <p role="alert" className="rounded-[3px] bg-status-dnd/10 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
+        <p role="alert" className="rounded-md bg-status-dnd/10 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
           {turnstileAdvice(turnstileError)}{" "}
-          <button type="button" className="font-medium text-[#00a8fc] hover:underline" onClick={resetTurnstile}>
+          <button type="button" className="font-medium text-text-link hover:underline" onClick={resetTurnstile}>
             {t("Retry")}
           </button>
           {turnstileError && turnstileError !== "timeout" && (
@@ -375,7 +375,7 @@ export function AnonymousAuthPanel({
       className={
         overlay
           ? "fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/85 overlay-fade p-4"
-          : "relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#404eed] px-4 py-8"
+          : "aero-hero relative flex min-h-dvh items-center justify-center overflow-hidden px-4 py-8"
       }
       onClick={overlay ? onClose : undefined}
     >
@@ -387,11 +387,11 @@ export function AnonymousAuthPanel({
         </div>
       )}
       <div
-        className={`${overlay ? "classic-modal" : "z-10"} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[480px] overflow-y-auto rounded-[5px] bg-bg-primary p-6 shadow-[var(--elevation-high)] sm:p-8`}
+        className={`${overlay ? "classic-modal" : "z-10"} channel-scroll relative max-h-[calc(100dvh-32px)] w-full max-w-[480px] overflow-y-auto rounded-2xl border border-border-subtle bg-bg-secondary p-6 shadow-[0_40px_90px_-30px_rgba(10,6,40,0.85)] sm:p-9`}
         onClick={overlay ? (e) => e.stopPropagation() : undefined}
       >
         <div className="mb-5 text-center">
-          <h1 className="text-[24px] font-semibold leading-[30px] text-header-primary">{heading}</h1>
+          <h1 className="text-[26px] font-bold leading-8 tracking-[-0.01em] text-header-primary">{heading}</h1>
           <p className="mt-2 text-[16px] leading-5 text-header-secondary">{subheading}</p>
         </div>
 
@@ -410,7 +410,7 @@ export function AnonymousAuthPanel({
                       role="radio"
                       aria-checked={on}
                       onClick={() => setTier(tierId)}
-                      className={`flex h-11 items-center gap-2.5 rounded-[3px] px-3 text-left text-[16px] font-medium transition-colors ${
+                      className={`flex h-11 items-center gap-2.5 rounded-md px-3 text-left text-[16px] font-medium transition-colors ${
                         on ? "bg-interactive-selected text-header-primary" : "bg-bg-secondary text-header-secondary hover:bg-interactive-hover hover:text-header-primary"
                       }`}
                     >
@@ -429,7 +429,7 @@ export function AnonymousAuthPanel({
 
             <div>
               <span className={LABEL}>{t("Anonymous accounts can’t")}</span>
-              <ul className="space-y-1.5 rounded-[3px] bg-bg-secondary px-3 py-2.5">
+              <ul className="space-y-1.5 rounded-md bg-bg-secondary px-3 py-2.5">
                 {RESTRICTIONS.map((r) => (
                   <li key={r} className="flex items-center gap-2 text-[14px] text-header-secondary">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" className="shrink-0 text-status-dnd">
@@ -453,8 +453,8 @@ export function AnonymousAuthPanel({
         {/* REVEAL */}
         {step === "reveal" && (
           <div className="space-y-4">
-            <div className="rounded-[3px] bg-bg-tertiary px-4 py-4 text-center">
-              <p className="text-[12px] font-bold uppercase leading-4 tracking-[0.02em] text-header-secondary">{t("Your account number")}</p>
+            <div className="rounded-md bg-bg-tertiary px-4 py-4 text-center">
+              <p className="text-[13px] font-semibold leading-4 text-header-secondary">{t("Your account number")}</p>
               <p className="mt-2 select-all font-mono text-[22px] font-semibold tracking-[0.12em] text-header-primary">
                 {createdNumber || "—"}
               </p>
@@ -462,7 +462,7 @@ export function AnonymousAuthPanel({
             <button type="button" onClick={() => void copyNumber()} className={SECONDARY}>
               {copied ? t("Copied!") : t("Copy Account Number")}
             </button>
-            <p className="rounded-[3px] bg-[#f0b232]/15 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
+            <p className="rounded-md bg-[#f0b232]/15 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
               {t("We can’t recover this number for you. If you lose it, the account is gone.")}
             </p>
             {errorBlock}
@@ -501,7 +501,7 @@ export function AnonymousAuthPanel({
         {/* EXPIRED */}
         {step === "expired" && expired && (
           <div className="space-y-4">
-            <p className="rounded-[3px] bg-bg-secondary px-3 py-2.5 text-[14px] leading-[18px] text-header-secondary">
+            <p className="rounded-md bg-bg-secondary px-3 py-2.5 text-[14px] leading-[18px] text-header-secondary">
               {t("Expired on")}{" "}<span className="font-medium text-header-primary">{formatDay(expired.expiresAt)}</span>.
               {expired.purged
                 ? t(" Everything has already been deleted.")
@@ -527,7 +527,7 @@ export function AnonymousAuthPanel({
                     setNotice(null);
                     resetTurnstile();
                   }}
-                  className="flex h-11 w-full items-center justify-center rounded-[3px] border border-button-danger text-[16px] font-medium text-white transition-colors hover:bg-button-danger"
+                  className="flex h-11 w-full items-center justify-center rounded-md border border-button-danger text-[16px] font-medium text-white transition-colors hover:bg-button-danger"
                 >
                   {t("Delete Everything Now")}
                 </button>
@@ -539,7 +539,7 @@ export function AnonymousAuthPanel({
         {/* PURGE CONFIRM */}
         {step === "purge-confirm" && expired && (
           <div className="space-y-4">
-            <p className="rounded-[3px] bg-status-dnd/10 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
+            <p className="rounded-md bg-status-dnd/10 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
               {t("This is permanent. Your profile, messages, reactions, notes, saved GIFs and every other trace of this account will be deleted right now, with no copy kept.")}
             </p>
             {turnstile}
@@ -548,7 +548,7 @@ export function AnonymousAuthPanel({
               type="button"
               onClick={() => void handlePurge()}
               disabled={loading || !turnstileToken}
-              className="flex h-11 w-full items-center justify-center rounded-[3px] bg-button-danger text-[16px] font-medium text-white transition-colors hover:bg-button-danger-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-11 w-full items-center justify-center rounded-md bg-button-danger text-[16px] font-medium text-white transition-colors hover:bg-button-danger-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? spinner : t("Yes, Delete Everything")}
             </button>
@@ -569,7 +569,7 @@ export function AnonymousAuthPanel({
         {/* PURGED */}
         {step === "purged" && (
           <div className="space-y-4">
-            <p className="rounded-[3px] bg-status-online/10 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
+            <p className="rounded-md bg-status-online/10 px-3 py-2.5 text-[14px] leading-[18px] text-text-normal">
               {t("Done. This account number now points at nothing and can’t be used to sign in again.")}
             </p>
             <button type="button" onClick={onClose} className={PRIMARY}>
@@ -584,21 +584,21 @@ export function AnonymousAuthPanel({
             (view === "create" ? (
               <p>
                 {t("Already have a number?")}{" "}
-                <button type="button" onClick={() => switchView("login")} className="font-medium text-[#00a8fc] hover:underline">
+                <button type="button" onClick={() => switchView("login")} className="font-medium text-text-link hover:underline">
                   {t("Log In")}
                 </button>
               </p>
             ) : (
               <p>
                 {t("Need a throwaway account?")}{" "}
-                <button type="button" onClick={() => switchView("create")} className="font-medium text-[#00a8fc] hover:underline">
+                <button type="button" onClick={() => switchView("create")} className="font-medium text-text-link hover:underline">
                   {t("Create One")}
                 </button>
               </p>
             ))}
           {step !== "purged" && (
             <p>
-              <button type="button" onClick={onClose} className="font-medium text-[#00a8fc] hover:underline">
+              <button type="button" onClick={onClose} className="font-medium text-text-link hover:underline">
                 {step === "expired" ? t("Back to Log In") : t("Back")}
               </button>
             </p>

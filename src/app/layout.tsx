@@ -12,9 +12,20 @@ import { DialogHost } from "@/components/ui/DialogHost";
 // from next/font/google, which downloads it during the build: a Google Fonts
 // hiccup on a CI runner used to fail the whole desktop release.
 const GeistSans = localFont({ src: "./fonts/geist-latin.woff2", weight: "100 900", variable: "--font-geist-sans", display: "swap" });
-// The app UI uses Noto Sans — the face Discord itself falls back to when its
-// proprietary gg sans is unavailable — so the classic layout keeps its metrics.
+// Noto Sans stays as the fallback face behind IBM Plex Sans (below), so a
+// glyph Plex's latin subset lacks still renders in a matching sans.
 const NotoSans = localFont({ src: "./fonts/noto-sans-latin.woff2", weight: "400 800", variable: "--font-noto", display: "swap" });
+// The app UI face since the redesign: IBM Plex Sans (SIL OFL 1.1, licence in
+// ./fonts/IBM-PLEX-OFL.txt), self-hosted like the others. Variable weight, so
+// one file per style covers every weight the UI uses.
+const PlexSans = localFont({
+  src: [
+    { path: "./fonts/ibm-plex-sans-latin.woff2", weight: "100 700", style: "normal" },
+    { path: "./fonts/ibm-plex-sans-latin-italic.woff2", weight: "100 700", style: "italic" },
+  ],
+  variable: "--font-plex",
+  display: "swap",
+});
 
 export const SITE_URL = PUBLIC_ENV.webAppUrl;
 
@@ -108,7 +119,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning
-          className={`${GeistSans.variable} ${NotoSans.variable}`}>
+          className={`${GeistSans.variable} ${NotoSans.variable} ${PlexSans.variable}`}>
       <head>
         <meta name="referrer" content="no-referrer" />
         <link rel="preload" as="image" href="/logo.png" />
