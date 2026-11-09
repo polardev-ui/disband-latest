@@ -2228,8 +2228,15 @@ export function DiscordApp() {
             </div>
             </div>
             </div>
-            <CallIndicator />
-            <UserPanel onOpenSettings={() => setSettingsOpen(true)} onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined} onContextMenu={handleUserPanelContext} />
+            {/* w-0 min-w-full: these fit the column instead of setting its width.
+                A long name and badges made the user panel wider than the rail
+                and channel list together, which stretched the whole sidebar
+                and left an empty strip beside the list (wider on Windows,
+                where text renders wider). */}
+            <div className="w-0 min-w-full">
+              <CallIndicator />
+              <UserPanel onOpenSettings={() => setSettingsOpen(true)} onOpenProfile={app.profile ? () => openProfile(app.profile!) : undefined} onContextMenu={handleUserPanelContext} />
+            </div>
           </div>
         </>
       )}
