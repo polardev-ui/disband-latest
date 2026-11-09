@@ -46,6 +46,8 @@ export interface Reply {
   components?: ActionRow[];
   /** Interaction replies only: replace the message whose button was pressed. */
   update?: boolean;
+  /** Interaction replies only: just the person who ran it sees this. */
+  ephemeral?: boolean;
 }
 
 export interface Person {
@@ -120,7 +122,12 @@ export function embed(e: Embed): Reply {
 }
 
 export const ok = (text: string): Reply => embed({ description: `✅ ${text}`, color: COLOR.ok });
-export const fail = (text: string): Reply => embed({ description: `❌ ${text}`, color: COLOR.bad });
+// Errors are private: only the person who ran the command sees them.
+export const fail = (text: string): Reply => ({ ...embed({ description: `❌ ${text}`, color: COLOR.bad }), ephemeral: true });
+/** A private success note, for things only the runner needs to know. */
+export const okPrivate = (text: string): Reply => ({ ...embed({ description: `✅ ${text}`, color: COLOR.ok }), ephemeral: true });
+/** A link to a channel that works even before the reader's app has loaded it. */
+export const channelLink = (id: string) => `<#${id}>`;
 export const info = (title: string, description: string): Reply => embed({ title, description });
 
 // --- Options ------------------------------------------------------------------

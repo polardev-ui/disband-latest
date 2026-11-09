@@ -1690,6 +1690,7 @@ export function DiscordApp() {
     webhook?: import("@/lib/embeds").MessageWebhookInfo | null;
     components?: ChatMessageData["components"];
     interaction?: ChatMessageData["interaction"];
+    ephemeral_to?: string | null;
     reply_to_deleted?: boolean;
   }): ChatMessageData => ({
     id: m.id,
@@ -1718,6 +1719,7 @@ export function DiscordApp() {
     // A bot's buttons, and who ran the command it answers ("kai used /fact").
     components: m.components ?? null,
     interaction: m.interaction ?? null,
+    ephemeral_to: m.ephemeral_to ?? null,
     reply_to_deleted: m.reply_to_deleted ?? false,
   });
 

@@ -5583,6 +5583,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .on("broadcast", { event: "MEMBERSHIP_ADD" }, () => {
           void loadServers(userId);
         })
+        // A bot's private reply to you ("Only you can see this"): it comes
+        // on your own topic, not the channel's (migration 0248).
+        .on("broadcast", { event: "EPHEMERAL_MESSAGE" }, ({ payload }) => {
+          const data = payload as { record?: Record<string, unknown>; author?: Profile | null } | null;
+          const record = data?.record;
+          if (!record || typeof record.id !== "string") return;
+          const row = record as unknown as Message;
+          if (row.channel_id !== activeChannelRef.current) return;
+          setMessages((prev) => appendLiveMessage(prev, row, data?.author ?? null));
+        })
         .on("broadcast", { event: "DM" }, ({ payload }) => {
           const data = payload as { record?: Record<string, unknown> } | null;
           const record = data?.record;

@@ -63,6 +63,8 @@ export interface ChatMessageData {
   webhook?: import("@/lib/embeds").MessageWebhookInfo | null;
   components?: import("@/lib/bot-commands").ActionRow[] | null;
   interaction?: import("@/lib/bot-commands").MessageInteractionInfo | null;
+  /** A private bot reply: only this person sees it. */
+  ephemeral_to?: string | null;
   edited_at?: string | null;
   created_at: string;
   mentions?: string[];
@@ -657,6 +659,21 @@ function ChatMessageImpl({
     />
   ) : null;
 
+  // A private bot reply ("Only you can see this"), which you can dismiss.
+  const [dismissed, setDismissed] = useState(false);
+  const ephemeralFooter = message.ephemeral_to ? (
+    <p className="mt-1 flex items-center gap-1.5 text-[12px] text-text-muted">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" />
+      </svg>
+      {t("Only you can see this")}
+      <span aria-hidden>·</span>
+      <button type="button" onClick={() => setDismissed(true)} className="font-medium text-text-link hover:underline">
+        {t("Dismiss message")}
+      </button>
+    </p>
+  ) : null;
+
   const replyBlock = message.interaction?.type === "command" ? (
     <InteractionHeader interaction={message.interaction} />
   ) : message.reply_to ? (
@@ -732,6 +749,8 @@ function ChatMessageImpl({
       } as React.CSSProperties)
     : undefined;
 
+  if (dismissed) return null;
+
   if (isSystem) {
     const sysText = normalizeMessageContent(message.content);
     if (!sysText) return null;
@@ -797,6 +816,7 @@ function ChatMessageImpl({
         </div>
         {attachment}
         {reactionBlock}
+        {ephemeralFooter}
       </article>
     );
   }
@@ -832,6 +852,7 @@ function ChatMessageImpl({
         {embedBlock}
         {attachment}
         {reactionBlock}
+        {ephemeralFooter}
       </article>
     );
   }
@@ -904,6 +925,7 @@ function ChatMessageImpl({
       {embedBlock}
       {attachment}
       {reactionBlock}
+      {ephemeralFooter}
     </article>
   );
 }

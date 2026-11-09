@@ -1,7 +1,8 @@
 "use client";
 
 import { channelLinkName, displayName, isValidMentionToken, roleMentionSlug } from "@/lib/utils";
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { ReactNode } from "react";
 
@@ -48,7 +49,7 @@ export interface ChannelLite {
 }
 
 const INLINE_RE =
-  /(@&[a-zA-Z0-9_-]{1,64}|@[a-zA-Z0-9_]{1,32}|#[\p{L}\p{N}\p{M}_-]+|`[^`]+`|\*\*[^*]+\*\*|\*[^*\n]+\*|__[^_\n]+__|_[^_\n]+_|~~[^~\n]+~~|\|\|[^\n]+?\|\||https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`])/u;
+  /(<#[0-9a-fA-F-]{36}>|@&[a-zA-Z0-9_-]{1,64}|@[a-zA-Z0-9_]{1,32}|#[\p{L}\p{N}\p{M}_-]+|`[^`]+`|\*\*[^*]+\*\*|\*[^*\n]+\*|__[^_\n]+__|_[^_\n]+_|~~[^~\n]+~~|\|\|[^\n]+?\|\||https?:\/\/[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`])/u;
 
 /** Grey is the "no colour" default for new roles; those keep the usual blue chip. */
 const UNCOLOURED_ROLE = new Set(["#949ba4", "#99aab5", "#000000"]);
@@ -104,6 +105,40 @@ function Spoiler({ children }: { children: ReactNode }) {
   );
 }
 
+const channelNameCache = new Map<string, string | null>();
+
+/** A channel link by id: its name (looked up when not loaded), clickable. */
+function ChannelIdChip({ id, name, onClick }: { id: string; name: string | null; onClick?: (channelId: string) => void }) {
+  const [fetched, setFetched] = useState<string | null | undefined>(() => (name ? name : channelNameCache.get(id)));
+  useEffect(() => {
+    if (name || fetched !== undefined) return;
+    let live = true;
+    void getSupabaseClient().from("channels").select("name").eq("id", id).maybeSingle().then(({ data }) => {
+      const n = (data as { name?: string } | null)?.name ?? null;
+      channelNameCache.set(id, n);
+      if (live) setFetched(n);
+    });
+    return () => { live = false; };
+  }, [id, name, fetched]);
+  const shown = name ?? fetched;
+  if (shown === null) {
+    // Gone, or a channel you can't see.
+    return <span className={MENTION_CHIP_CLASS}>#unknown</span>;
+  }
+  return (
+    <button
+      type="button"
+      className={`${MENTION_CHIP_CLASS} cursor-pointer`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.(id);
+      }}
+    >
+      #{shown ?? "…"}
+    </button>
+  );
+}
+
 function renderInlineTokens(
   text: string,
   members: Profile[],
@@ -127,6 +162,21 @@ function renderInlineTokens(
     const token = m[0];
     rest = rest.slice(m.index + token.length);
     const key = k++;
+
+    // <#channel-id>: a channel link by id (bots use these), so it works even
+    // for a channel this client hasn't loaded yet, like a brand-new ticket.
+    if (token.startsWith("<#")) {
+      const id = token.slice(2, -1);
+      out.push(
+        <ChannelIdChip
+          key={key}
+          id={id}
+          name={channels?.find((c) => c.id === id)?.name ?? null}
+          onClick={onChannelClick}
+        />,
+      );
+      continue;
+    }
 
     // Roles use their own @& namespace so a role named "Staff" can never
     // resolve to the member named "staff".

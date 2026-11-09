@@ -12,6 +12,8 @@ import { normalizeComponents } from "@/lib/bot-commands";
        posts a reply in the channel, shown as "@kai used /weather".
    { "update": true, ... }
        for a button press: edits the message the button is on instead.
+   { "ephemeral": true, ... }   (or Discord's "flags": 64)
+       only the person who ran the command sees the reply.
 
  Up to 5 answers per interaction, so a bot can send follow-ups. Answering
  does not need messages.write: the member asked the bot directly.
@@ -33,6 +35,8 @@ export async function POST(
       embeds?: unknown;
       components?: unknown;
       update?: boolean;
+      ephemeral?: boolean;
+      flags?: number;
     };
     const embeds = body.embeds === undefined ? null : normalizeEmbeds(body.embeds);
     if (embeds && !embeds.ok) return NextResponse.json({ error: embeds.error }, { status: 400 });
@@ -53,6 +57,8 @@ export async function POST(
       p_embeds: embeds ? embeds.embeds : null,
       p_components: components.value ?? (update && body.components !== undefined ? [] : null),
       p_update: update,
+      // Discord's EPHEMERAL flag is 1 << 6.
+      p_ephemeral: !update && (body.ephemeral === true || ((Number(body.flags) || 0) & 64) === 64),
     });
     if (error) {
       const status = /Interaction not found|Message not found/.test(error.message) ? 404 : botJsonError(error);

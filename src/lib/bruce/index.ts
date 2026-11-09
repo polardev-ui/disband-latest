@@ -232,6 +232,7 @@ export async function handleInteraction(service: Service, me: Identity, ev: Inte
     await service.rpc("bot_interaction_respond", {
       p_bot_id: me.botId, p_interaction_id: ev.id, p_content: r.content ?? "",
       p_embeds: r.embeds ?? null, p_components: r.components ?? null, p_update: !!r.update,
+      p_ephemeral: !!r.ephemeral && !r.update,
     });
   };
   const ctx: Ctx = { ...base, opt: { ...(ev.command?.options ?? {}) }, via: "slash", invoked: ev.command?.name ?? "" };

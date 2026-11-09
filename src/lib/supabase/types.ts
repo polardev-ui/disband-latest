@@ -287,6 +287,8 @@ export interface DbMessage {
   components?: ActionRow[] | null;
   /** Set on a bot's answer to a slash command or button press. */
   interaction?: MessageInteractionInfo | null;
+  /** Set on a private bot reply: the one person who can see it (migration 0248). */
+  ephemeral_to?: string | null;
   created_at: string;
   edited_at: string | null;
   display_id: number;
