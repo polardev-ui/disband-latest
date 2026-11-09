@@ -736,7 +736,10 @@ function ChatMessageImpl({
       .find((c): c is string => !!c);
     return hit ?? null;
   })();
-  const rowBgClass = pingRoleColour
+  // A private bot reply: tinted, with the brand bar down the left, as on Discord.
+  const rowBgClass = message.ephemeral_to
+    ? "bg-brand/[0.06] hover:bg-brand/[0.09] shadow-[inset_2px_0_0_0_var(--brand)]"
+    : pingRoleColour
     ? "bg-[var(--ping-role-bg)] hover:bg-[var(--ping-role-bg-hover)] shadow-[inset_2px_0_0_0_var(--ping-role)]"
     : pingedYou
       ? "bg-[var(--ping-bg)] hover:bg-[var(--ping-bg-hover)] shadow-[inset_2px_0_0_0_var(--ping-bar)]"
