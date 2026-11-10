@@ -25,6 +25,7 @@ import { usePresence } from "@/hooks/usePresence";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconClose } from "@/components/icons";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { ActivityGlyph } from "./ActivityGlyph";
 import { BoardGame } from "./BoardGame";
 import {
@@ -72,6 +73,7 @@ export function ActivityModal({
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"play" | "leaderboard">("play");
   const inFlight = useRef(false);
+  const moveChannelRef = useRef<RealtimeChannel | null>(null);
 
   const { mounted, exiting } = usePresence(open);
   useOverlayDismiss(onClose, open);
@@ -167,6 +169,35 @@ export function ActivityModal({
     };
   }, [open, activityId]);
 
+  // Faster path: broadcast moves directly instead of waiting for the DB
+  // round-trip + postgres_changes. Still reconciles via getActivity().
+  useEffect(() => {
+    if (!open || !activityId) return;
+    const supabase = getSupabaseClient();
+    const channel = supabase.channel(`activity-moves:${activityId}`);
+    moveChannelRef.current = channel;
+    channel.on("broadcast", { event: "move" }, () => {
+      void (async () => {
+        try {
+          const next = await getActivity(activityId);
+          if (activeId.current !== activityId) return;
+          setActivity((current) =>
+            current?.id === next.id && current.revision > next.revision
+              ? current
+              : next,
+          );
+        } catch {
+          /* ignore */
+        }
+      })();
+    });
+    channel.subscribe();
+    return () => {
+      moveChannelRef.current = null;
+      void supabase.removeChannel(channel);
+    };
+  }, [open, activityId]);
+
   useEffect(() => {
     if (!open || !activityId) return;
     const timer = window.setInterval(
@@ -191,6 +222,7 @@ export function ActivityModal({
           : next,
       );
       notifyActivityUpdated(next.id);
+      moveChannelRef.current?.send({ type: "broadcast", event: "move", payload: { revision: next.revision } });
       return true;
     } catch (err) {
       console.info("[activity] action failed", { activityId, ms: Math.round(performance.now() - started) });
