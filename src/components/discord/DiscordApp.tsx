@@ -2745,6 +2745,34 @@ export function DiscordApp() {
         onClose={() => setProfileTarget(null)}
         onOpenFullProfile={() => setProfileFull(true)}
         onOpenSettings={() => setSettingsOpen(true)}
+        onBlock={
+          profileTarget && !app.isBlocked(profileTarget.id)
+            ? () => {
+                void confirmDialog({
+                  title: t("Block {name}", { name: displayName(profileTarget) }),
+                  body: t("They won't be able to message you."),
+                  confirmLabel: t("Block"),
+                  action: async () => {
+                    const err = await app.blockUser(profileTarget.id);
+                    if (err) void alertDialog(err);
+                  },
+                });
+              }
+            : undefined
+        }
+        onUnblock={
+          profileTarget && app.isBlocked(profileTarget.id)
+            ? () => {
+                void app.unblockUser(profileTarget.id);
+                setProfileTarget(null);
+              }
+            : undefined
+        }
+        onReport={
+          profileTarget && profileTarget.id !== app.user?.id
+            ? () => setReportTarget({ kind: "profile", profile: profileTarget })
+            : undefined
+        }
         isSelf={profileTarget?.id === app.user?.id}
         plan={profileTarget?.id === app.user?.id ? subPlan : undefined}
         isServerMember={!!profileServerMember}

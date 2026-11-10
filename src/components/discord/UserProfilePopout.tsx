@@ -1,6 +1,7 @@
 "use client";
 
 import { AuthorizeAppButton } from "@/components/ui/AuthorizeAppButton";
+import { OverflowMenu } from "@/components/modals/UserProfileModal";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "@/contexts/AppContext";
@@ -40,6 +41,9 @@ export interface UserProfilePopoutProps {
   onClose: () => void;
   onOpenFullProfile: () => void;
   onOpenSettings?: () => void;
+  onBlock?: () => void;
+  onUnblock?: () => void;
+  onReport?: () => void;
   isSelf?: boolean;
   plan?: SubscriptionPlan;
   isServerMember?: boolean;
@@ -73,6 +77,9 @@ export function UserProfilePopout({
   onClose,
   onOpenFullProfile,
   onOpenSettings,
+  onBlock,
+  onUnblock,
+  onReport,
   isSelf,
   plan,
   isServerMember,
@@ -225,28 +232,39 @@ export function UserProfilePopout({
                 {theme && <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: theme.bannerTint }} />}
               </>
             )}
-            {canAddFriend && (
-              <button
-                type="button"
-                disabled={requestSent || addingFriend}
-                onClick={async () => {
-                  if (!p.username) return;
-                  setAddingFriend(true);
-                  const err = await sendFriendRequest(p.username);
-                  setAddingFriend(false);
-                  setFriendNote(err);
-                }}
-                title={requestSent ? t("Friend Request Sent") : t("Add Friend")}
-                aria-label={requestSent ? t("Friend Request Sent") : t("Add Friend")}
-                className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/15 backdrop-blur-sm transition-colors hover:bg-black/65 disabled:cursor-default"
-              >
-                {requestSent ? (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12" /></svg>
-                ) : (
-                  <IconUserPlus size={17} />
-                )}
-              </button>
-            )}
+            <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+              {canAddFriend && (
+                <button
+                  type="button"
+                  disabled={requestSent || addingFriend}
+                  onClick={async () => {
+                    if (!p.username) return;
+                    setAddingFriend(true);
+                    const err = await sendFriendRequest(p.username);
+                    setAddingFriend(false);
+                    setFriendNote(err);
+                  }}
+                  title={requestSent ? t("Friend Request Sent") : t("Add Friend")}
+                  aria-label={requestSent ? t("Friend Request Sent") : t("Add Friend")}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/15 backdrop-blur-sm transition-colors hover:bg-black/65 disabled:cursor-default"
+                >
+                  {requestSent ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12" /></svg>
+                  ) : (
+                    <IconUserPlus size={17} />
+                  )}
+                </button>
+              )}
+              {(onBlock || onUnblock || onReport) && (
+                <OverflowMenu
+                  items={[
+                    ...(onBlock ? [{ label: t("Block"), onClick: onBlock, danger: true }] : []),
+                    ...(onUnblock ? [{ label: t("Unblock"), onClick: onUnblock }] : []),
+                    ...(onReport ? [{ label: t("Report"), onClick: onReport }] : []),
+                  ]}
+                />
+              )}
+            </div>
           </div>
 
           {/* Avatar, cut into the banner. Above the badges row (z-20): that

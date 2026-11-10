@@ -145,7 +145,7 @@ function ProfileBanner({ profile }: { profile: Profile }) {
   );
 }
 
-function OverflowMenu({ items }: { items: { label: string; onClick: () => void; danger?: boolean }[] }) {
+export function OverflowMenu({ items }: { items: { label: string; onClick: () => void; danger?: boolean }[] }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const { mounted, exiting } = usePresence(open);
@@ -174,7 +174,8 @@ function OverflowMenu({ items }: { items: { label: string; onClick: () => void; 
       {mounted && (
         <div
           role="menu"
-          className={`menu-pop${exiting ? " pop-out" : ""} absolute right-0 top-full z-20 mt-1.5 w-44 overflow-hidden rounded-lg bg-bg-floating p-1 shadow-[var(--elevation-high)]`}
+          className="menu-pop absolute right-0 top-full z-20 mt-1.5 w-44 overflow-hidden rounded-lg bg-bg-floating p-1 shadow-[var(--elevation-high)]"
+          style={exiting ? { animation: "pop-out 0.16s cubic-bezier(0.4,0,1,1) forwards", transformOrigin: "top right" } : undefined}
         >
           {items.map((item) => (
             <button
