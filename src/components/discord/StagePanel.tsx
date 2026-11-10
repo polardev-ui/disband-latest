@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useI18n } from "@/contexts/I18nContext";
@@ -253,7 +255,7 @@ export function StagePanel({ channel }: { channel: Channel }) {
                 className="mt-5 flex h-11 items-center gap-2 rounded-full bg-button-green px-6 text-[15px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:cursor-wait disabled:opacity-60"
               >
                 <IconHeadphones size={18} />
-                {joining ? t("Joining…") : t("Join Stage")}
+                {joining ? <LoadingDots size={6} className="mx-auto" /> : t("Join Stage")}
               </button>
               <p className="mt-3 text-[12px] text-text-muted">{t("You'll join the audience, muted.")}</p>
             </div>

@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
@@ -174,7 +176,7 @@ export function EmojiSection({ server, catalystCount }: SectionProps) {
                   {nameTaken && cleanName && <p className="mt-1.5 text-[12px] text-status-dnd">{t("That name is taken here.")}</p>}
                 </div>
                 <button type="button" onClick={() => void add()} disabled={!file || !cleanName || uploading || nameTaken} className={`${btn.primary} self-start`}>
-                  {uploading ? t("Uploading…") : t("Add emoji")}
+                  {uploading ? <LoadingDots size={6} className="mx-auto" /> : t("Add emoji")}
                 </button>
               </div>
             </div>

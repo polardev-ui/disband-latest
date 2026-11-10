@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -70,7 +72,7 @@ export function AgePrompt() {
             onClick={() => void save()}
             className={`${classicBtn.brand} ${classicBtn.sm}`}
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? <LoadingDots size={6} className="mx-auto" /> : "Save"}
           </button>
         </div>
       </div>

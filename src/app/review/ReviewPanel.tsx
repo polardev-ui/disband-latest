@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -132,7 +134,7 @@ function ReviewForm({
           onClick={() => void submit()}
           className="flex-1 rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {saving ? "Saving…" : initial ? "Update review" : "Post review"}
+          {saving ? <LoadingDots size={6} className="mx-auto" /> : initial ? "Update review" : "Post review"}
         </button>
         {initial && (
           <button

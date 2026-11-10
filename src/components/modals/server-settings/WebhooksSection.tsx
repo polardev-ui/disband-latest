@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
@@ -203,7 +205,7 @@ export function WebhooksSection({ server }: SectionProps) {
         description={hooks.length > 0 ? t("{length} in this space", { length: hooks.length }) : t("None yet")}
         action={
           <button type="button" onClick={() => void create()} disabled={busy === "create" || textChannels.length === 0} className={btn.primary}>
-            <IconPlus size={15} /> {busy === "create" ? t("Creating…") : t("New Webhook")}
+            <IconPlus size={15} /> {busy === "create" ? <LoadingDots size={6} className="mx-auto" /> : t("New Webhook")}
           </button>
         }
       >
@@ -382,7 +384,7 @@ export function WebhooksSection({ server }: SectionProps) {
                               disabled={busy === `save:${hook.id}`}
                               className={btn.primary}
                             >
-                              {busy === `save:${hook.id}` ? t("Saving…") : t("Save changes")}
+                              {busy === `save:${hook.id}` ? <LoadingDots size={6} className="mx-auto" /> : t("Save changes")}
                             </button>
                           </div>
                         </div>

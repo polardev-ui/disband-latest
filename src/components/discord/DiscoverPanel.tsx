@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useMemo, useState } from "react";
 import { CommunityBackdrop } from "@/components/ui/CommunityBackdrop";
 import { useApp } from "@/contexts/AppContext";
@@ -158,7 +160,7 @@ function JoinButton({
       onClick={onJoin}
       className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-button-green px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:opacity-50"
     >
-      {joining ? t("Joining…") : t("Join")}
+      {joining ? <LoadingDots size={6} className="mx-auto" /> : t("Join")}
     </button>
   );
 }

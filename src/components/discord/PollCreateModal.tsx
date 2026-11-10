@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 
@@ -146,7 +148,7 @@ export function PollCreateModal({ open, onClose, onCreated }: PollCreateModalPro
             onClick={() => void create()}
             className="h-[38px] min-w-[96px] rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {creating ? t("Posting…") : t("Post")}
+            {creating ? <LoadingDots size={6} className="mx-auto" /> : t("Post")}
           </button>
         </div>
       </div>

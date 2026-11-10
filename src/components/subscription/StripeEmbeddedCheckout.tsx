@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { getStripe, isStripeConfigured } from "@/lib/stripe-client";
 import {
   CheckoutElementsProvider,
@@ -323,7 +325,7 @@ function PromotionCodeField({ checkout }: { checkout: StripeCheckoutElementsValu
               disabled={busy || !code.trim()}
               className="shrink-0 rounded-lg bg-bg-accent px-4 py-2.5 text-[13px] font-semibold text-text-normal transition-colors hover:bg-interactive-hover hover:text-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {busy ? t("Applying…") : t("Apply")}
+              {busy ? <LoadingDots size={6} className="mx-auto" /> : t("Apply")}
             </button>
           </div>
         </div>

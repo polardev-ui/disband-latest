@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { apiFetch } from "@/lib/api";
 import { useApp } from "@/contexts/AppContext";
@@ -115,7 +117,7 @@ function ImagePick({ label, url, wide, busy, onPick, onClear }: {
           {url && <img src={url} alt="" className="h-full w-full object-cover" />}
         </div>
         <label className={`cursor-pointer ${SECONDARY} ${busy ? "pointer-events-none opacity-50" : ""}`}>
-          {busy ? "Uploading…" : url ? "Change" : "Upload"}
+          {busy ? <LoadingDots size={6} className="mx-auto" /> : url ? "Change" : "Upload"}
           <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="sr-only"
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onPick(f); }} />
         </label>
@@ -368,7 +370,7 @@ export function DeveloperPortal() {
                 onKeyDown={(e) => { if (e.key === "Enter" && newName.trim()) void create(); }} />
             </Field>
             <div className="flex gap-2">
-              <button type="button" disabled={saving || !newName.trim()} onClick={() => void create()} className={PRIMARY}>{saving ? "Creating…" : "Create"}</button>
+              <button type="button" disabled={saving || !newName.trim()} onClick={() => void create()} className={PRIMARY}>{saving ? <LoadingDots size={6} className="mx-auto" /> : "Create"}</button>
               <button type="button" onClick={() => setCreating(false)} className="rounded px-4 py-2 text-[14px] text-text-normal hover:underline">Cancel</button>
             </div>
           </div>
@@ -505,7 +507,7 @@ export function DeveloperPortal() {
                 termsUrl: draft.terms,
                 privacyUrl: draft.privacy,
               }, "Changes saved.")}>
-              {saving ? "Saving…" : "Save Changes"}
+              {saving ? <LoadingDots size={6} className="mx-auto" /> : "Save Changes"}
             </button>
           </div>
         )}
@@ -552,7 +554,7 @@ export function DeveloperPortal() {
               </div>
               <ScopePicker value={draftScopes} onChange={setDraftScopes} />
               <button type="button" disabled={saving || draftScopes.length === 0} onClick={() => void save({ scopes: draftScopes }, "Permissions saved.")} className={PRIMARY}>
-                {saving ? "Saving…" : "Save Permissions"}
+                {saving ? <LoadingDots size={6} className="mx-auto" /> : "Save Permissions"}
               </button>
             </div>
           </div>

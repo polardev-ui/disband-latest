@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
@@ -200,7 +202,7 @@ export function CreateChannelModal({ target, categories, onClose, onCreate }: Cr
             disabled={!trimmed || busy}
             className="rounded-lg bg-brand px-4 py-2 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {busy ? t("Creating…") : t("Create Channel")}
+            {busy ? <LoadingDots size={6} className="mx-auto" /> : t("Create Channel")}
           </button>
         </div>
       </div>

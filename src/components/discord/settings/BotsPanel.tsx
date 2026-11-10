@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePresence } from "@/hooks/usePresence";
 import { useApp } from "@/contexts/AppContext";
@@ -325,7 +327,7 @@ export function BotsPanel() {
                   disabled={creating}
                   className="shrink-0 rounded-md bg-brand px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                 >
-                  {creating ? t("Creating…") : t("Create")}
+                  {creating ? <LoadingDots size={6} className="mx-auto" /> : t("Create")}
                 </button>
               </div>
             </SettingRow>
@@ -561,7 +563,7 @@ export function BotsPanel() {
                     disabled={inviteLoading}
                     className="rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                   >
-                    {inviteLoading ? t("Generating…") : t("Generate invite link")}
+                    {inviteLoading ? <LoadingDots size={6} className="mx-auto" /> : t("Generate invite link")}
                   </button>
                 )}
               </div>
@@ -629,7 +631,7 @@ export function BotsPanel() {
                 disabled={editSaving || !editName.trim() || editScopes.length === 0}
                 className="rounded-md bg-brand px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
               >
-                {editSaving ? t("Saving…") : t("Save")}
+                {editSaving ? <LoadingDots size={6} className="mx-auto" /> : t("Save")}
               </button>
             </div>
           </div>

@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 
@@ -194,7 +196,7 @@ export function InviteGroupModal({ open, groupId, members, onClose }: InviteGrou
             className="h-[38px] w-full rounded-md bg-brand text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
-              ? t("Adding…")
+              ? <LoadingDots size={6} className="mx-auto" />
               : selected.length === 0
                 ? t("Select friends to add")
                 : t(selected.length === 1 ? "Add {count} friend" : "Add {count} friends", { count: selected.length })}

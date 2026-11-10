@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useRef, useState } from "react";
 import { useSkin } from "@/components/theme/SkinProvider";
 import { SKINS, type SkinId } from "@/lib/theme/skins";
@@ -158,7 +160,7 @@ export function ThemesPanel() {
             }}
             className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
           >
-            {saving ? t("Saving…") : t("Save CSS")}
+            {saving ? <LoadingDots size={6} className="mx-auto" /> : t("Save CSS")}
           </button>
           <span className="text-xs text-text-muted">
             {draftCss.length.toLocaleString()} / {MAX_CUSTOM_CSS_BYTES.toLocaleString()}
@@ -207,7 +209,7 @@ export function ThemesPanel() {
             onClick={() => fileRef.current?.click()}
             className="rounded-md border border-border-subtle px-4 py-2 text-sm font-semibold text-text-normal hover:bg-interactive-hover disabled:opacity-50"
           >
-            {uploading ? t("Uploading…") : t("Upload icon")}
+            {uploading ? <LoadingDots size={6} className="mx-auto" /> : t("Upload icon")}
           </button>
         </div>
 

@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -292,7 +294,7 @@ export function AccountViewerModal({
               }`}
             >
               {!ban && <IconAlert size={16} />}
-              {busy ? "Saving…" : ban ? "Lift ban" : "Ban from Disband"}
+              {busy ? <LoadingDots size={6} className="mx-auto" /> : ban ? "Lift ban" : "Ban from Disband"}
             </button>
           </div>
         )}

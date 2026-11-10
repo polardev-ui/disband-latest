@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api";
@@ -61,7 +63,7 @@ export function PromoteSection({ server }: SectionProps) {
             <StripeEmbeddedCheckout clientSecret={secret} onSuccess={() => { setSecret(null); setTimeout(refresh, 2500); }} onCancel={() => setSecret(null)} />
           ) : (
             <button type="button" className={btn.primary} disabled={busy || !server.discoverable} onClick={() => void start()}>
-              {busy ? t("Starting…") : t("Promote for {label} · {value}", { label: t(PROMOTION_PLANS.find((p) => p.days === days)?.label ?? ""), value: formatPrice(PROMOTION_PLANS.find((p) => p.days === days)?.cents ?? 0) })}
+              {busy ? <LoadingDots size={6} className="mx-auto" /> : t("Promote for {label} · {value}", { label: t(PROMOTION_PLANS.find((p) => p.days === days)?.label ?? ""), value: formatPrice(PROMOTION_PLANS.find((p) => p.days === days)?.cents ?? 0) })}
             </button>
           )}
         </div>

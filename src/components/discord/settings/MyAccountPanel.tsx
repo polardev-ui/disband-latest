@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -230,7 +232,7 @@ export function MyAccountPanel({
           onClick={() => void signOutOthers()}
           className={`${classicBtn.danger} ${classicBtn.sm}`}
         >
-          {signedOut ? t("Logged Out Everywhere Else") : signingOut ? t("Logging Out…") : t("Log Out All Known Devices")}
+          {signedOut ? t("Logged Out Everywhere Else") : signingOut ? <LoadingDots size={6} className="mx-auto" /> : t("Log Out All Known Devices")}
         </button>
       </section>
 
@@ -277,7 +279,7 @@ export function MyAccountPanel({
                 }}
                 className={`${classicBtn.brand} ${classicBtn.sm}`}
               >
-                {savingAge ? t("Saving…") : t("Save")}
+                {savingAge ? <LoadingDots size={6} className="mx-auto" /> : t("Save")}
               </button>
             </div>
             {ageError && <p className="mt-3 text-[14px] text-status-dnd">{ageError}</p>}
@@ -353,7 +355,7 @@ export function MyAccountPanel({
               }}
               className={`${classicBtn.brand} ${classicBtn.sm}`}
             >
-              {cancelling ? t("Cancelling…") : t("Cancel Deletion")}
+              {cancelling ? <LoadingDots size={6} className="mx-auto" /> : t("Cancel Deletion")}
             </button>
           </>
         ) : (
@@ -429,7 +431,7 @@ function EmailModal({ open, current, onClose }: { open: boolean; current: string
               {t("Cancel")}
             </button>
             <button type="submit" form="classic-email-form" disabled={busy || !value.trim()} className={`${classicBtn.brand} ${classicBtn.md}`}>
-              {busy ? t("Sending…") : t("Done")}
+              {busy ? <LoadingDots size={6} className="mx-auto" /> : t("Done")}
             </button>
           </>
         )
@@ -513,7 +515,7 @@ function PasswordModal({
               {t("Cancel")}
             </button>
             <button type="submit" form="classic-password-form" disabled={busy} className={`${classicBtn.brand} ${classicBtn.md}`}>
-              {busy ? t("Updating…") : t("Done")}
+              {busy ? <LoadingDots size={6} className="mx-auto" /> : t("Done")}
             </button>
           </>
         )

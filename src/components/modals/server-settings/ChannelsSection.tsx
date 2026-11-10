@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import type { ChannelType } from "@/lib/supabase/types";
@@ -112,7 +114,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
             />
           </label>
           <button type="button" onClick={() => void create()} disabled={creating || !name.trim()} className={`${btn.primary} h-10`}>
-            <IconPlus size={15} /> {creating ? t("Creating…") : t("Create")}
+            <IconPlus size={15} /> {creating ? <LoadingDots size={6} className="mx-auto" /> : t("Create")}
           </button>
         </div>
       </section>
@@ -137,7 +139,7 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
               disabled={creatingCategory || !categoryName.trim()}
               className={`${btn.primary} h-10`}
             >
-              <IconPlus size={15} /> {creatingCategory ? t("Creating…") : t("Create")}
+              <IconPlus size={15} /> {creatingCategory ? <LoadingDots size={6} className="mx-auto" /> : t("Create")}
             </button>
           </div>
           {categories.length > 0 && (

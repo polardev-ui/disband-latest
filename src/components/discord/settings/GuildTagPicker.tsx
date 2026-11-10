@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useState } from "react";
 import {
   clearGuildTag,
@@ -135,7 +137,7 @@ export function GuildTagPicker({ userId }: { userId: string }) {
                     disabled={isBusy}
                     className={`${ACTION} bg-bg-tertiary text-text-normal hover:bg-interactive-hover`}
                   >
-                    {isBusy ? t("Removing…") : t("Remove")}
+                    {isBusy ? <LoadingDots size={6} className="mx-auto" /> : t("Remove")}
                   </button>
                 ) : (
                   <button
@@ -144,7 +146,7 @@ export function GuildTagPicker({ userId }: { userId: string }) {
                     disabled={!!busy}
                     className={`${ACTION} bg-brand text-white hover:bg-brand-hover`}
                   >
-                    {isBusy ? t("Wearing…") : t("Wear")}
+                    {isBusy ? <LoadingDots size={6} className="mx-auto" /> : t("Wear")}
                   </button>
                 )}
               </div>

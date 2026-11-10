@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { apiFetch } from "@/lib/api";
@@ -84,7 +86,7 @@ export function PlatformBanScreen() {
                 onClick={() => void submitAppeal()}
                 className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
               >
-                {submitting ? t("Submitting…") : t("Submit appeal")}
+                {submitting ? <LoadingDots size={6} className="mx-auto" /> : t("Submit appeal")}
               </button>
               <button
                 type="button"

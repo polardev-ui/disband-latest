@@ -1,3 +1,4 @@
+import { LoadingDots } from "@/components/ui/LoadingDots";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -173,7 +174,7 @@ export default function SearchPanel({ scopeKind, serverId, containerId, onJump, 
       {/* Header: count on the left, sort tabs on the right. */}
       <div className="flex h-14 shrink-0 items-center gap-3 bg-bg-tertiary px-4">
         <span className="min-w-0 flex-1 truncate text-[16px] font-semibold text-header-primary">
-          {loading && results.length === 0 ? t("Searching…") : searching ? t(total === 1 ? "{count} Result" : "{count} Results", { count: total.toLocaleString() }) : t("Search")}
+          {loading && results.length === 0 ? <LoadingDots size={6} className="mx-auto" /> : searching ? t(total === 1 ? "{count} Result" : "{count} Results", { count: total.toLocaleString() }) : t("Search")}
         </span>
         {searching && (
           <div role="tablist" aria-label={t("Sort results")} className="flex items-center gap-4">
@@ -282,7 +283,7 @@ export default function SearchPanel({ scopeKind, serverId, containerId, onJump, 
                 disabled={loading}
                 className="mt-2 h-8 w-full rounded-md bg-button-secondary text-[14px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-60"
               >
-                {loading ? t("Loading…") : t("Load More")}
+                {loading ? <LoadingDots size={6} className="mx-auto" /> : t("Load More")}
               </button>
             )}
           </>

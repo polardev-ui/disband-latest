@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useOptionalApp } from "@/contexts/AppContext";
@@ -198,12 +200,12 @@ export function GiftCardContent({ gift, buyerName, mine, claimedByMe, claiming, 
                 <p role="status" className="flex min-w-0 flex-1 items-center gap-2 text-[12px] leading-4 text-text-muted">
                   <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-text-muted/40 border-t-text-muted" aria-hidden />Waiting for payment to clear…
                 </p>
-                <button type="button" disabled={refreshing} onClick={onRefresh} className="rounded-md bg-button-secondary px-3 py-1.5 text-[12px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-50">{refreshing ? "Checking…" : "Refresh"}</button>
+                <button type="button" disabled={refreshing} onClick={onRefresh} className="rounded-md bg-button-secondary px-3 py-1.5 text-[12px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-50">{refreshing ? <LoadingDots size={6} /> : "Refresh"}</button>
               </div>
             ) : (
               <div className="flex flex-wrap items-end justify-between gap-2">
                 {mine ? <p className="text-[13px] text-text-muted">Waiting to be accepted</p> : (
-                  <button type="button" disabled={claiming} onClick={onClaim} className="h-8 rounded-md bg-button-green px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:cursor-wait disabled:opacity-60">{claiming ? "Accepting…" : "Accept"}</button>
+                  <button type="button" disabled={claiming} onClick={onClaim} className="h-8 rounded-md bg-button-green px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:cursor-wait disabled:opacity-60">{claiming ? <LoadingDots size={6} /> : "Accept"}</button>
                 )}
                 {expiryLabel && <time dateTime={gift.expires_at} title={expires.toLocaleString("en-GB")} className="pb-1 text-[11px] text-text-muted">Expires {expiryLabel}</time>}
               </div>

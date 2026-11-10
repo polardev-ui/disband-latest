@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -417,7 +419,7 @@ export function ActivityModal({
                     onClick={() => void join()}
                     className="mt-3 h-9 rounded-md bg-brand px-4 text-[13px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                   >
-                    {busy ? "Joining…" : "Join activity"}
+                    {busy ? <LoadingDots size={6} className="mx-auto" /> : "Join activity"}
                   </button>
                 </div>
               ) : (

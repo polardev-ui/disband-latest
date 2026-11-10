@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 
@@ -73,7 +75,7 @@ export function ResendResetLink({
         className="w-full rounded-md border border-divider py-2.5 text-[15px] font-medium text-text-normal transition-colors hover:border-text-muted hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-divider disabled:hover:bg-transparent"
       >
         {state === "sending"
-          ? t("Sending…")
+          ? <LoadingDots size={6} className="mx-auto" />
           : remaining > 0
             ? t("Send it again in {remaining}s", { remaining })
             : t("Send it again")}

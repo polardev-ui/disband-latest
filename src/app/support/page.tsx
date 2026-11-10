@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, LockKeyhole } from "lucide-react";
@@ -167,7 +169,7 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
             onClick={() => void send()}
             className="shrink-0 rounded-lg bg-brand px-6 py-3 text-[15px] font-bold text-white transition-all hover:bg-brand-hover disabled:opacity-50"
           >
-            {busy ? "Sending…" : "Send code"}
+            {busy ? <LoadingDots size={6} className="mx-auto" /> : "Send code"}
           </button>
         </div>
       ) : (
@@ -190,7 +192,7 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
               onClick={() => void verify()}
               className="shrink-0 rounded-lg bg-brand px-6 py-3 text-[15px] font-bold text-white transition-all hover:bg-brand-hover disabled:opacity-50"
             >
-              {busy ? "Checking…" : "Verify & continue"}
+              {busy ? <LoadingDots size={6} className="mx-auto" /> : "Verify & continue"}
             </button>
           </div>
           <button
@@ -324,7 +326,7 @@ function HeroChat({
         <div className={styles.heroBarFooter}>
           <p className="flex items-center gap-1.5"><LockKeyhole size={13} className="shrink-0" />Private help, just for your account</p>
           <button type="submit" disabled={starting || !text.trim()} className={styles.heroSubmit}>
-            {starting ? "Starting…" : "Ask Tether"}<ArrowUpRight size={17} />
+            {starting ? <LoadingDots size={6} className="mx-auto" /> : "Ask Tether"}<ArrowUpRight size={17} />
           </button>
         </div>
       </form>

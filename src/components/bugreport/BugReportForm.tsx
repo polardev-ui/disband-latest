@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useRef, useState } from "react";
 import { uploadMedia } from "@/lib/media/uploadMedia";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -268,7 +270,7 @@ export function BugReportForm() {
           disabled={!ready || submitting}
           className="rounded-lg bg-brand px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {submitting ? "Submitting…" : "Submit bug report"}
+          {submitting ? <LoadingDots size={6} className="mx-auto" /> : "Submit bug report"}
         </button>
       </div>
     </form>

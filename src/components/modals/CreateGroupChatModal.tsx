@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 
@@ -201,7 +203,7 @@ export function CreateGroupChatModal({ open, onClose }: CreateGroupChatModalProp
             disabled={loading || selected.length < MIN_PICKS}
             className="h-[38px] w-full rounded-md bg-brand text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? t("Creating…") : selected.length < MIN_PICKS ? t(need === 1 ? "Select {count} more friend" : "Select {count} more friends", { count: need }) : t("Create Group DM")}
+            {loading ? <LoadingDots size={6} className="mx-auto" /> : selected.length < MIN_PICKS ? t(need === 1 ? "Select {count} more friend" : "Select {count} more friends", { count: need }) : t("Create Group DM")}
           </button>
         </div>
       </form>

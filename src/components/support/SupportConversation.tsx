@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { ArrowLeft, ArrowUp, Check, Copy, LoaderCircle, LockKeyhole, MessageCircle, X } from "lucide-react";
@@ -115,7 +117,7 @@ function EmailFixForm() {
       </label>
       {error && <p role="alert" className="mt-2 text-[#f23f43]">{error}</p>}
       <button type="submit" disabled={busy || !username.trim() || !password} className="mt-3 rounded-md bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-hover disabled:opacity-50">
-        {busy ? "Changing…" : "Change email"}
+        {busy ? <LoadingDots size={6} className="mx-auto" /> : "Change email"}
       </button>
     </form>
   );

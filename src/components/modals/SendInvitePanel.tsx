@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Avatar } from "@/components/ui/Avatar";
@@ -76,7 +78,7 @@ export function SendInvitePanel({ inviteUrl, serverName }: SendInvitePanelProps)
                 }`}
               >
                 {sent ? <IconCheck size={14} /> : <IconSend size={14} />}
-                {sent ? t("Sent") : sending ? t("Sending…") : t("Send")}
+                {sent ? t("Sent") : sending ? <LoadingDots size={6} /> : t("Send")}
               </button>
             </li>
           );

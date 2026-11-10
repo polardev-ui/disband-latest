@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useState } from "react";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { PublicActivityLobby } from "./PublicActivityLobby";
@@ -130,7 +132,7 @@ export function ActivityPicker({
                   onClick={() => void pick(featured.kind)}
                   className="mt-2.5 h-8 rounded-lg bg-brand px-4 text-[13px] font-semibold text-white transition-colors hover:brightness-110 disabled:opacity-60"
                 >
-                  {busyFor(featured.kind) ? "Starting…" : mode === "public" ? "Host a public game" : "Play in this chat"}
+                  {busyFor(featured.kind) ? <LoadingDots size={6} className="mx-auto" /> : mode === "public" ? "Host a public game" : "Play in this chat"}
                 </button>
               </div>
             </div>

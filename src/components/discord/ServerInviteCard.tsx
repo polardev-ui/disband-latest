@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { apiFetch } from "@/lib/api";
@@ -182,7 +184,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
           </button>
         ) : (
           <button type="button" disabled={joining || !user} onClick={() => void handleJoin()} className="w-full rounded bg-brand py-1.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50">
-            {joining ? t("Joining…") : t("Join Space")}
+            {joining ? <LoadingDots size={6} className="mx-auto" /> : t("Join Space")}
           </button>
         )}
         {error && <p className="mt-1 text-xs text-status-dnd">{error}</p>}

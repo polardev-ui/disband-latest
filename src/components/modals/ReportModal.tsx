@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useMemo, useState } from "react";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { apiFetch } from "@/lib/api";
@@ -278,7 +280,7 @@ export function ReportModal({ target, onClose }: ReportModalProps) {
                 disabled={!reason || submitting}
                 className="inline-flex h-9 items-center justify-center rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {submitting ? t("Sending…") : t("Submit report")}
+                {submitting ? <LoadingDots size={6} className="mx-auto" /> : t("Submit report")}
               </button>
             </div>
           </>

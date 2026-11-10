@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Logo } from "@/components/ui/Logo";
@@ -162,7 +164,7 @@ export function MfaChallengeScreen() {
               disabled={loading || code.length !== 6}
               className="w-full rounded bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
             >
-              {loading ? t("Verifying…") : t("Verify code")}
+              {loading ? <LoadingDots size={6} className="mx-auto" /> : t("Verify code")}
             </button>
           </form>
         )}
@@ -178,7 +180,7 @@ export function MfaChallengeScreen() {
               onClick={() => void usePasskey()}
               className="w-full rounded border border-divider bg-bg-accent py-2.5 text-sm font-semibold text-text-normal hover:bg-interactive-hover disabled:opacity-50"
             >
-              {loading ? t("Verifying…") : t("Use a passkey")}
+              {loading ? <LoadingDots size={6} className="mx-auto" /> : t("Use a passkey")}
             </button>
             <p className="text-center text-xs leading-4 text-text-muted">
               {t("Face ID, Touch ID, Windows Hello or a security key")}

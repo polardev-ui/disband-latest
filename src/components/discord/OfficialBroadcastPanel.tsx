@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -401,7 +403,7 @@ export function OfficialBroadcastPanel() {
           onClick={() => void send()}
           className="w-full rounded bg-brand px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {busy ? "Sending..." : audience === "everyone" ? `Send to everyone` : "Send"}
+          {busy ? <LoadingDots size={6} className="mx-auto" /> : audience === "everyone" ? `Send to everyone` : "Send"}
         </button>
       </div>
 

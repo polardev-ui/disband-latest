@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
@@ -110,7 +112,7 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
           </div>
           <div className="flex flex-1 flex-wrap items-center gap-2">
             <FilePickButton accept={IMAGE_TYPES} disabled={!isOwner || busy !== null} onPick={(f) => void setImage("icon", f)}>
-              <IconUpload size={15} /> {busy === "icon" ? t("Uploading…") : icon ? t("Change icon") : t("Upload icon")}
+              <IconUpload size={15} /> {busy === "icon" ? <LoadingDots size={6} className="mx-auto" /> : icon ? t("Change icon") : t("Upload icon")}
             </FilePickButton>
             {icon && (
               <button
@@ -140,7 +142,7 @@ export function AppearanceSection({ server, isOwner }: SectionProps) {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <FilePickButton accept={IMAGE_TYPES} disabled={!isOwner || busy !== null} onPick={(f) => void setImage("banner", f)}>
-              <IconUpload size={15} /> {busy === "banner" ? t("Uploading…") : banner ? t("Change banner") : t("Upload banner")}
+              <IconUpload size={15} /> {busy === "banner" ? <LoadingDots size={6} className="mx-auto" /> : banner ? t("Change banner") : t("Upload banner")}
             </FilePickButton>
             {banner && (
               <button

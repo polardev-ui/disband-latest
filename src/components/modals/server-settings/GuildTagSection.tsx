@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import {
@@ -331,7 +333,7 @@ export function GuildTagSection({ server, isOwner, catalystCount, onBoost }: Sec
                 disabled={saving || !dirty || !!tagProblem}
                 className={btn.primary}
               >
-                {saving ? t("Saving…") : existing ? t("Save changes") : t("Create tag")}
+                {saving ? <LoadingDots size={6} className="mx-auto" /> : existing ? t("Save changes") : t("Create tag")}
               </button>
             </div>
           </div>

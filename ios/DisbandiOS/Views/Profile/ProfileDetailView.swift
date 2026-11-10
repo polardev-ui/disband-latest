@@ -9,7 +9,13 @@ struct ProfileDetailView: View {
     var onStartDM: ((Profile) -> Void)? = nil
 
     @Environment(AppState.self) private var app
-    @Environment(PresenceService.self) private var presence
+    // Read presence through AppState rather than as its own environment value.
+    // A profile opened from a sheet (which the Mac app does for members and
+    // reactions) could arrive without the newer environment values, and a
+    // missing *required* one traps in SwiftUI — this was the bot-profile
+    // crash. AppState owns the same service, so there is no reason to ask the
+    // sheet's environment for a second copy.
+    private var presence: PresenceService? { app.presence }
     @Environment(\.dismiss) private var dismiss
 
     @State private var relation: FriendshipStatus?
@@ -34,7 +40,7 @@ struct ProfileDetailView: View {
     /// DND picked on another device, or offline when the socket dies — instead
     /// of a stale `profiles.status` column.
     private var liveStatus: UserStatus {
-        presence.status(for: profile.id, fallback: isSelf ? profile.status : .offline)
+        presence?.status(for: profile.id, fallback: isSelf ? profile.status : .offline) ?? (isSelf ? profile.status : .offline)
     }
 
     var body: some View {

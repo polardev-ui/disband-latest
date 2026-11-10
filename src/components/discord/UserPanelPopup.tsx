@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useId } from "react";
 import { createPortal } from "react-dom";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
@@ -415,7 +417,7 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
                 onClick={() => void saveCustomStatus()}
                 className="h-8 flex-1 rounded-lg bg-brand text-[14px] font-semibold text-brand-foreground transition-colors hover:bg-brand-hover disabled:opacity-50"
               >
-                {savingCustom ? t("Saving…") : t("Set status")}
+                {savingCustom ? <LoadingDots size={6} className="mx-auto" /> : t("Set status")}
               </button>
               {(liveNote || customNote.trim()) && (
                 <button

@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 /*
  A forum channel: its posts as cards, newest activity first with pinned
  posts on top, filtered by search and tags, and a dialog to start a post.
@@ -562,7 +564,7 @@ function NewPostDialog({
             {t("Cancel")}
           </button>
           <button type="button" onClick={() => void submit()} disabled={busy || !title.trim() || !body.trim()} className={`${classicBtn.brand} ${classicBtn.md}`}>
-            {busy ? t("Posting…") : t("Post")}
+            {busy ? <LoadingDots size={6} className="mx-auto" /> : t("Post")}
           </button>
         </>
       }
@@ -663,7 +665,7 @@ function EditPostDialog({
             {t("Cancel")}
           </button>
           <button type="button" onClick={() => void save()} disabled={busy || !title.trim()} className={`${classicBtn.brand} ${classicBtn.md}`}>
-            {busy ? t("Saving…") : t("Save")}
+            {busy ? <LoadingDots size={6} className="mx-auto" /> : t("Save")}
           </button>
         </>
       }

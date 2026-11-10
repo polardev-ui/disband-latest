@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -154,7 +156,7 @@ export function CurrencyPanel() {
                 )}
               </div>
               <button type="button" disabled={balance < r.cost || busy !== null} onClick={() => void redeem(r.id)} className={btn.primary}>
-                {busy === r.id ? t("Redeeming…") : `${CURRENCY.symbol} ${r.cost}`}
+                {busy === r.id ? <LoadingDots size={6} className="mx-auto" /> : `${CURRENCY.symbol} ${r.cost}`}
               </button>
             </div>
           ))}

@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
@@ -318,7 +320,7 @@ export function ShopModal({ open, onClose, self, onChanged, initialCategory = "r
                   className="h-[38px] min-w-[160px] rounded-md bg-brand px-4 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {busyId === giftItem.id
-                    ? "Opening…"
+                    ? <LoadingDots size={6} className="mx-auto" />
                     : giftTo
                       ? `Gift to ${friendName(giftTo)} · ${formatPrice(effectivePriceCents(giftItem.priceCents, giftItem.salePriceCents))}`
                       : "Pick a friend"}
@@ -447,7 +449,7 @@ function ShopCard({
             onClick={onBuy}
             className="h-[38px] w-full rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
           >
-            {busy ? "Opening…" : `Buy ${formatPrice(effectivePriceCents(item.priceCents, item.salePriceCents))}`}
+            {busy ? <LoadingDots size={6} className="mx-auto" /> : `Buy ${formatPrice(effectivePriceCents(item.priceCents, item.salePriceCents))}`}
           </button>
         ) : equipped ? (
           <div className="flex h-[38px] w-full items-center justify-center rounded-md border border-status-online/60 text-[14px] font-medium text-status-online">
@@ -460,7 +462,7 @@ function ShopCard({
             onClick={onEquip}
             className="h-[38px] w-full rounded-md bg-button-secondary px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover disabled:opacity-50"
           >
-            {busy ? "…" : "Equip"}
+            {busy ? <LoadingDots size={6} /> : "Equip"}
           </button>
         )}
         </div>

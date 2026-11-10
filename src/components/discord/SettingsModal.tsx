@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { Tooltip } from "./Tooltip";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
@@ -1511,7 +1513,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                         disabled={saving || !profileDirty}
                         className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {saving ? t("Saving…") : profileDirty ? t("Save Changes") : t("Saved!")}
+                        {saving ? <LoadingDots size={6} className="mx-auto" /> : profileDirty ? t("Save Changes") : t("Saved!")}
                       </button>
                     </div>
                   )}
@@ -2313,7 +2315,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                               title={t("Older Disband builds kept this connection in this browser only.")}
                               className="h-8 rounded-md bg-button-secondary px-3 text-[14px] font-medium text-white hover:bg-button-secondary-hover disabled:opacity-50"
                             >
-                              {legacySpotifyBusy ? t("Importing…") : t("Import old connection")}
+                              {legacySpotifyBusy ? <LoadingDots size={6} className="mx-auto" /> : t("Import old connection")}
                             </button>
                           )}
                           <button type="button" onClick={handleSpotifyConnect} className="h-8 rounded-md bg-[#1db954] px-4 text-[14px] font-medium text-white hover:brightness-95">
@@ -2347,7 +2349,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                                 onClick={() => void finishSpotifyPaste()}
                                 className="rounded-md bg-brand px-3.5 py-2 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
                               >
-                                {spotifyPasteBusy ? t("Connecting…") : t("Connect")}
+                                {spotifyPasteBusy ? <LoadingDots size={6} className="mx-auto" /> : t("Connect")}
                               </button>
                             </div>
                             {spotifyPasteError && (
@@ -2553,7 +2555,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
               }}
               className={`${classicBtn.danger} ${classicBtn.md}`}
             >
-              {deletingAccount ? t("Deleting…") : t("Delete Account")}
+              {deletingAccount ? <LoadingDots size={6} className="mx-auto" /> : t("Delete Account")}
             </button>
           </>
         }

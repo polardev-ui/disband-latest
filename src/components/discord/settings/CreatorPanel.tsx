@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -121,7 +123,7 @@ export function CreatorPanel() {
                   <button type="button" disabled={busy === p} onClick={() => void disconnect(p)} className={btn.secondary}>{t("Disconnect")}</button>
                 ) : (
                   <button type="button" disabled={busy === p || ready === false} onClick={() => void connect(p)} className={btn.primary}>
-                    {busy === p ? t("Opening…") : t("Connect")}
+                    {busy === p ? <LoadingDots size={6} className="mx-auto" /> : t("Connect")}
                   </button>
                 )}
               </li>

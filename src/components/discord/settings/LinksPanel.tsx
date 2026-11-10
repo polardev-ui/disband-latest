@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { PUBLIC_ENV } from "@/lib/public-env";
@@ -256,7 +258,7 @@ export function LinksPanel() {
               <input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder={t("Website (optional), https://…")} className={settingsInputClass} />
               <textarea value={redirects} onChange={(e) => setRedirects(e.target.value)} rows={3} placeholder={t("Redirect URLs, one per line\nhttps://example.com/auth/disband/callback")} className={`${settingsInputClass} font-mono text-[13px]`} />
               <div className="flex gap-2">
-                <button type="button" className={btn.primary} disabled={busy || name.trim().length < 2 || !redirects.trim()} onClick={() => void create()}>{busy ? t("Making…") : t("Make Link")}</button>
+                <button type="button" className={btn.primary} disabled={busy || name.trim().length < 2 || !redirects.trim()} onClick={() => void create()}>{busy ? <LoadingDots size={6} className="mx-auto" /> : t("Make Link")}</button>
                 <button type="button" className={btn.secondary} onClick={() => setCreating(false)}>{t("Cancel")}</button>
               </div>
             </div>

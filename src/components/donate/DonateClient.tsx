@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
@@ -302,7 +304,7 @@ export function DonateClient() {
           disabled={submitting || !amountCents || !!amountError || (needsTurnstile && !turnstileToken)}
           className="mt-5 h-12 w-full rounded-xl bg-brand text-[16px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {submitting ? "Opening checkout…" : amountCents ? `Donate ${formatUsd(amountCents)}` : "Donate"}
+          {submitting ? <LoadingDots size={6} className="mx-auto" /> : amountCents ? `Donate ${formatUsd(amountCents)}` : "Donate"}
         </button>
         <p className="mt-3 text-center text-[12px] leading-relaxed text-[#6d6f78]">
           You&rsquo;ll finish on Stripe&rsquo;s secure checkout. Donations aren&rsquo;t tax-deductible, and apart from the Donor badge they don&rsquo;t unlock anything.

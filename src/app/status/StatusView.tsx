@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -272,7 +274,7 @@ export function StatusView({ initial }: { initial: StatusSnapshot }) {
             disabled={refreshing}
             className="h-[34px] rounded-lg border border-white/[0.08] bg-bg-secondary-alt px-3 text-[13px] font-medium text-text-normal transition-colors hover:border-white/[0.15] hover:bg-interactive-hover disabled:opacity-60"
           >
-            {refreshing ? "Refreshing…" : "Refresh"}
+            {refreshing ? <LoadingDots size={6} className="mx-auto" /> : "Refresh"}
           </button>
         </div>
       </div>

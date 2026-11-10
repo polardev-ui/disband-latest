@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useState } from "react";
 import { mapAuthError } from "@/lib/authErrors";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -85,7 +87,7 @@ export function ResendConfirmation({
         disabled={state === "sending" || !email.trim()}
         className="w-full rounded-md border border-divider bg-bg-accent py-2.5 text-sm font-semibold text-text-normal transition-colors hover:bg-interactive-hover disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {state === "sending" ? t("Sending…") : t("Send a new confirmation email")}
+        {state === "sending" ? <LoadingDots size={6} className="mx-auto" /> : t("Send a new confirmation email")}
       </button>
 
       {error && <p className="text-[13px] text-status-dnd">{error}</p>}

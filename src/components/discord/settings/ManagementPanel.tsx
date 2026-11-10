@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api";
@@ -146,7 +148,7 @@ export function ManagementPanel({ isOwner, isManager = true }: { isOwner: boolea
             Ask Sentinel to review everyone who spoke there and act on their standing
           </label>
           <div className="flex gap-2">
-            <button type="button" className={btn.danger} disabled={busy || !space.trim() || !spaceReason.trim()} onClick={() => void suspend(true)}>{busy ? "Working…" : "Suspend space"}</button>
+            <button type="button" className={btn.danger} disabled={busy || !space.trim() || !spaceReason.trim()} onClick={() => void suspend(true)}>{busy ? <LoadingDots size={6} className="mx-auto" /> : "Suspend space"}</button>
             <button type="button" className={btn.secondary} disabled={busy || !space.trim()} onClick={() => void suspend(false)}>Lift suspension</button>
           </div>
         </div>

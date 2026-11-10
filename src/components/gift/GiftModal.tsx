@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 
 import { useState } from "react";
@@ -194,7 +196,7 @@ export function GiftModal({ onClose, onPurchased, exiting }: {
                   onClick={() => void startCheckout()}
                   className="h-[38px] rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
                 >
-                  {busy ? "Starting checkout…" : `Continue to payment · ${formatPrice(price)}`}
+                  {busy ? <LoadingDots size={6} className="mx-auto" /> : `Continue to payment · ${formatPrice(price)}`}
                 </button>
               </div>
               <p className="mt-3 text-center text-[12px] leading-relaxed text-text-muted">

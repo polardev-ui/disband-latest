@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { catalystLevel, sanitizeVanity, vanityError } from "@/lib/catalysts";
@@ -170,7 +172,7 @@ function VanityCard({
             />
             {isOwner && (
               <button type="button" onClick={() => void submit(clean || null)} disabled={saving || !dirty} className={`${btn.primary} h-10`}>
-                {saving ? t("Saving…") : saved ? t("Saved") : !clean && current ? t("Release") : t("Claim")}
+                {saving ? <LoadingDots size={6} className="mx-auto" /> : saved ? t("Saved") : !clean && current ? t("Release") : t("Claim")}
               </button>
             )}
           </div>

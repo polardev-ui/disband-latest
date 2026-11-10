@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useMemo, useState } from "react";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { AppProvider, useApp } from "@/contexts/AppContext";
@@ -130,7 +132,7 @@ function ConsentCard() {
             <div className="flex justify-end gap-2 bg-bg-secondary px-6 py-4">
               <button type="button" disabled={busy} onClick={() => back({ error: "access_denied" })} className="h-[38px] rounded-md px-4 text-[14px] font-medium text-text-normal hover:underline">Cancel</button>
               <button type="button" disabled={busy} onClick={() => void authorise()} className="h-[38px] min-w-[110px] rounded-md bg-brand px-4 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60">
-                {busy ? "Authorising…" : "Authorise"}
+                {busy ? <LoadingDots size={6} className="mx-auto" /> : "Authorise"}
               </button>
             </div>
           </>

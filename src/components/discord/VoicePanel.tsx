@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useState } from "react";
 import { getCallIndicatorState, subscribeCallIndicator } from "@/lib/call-status";
 import { useApp } from "@/contexts/AppContext";
@@ -182,7 +184,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
                 className="flex h-12 items-center gap-2 rounded-full bg-button-green px-6 text-[15px] font-medium text-white transition-colors hover:bg-button-green-hover disabled:cursor-wait disabled:opacity-60"
               >
                 <IconPhone size={20} />
-                {joining ? t("Joining…") : t("Join Voice")}
+                {joining ? <LoadingDots size={6} className="mx-auto" /> : t("Join Voice")}
               </button>
             </>
           ) : (

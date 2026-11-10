@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -67,7 +69,7 @@ export function TosConsentPopup() {
           onClick={() => void accept()}
           className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
         >
-          {saving ? "Saving…" : "I agree"}
+          {saving ? <LoadingDots size={6} className="mx-auto" /> : "I agree"}
         </button>
       </div>
     </div>

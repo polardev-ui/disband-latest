@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { FieldLabel, InlineError, SettingRow, SettingsSection, Toggle, btn, settingsInputClass } from "./ui";
@@ -124,7 +126,7 @@ export function OverviewSection({ server, isOwner }: SectionProps) {
               </button>
             )}
             <button type="button" onClick={() => void save()} disabled={saving || !dirty} className={btn.primary}>
-              {saving ? t("Saving…") : t("Save changes")}
+              {saving ? <LoadingDots size={6} className="mx-auto" /> : t("Save changes")}
             </button>
           </div>
         </div>

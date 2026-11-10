@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 
@@ -214,7 +216,7 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
                 disabled={loading || isUploading || !name.trim()}
                 className="h-[38px] rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
               >
-                {loading ? t("Creating…") : t("Create")}
+                {loading ? <LoadingDots size={6} className="mx-auto" /> : t("Create")}
               </button>,
             )}
           </div>
@@ -250,7 +252,7 @@ export function CreateServerModal({ open, onClose }: CreateServerModalProps) {
                 disabled={loading || !invite.trim()}
                 className="h-[38px] rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
               >
-                {loading ? t("Joining…") : t("Join Space")}
+                {loading ? <LoadingDots size={6} className="mx-auto" /> : t("Join Space")}
               </button>,
             )}
           </div>

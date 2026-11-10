@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { deleteServerSound, fetchServerSounds, uploadServerSound } from "@/lib/server-sounds";
@@ -143,7 +145,7 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
               </div>
             </div>
             <button type="button" onClick={() => void add()} disabled={!file || !name.trim() || !emoji.trim() || uploading} className={btn.primary}>
-              {uploading ? t("Uploading…") : t("Add sound")}
+              {uploading ? <LoadingDots size={6} className="mx-auto" /> : t("Add sound")}
             </button>
           </div>
         </SettingsSection>
@@ -183,7 +185,7 @@ export function SoundboardSection({ server, isOwner }: SectionProps) {
                   </button>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[14px] font-medium text-text-normal">{s.name}</p>
-                    <p className="text-[12px] text-text-muted">{playing ? t("Playing…") : t("Tap to preview")}</p>
+                    <p className="text-[12px] text-text-muted">{playing ? <LoadingDots size={6} className="mx-auto" /> : t("Tap to preview")}</p>
                   </div>
                   {isOwner && (
                     <button type="button" onClick={() => setRemoving(s)} className={iconBtnDanger} aria-label={t("Remove {name}", { name: s.name })} title={t("Remove")}>

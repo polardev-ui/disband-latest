@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { MarketingFooter, MarketingNav } from "@/components/marketing/MarketingLayout";
@@ -196,7 +198,7 @@ function MonitorItem({
             disabled={saving}
             className={`${BUTTON} ml-auto`}
           >
-            {saving ? "Saving…" : "Save monitor"}
+            {saving ? <LoadingDots size={6} className="mx-auto" /> : "Save monitor"}
           </button>
           <button type="button" onClick={() => void remove()} disabled={saving} className={BUTTON_DANGER}>
             Delete
@@ -338,7 +340,7 @@ function IncidentItem({
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => void postUpdate(status, body)} disabled={busy} className={BUTTON}>
-            {busy ? "Posting…" : "Post update"}
+            {busy ? <LoadingDots size={6} className="mx-auto" /> : "Post update"}
           </button>
           {active && incident.kind === "incident" && (
             <button
@@ -472,7 +474,7 @@ export default function StatusAdminPage() {
               View public page
             </Link>
             <button type="button" onClick={() => void load()} disabled={loading} className={BUTTON_SECONDARY}>
-              {loading ? "Loading…" : "Reload"}
+              {loading ? <LoadingDots size={6} className="mx-auto" /> : "Reload"}
             </button>
           </div>
         </div>
@@ -541,7 +543,7 @@ export default function StatusAdminPage() {
                   disabled={creatingMonitor || !name.trim() || !url.trim()}
                   className={`${BUTTON} mt-3`}
                 >
-                  {creatingMonitor ? "Adding…" : "Add monitor"}
+                  {creatingMonitor ? <LoadingDots size={6} className="mx-auto" /> : "Add monitor"}
                 </button>
               </div>
             </section>
@@ -649,7 +651,7 @@ export default function StatusAdminPage() {
                   disabled={creatingIncident || !title.trim()}
                   className={`${BUTTON} mt-3`}
                 >
-                  {creatingIncident ? "Posting…" : "Post"}
+                  {creatingIncident ? <LoadingDots size={6} className="mx-auto" /> : "Post"}
                 </button>
               </div>
             </section>

@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
@@ -130,7 +132,7 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
         {/* Role list */}
         <div className="min-w-0">
           <button type="button" onClick={() => void create()} disabled={creating} className={`${btn.secondary} mb-3 w-full`}>
-            <IconPlus size={15} /> {creating ? t("Creating…") : t("Create role")}
+            <IconPlus size={15} /> {creating ? <LoadingDots size={6} className="mx-auto" /> : t("Create role")}
           </button>
           <ul className="overflow-hidden rounded-xl border border-border-subtle bg-surface-raised p-1.5">
             {sorted.map((r, i) => {
@@ -613,7 +615,7 @@ function RoleIconCard({
               <span className="mt-6 text-[13px] text-text-muted">or</span>
               <div className="mt-6 flex items-center gap-2">
                 <FilePickButton accept={ICON_TYPES} disabled={uploading} onPick={(f) => void pickImage(f)}>
-                  <IconUpload size={15} /> {uploading ? t("Uploading…") : t("Upload image")}
+                  <IconUpload size={15} /> {uploading ? <LoadingDots size={6} className="mx-auto" /> : t("Upload image")}
                 </FilePickButton>
                 {role.icon && (
                   <button type="button" onClick={() => void setIcon(null)} className={btn.ghost}>

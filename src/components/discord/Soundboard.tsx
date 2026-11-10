@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import {
@@ -266,7 +268,7 @@ export function Soundboard({ compact = false, variant = "round" }: SoundboardPro
                             title={favorite ? t("Remove favourite") : t("Add favourite")}
                             aria-label={favorite ? t("Remove favourite") : t("Add favourite")}
                           >
-                            {toggling === sound.id ? "…" : favorite ? "★" : "☆"}
+                            {toggling === sound.id ? <LoadingDots size={5} /> : favorite ? "★" : "☆"}
                           </button>
                         </div>
                       );

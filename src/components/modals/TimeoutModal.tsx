@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 
@@ -248,7 +250,7 @@ export function TimeoutModal({ open, profile: profileProp, onClose, onSubmit }: 
             disabled={!valid || busy}
             className="h-[38px] rounded-md bg-button-danger px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-button-danger-hover disabled:opacity-50"
           >
-            {busy ? t("Timing out…") : t("Time out")}
+            {busy ? <LoadingDots size={6} className="mx-auto" /> : t("Time out")}
           </button>
         </div>
       </div>

@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 
 import { useState } from "react";
@@ -108,7 +110,7 @@ export function ServerFolderDialog({ title, initialName = "", initialColor = FOL
             onClick={() => void save()}
             className="flex-1 rounded-md bg-brand py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {saving ? t("Saving…") : t("Save")}
+            {saving ? <LoadingDots size={6} className="mx-auto" /> : t("Save")}
           </button>
         </div>
       </div>

@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -115,7 +117,7 @@ export function DiscordConnectPanel() {
               onClick={() => void connect()}
               className="w-full rounded-md bg-brand px-5 py-3 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {busy ? "Opening Discord…" : "Connect with Discord"}
+              {busy ? <LoadingDots size={6} className="mx-auto" /> : "Connect with Discord"}
             </button>
             <p className="mt-3 text-xs leading-relaxed text-text-muted">
               Discord will ask you to confirm your identity. Disband only reads your username and

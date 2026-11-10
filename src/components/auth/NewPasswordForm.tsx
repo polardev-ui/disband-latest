@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useI18n } from "@/contexts/I18nContext";
@@ -100,7 +102,7 @@ export function NewPasswordForm({
         disabled={loading}
         className="w-full rounded bg-brand py-2.5 text-sm font-semibold text-white transition-all duration-150 ease-in-out hover:bg-brand-hover disabled:opacity-50"
       >
-        {loading ? t("Updating…") : submitLabel}
+        {loading ? <LoadingDots size={6} className="mx-auto" /> : submitLabel}
       </button>
     </form>
   );

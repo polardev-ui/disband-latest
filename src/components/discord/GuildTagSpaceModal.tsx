@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { ClassicModal, classicBtn } from "@/components/ui/ClassicModal";
@@ -106,7 +108,7 @@ export function GuildTagSpaceModal() {
           )}
           {canJoin && (
             <button type="button" disabled={joining} onClick={() => void join()} className={`${classicBtn.brand} ${classicBtn.md}`}>
-              {joining ? t("Joining…") : t("Join Space")}
+              {joining ? <LoadingDots size={6} className="mx-auto" /> : t("Join Space")}
             </button>
           )}
         </>

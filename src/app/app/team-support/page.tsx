@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingDots } from "@/components/ui/LoadingDots";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
@@ -855,7 +857,7 @@ export default function TeamSupportPage() {
                                 className={`${ui.btnPrimary} h-8 shrink-0`}
                               >
                                 <IconSend size={16} />
-                                {replying ? "Sending…" : "Send"}
+                                {replying ? <LoadingDots size={6} /> : "Send"}
                               </button>
                             </div>
                           </div>
@@ -1311,7 +1313,7 @@ export default function TeamSupportPage() {
                 }}
                 className={`${actionType === "actioned" ? ui.btnDanger : ui.btnPrimary} h-[38px] min-w-[96px]`}
               >
-                {actioning ? "Saving…" : actionType === "actioned" ? "Take action" : "Dismiss"}
+                {actioning ? <LoadingDots size={6} className="mx-auto" /> : actionType === "actioned" ? "Take action" : "Dismiss"}
               </button>
             </>
           }

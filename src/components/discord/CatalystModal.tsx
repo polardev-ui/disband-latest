@@ -8,7 +8,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { apiFetch } from "@/lib/api";
 import { IconClose } from "@/components/icons";
-import { BUSY_BUTTON, BusyLabel } from "@/components/ui/LoadingDots";
+import { BUSY_BUTTON, BusyLabel, LoadingDots } from "@/components/ui/LoadingDots";
 import { safeImageUrl } from "@/lib/safe-url";
 import { StripeEmbeddedCheckout } from "@/components/subscription/StripeEmbeddedCheckout";
 import {
@@ -298,7 +298,7 @@ export function CatalystModal({ server: serverProp, open, onClose, variant = "pa
               title={grant === 0 ? t("A paid plan includes monthly credits") : balance <= 0 ? t("No credits left this month") : t("Spend a monthly credit")}
               className="flex-1 rounded-md bg-brand py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {busy ? t("Working…") : t("Boost this space")}
+              {busy ? <LoadingDots size={6} className="mx-auto" /> : t("Boost this space")}
             </button>
             {myHere > 0 && (
               <button
@@ -366,7 +366,7 @@ export function CatalystModal({ server: serverProp, open, onClose, variant = "pa
                           onClick={() => void doMove(c.id!)}
                           className="h-8 rounded-md bg-brand px-3 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
                         >
-                          {busy ? t("Moving…") : t("Move here")}
+                          {busy ? <LoadingDots size={6} className="mx-auto" /> : t("Move here")}
                         </button>
                       </div>
                     )}
@@ -419,7 +419,7 @@ export function CatalystModal({ server: serverProp, open, onClose, variant = "pa
                   onClick={() => void startBuy()}
                   className="h-[38px] flex-1 rounded-md bg-brand py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  {buying ? t("Starting…") : t("Buy {qty} · {value}", { qty, value: formatCents(unitCents * qty) })}
+                  {buying ? <LoadingDots size={6} className="mx-auto" /> : t("Buy {qty} · {value}", { qty, value: formatCents(unitCents * qty) })}
                 </button>
               </div>
             </>
