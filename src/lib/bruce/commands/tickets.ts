@@ -80,8 +80,14 @@ export async function openTicket(ctx: Ctx, topic: string | null): Promise<Reply>
   const number = Number(num);
   const name = `ticket-${pad(number)}`;
 
+  // A category that was deleted (or never was one) is skipped, not fatal.
+  let categoryId: string | null = null;
+  if (ctx.guild.ticket_category_id) {
+    const { data: cat } = await ctx.service.from("channel_categories").select("id").eq("id", ctx.guild.ticket_category_id).eq("server_id", ctx.serverId).maybeSingle();
+    categoryId = (cat as { id?: string } | null)?.id ?? null;
+  }
   const { data: chan, error: chanErr } = await ctx.service.rpc("bot_create_channel", {
-    p_bot_id: ctx.botId, p_server_id: ctx.serverId, p_name: name, p_type: "text", p_category_id: ctx.guild.ticket_category_id,
+    p_bot_id: ctx.botId, p_server_id: ctx.serverId, p_name: name, p_type: "text", p_category_id: categoryId,
   });
   if (chanErr) return fail(friendly(chanErr.message));
   const channelId = (chan as { id?: string } | null)?.id ?? (typeof chan === "string" ? chan : null);
@@ -236,31 +242,44 @@ export const ticketCommands: Command[] = [
     slash: true,
     perm: "manage_server",
     description: "Set up tickets: the staff role (required), category and log channel",
-    options: [o.role("staff_role", "Role that can see, claim and answer tickets"), o.channel("category", "Category new tickets go in", false), o.channel("log", "Channel for ticket logs", false)],
+    options: [o.role("staff_role", "Role that can see, claim and answer tickets"), o.str("category", "Category name new tickets go in", false), o.channel("log", "Channel for ticket logs", false)],
     run: async (ctx) => {
       const patch: Record<string, string | null> = {};
       const staff = await findRoleRef(ctx, ctx.opt.staff_role);
       if (!staff) return fail("No role with that name. Make a staff role first (Space Settings → Roles).");
       if ((staff as { is_default: boolean }).is_default) return fail("Pick a staff role, not @everyone: tickets are private.");
       patch.ticket_support_role_id = (staff as { id: string }).id;
-      for (const [opt, col] of [["category", "ticket_category_id"], ["log", "ticket_log_channel_id"]] as const) {
-        if (!ctx.opt[opt]) continue;
-        const ref = str(ctx.opt[opt]).replace(/^<#|>$/g, "");
+      // Categories are their own list, not channels.
+      if (ctx.opt.category) {
+        const ref = str(ctx.opt.category).trim();
+        let q = ctx.service.from("channel_categories").select("id, name").eq("server_id", ctx.serverId);
+        q = /^[0-9a-f-]{36}$/i.test(ref) ? q.eq("id", ref) : q.ilike("name", ref);
+        const { data } = await q.limit(1).maybeSingle();
+        if (!data) return fail(`I can't find a category called "${ref}".`);
+        patch.ticket_category_id = (data as { id: string }).id;
+      }
+      if (ctx.opt.log) {
+        const ref = str(ctx.opt.log).replace(/^<#|>$/g, "");
         let q = ctx.service.from("channels").select("id").eq("server_id", ctx.serverId);
         q = /^[0-9a-f-]{36}$/i.test(ref) ? q.eq("id", ref) : q.ilike("name", ref.replace(/^#/, ""));
         const { data } = await q.limit(1).maybeSingle();
-        if (!data) return fail(`I can't find the ${opt} channel "${ref}".`);
-        patch[col] = (data as { id: string }).id;
+        if (!data) return fail(`I can't find the log channel "${ref}".`);
+        patch.ticket_log_channel_id = (data as { id: string }).id;
       }
       await ctx.service.from("bruce_guilds").upsert({ server_id: ctx.serverId, ...patch }, { onConflict: "server_id" });
       const g = { ...ctx.guild, ...patch } as typeof ctx.guild;
+      let categoryName: string | null = null;
+      if (g.ticket_category_id) {
+        const { data } = await ctx.service.from("channel_categories").select("name").eq("id", g.ticket_category_id).maybeSingle();
+        categoryName = (data as { name?: string } | null)?.name ?? null;
+      }
       return embed({
         title: "🎫 Tickets set up",
         description: "Run `/ticket-panel` in any channel to post an **Open a ticket** button. Anyone can also run `/ticket`.",
         color: COLOR.ok,
         fields: [
           { name: "Staff role", value: (staff as { name: string }).name, inline: true },
-          { name: "Category", value: g.ticket_category_id ? channelLink(g.ticket_category_id) : "None", inline: true },
+          { name: "Category", value: categoryName ?? "None", inline: true },
           { name: "Log channel", value: g.ticket_log_channel_id ? channelLink(g.ticket_log_channel_id) : "None", inline: true },
           { name: "Who can see a ticket", value: "The person who opened it, the staff role, Administrators and the owner.", inline: false },
         ],

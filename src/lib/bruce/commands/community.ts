@@ -127,7 +127,7 @@ export const communityCommands: Command[] = [
           { name: "Prefix", value: `\`${g.prefix}\``, inline: true },
           { name: "Levels", value: g.levels_enabled ? (g.level_up_messages ? "On, announced" : "On, quiet") : "Off", inline: true },
           { name: "Mod log", value: await ch(g.mod_log_channel_id), inline: true },
-          { name: "Ticket category", value: await ch(g.ticket_category_id), inline: true },
+          { name: "Ticket category", value: g.ticket_category_id ? (((await ctx.service.from("channel_categories").select("name").eq("id", g.ticket_category_id).maybeSingle()).data as { name?: string } | null)?.name ?? "Missing") : "Not set", inline: true },
           { name: "Ticket support role", value: role, inline: true },
           { name: "Ticket log", value: await ch(g.ticket_log_channel_id), inline: true },
         ],
