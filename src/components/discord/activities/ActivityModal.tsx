@@ -23,6 +23,7 @@ import { notifyActivityUpdated } from "@/lib/activity-events";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 import { Avatar } from "@/components/ui/Avatar";
+import { isBoardKind, moveBoard } from "@/lib/activity-board";
 import { IconClose } from "@/components/icons";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -463,11 +464,35 @@ export function ActivityModal({
                     <BoardGame
                       activity={activity}
                       busy={busy}
-                      onMove={(move) =>
-                        run(() =>
+                      onMove={(move) => {
+                        // Optimistic: apply the move locally before the server round-trip.
+                        if (activity.board && isBoardKind(activity.kind)) {
+                          const me = activity.participants.find((p) => p.isMe);
+                          const seat = me
+                            ? activity.board.seats.indexOf(me.userId) + 1
+                            : 0;
+                          if (seat === 1 || seat === 2) {
+                            try {
+                              const nextBoard = moveBoard(
+                                activity.kind,
+                                activity.board,
+                                seat as 1 | 2,
+                                move,
+                              );
+                              setActivity((current) =>
+                                current && current.id === activity.id
+                                  ? { ...current, board: { ...current.board!, ...nextBoard } }
+                                  : current,
+                              );
+                            } catch {
+                              /* illegal move: let the server reject it */
+                            }
+                          }
+                        }
+                        return run(() =>
                           submitBoardMove(activity.id, activity.revision, move),
-                        )
-                      }
+                        );
+                      }}
                       onResign={() =>
                         run(() =>
                           resignActivity(activity.id, activity.revision),
