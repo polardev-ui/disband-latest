@@ -222,6 +222,39 @@ export function UserProfilePopout({
         {/* The equipped profile effect: over the banner, under the profile,
             and holding still while the card scrolls beneath it. */}
         <ProfileOverlay itemId={p.equipped_overlay_effect} />
+        <div className="absolute right-3 top-3 z-30 flex items-center gap-2">
+          {canAddFriend && (
+            <button
+              type="button"
+              disabled={requestSent || addingFriend}
+              onClick={async () => {
+                if (!p.username) return;
+                setAddingFriend(true);
+                const err = await sendFriendRequest(p.username);
+                setAddingFriend(false);
+                setFriendNote(err);
+              }}
+              title={requestSent ? t("Friend Request Sent") : t("Add Friend")}
+              aria-label={requestSent ? t("Friend Request Sent") : t("Add Friend")}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-button-secondary text-white transition-colors hover:bg-button-secondary-hover disabled:cursor-default"
+            >
+              {requestSent ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12" /></svg>
+              ) : (
+                <IconUserPlus size={16} />
+              )}
+            </button>
+          )}
+          {(onBlock || onUnblock || onReport) && (
+            <OverflowMenu
+              items={[
+                ...(onBlock ? [{ label: t("Block"), onClick: onBlock, danger: true }] : []),
+                ...(onUnblock ? [{ label: t("Unblock"), onClick: onUnblock }] : []),
+                ...(onReport ? [{ label: t("Report"), onClick: onReport }] : []),
+              ]}
+            />
+          )}
+        </div>
         <div className="relative min-h-0 overflow-y-auto">
           {/* Banner */}
           <div className={`relative overflow-hidden ${banner ? "h-[120px]" : "h-[60px]"}`} style={{ background: bannerBg }}>
@@ -232,39 +265,7 @@ export function UserProfilePopout({
                 {theme && <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: theme.bannerTint }} />}
               </>
             )}
-            <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
-              {canAddFriend && (
-                <button
-                  type="button"
-                  disabled={requestSent || addingFriend}
-                  onClick={async () => {
-                    if (!p.username) return;
-                    setAddingFriend(true);
-                    const err = await sendFriendRequest(p.username);
-                    setAddingFriend(false);
-                    setFriendNote(err);
-                  }}
-                  title={requestSent ? t("Friend Request Sent") : t("Add Friend")}
-                  aria-label={requestSent ? t("Friend Request Sent") : t("Add Friend")}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/15 backdrop-blur-sm transition-colors hover:bg-black/65 disabled:cursor-default"
-                >
-                  {requestSent ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12" /></svg>
-                  ) : (
-                    <IconUserPlus size={17} />
-                  )}
-                </button>
-              )}
-              {(onBlock || onUnblock || onReport) && (
-                <OverflowMenu
-                  items={[
-                    ...(onBlock ? [{ label: t("Block"), onClick: onBlock, danger: true }] : []),
-                    ...(onUnblock ? [{ label: t("Unblock"), onClick: onUnblock }] : []),
-                    ...(onReport ? [{ label: t("Report"), onClick: onReport }] : []),
-                  ]}
-                />
-              )}
-            </div>
+            {/* moved out of the banner so the menu isn't clipped */}
           </div>
 
           {/* Avatar, cut into the banner. Above the badges row (z-20): that
