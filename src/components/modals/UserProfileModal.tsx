@@ -148,6 +148,7 @@ function ProfileBanner({ profile }: { profile: Profile }) {
 function OverflowMenu({ items }: { items: { label: string; onClick: () => void; danger?: boolean }[] }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const { mounted, exiting } = usePresence(open);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -170,10 +171,10 @@ function OverflowMenu({ items }: { items: { label: string; onClick: () => void; 
       >
         <IconMore size={18} />
       </button>
-      {open && (
+      {mounted && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-20 mt-1.5 w-44 overflow-hidden rounded-lg bg-bg-floating p-1 shadow-[var(--elevation-high)]"
+          className={`menu-pop${exiting ? " pop-out" : ""} absolute right-0 top-full z-20 mt-1.5 w-44 overflow-hidden rounded-lg bg-bg-floating p-1 shadow-[var(--elevation-high)]`}
         >
           {items.map((item) => (
             <button

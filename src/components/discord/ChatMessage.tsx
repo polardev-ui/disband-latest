@@ -101,6 +101,8 @@ interface ChatMessageProps {
   onOpenActivity?: (activityId: string) => void;
   highlight?: boolean;
   onContentResize?: () => void;
+  /** When true, the author is blocked by the viewer (either direction). */
+  blocked?: boolean;
   channels?: ChannelLite[];
   onChannelClick?: (channelId: string) => void;
   roles?: ServerRole[];
@@ -576,9 +578,28 @@ function ChatMessageImpl({
   customEmoji,
   roles,
   myRoleIds,
+  blocked,
 }: ChatMessageProps & { members?: Profile[] }) {
   const { t } = useI18n();
+  const [showBlocked, setShowBlocked] = useState(false);
   const author = message.author;
+  if (blocked) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-1 text-[13px] text-text-muted">
+        <span className="flex-1 truncate">{t("Message from a blocked user")}</span>
+        <button
+          type="button"
+          onClick={() => setShowBlocked((v) => !v)}
+          className="shrink-0 rounded-md px-2 py-1 text-[12px] font-medium text-text-link hover:underline"
+        >
+          {showBlocked ? t("Hide message") : t("Show message")}
+        </button>
+        {showBlocked && (
+          <div className="mt-1 w-full whitespace-pre-wrap break-words text-text-normal">{message.content}</div>
+        )}
+      </div>
+    );
+  }
   const webhook = message.webhook ?? null;
   // Webhooks post as a backing bot profile. Show the webhook's own name and
   // avatar instead, but keep the profile's other fields for colour/fallbacks.

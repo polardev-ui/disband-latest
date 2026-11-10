@@ -2253,6 +2253,7 @@ export function DiscordApp() {
             loading={app.dmLoading}
             members={dmMembers}
             currentUserId={app.user?.id}
+            isBlockedAuthor={app.isBlockedEitherWay}
             currentUserName={app.profile ? displayName(app.profile) : undefined}
             messageContext="dm"
             reactions={app.messageReactions}
@@ -2387,6 +2388,7 @@ export function DiscordApp() {
                 loading={app.groupLoading}
                 members={activeGroup.members}
                 currentUserId={app.user?.id}
+            isBlockedAuthor={app.isBlockedEitherWay}
                 currentUserName={app.profile ? displayName(app.profile) : undefined}
                 messageContext="group"
                 reactions={app.messageReactions}
@@ -2503,6 +2505,7 @@ export function DiscordApp() {
           messages={noteMessages}
           members={notesMembers}
           currentUserId={app.user?.id}
+            isBlockedAuthor={app.isBlockedEitherWay}
           messageContext="notes"
           headerTrailing={
             pinnedNoteIds.size > 0 ? (
@@ -2648,6 +2651,7 @@ export function DiscordApp() {
           channels={app.channels}
           onChannelClick={(id) => void app.selectChannel(id)}
           currentUserId={app.user?.id}
+            isBlockedAuthor={app.isBlockedEitherWay}
           currentUserName={app.profile ? displayName(app.profile) : undefined}
           messageContext="channel"
           reactions={app.messageReactions}

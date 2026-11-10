@@ -225,6 +225,7 @@ interface MessageRowProps {
   authorColor?: string | null;
   authorRoleIcon?: string | null;
   authorRoleName?: string | null;
+  blocked?: boolean;
   reactions: MessageReaction[];
   members: Profile[];
   channels?: ChannelLite[];
@@ -267,6 +268,7 @@ const MessageRow = memo(function MessageRow({
   authorColor,
   authorRoleIcon,
   authorRoleName,
+  blocked,
   reactions,
   members,
   channels,
@@ -337,6 +339,7 @@ const MessageRow = memo(function MessageRow({
         authorColor={authorColor}
         authorRoleIcon={authorRoleIcon}
         authorRoleName={authorRoleName}
+        blocked={blocked}
         reactions={reactions}
         onAuthorClick={onAuthorClick}
         onAuthorContextMenu={onAuthorContextMenu}
@@ -385,6 +388,8 @@ interface ChatCanvasProps {
   getAuthorColor?: (authorId: string) => string | null | undefined;
   /** The author's icon-bearing role, if any (role icons). */
   getAuthorIconRole?: (authorId: string) => { icon?: string | null; name: string } | null | undefined;
+  /** Whether the author of a message is blocked by the viewer (either direction). */
+  isBlockedAuthor?: (userId: string) => boolean;
   headerExtra?: React.ReactNode;
   headerTrailing?: React.ReactNode;
   /** Before the channel icon; the phone layout puts its menu button here. */
@@ -437,7 +442,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
     reactionsEnabled = true,
     getAuthorColor,
     getAuthorIconRole,
-    headerExtra,
+    isBlockedAuthor,    headerExtra,
     headerTrailing,
     headerLeading,
     callPanel,
@@ -1130,6 +1135,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
                     authorColor={msg.author_id ? getAuthorColor?.(msg.author_id) : null}
                     authorRoleIcon={msg.author_id ? getAuthorIconRole?.(msg.author_id)?.icon ?? null : null}
                     authorRoleName={msg.author_id ? getAuthorIconRole?.(msg.author_id)?.name ?? null : null}
+                    blocked={msg.author_id ? isBlockedAuthor?.(msg.author_id) ?? false : false}
                     reactions={msgReactions}
                     members={renderMembers}
                     channels={channels}
