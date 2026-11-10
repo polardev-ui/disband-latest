@@ -2248,7 +2248,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const now = new Date().toISOString();
         const [{ data: timeoutRows }, { data: banRows }] = await Promise.all([
           supabase.from("server_timeouts").select("*").eq("server_id", serverId).gt("expires_at", now),
-          supabase.from("server_bans").select("server_id, user_id, banned_by, reason, created_at").eq("server_id", serverId),
+          supabase.from("server_bans").select("server_id, user_id, banned_by, reason, created_at").eq("server_id", serverId).order("created_at", { ascending: false }),
         ]);
         if (activeServerRef.current !== serverId) return;
         setServerTimeouts((timeoutRows as ServerTimeout[]) ?? []);

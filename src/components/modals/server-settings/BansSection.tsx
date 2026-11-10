@@ -17,9 +17,12 @@ export function BansSection(_props: SectionProps) {
   const [lifting, setLifting] = useState<{ userId: string; name: string } | null>(null);
 
   const shown = useMemo(() => {
+    const sorted = [...serverBans].sort(
+      (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
+    );
     const q = query.trim().toLowerCase();
-    if (!q) return serverBans;
-    return serverBans.filter((b) =>
+    if (!q) return sorted;
+    return sorted.filter((b) =>
       `${b.profile ? displayName(b.profile) : ""} ${b.profile?.username ?? ""} ${b.reason ?? ""}`.toLowerCase().includes(q),
     );
   }, [serverBans, query]);
