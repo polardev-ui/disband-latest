@@ -521,6 +521,32 @@ function ReplyQuote({
 
 const COMPACT_INDENT = "pl-[72px]";
 
+// Private replies you dismissed, kept on this device so they stay gone
+// after you leave the channel and come back.
+const DISMISSED_KEY = "disband:dismissed-ephemeral";
+let dismissedIds: Set<string> | null = null;
+function dismissedSet(): Set<string> {
+  if (dismissedIds) return dismissedIds;
+  try {
+    dismissedIds = new Set(JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "[]") as string[]);
+  } catch {
+    dismissedIds = new Set();
+  }
+  return dismissedIds;
+}
+function isDismissed(id: string): boolean {
+  return typeof window !== "undefined" && dismissedSet().has(id);
+}
+function rememberDismissed(id: string) {
+  const set = dismissedSet();
+  set.add(id);
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify([...set].slice(-500)));
+  } catch {
+    // Storage full or blocked: it stays dismissed for this session.
+  }
+}
+
 function ChatMessageImpl({
   message,
   showHeader,
@@ -660,7 +686,7 @@ function ChatMessageImpl({
   ) : null;
 
   // A private bot reply ("Only you can see this"), which you can dismiss.
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => isDismissed(message.id));
   const ephemeralFooter = message.ephemeral_to ? (
     <p className="mt-1 flex items-center gap-1.5 text-[12px] text-text-muted">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -668,7 +694,7 @@ function ChatMessageImpl({
       </svg>
       {t("Only you can see this")}
       <span aria-hidden>·</span>
-      <button type="button" onClick={() => setDismissed(true)} className="font-medium text-text-link hover:underline">
+      <button type="button" onClick={() => { rememberDismissed(message.id); setDismissed(true); }} className="font-medium text-text-link hover:underline">
         {t("Dismiss message")}
       </button>
     </p>
