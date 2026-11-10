@@ -10,7 +10,7 @@
  * support role. Closing deletes both.
  */
 
-import { type Command, type Ctx, type Reply, o, ok, okPrivate, fail, embed, botCall, nameOf, mention, str, COLOR, clip, channelLink, friendly } from "../kit";
+import { type Command, type Ctx, type Reply, o, ok, okPrivate, fail, embed, botCall, nameOf, mention, str, COLOR, clip, channelLink, friendly, findRoleRef } from "../kit";
 
 interface Ticket {
   id: string;
@@ -236,10 +236,10 @@ export const ticketCommands: Command[] = [
     slash: true,
     perm: "manage_server",
     description: "Set up tickets: the staff role (required), category and log channel",
-    options: [o.str("staff_role", "Role that can see, claim and answer tickets"), o.channel("category", "Category new tickets go in", false), o.channel("log", "Channel for ticket logs", false)],
+    options: [o.role("staff_role", "Role that can see, claim and answer tickets"), o.channel("category", "Category new tickets go in", false), o.channel("log", "Channel for ticket logs", false)],
     run: async (ctx) => {
       const patch: Record<string, string | null> = {};
-      const { data: staff } = await ctx.service.from("server_roles").select("id, name, is_default").eq("server_id", ctx.serverId).ilike("name", str(ctx.opt.staff_role).replace(/^@/, "")).maybeSingle();
+      const staff = await findRoleRef(ctx, ctx.opt.staff_role);
       if (!staff) return fail("No role with that name. Make a staff role first (Space Settings → Roles).");
       if ((staff as { is_default: boolean }).is_default) return fail("Pick a staff role, not @everyone: tickets are private.");
       patch.ticket_support_role_id = (staff as { id: string }).id;

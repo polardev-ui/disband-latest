@@ -1,4 +1,4 @@
-import { type Command, o, embed, fail, fmt, nameOf, mention, dateLong, ago, COLOR, str } from "../kit";
+import { type Command, o, embed, fail, fmt, nameOf, mention, dateLong, ago, COLOR, str, findRoleRef } from "../kit";
 
 const STARTED = Date.now();
 
@@ -167,9 +167,10 @@ export const infoCommands: Command[] = [
     category: "Info",
     slash: true,
     description: "About a role",
-    options: [o.str("role", "The role's name")],
+    options: [o.role("role", "The role")],
     run: async (ctx) => {
-      const { data } = await ctx.service.from("server_roles").select("id, name, color, position, display_id, permissions").eq("server_id", ctx.serverId).ilike("name", str(ctx.opt.role)).maybeSingle();
+      const ref = await findRoleRef(ctx, ctx.opt.role);
+      const { data } = ref ? await ctx.service.from("server_roles").select("id, name, color, position, display_id, permissions").eq("id", ref.id).maybeSingle() : { data: null };
       const r = data as { id: string; name: string; color: string; position: number; display_id: number; permissions: Record<string, boolean> } | null;
       if (!r) return fail("No role with that name.");
       const holders = await count(ctx, "member_roles", { role_id: r.id });

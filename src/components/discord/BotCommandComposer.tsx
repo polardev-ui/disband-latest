@@ -40,11 +40,13 @@ interface PickItem {
   label: string;
   hint?: string;
   profile?: Profile;
+  /** A role's colour, shown as a dot. */
+  color?: string;
 }
 
 export function BotCommandComposer({ command, members, channels, serverId, channelId, initial = {}, onExit, onDone }: Props) {
   const { t } = useI18n();
-  const { presenceMap } = useApp();
+  const { presenceMap, serverRoles } = useApp();
   const opts = command.options;
   const [shown, setShown] = useState<string[]>(() =>
     opts.filter((o) => o.required || initial[o.name]).map((o) => o.name),
@@ -90,6 +92,14 @@ export function BotCommandComposer({ command, members, channels, serverId, chann
     if (option.type === "user" && !picked[option.name]) {
       return memberResults.map((p) => ({ key: p.id, label: displayName(p), hint: p.username ?? undefined, profile: p }));
     }
+    if (option.type === "role" && !picked[option.name]) {
+      const rq = q.replace(/^@&?/, "");
+      return serverRoles
+        .filter((r) => !r.is_default && (!rq || r.name.toLowerCase().includes(rq)))
+        .sort((a, b) => b.position - a.position)
+        .slice(0, 8)
+        .map((r) => ({ key: r.id, label: `@${r.name}`, color: r.color }));
+    }
     if (option.type === "channel" && !picked[option.name]) {
       return channels
         .filter((c) => !q || c.name.toLowerCase().includes(q.replace(/^#/, "")))
@@ -97,7 +107,7 @@ export function BotCommandComposer({ command, members, channels, serverId, chann
         .map((c) => ({ key: c.id, label: `#${c.name}` }));
     }
     return [];
-  }, [option, value, memberResults, channels, picked]);
+  }, [option, value, memberResults, channels, picked, serverRoles]);
 
   useEffect(() => setPickIdx(0), [active, value]);
 
@@ -130,7 +140,7 @@ export function BotCommandComposer({ command, members, channels, serverId, chann
   function choose(item: PickItem) {
     if (!option) return;
     const name = option.name;
-    if (option.type === "user" || option.type === "channel") {
+    if (option.type === "user" || option.type === "channel" || option.type === "role") {
       const label = option.type === "user" ? `@${item.profile?.username ?? item.label}` : item.label;
       setValues((prev) => ({ ...prev, [name]: label }));
       setPicked((prev) => ({ ...prev, [name]: { id: item.key, label } }));
@@ -175,6 +185,11 @@ export function BotCommandComposer({ command, members, channels, serverId, chann
       } else if (o.type === "user") {
         const id = picked[o.name]?.id ?? resolveMember(members, raw)?.id ?? (o.name === option?.name && memberResults.length === 1 ? memberResults[0].id : undefined);
         if (!id) return fail(`No member called ${raw}.`);
+        out[o.name] = id;
+      } else if (o.type === "role") {
+        const name = raw.replace(/^@&?/, "").toLowerCase();
+        const id = picked[o.name]?.id ?? serverRoles.find((r) => !r.is_default && r.name.toLowerCase() === name)?.id;
+        if (!id) return fail(`No role called ${raw}. Pick one from the list.`);
         out[o.name] = id;
       } else if (o.type === "channel") {
         const id = picked[o.name]?.id ?? channels.find((c) => c.name.toLowerCase() === raw.replace(/^#/, "").toLowerCase() || channelLinkName(c.name) === channelLinkName(raw.replace(/^#/, "")))?.id;
@@ -227,7 +242,7 @@ export function BotCommandComposer({ command, members, channels, serverId, chann
         return;
       }
       // Enter fills from the list first; the next Enter sends the command.
-      const settled = (opt.type === "user" || opt.type === "channel") ? !!picked[opt.name] : !opt.choices?.length && opt.type !== "boolean";
+      const settled = (opt.type === "user" || opt.type === "channel" || opt.type === "role") ? !!picked[opt.name] : !opt.choices?.length && opt.type !== "boolean";
       if (items[pickIdx] && !settled && !(opt.choices?.length && opt.choices.some((c) => c.name === v))) {
         choose(items[pickIdx]);
         if (index < shown.length - 1) focusOption(index + 1);
@@ -258,7 +273,7 @@ export function BotCommandComposer({ command, members, channels, serverId, chann
     }
   }
 
-  const pickerTitle = option?.type === "user" ? "Members" : option?.type === "channel" ? "Channels" : "Options";
+  const pickerTitle = option?.type === "user" ? "Members" : option?.type === "channel" ? "Channels" : option?.type === "role" ? "Roles" : "Options";
 
   return (
     <>
@@ -289,6 +304,7 @@ export function BotCommandComposer({ command, members, channels, serverId, chann
                   <StatusDot status={presenceStatusFor(item.profile, presenceMap)} size={8} ring="var(--bg-secondary)" />
                 </span>
               )}
+              {item.color && <span aria-hidden className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />}
               <span className="min-w-0 truncate text-[16px] font-medium text-header-primary">{item.label}</span>
               {item.hint && <span className="ml-auto shrink-0 truncate text-[14px] text-header-secondary">{item.hint}</span>}
             </button>

@@ -140,6 +140,7 @@ export const o = {
   num: (name: string, description: string, required = true): CommandOption => ({ name, description, type: "number", required }),
   user: (name: string, description: string, required = true): CommandOption => ({ name, description, type: "user", required }),
   channel: (name: string, description: string, required = true): CommandOption => ({ name, description, type: "channel", required }),
+  role: (name: string, description: string, required = true): CommandOption => ({ name, description, type: "role", required }),
   bool: (name: string, description: string, required = true): CommandOption => ({ name, description, type: "boolean", required }),
 };
 
@@ -175,6 +176,8 @@ export function optionsFromWords(options: CommandOption[] = [], rest: string): R
       out[def.name] = /^(on|yes|true|1|enable|enabled)$/i.test(word);
     } else if (def.type === "channel") {
       out[def.name] = word.replace(/^<#|>$/g, "").replace(/^#/, "");
+    } else if (def.type === "role") {
+      out[def.name] = word.replace(/^<@&|>$/g, "").replace(/^@&?/, "");
     } else {
       out[def.name] = word;
     }
@@ -305,4 +308,14 @@ export function friendly(message: string): string {
   if (/above|higher|hierarchy|top role/i.test(message)) return "That's above my highest role, so I can't touch it.";
   if (/owner|moderator|another bot/i.test(message)) return "I can't do that to the owner, moderators or other bots.";
   return message;
+}
+
+/** A role in this space, from the id a role option sends or a typed name. */
+export async function findRoleRef(ctx: Pick<Ctx, "service" | "serverId">, ref: OptValue) {
+  const raw = str(ref).trim().replace(/^<@&|>$/g, "").replace(/^@&?/, "");
+  if (!raw) return null;
+  let q = ctx.service.from("server_roles").select("id, name, is_default").eq("server_id", ctx.serverId);
+  q = /^[0-9a-f-]{36}$/i.test(raw) ? q.eq("id", raw) : q.ilike("name", raw);
+  const { data } = await q.limit(1).maybeSingle();
+  return data as { id: string; name: string; is_default: boolean } | null;
 }

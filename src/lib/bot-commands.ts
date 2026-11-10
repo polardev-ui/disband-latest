@@ -10,9 +10,9 @@
  the database. Each returns the first problem in plain words.
 */
 
-export type CommandOptionType = "string" | "integer" | "number" | "boolean" | "user" | "channel";
+export type CommandOptionType = "string" | "integer" | "number" | "boolean" | "user" | "channel" | "role";
 
-export const COMMAND_OPTION_TYPES: CommandOptionType[] = ["string", "integer", "number", "boolean", "user", "channel"];
+export const COMMAND_OPTION_TYPES: CommandOptionType[] = ["string", "integer", "number", "boolean", "user", "channel", "role"];
 
 export interface CommandChoice {
   name: string;

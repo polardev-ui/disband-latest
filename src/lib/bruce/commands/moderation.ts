@@ -1,6 +1,6 @@
 import {
   type Command, type Ctx, o, ok, fail, embed, botCall, parseDuration, humanMinutes,
-  nameOf, mention, str, dateLong, COLOR, clip,
+  nameOf, mention, str, dateLong, COLOR, clip, findRoleRef,
 } from "../kit";
 
 /** Post to the space's mod log, when one is set. */
@@ -22,9 +22,8 @@ async function everyoneRole(ctx: Ctx): Promise<string | null> {
   return (data as { id?: string } | null)?.id ?? null;
 }
 
-async function findRole(ctx: Ctx, name: string) {
-  const { data } = await ctx.service.from("server_roles").select("id, name").eq("server_id", ctx.serverId).ilike("name", name.replace(/^@/, "")).maybeSingle();
-  return data as { id: string; name: string } | null;
+async function findRole(ctx: Ctx, ref: string) {
+  return findRoleRef(ctx, ref);
 }
 
 function target(ctx: Ctx) {
@@ -241,7 +240,7 @@ export const moderationCommands: Command[] = [
     slash: true,
     perm: "manage_roles",
     description: "Give a member a role",
-    options: [o.user("user", "Who"), o.str("role", "The role's name")],
+    options: [o.user("user", "Who"), o.role("role", "The role")],
     run: async (ctx) => {
       const p = await target(ctx);
       const r = await findRole(ctx, str(ctx.opt.role));
@@ -258,7 +257,7 @@ export const moderationCommands: Command[] = [
     slash: true,
     perm: "manage_roles",
     description: "Take a role from a member",
-    options: [o.user("user", "Who"), o.str("role", "The role's name")],
+    options: [o.user("user", "Who"), o.role("role", "The role")],
     run: async (ctx) => {
       const p = await target(ctx);
       const r = await findRole(ctx, str(ctx.opt.role));
