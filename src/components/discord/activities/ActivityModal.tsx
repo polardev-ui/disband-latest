@@ -178,10 +178,12 @@ export function ActivityModal({
 
   async function run(action: () => Promise<ActivitySession>): Promise<boolean> {
     if (!activityId || busy) return false;
+    const started = performance.now();
     setBusy(true);
     setError(null);
     try {
       const next = await action();
+      console.info("[activity] action ok", { activityId, ms: Math.round(performance.now() - started) });
       if (activeId.current !== activityId) return false;
       setActivity((current) =>
         current?.id === next.id && current.revision > next.revision
@@ -191,6 +193,7 @@ export function ActivityModal({
       notifyActivityUpdated(next.id);
       return true;
     } catch (err) {
+      console.info("[activity] action failed", { activityId, ms: Math.round(performance.now() - started) });
       if (activeId.current !== activityId) return false;
       setError(errorMessage(err));
       // A conflicting move may have won the race. Recover the authoritative board.
