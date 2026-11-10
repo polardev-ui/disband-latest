@@ -13,6 +13,12 @@ struct ReactionDetailSheet: View {
     @State var selected: String
 
     @Environment(\.dismiss) private var dismiss
+    // Optional: on macOS a sheet can be hosted without its presenter's
+    // environment. Reading these optionally keeps opening this sheet from
+    // trapping, and a profile opened from here still gets a viewer when the
+    // values did arrive.
+    @Environment(AppState.self) private var app: AppState?
+    @Environment(PresenceService.self) private var presence: PresenceService?
     @State private var profiles: [String: Profile] = [:]
 
     private var current: ReactionSummary? {
@@ -55,7 +61,9 @@ struct ReactionDetailSheet: View {
                         if let profile = profiles[userId] {
                             // Tap through to their profile.
                             NavigationLink {
-                                ProfileDetailView(profile: profile)
+                                ProfileDetailView(profile: profile,
+                                                  viewerId: app?.currentUserId,
+                                                  presence: presence ?? app?.presence)
                             } label: {
                                 HStack(spacing: 10) {
                                     AvatarView(url: profile.avatarUrl, name: profile.name, size: 32)

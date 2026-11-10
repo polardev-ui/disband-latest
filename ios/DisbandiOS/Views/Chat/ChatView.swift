@@ -275,7 +275,18 @@ struct ChatView: View {
         .sheet(isPresented: $showGifPicker) { GifPickerView { sendGif($0) } }
         .sheet(isPresented: $showPollSheet) { PollCreateSheet { sendPoll($0) } }
         .sheet(item: $openProfile) {
-            ProfileDetailView(profile: $0)
+            // Re-inject the services at the sheet's root: SwiftUI on Mac
+            // (Designed for iPad) does not carry the presenter's environment
+            // into a sheet (FB16112395), and the chat opened by "Message"
+            // needs all of these. The profile itself takes its viewer values
+            // directly for the same reason.
+            ProfileDetailView(profile: $0, viewerId: app.currentUserId, presence: presence)
+                .environment(app)
+                .environment(call)
+                .environment(unreadStore)
+                .environment(voice)
+                .environment(directMessages)
+                .environment(presence)
                 // A glance, not a destination: it opens part-height and is
                 // dragged up only if you want the whole profile.
                 .presentationDetents([.medium, .large])

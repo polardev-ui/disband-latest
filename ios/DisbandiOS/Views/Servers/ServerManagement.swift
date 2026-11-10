@@ -93,7 +93,9 @@ struct ServerMembersView: View {
         .background(Brand.background)
         .navigationTitle("Members")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $openProfile) { ProfileDetailView(profile: $0) }
+        .sheet(item: $openProfile) {
+            ProfileDetailView(profile: $0, viewerId: app.currentUserId, presence: presence)
+        }
         .task { await load() }
     }
 

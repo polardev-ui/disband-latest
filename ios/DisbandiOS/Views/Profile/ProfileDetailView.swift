@@ -5,17 +5,21 @@ import SwiftUI
 /// anywhere a user appears (chat, DM list, friends, server members).
 struct ProfileDetailView: View {
     let profile: Profile
+    /// The signed-in user, handed in by the presenter.
+    ///
+    /// SwiftUI on Mac (Designed for iPad) does not propagate environment
+    /// values into `.sheet` content (FB16112395). A required
+    /// `@Environment(AppState.self)` therefore trapped inside SwiftUI while
+    /// this sheet was being presented — the bot-profile crash. Passing the
+    /// two values this view needs keeps the sheet independent of the sheet's
+    /// environment; `\.dismiss` is the only environment value read here, and
+    /// it always exists.
+    var viewerId: String?
+    /// Live presence for the profile's status dot, owned by AppState.
+    var presence: PresenceService?
     /// Called when the viewer taps "Message" — the presenter handles navigation.
     var onStartDM: ((Profile) -> Void)? = nil
 
-    @Environment(AppState.self) private var app
-    // Read presence through AppState rather than as its own environment value.
-    // A profile opened from a sheet (which the Mac app does for members and
-    // reactions) could arrive without the newer environment values, and a
-    // missing *required* one traps in SwiftUI — this was the bot-profile
-    // crash. AppState owns the same service, so there is no reason to ask the
-    // sheet's environment for a second copy.
-    private var presence: PresenceService? { app.presence }
     @Environment(\.dismiss) private var dismiss
 
     @State private var relation: FriendshipStatus?
@@ -32,7 +36,7 @@ struct ProfileDetailView: View {
 
     private var shown: Profile { full ?? profile }
 
-    private var isSelf: Bool { profile.id == app.currentUserId }
+    private var isSelf: Bool { profile.id == viewerId }
 
     /// Live presence for this profile. The current user's own status is read
     /// from the presence channel too (falling back to their stored status only
@@ -204,7 +208,7 @@ struct ProfileDetailView: View {
     // MARK: - Actions
 
     private func loadRelation() async {
-        guard let uid = app.currentUserId, !isSelf else { return }
+        guard let uid = viewerId, !isSelf else { return }
         let all = (try? await DatabaseService.friendships(currentUserId: uid)) ?? []
         relation = all.first { f in
             (f.requesterId == uid && f.addresseeId == profile.id) ||
@@ -230,7 +234,7 @@ struct ProfileDetailView: View {
     }
 
     private func run(_ op: @escaping () async throws -> Void) async {
-        guard let _ = app.currentUserId else { return }
+        guard let _ = viewerId else { return }
         working = true; error = nil
         do { try await op(); await loadRelation() }
         catch { self.error = error.localizedDescription }
@@ -238,11 +242,11 @@ struct ProfileDetailView: View {
     }
 
     private func addFriend() async {
-        guard let uid = app.currentUserId else { return }
+        guard let uid = viewerId else { return }
         await run { try await DatabaseService.sendFriendRequest(from: uid, to: profile.id) }
     }
     private func unfriend() async {
-        guard let uid = app.currentUserId else { return }
+        guard let uid = viewerId else { return }
         await run { try await DatabaseService.removeFriend(currentUserId: uid, otherUserId: profile.id) }
     }
     private func block() async {

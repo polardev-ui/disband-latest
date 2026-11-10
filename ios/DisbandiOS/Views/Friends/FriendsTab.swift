@@ -119,7 +119,8 @@ struct FriendsTab: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $openChat) { ChatView(source: $0) }
             .sheet(item: $selectedProfile) { p in
-                ProfileDetailView(profile: p, onStartDM: { startDm(with: $0) })
+                ProfileDetailView(profile: p, viewerId: app.currentUserId, presence: presence,
+                                  onStartDM: { startDm(with: $0) })
             }
             .sheet(isPresented: $showAdd) { AddFriendSheet { await load() } }
             .onChange(of: selectedProfile) { _, _ in Task { await load() } }
