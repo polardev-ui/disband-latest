@@ -139,6 +139,8 @@ struct RawMessageRow: Decodable, Sendable {
         mentions = try? c.decodeIfPresent([String].self, forKey: .mentions)
         embeds = try? c.decodeIfPresent([MessageEmbed].self, forKey: .embeds)
         webhook = try? c.decodeIfPresent(MessageWebhook.self, forKey: .webhook)
+        components = try? c.decodeIfPresent(LossyList<ActionRow>.self, forKey: .components)
+        interaction = try? c.decodeIfPresent(Lenient<MessageInteraction>.self, forKey: .interaction)
     }
 }
 
