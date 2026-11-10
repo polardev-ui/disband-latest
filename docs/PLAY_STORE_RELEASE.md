@@ -122,7 +122,7 @@ machine, restore both files into `android/` and nothing else needs configuring.
 To generate your own key instead:
 
 ```bash
-cd /Users/joshclark/Projects/disband-latest
+cd /Users/newadmin/Projects/disband-latest
 mkdir -p android/keystore
 keytool -genkeypair -v \
   -keystore android/keystore/upload-keystore.jks -alias upload \
@@ -158,7 +158,7 @@ You will need the upload certificate's fingerprint for Firebase, Google sign-in
 and App Links:
 
 ```bash
-cd /Users/joshclark/Projects/disband-latest/android
+cd /Users/newadmin/Projects/disband-latest/android
 keytool -list -v -keystore keystore/upload-keystore.jks -alias upload | grep -A1 SHA
 ```
 
@@ -257,7 +257,7 @@ Play accepts **Android App Bundles** (`.aab`) only for new apps. Google
 generates per-device APKs from it.
 
 ```bash
-cd /Users/joshclark/Projects/disband-latest/android
+cd /Users/newadmin/Projects/disband-latest/android
 ./gradlew :app:bundleRelease
 # → app/build/outputs/bundle/release/app-release.aab
 ```
@@ -306,7 +306,7 @@ Two levels of confidence:
 **Fast — install the release APK:**
 
 ```bash
-cd /Users/joshclark/Projects/disband-latest/android
+cd /Users/newadmin/Projects/disband-latest/android
 adb install -r app/build/outputs/apk/release/app-release.apk
 adb shell am start -n com.wsgpolar.disband/.MainActivity
 adb logcat -c && adb logcat | grep -iE "disband|AndroidRuntime|FATAL"
@@ -319,7 +319,7 @@ monolithic APK hides:
 ```bash
 brew install bundletool   # or download the jar from github.com/google/bundletool
 
-cd /Users/joshclark/Projects/disband-latest/android
+cd /Users/newadmin/Projects/disband-latest/android
 bundletool build-apks \
   --bundle=app/build/outputs/bundle/release/app-release.aab \
   --output=/tmp/disband.apks \
@@ -570,7 +570,7 @@ The launcher icons and the Play icon all come from one source of truth,
 brand change:
 
 ```bash
-cd /Users/joshclark/Projects/disband-latest
+cd /Users/newadmin/Projects/disband-latest
 swift android/tools/make_icons.swift \
   android/tools/logo.png \
   android/app/src/main/res \
@@ -780,7 +780,7 @@ Repeated resubmissions without fixing anything risks account-level enforcement.
 ## Quick command recap
 
 ```bash
-cd /Users/joshclark/Projects/disband-latest/android
+cd /Users/newadmin/Projects/disband-latest/android
 
 # 1. bump versionCode + versionName in app/build.gradle.kts
 

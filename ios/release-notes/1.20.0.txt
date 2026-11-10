@@ -1,0 +1,9 @@
+What's new in Disband 1.20
+
+• Forums: spaces can now have forum channels. Browse posts, pinned ones first, and start your own with a title and a message.
+• Bot commands: type / in a channel to see the commands your space's bots offer, fill in the options and send.
+• Bot replies show who ran the command, and bot buttons work right in the chat.
+• Bots show as online while they're running, so you can tell at a glance when one is up.
+• Create forum channels from your space's settings.
+• Fixed spaces with a forum channel showing no channels at all.
+• Plus other fixes and improvements.
