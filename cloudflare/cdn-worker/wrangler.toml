@@ -56,9 +56,7 @@ ALLOWED_ORIGIN = "*"
 # per-plan limits (PLAN_LIMITS in src/index.js) sit under or above it, and
 # anything above goes up in parts through /v1/uploads.
 MAX_UPLOAD_MB = "100"
-# Fallback storage caps for callers that don't pass a plan (URL imports).
-MAX_USER_STORAGE_MB = "1024"
-MAX_USER_OBJECTS = "500"
+
 LEGACY_MEDIA_ORIGIN = "https://api.wsgpolar.me"
 # Used to check that an uploader is a real signed-in user. Both are already
 # public in every client, so neither is a secret.

@@ -29,11 +29,14 @@ const MB = 1024 * 1024;
  * A file bigger than one request allows (`maxUploadBytes`) goes up in parts
  * through /v1/uploads, so Aero's 500 MB is real even though Cloudflare caps a
  * single request body at 100 MB.
+ *
+ * There is no cumulative per-user storage/object quota — uploads are limited by
+ * per-plan upload size and upload rate.
  */
 const PLAN_LIMITS = {
-  free: { uploadBytes: 50 * MB, storageBytes: 1024 * MB, objects: 500 },
-  lite: { uploadBytes: 100 * MB, storageBytes: 5 * 1024 * MB, objects: 2000 },
-  aero: { uploadBytes: 500 * MB, storageBytes: 20 * 1024 * MB, objects: 5000 },
+  free: { uploadBytes: 50 * MB },
+  lite: { uploadBytes: 100 * MB },
+  aero: { uploadBytes: 500 * MB },
 };
 
 // Every part but the last must be the same size (an R2 rule).
@@ -66,9 +69,7 @@ function tooLarge(limits, env) {
   return json({ error: `That file is too large. The maximum is ${mb} MB.${upsell}` }, 413, env);
 }
 
-function reserveBody(bytes, limits) {
-  return JSON.stringify({ bytes, maxBytes: limits.storageBytes, maxObjects: limits.objects });
-}
+
 
 /**
  * Types a browser may be handed back as-is.
@@ -141,7 +142,7 @@ export default {
     // Import by URL: fetch a remote image (a catbox.moe link, a direct PNG
     // off someone's site) straight into R2 so the app stores its own copy
     // instead of hotlinking a host it doesn't control. Same auth, rate
-    // limit, quota, hash-ban, and asset-registration contract as `upload`.
+    // limit, hash-ban, and asset-registration contract as `upload`.
     // Uploads bigger than one request allows: start, send parts, finish.
     if (request.method === "POST" && pathname === "/v1/uploads") return createMultipart(request, env);
     if (request.method === "PUT" && pathname === "/v1/uploads/part") return uploadPart(request, env, url);
@@ -276,19 +277,8 @@ async function upload(request, env) {
     return overLimit();
   }
 
-  const quotaId = env.MEDIA_QUOTA.idFromName(auth.userId);
-  const quota = env.MEDIA_QUOTA.get(quotaId);
-  const reservation = await quota.fetch("https://quota/reserve", {
-    method: "POST",
-    body: reserveBody(file.size, limits),
-  });
-  if (!reservation.ok) {
-    return json({ error: "Your media storage quota has been reached." }, 429, env);
-  }
-
   let key;
   let hashing;
-  let quotaReleased = false;
   try {
     const type = (file.type || "application/octet-stream").toLowerCase();
     const sniffed = await sniffInlineType(file);
@@ -296,7 +286,7 @@ async function upload(request, env) {
     key = `${auth.userId}/${crypto.randomUUID()}.${extensionOf(file.name, type)}`;
     const url = `${env.PUBLIC_BASE}/v1/images/${key}`;
 
-    // Keep the live user-scoped key and quota contract while hashing the upload.
+    // Keep the live user-scoped key contract while hashing the upload.
     const [toStore, toHash] = file.stream().tee();
     const digestStream = new crypto.DigestStream("SHA-256");
     hashing = toHash.pipeTo(digestStream);
@@ -316,11 +306,6 @@ async function upload(request, env) {
     if (await isHashBanned(env, sha256)) {
       await env.MEDIA.delete(key);
       key = null;
-      await quota.fetch("https://quota/rollback", {
-        method: "POST",
-        body: JSON.stringify({ bytes: file.size }),
-      }).catch(() => undefined);
-      quotaReleased = true;
       await recordBlockedUpload(env, sha256, auth.userId);
       return json({ error: "That file can't be uploaded. If you believe this is a mistake, contact support." }, 451, env);
     }
@@ -329,12 +314,6 @@ async function upload(request, env) {
   } catch (error) {
     await hashing?.catch(() => undefined);
     if (key) await env.MEDIA.delete(key).catch(() => undefined);
-    if (!quotaReleased) {
-      await quota.fetch("https://quota/rollback", {
-        method: "POST",
-        body: JSON.stringify({ bytes: file.size }),
-      }).catch(() => undefined);
-    }
     throw error;
   }
 }
@@ -345,11 +324,10 @@ async function upload(request, env) {
  * Large uploads. The client starts one (POST /v1/uploads with name, type and
  * size), sends PART_BYTES pieces in order (PUT /v1/uploads/part), then
  * finishes (POST /v1/uploads/complete). Finishing applies every check a
- * single upload gets: the plan limit on the real size, the type sniff, the
- * storage quota, the banned-hash list, and asset registration for scanning.
+ * single upload gets: the plan upload-size limit, the type sniff, the
+ * banned-hash list, and asset registration for scanning.
  *
- * Nothing is reserved until the end, so an abandoned upload never holds
- * quota; R2 discards unfinished uploads after a week on its own.
+ * R2 discards unfinished uploads after a week on its own.
  */
 function ownsKey(auth, key) {
   return typeof key === "string"
@@ -458,13 +436,6 @@ async function completeMultipart(request, env) {
     contentType = "application/octet-stream";
   }
 
-  const quota = env.MEDIA_QUOTA.get(env.MEDIA_QUOTA.idFromName(auth.userId));
-  const reservation = await quota.fetch("https://quota/reserve", { method: "POST", body: reserveBody(size, limits) });
-  if (!reservation.ok) {
-    await env.MEDIA.delete(finalKey);
-    return json({ error: "Your media storage quota has been reached." }, 429, env);
-  }
-
   try {
     const object = await env.MEDIA.get(finalKey);
     const digest = new crypto.DigestStream("SHA-256");
@@ -472,8 +443,6 @@ async function completeMultipart(request, env) {
     const sha256 = hex(await digest.digest);
     if (await isHashBanned(env, sha256)) {
       await env.MEDIA.delete(finalKey);
-      await quota.fetch("https://quota/rollback", { method: "POST", body: JSON.stringify({ bytes: size }) })
-        .catch(() => undefined);
       await recordBlockedUpload(env, sha256, auth.userId);
       return json({ error: "That file can't be uploaded. If you believe this is a mistake, contact support." }, 451, env);
     }
@@ -482,8 +451,6 @@ async function completeMultipart(request, env) {
     return json({ url, key: finalKey }, 200, env);
   } catch (error) {
     await env.MEDIA.delete(finalKey).catch(() => undefined);
-    await quota.fetch("https://quota/rollback", { method: "POST", body: JSON.stringify({ bytes: size }) })
-      .catch(() => undefined);
     throw error;
   }
 }
@@ -643,23 +610,8 @@ async function importFromUrl(request, env) {
     return json({ error: "That file isn't the image it claims to be." }, 400, env);
   }
 
-  // From here the contract matches `upload`: quota, key, hash-ban, register.
-  const quotaId = env.MEDIA_QUOTA.idFromName(auth.userId);
-  const quota = env.MEDIA_QUOTA.get(quotaId);
-  const reservation = await quota.fetch("https://quota/reserve", {
-    method: "POST",
-    body: JSON.stringify({ bytes: bytes.byteLength }),
-  });
-  if (!reservation.ok) {
-    return json({ error: "Your media storage quota has been reached." }, 429, env);
-  }
-
+  // From here the contract matches `upload`: key, hash-ban, register.
   let key;
-  let quotaReleased = false;
-  const rollbackQuota = () => quota.fetch("https://quota/rollback", {
-    method: "POST",
-    body: JSON.stringify({ bytes: bytes.byteLength }),
-  }).catch(() => undefined);
   try {
     const contentType = storageTypeFor(declared);
     let filename = "image";
@@ -673,8 +625,6 @@ async function importFromUrl(request, env) {
     const sha256 = hex(await crypto.subtle.digest("SHA-256", bytes));
     if (await isHashBanned(env, sha256)) {
       key = null;
-      await rollbackQuota();
-      quotaReleased = true;
       await recordBlockedUpload(env, sha256, auth.userId);
       return json({ error: "That file can't be uploaded. If you believe this is a mistake, contact support." }, 451, env);
     }
@@ -694,7 +644,6 @@ async function importFromUrl(request, env) {
     return json({ url, key }, 200, env);
   } catch (error) {
     if (key) await env.MEDIA.delete(key).catch(() => undefined);
-    if (!quotaReleased) await rollbackQuota();
     throw error;
   }
 }

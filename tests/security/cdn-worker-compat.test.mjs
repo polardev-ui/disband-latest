@@ -78,18 +78,7 @@ function fixture() {
   };
   const quota = {
     idFromName(name) { assert.equal(name, USER); return name; },
-    get() { return { async fetch(request, init) {
-      const { bytes, maxBytes } = JSON.parse(init.body);
-      lastReserve.maxBytes = maxBytes;
-      if (new URL(request).pathname === '/rollback') {
-        usage.bytes -= bytes;
-        usage.objects -= 1;
-      } else {
-        usage.bytes += bytes;
-        usage.objects += 1;
-      }
-      return new Response('{}');
-    } }; },
+    get() { return { async fetch() { return new Response('{}'); } }; },
   };
   const limit = { async limit() { return { success: true }; } };
   const env = {
@@ -111,7 +100,7 @@ function uploadRequest(bytes = PNG) {
   });
 }
 
-test('CDN Worker retains quotas and user keys while registering and quarantining media', async () => {
+test('CDN Worker registers and quarantines media without total storage quotas', async () => {
   const oldFetch = globalThis.fetch;
   const oldDigest = globalThis.crypto.DigestStream;
   globalThis.crypto.DigestStream = DigestStream;
@@ -137,7 +126,6 @@ test('CDN Worker retains quotas and user keys while registering and quarantining
     const { key, url } = await uploaded.json();
     assert.match(key, new RegExp(`^${USER}/[0-9a-f-]{36}\\.png$`));
     assert.equal(url, `${BASE}/v1/images/${key}`);
-    assert.equal(state.usage.objects, 1);
     assert.equal(state.records[0].storage_key, key);
     assert.equal(state.records[0].sha256, createHash('sha256').update(PNG).digest('hex'));
     const served = await worker.fetch(new Request(url), state.env);
@@ -174,7 +162,6 @@ test('CDN Worker retains quotas and user keys while registering and quarantining
     state.blocked.add(sha256);
     const rejected = await worker.fetch(uploadRequest(), state.env);
     assert.equal(rejected.status, 451);
-    assert.equal(state.usage.objects, 1);
     assert.equal(state.records.length, 1);
     assert.equal(state.objects.size, 1);
   } finally {
@@ -246,8 +233,6 @@ test('CDN Worker applies plan limits and accepts large uploads in parts', async 
     assert.equal(out.key, key);
     assert.deepEqual(state.objects.get(key).bytes, mp4);
     assert.equal(state.records.at(-1).sha256, createHash('sha256').update(mp4).digest('hex'));
-    // Aero's storage cap travels with the reservation.
-    assert.equal(state.lastReserve.maxBytes, 20 * 1024 * 1024 * 1024);
   } finally {
     globalThis.fetch = oldFetch;
     if (oldDigest === undefined) delete globalThis.crypto.DigestStream;
