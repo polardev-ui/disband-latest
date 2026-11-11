@@ -1,7 +1,28 @@
 import type { Message, MessageData } from "./message.js";
 
-export type BotScope = "messages.read" | "messages.write" | "members.read" | "channels.manage";
-export type BotEventType = "messageCreate" | "messageUpdate" | "messageDelete";
+export type BotScope =
+  | "messages.read"
+  | "messages.write"
+  | "messages.delete"
+  | "messages.react"
+  | "members.read"
+  | "members.kick"
+  | "members.ban"
+  | "members.timeout"
+  | "channels.read"
+  | "channels.manage"
+  | "webhooks.manage"
+  | "roles.manage"
+  | "servers.read"
+  | "audit.read";
+
+export type MessageEventType = "messageCreate" | "messageUpdate" | "messageDelete";
+export type BotEventType =
+  | MessageEventType
+  | "memberJoin"
+  | "memberLeave"
+  | "memberUpdate"
+  | "interactionCreate";
 
 export interface ClientUser {
   id: string;
@@ -9,18 +30,68 @@ export interface ClientUser {
   name: string;
   username: string | null;
   avatarUrl: string | null;
-  scopes: BotScope[];
+  scopes: string[];
 }
 
 export interface GatewayEvent {
   type: BotEventType;
-  payload: MessageData;
+  payload: unknown;
 }
 
 export interface ClientOptions {
   token: string;
   baseUrl?: string;
   gatewayTimeout?: number;
+  requestTimeout?: number;
+  allowInsecureLocalhost?: boolean;
+}
+
+export interface SendMessageOptions {
+  replyToId?: string | null;
+  embeds?: unknown[];
+  components?: unknown[];
+}
+
+export interface MessageEditPatch {
+  content?: string | null;
+  embeds?: unknown[] | null;
+  components?: unknown[] | null;
+}
+
+export interface CreateChannelOptions {
+  type?: "text" | "voice";
+  categoryId?: string | null;
+  category_id?: string | null;
+  topic?: string | null;
+  slowModeSeconds?: number;
+  slow_mode_seconds?: number;
+  readOnly?: boolean;
+  read_only?: boolean;
+  userLimit?: number | null;
+  user_limit?: number | null;
+  permissions?: Array<Record<string, unknown>>;
+}
+
+export interface ChannelPermissionOverwrite {
+  can_view?: boolean | null;
+  can_post?: boolean | null;
+  can_react?: boolean | null;
+  can_attach?: boolean | null;
+}
+
+export interface RoleInput {
+  name?: string;
+  color?: string | null;
+  permissions?: Record<string, boolean>;
+  self_assignable?: boolean;
+  position?: number;
+}
+
+export interface WebhookInput {
+  channel_id?: string;
+  name?: string;
+  avatar_url?: string | null;
+  reset_token?: boolean;
 }
 
 export type MessageHandler = (message: Message) => void | Promise<void>;
@@ -32,28 +103,83 @@ export class Client {
   token: string;
   baseUrl: string;
   gatewayTimeout: number;
+  requestTimeout: number;
   user: ClientUser | null;
   readonly connected: boolean;
 
   on(event: "ready", handler: ReadyHandler): this;
-  on(event: "messageCreate" | "messageUpdate" | "messageDelete", handler: MessageHandler): this;
+  on(event: MessageEventType, handler: MessageHandler): this;
+  on(event: "memberJoin" | "memberLeave" | "memberUpdate" | "interactionCreate", handler: (payload: any) => void | Promise<void>): this;
   on(event: "error", handler: ErrorHandler): this;
   on(event: "debug", handler: (message: string) => void | Promise<void>): this;
+  on(event: string, handler: (...args: any[]) => any): this;
   once(event: string, handler: (...args: unknown[]) => unknown): this;
   off(event: string, handler: (...args: unknown[]) => unknown): this;
 
   connect(): Promise<this>;
   close(): void;
 
-  sendMessage(channelId: string, content: string, options?: { replyToId?: string | null }): Promise<Message>;
+  sendMessage(channelId: string, content: string | null | undefined, options?: SendMessageOptions): Promise<Message>;
+  editMessage(channelId: string, messageId: string, patch: string | MessageEditPatch): Promise<Message>;
   listMessages(channelId: string, options?: { limit?: number; before?: string }): Promise<Message[]>;
-  listChannels(serverId: string): Promise<Array<Record<string, unknown>>>;
-  listMembers(serverId: string): Promise<Array<Record<string, unknown>>>;
-  createChannel(serverId: string, name: string, options?: { type?: "text" | "voice"; categoryId?: string | null }): Promise<string>;
-  renameChannel(channelId: string, name: string): Promise<unknown>;
-  deleteChannel(channelId: string): Promise<unknown>;
-  /** Delete a message (messages.delete). Others' messages need Manage Messages. Takes the id or display_id. */
   deleteMessage(channelId: string, messageId: string): Promise<void>;
-  leaveServer(serverId: string): Promise<unknown>;
+  bulkDeleteMessages(channelId: string, messageIds: string[]): Promise<number>;
+
+  addReaction(channelId: string, messageId: string, emoji: string): Promise<any>;
+  removeReaction(channelId: string, messageId: string, emoji: string): Promise<any>;
+  listPins(channelId: string): Promise<any[]>;
+  pinMessage(channelId: string, messageId: string): Promise<any>;
+  unpinMessage(channelId: string, messageId: string): Promise<any>;
+
+  getServer(serverId: string): Promise<any>;
+  updateServer(serverId: string, patch: Record<string, unknown>): Promise<any>;
+  getServerPermissions(serverId: string): Promise<any>;
+  listAuditLog(serverId: string, options?: { limit?: number }): Promise<any[]>;
+
+  listCategories(serverId: string): Promise<any[]>;
+  createCategory(serverId: string, name: string): Promise<any>;
+  updateCategory(categoryId: string, patch: { name?: string; position?: number }): Promise<any>;
+  deleteCategory(categoryId: string): Promise<void>;
+
+  listChannels(serverId: string): Promise<any[]>;
+  getChannel(channelId: string): Promise<any>;
+  createChannel(serverId: string, name: string, options?: CreateChannelOptions): Promise<string>;
+  updateChannel(channelId: string, patch: Record<string, unknown>): Promise<any>;
+  renameChannel(channelId: string, name: string): Promise<any>;
+  deleteChannel(channelId: string): Promise<void>;
+  listChannelPermissions(channelId: string): Promise<any[]>;
+  setChannelPermission(channelId: string, roleId: string, overwrite?: ChannelPermissionOverwrite): Promise<any>;
+  deleteChannelPermission(channelId: string, roleId: string): Promise<any>;
+
+  listMembers(serverId: string): Promise<any[]>;
+  getMember(serverId: string, userId: string): Promise<any>;
+  kickMember(serverId: string, userId: string): Promise<any>;
+  timeoutMember(serverId: string, userId: string, timeoutMinutes: number, reason?: string): Promise<any>;
+  addMemberRole(serverId: string, userId: string, roleId: string): Promise<any>;
+  removeMemberRole(serverId: string, userId: string, roleId: string): Promise<any>;
+
+  listBans(serverId: string): Promise<any[]>;
+  banMember(serverId: string, userId: string, options?: { reason?: string }): Promise<any>;
+  unbanMember(serverId: string, userId: string): Promise<any>;
+
+  listRoles(serverId: string): Promise<any[]>;
+  createRole(serverId: string, role: RoleInput): Promise<any>;
+  getRole(serverId: string, roleId: string): Promise<any>;
+  updateRole(serverId: string, roleId: string, patch: RoleInput): Promise<any>;
+  deleteRole(serverId: string, roleId: string): Promise<any>;
+
+  listWebhooks(serverId: string): Promise<any[]>;
+  createWebhook(serverId: string, options: WebhookInput): Promise<any>;
+  getWebhook(webhookId: string): Promise<any>;
+  updateWebhook(webhookId: string, patch: WebhookInput): Promise<any>;
+  deleteWebhook(webhookId: string): Promise<void>;
+
+  listCommands(): Promise<any[]>;
+  setCommands(commands: any[]): Promise<any[]>;
+  upsertCommand(command: any): Promise<any>;
+  deleteCommand(name: string): Promise<any>;
+  respondToInteraction(interactionId: string, response: Record<string, unknown>): Promise<any>;
+
+  leaveServer(serverId: string): Promise<any>;
   createInvite(serverId: string, scopes: BotScope[]): Promise<{ code: string; invite_url: string }>;
 }

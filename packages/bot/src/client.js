@@ -5,11 +5,22 @@ import { AuthError } from "./errors.js";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const pathSegment = (value) => encodeURIComponent(String(value));
 
-const EVENT_NAMES = new Set(["ready", "messageCreate", "messageUpdate", "messageDelete", "error", "debug"]);
+const EVENT_NAMES = new Set([
+  "ready",
+  "messageCreate",
+  "messageUpdate",
+  "messageDelete",
+  "memberJoin",
+  "memberLeave",
+  "memberUpdate",
+  "interactionCreate",
+  "error",
+  "debug",
+]);
 
-function shapeEvent(event) {
-  if (event.type === "messageCreate" || event.type === "messageUpdate") {
-    return [event.payload.message ?? event.payload];
+function shapeEvent(event, client) {
+  if (event.type === "messageCreate" || event.type === "messageUpdate" || event.type === "messageDelete") {
+    return [new Message(event.payload.message ?? event.payload, client)];
   }
   return [event.payload];
 }
@@ -122,9 +133,14 @@ export class Client {
     while (!this._stopped) {
       try {
         const { events } = await this._rest.get(`/api/v1/gateway?timeout=${this.gatewayTimeout}`);
-        for (const event of events) {
+        for (const event of events ?? []) {
           if (this._stopped) break;
-          this._emit(event.type, ...shapeEvent(event));
+          const type = event.type;
+          if (EVENT_NAMES.has(type)) {
+            this._emit(type, ...shapeEvent(event, this));
+          } else {
+            this._emit("debug", `Unknown gateway event type: ${String(type)}`);
+          }
         }
       } catch (err) {
         if (this._stopped) break;
@@ -151,10 +167,27 @@ export class Client {
   // ------------------------------------------------------------ REST helpers
 
   async sendMessage(channelId, content, options = {}) {
-    const { message } = await this._rest.post(`/api/v1/channels/${pathSegment(channelId)}/messages`, {
-      content,
-      reply_to_id: options.replyToId ?? null,
-    });
+    const body = {};
+    if (content !== undefined && content !== null) body.content = content;
+    if (options.replyToId !== undefined) body.reply_to_id = options.replyToId;
+    if (options.embeds !== undefined) body.embeds = options.embeds;
+    if (options.components !== undefined) body.components = options.components;
+    const { message } = await this._rest.post(`/api/v1/channels/${pathSegment(channelId)}/messages`, body);
+    return new Message(message, this);
+  }
+
+  async editMessage(channelId, messageId, patch = {}) {
+    const body = {};
+    if (typeof patch === "string") body.content = patch;
+    else {
+      if (patch.content !== undefined) body.content = patch.content;
+      if (patch.embeds !== undefined) body.embeds = patch.embeds;
+      if (patch.components !== undefined) body.components = patch.components;
+    }
+    const { message } = await this._rest.patch(
+      `/api/v1/channels/${pathSegment(channelId)}/messages/${pathSegment(messageId)}`,
+      body,
+    );
     return new Message(message, this);
   }
 
@@ -170,12 +203,86 @@ export class Client {
   }
 
   /**
-   * Deletes a message (messages.delete scope). The bot's own messages always;
-   * anyone's when one of the bot's roles has Manage Messages. `messageId` may
-   * be the message id or its numeric display_id.
+   * Deletes a message (messages.delete). The bot's own messages always;
+   * others' need the manage_messages role permission. `messageId` may be a
+   * UUID or a numeric display_id.
    */
   async deleteMessage(channelId, messageId) {
     await this._rest.delete(`/api/v1/channels/${pathSegment(channelId)}/messages/${pathSegment(messageId)}`);
+  }
+
+  /** Bulk-deletes 1–100 message UUIDs in a channel. */
+  async bulkDeleteMessages(channelId, messageIds) {
+    const data = await this._rest.post(`/api/v1/channels/${pathSegment(channelId)}/messages/bulk-delete`, {
+      message_ids: messageIds,
+    });
+    return data?.deleted ?? 0;
+  }
+
+  async addReaction(channelId, messageId, emoji) {
+    return this._rest.put(
+      `/api/v1/channels/${pathSegment(channelId)}/messages/${pathSegment(messageId)}/reactions/${encodeURIComponent(String(emoji))}`,
+    );
+  }
+
+  async removeReaction(channelId, messageId, emoji) {
+    return this._rest.delete(
+      `/api/v1/channels/${pathSegment(channelId)}/messages/${pathSegment(messageId)}/reactions/${encodeURIComponent(String(emoji))}`,
+    );
+  }
+
+  async listPins(channelId) {
+    const { pins } = await this._rest.get(`/api/v1/channels/${pathSegment(channelId)}/pins`);
+    return pins ?? [];
+  }
+
+  async pinMessage(channelId, messageId) {
+    return this._rest.put(`/api/v1/channels/${pathSegment(channelId)}/pins/${pathSegment(messageId)}`);
+  }
+
+  async unpinMessage(channelId, messageId) {
+    return this._rest.delete(`/api/v1/channels/${pathSegment(channelId)}/pins/${pathSegment(messageId)}`);
+  }
+
+  async getServer(serverId) {
+    const { server } = await this._rest.get(`/api/v1/servers/${pathSegment(serverId)}`);
+    return server;
+  }
+
+  async updateServer(serverId, patch) {
+    const { server } = await this._rest.patch(`/api/v1/servers/${pathSegment(serverId)}`, patch);
+    return server;
+  }
+
+  async getServerPermissions(serverId) {
+    return this._rest.get(`/api/v1/servers/${pathSegment(serverId)}/permissions`);
+  }
+
+  async listAuditLog(serverId, options = {}) {
+    const params = new URLSearchParams();
+    if (options.limit) params.set("limit", String(options.limit));
+    const qs = params.toString();
+    const { audit } = await this._rest.get(`/api/v1/servers/${pathSegment(serverId)}/audit${qs ? `?${qs}` : ""}`);
+    return audit ?? [];
+  }
+
+  async listCategories(serverId) {
+    const { categories } = await this._rest.get(`/api/v1/servers/${pathSegment(serverId)}/categories`);
+    return categories ?? [];
+  }
+
+  async createCategory(serverId, name) {
+    const { category } = await this._rest.post(`/api/v1/servers/${pathSegment(serverId)}/categories`, { name });
+    return category;
+  }
+
+  async updateCategory(categoryId, patch) {
+    const { category } = await this._rest.patch(`/api/v1/categories/${pathSegment(categoryId)}`, patch);
+    return category;
+  }
+
+  async deleteCategory(categoryId) {
+    await this._rest.delete(`/api/v1/categories/${pathSegment(categoryId)}`);
   }
 
   async listChannels(serverId) {
@@ -183,26 +290,181 @@ export class Client {
     return channels ?? [];
   }
 
+  async getChannel(channelId) {
+    const { channel } = await this._rest.get(`/api/v1/channels/${pathSegment(channelId)}`);
+    return channel;
+  }
+
+  async createChannel(serverId, name, options = {}) {
+    const body = {
+      name,
+      type: options.type ?? "text",
+      category_id: options.categoryId ?? options.category_id ?? null,
+    };
+    if (options.topic !== undefined) body.topic = options.topic;
+    if (options.slowModeSeconds !== undefined) body.slow_mode_seconds = options.slowModeSeconds;
+    else if (options.slow_mode_seconds !== undefined) body.slow_mode_seconds = options.slow_mode_seconds;
+    if (options.readOnly !== undefined) body.read_only = options.readOnly;
+    else if (options.read_only !== undefined) body.read_only = options.read_only;
+    if (options.userLimit !== undefined) body.user_limit = options.userLimit;
+    else if (options.user_limit !== undefined) body.user_limit = options.user_limit;
+    if (options.permissions !== undefined) body.permissions = options.permissions;
+    const data = await this._rest.post(`/api/v1/servers/${pathSegment(serverId)}/channels`, body);
+    return data?.channel_id;
+  }
+
+  async updateChannel(channelId, patch) {
+    const { channel } = await this._rest.patch(`/api/v1/channels/${pathSegment(channelId)}`, patch);
+    return channel;
+  }
+
+  async renameChannel(channelId, name) {
+    return this.updateChannel(channelId, { name });
+  }
+
+  async deleteChannel(channelId) {
+    await this._rest.delete(`/api/v1/channels/${pathSegment(channelId)}`);
+  }
+
+  async listChannelPermissions(channelId) {
+    const { permissions } = await this._rest.get(`/api/v1/channels/${pathSegment(channelId)}/permissions`);
+    return permissions ?? [];
+  }
+
+  async setChannelPermission(channelId, roleId, overwrite = {}) {
+    return this._rest.put(
+      `/api/v1/channels/${pathSegment(channelId)}/permissions/${pathSegment(roleId)}`,
+      overwrite,
+    );
+  }
+
+  async deleteChannelPermission(channelId, roleId) {
+    return this._rest.delete(`/api/v1/channels/${pathSegment(channelId)}/permissions/${pathSegment(roleId)}`);
+  }
+
   async listMembers(serverId) {
     const { members } = await this._rest.get(`/api/v1/servers/${pathSegment(serverId)}/members`);
     return members ?? [];
   }
 
-  async createChannel(serverId, name, options = {}) {
-    const { channel_id } = await this._rest.post(`/api/v1/servers/${pathSegment(serverId)}/channels`, {
-      name,
-      type: options.type ?? "text",
-      category_id: options.categoryId ?? null,
-    });
-    return channel_id;
+  async getMember(serverId, userId) {
+    const { member } = await this._rest.get(
+      `/api/v1/servers/${pathSegment(serverId)}/members/${pathSegment(userId)}`,
+    );
+    return member;
   }
 
-  async renameChannel(channelId, name) {
-    return this._rest.patch(`/api/v1/channels/${pathSegment(channelId)}`, { name });
+  async kickMember(serverId, userId) {
+    return this._rest.delete(`/api/v1/servers/${pathSegment(serverId)}/members/${pathSegment(userId)}`);
   }
 
-  async deleteChannel(channelId) {
-    return this._rest.delete(`/api/v1/channels/${pathSegment(channelId)}`);
+  async timeoutMember(serverId, userId, timeoutMinutes, reason) {
+    const body = { timeout_minutes: timeoutMinutes };
+    if (reason !== undefined) body.reason = reason;
+    return this._rest.patch(`/api/v1/servers/${pathSegment(serverId)}/members/${pathSegment(userId)}`, body);
+  }
+
+  async addMemberRole(serverId, userId, roleId) {
+    return this._rest.put(
+      `/api/v1/servers/${pathSegment(serverId)}/members/${pathSegment(userId)}/roles/${pathSegment(roleId)}`,
+    );
+  }
+
+  async removeMemberRole(serverId, userId, roleId) {
+    return this._rest.delete(
+      `/api/v1/servers/${pathSegment(serverId)}/members/${pathSegment(userId)}/roles/${pathSegment(roleId)}`,
+    );
+  }
+
+  async listBans(serverId) {
+    const { bans } = await this._rest.get(`/api/v1/servers/${pathSegment(serverId)}/bans`);
+    return bans ?? [];
+  }
+
+  async banMember(serverId, userId, options = {}) {
+    const body = {};
+    if (options.reason !== undefined) body.reason = options.reason;
+    return this._rest.put(`/api/v1/servers/${pathSegment(serverId)}/bans/${pathSegment(userId)}`, body);
+  }
+
+  async unbanMember(serverId, userId) {
+    return this._rest.delete(`/api/v1/servers/${pathSegment(serverId)}/bans/${pathSegment(userId)}`);
+  }
+
+  async listRoles(serverId) {
+    const { roles } = await this._rest.get(`/api/v1/servers/${pathSegment(serverId)}/roles`);
+    return roles ?? [];
+  }
+
+  async createRole(serverId, role) {
+    const { role: created } = await this._rest.post(`/api/v1/servers/${pathSegment(serverId)}/roles`, role);
+    return created;
+  }
+
+  async getRole(serverId, roleId) {
+    const { role } = await this._rest.get(
+      `/api/v1/servers/${pathSegment(serverId)}/roles/${pathSegment(roleId)}`,
+    );
+    return role;
+  }
+
+  async updateRole(serverId, roleId, patch) {
+    const { role } = await this._rest.patch(
+      `/api/v1/servers/${pathSegment(serverId)}/roles/${pathSegment(roleId)}`,
+      patch,
+    );
+    return role;
+  }
+
+  async deleteRole(serverId, roleId) {
+    return this._rest.delete(`/api/v1/servers/${pathSegment(serverId)}/roles/${pathSegment(roleId)}`);
+  }
+
+  async listWebhooks(serverId) {
+    const { webhooks } = await this._rest.get(`/api/v1/servers/${pathSegment(serverId)}/webhooks`);
+    return webhooks ?? [];
+  }
+
+  async createWebhook(serverId, options) {
+    const { webhook } = await this._rest.post(`/api/v1/servers/${pathSegment(serverId)}/webhooks`, options);
+    return webhook;
+  }
+
+  async getWebhook(webhookId) {
+    const { webhook } = await this._rest.get(`/api/v1/webhooks/${pathSegment(webhookId)}`);
+    return webhook;
+  }
+
+  async updateWebhook(webhookId, patch) {
+    const { webhook } = await this._rest.patch(`/api/v1/webhooks/${pathSegment(webhookId)}`, patch);
+    return webhook;
+  }
+
+  async deleteWebhook(webhookId) {
+    await this._rest.delete(`/api/v1/webhooks/${pathSegment(webhookId)}`);
+  }
+
+  async listCommands() {
+    const { commands } = await this._rest.get("/api/v1/commands");
+    return commands ?? [];
+  }
+
+  async setCommands(commands) {
+    const data = await this._rest.put("/api/v1/commands", { commands });
+    return data?.commands ?? [];
+  }
+
+  async upsertCommand(command) {
+    const data = await this._rest.post("/api/v1/commands", command);
+    return data?.command ?? data;
+  }
+
+  async deleteCommand(name) {
+    return this._rest.delete(`/api/v1/commands?name=${encodeURIComponent(String(name))}`);
+  }
+
+  async respondToInteraction(interactionId, response) {
+    return this._rest.post(`/api/v1/interactions/${pathSegment(interactionId)}/callback`, response);
   }
 
   async leaveServer(serverId) {

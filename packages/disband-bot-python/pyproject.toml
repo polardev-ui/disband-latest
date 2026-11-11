@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "disband-bot"
-version = "0.1.0"
+version = "0.2.0"
 description = "Official Python client for Disband bots. Self-hosted, token-authenticated, zero dependencies."
 readme = "README.md"
 requires-python = ">=3.9"
