@@ -1,0 +1,17 @@
+{
+  "name": "disband-example-utility-bot",
+  "version": "1.0.0",
+  "description": "Disband example: a utility bot (command router, cooldowns, chunking, graceful shutdown).",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@disband/bot": "file:../../../packages/bot"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

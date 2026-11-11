@@ -1,0 +1,11 @@
+{
+  "name": "disband-example-automod-bot",
+  "version": "1.0.0",
+  "description": "Disband example: an auto-moderation bot with ban lists, dry-run, and mod-log.",
+  "type": "module",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": { "@disband/bot": "file:../../../packages/bot" },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}

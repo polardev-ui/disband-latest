@@ -1,0 +1,2 @@
+# disband-bot>=0.1.0
+# Install: pip install disband-bot  (or pip install -e ../../../packages/disband-bot-python)

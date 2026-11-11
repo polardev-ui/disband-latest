@@ -1,0 +1,11 @@
+{
+  "name": "disband-example-server-info-bot",
+  "version": "1.0.0",
+  "description": "Disband example: a server info bot with caching, pagination, and role breakdown.",
+  "type": "module",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": { "@disband/bot": "file:../../../packages/bot" },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}

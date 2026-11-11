@@ -1,0 +1,3 @@
+# disband-bot is zero-dependency. Install from PyPI or, from this repo:
+#   pip install -e ../../../packages/disband-bot-python
+# disband-bot>=0.1.0
