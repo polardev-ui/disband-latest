@@ -5,6 +5,7 @@ import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
 
 type Params = { params: Promise<{ serverId: string }> };
 
+/** Categories in display order, with channel counts. */
 export async function GET(request: NextRequest, { params }: Params) {
   try {
     const bot = await authenticateBot(request);
@@ -17,40 +18,44 @@ export async function GET(request: NextRequest, { params }: Params) {
     const gate = await checkBotRateLimit(service, "read", bot.botId);
     if (gate.limited) return botRateLimited(gate.retryAfterSeconds);
 
-    const { data: member } = await service
-      .from("server_members")
-      .select("user_id")
-      .eq("server_id", serverId)
-      .eq("user_id", bot.userId)
-      .maybeSingle();
-    if (!member) {
-      return NextResponse.json({ error: "Bot is not a member of this server" }, { status: 403 });
-    }
+    const { data, error } = await service.rpc("bot_list_categories", {
+      p_bot_id: bot.botId,
+      p_server_id: serverId,
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: botJsonError(error) });
 
-    const { data: grant } = await service
-      .from("bot_grants")
-      .select("scopes")
-      .eq("bot_id", bot.botId)
-      .eq("server_id", serverId)
-      .maybeSingle();
-    const scopes = (grant?.scopes as string[] | undefined) ?? [];
-    if (!scopes.includes("messages.read") && !scopes.includes("channels.manage")) {
-      return NextResponse.json({ error: "Missing required scope" }, { status: 403 });
-    }
-
-    const { data: categories, error } = await service
-      .from("channel_categories")
-      .select("id, server_id, name, position")
-      .eq("server_id", serverId)
-      .order("position");
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: botJsonError(error) });
-    }
-
-    return NextResponse.json({ categories: categories ?? [] });
+    return NextResponse.json({ categories: data ?? [] });
   } catch (err) {
     console.error("v1/servers/[serverId]/categories GET error", err);
+    return NextResponse.json({ error: "Internal space error" }, { status: 500 });
+  }
+}
+
+/** Create a category: { "name": "Support" } (channels.manage + manage_channels). */
+export async function POST(request: NextRequest, { params }: Params) {
+  try {
+    const bot = await authenticateBot(request);
+    if (!bot) return NextResponse.json({ error: "Invalid bot token" }, { status: 401 });
+
+    const { serverId } = await params;
+    const body = (await request.json().catch(() => ({}))) as { name?: string };
+
+    const service = getServiceSupabase();
+    if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
+
+    const gate = await checkBotRateLimit(service, "write", bot.botId);
+    if (gate.limited) return botRateLimited(gate.retryAfterSeconds);
+
+    const { data, error } = await service.rpc("bot_create_category", {
+      p_bot_id: bot.botId,
+      p_server_id: serverId,
+      p_name: body.name ?? null,
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: botJsonError(error) });
+
+    return NextResponse.json({ category: data }, { status: 201 });
+  } catch (err) {
+    console.error("v1/servers/[serverId]/categories POST error", err);
     return NextResponse.json({ error: "Internal space error" }, { status: 500 });
   }
 }

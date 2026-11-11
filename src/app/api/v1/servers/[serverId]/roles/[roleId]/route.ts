@@ -7,6 +7,25 @@ import { resolveRoleId } from "@/lib/bot-ids";
 
 type Params = { params: Promise<{ serverId: string; roleId: string }> };
 
+/** Single role, including whether this bot can manage it. */
+export async function GET(request: NextRequest, { params }: Params) {
+  const bot = await authenticateBot(request);
+  if (!bot) return NextResponse.json({ error: "Invalid bot token" }, { status: 401 });
+  const { serverId, roleId } = await params;
+  const service = getServiceSupabase();
+  if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
+  const gate = await checkBotRateLimit(service, "read", bot.botId);
+  if (gate.limited) return botRateLimited(gate.retryAfterSeconds);
+  const role = await resolveRoleId(service, roleId);
+  if (!role || !(await roleInServer(service, role, serverId))) return NextResponse.json({ error: "Role not found" }, { status: 404 });
+  const { data, error } = await service.rpc("bot_get_role", { p_bot_id: bot.botId, p_role_id: role });
+  if (error) {
+    const status = /not found/i.test(error.message ?? "") ? 404 : botJsonError(error);
+    return NextResponse.json({ error: error.message }, { status });
+  }
+  return NextResponse.json({ role: data });
+}
+
 /** Edit a role below the bot's own: { name?, color?, permissions?, self_assignable?, position? } (roles.manage). */
 export async function PATCH(request: NextRequest, { params }: Params) {
   const bot = await authenticateBot(request);

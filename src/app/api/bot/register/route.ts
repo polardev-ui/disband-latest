@@ -2,13 +2,13 @@ import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { getUserFromRequest } from "@/lib/server-auth";
-import { hashBotToken, isBotScope } from "@/lib/bot-auth";
+import { BOT_SCOPES, hashBotToken, isBotScope } from "@/lib/bot-auth";
 import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
 
 const MAX_BOTS_PER_OWNER = 5;
 
 const MAX_BOT_NAME = 25;
-const ALLOWED_SCOPES = ["messages.read", "messages.write", "messages.delete", "messages.react", "members.read", "channels.read", "channels.manage", "webhooks.manage", "roles.manage"];
+const ALLOWED_SCOPES = BOT_SCOPES;
 
 export async function POST(request: NextRequest) {
   try {

@@ -19,3 +19,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (error) return NextResponse.json({ error: error.message }, { status: botJsonError(error) });
   return NextResponse.json({ ok: true });
 }
+
+/** Unban a user (members.ban + ban). Idempotent. */
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ serverId: string; userId: string }> }) {
+  const bot = await authenticateBot(request);
+  if (!bot) return NextResponse.json({ error: "Invalid bot token" }, { status: 401 });
+  const { serverId, userId } = await params;
+  const service = getServiceSupabase();
+  if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
+  const gate = await checkBotRateLimit(service, "write", bot.botId);
+  if (gate.limited) return botRateLimited(gate.retryAfterSeconds);
+  const { data, error } = await service.rpc("bot_unban_member", {
+    p_bot_id: bot.botId, p_server_id: serverId, p_user_id: userId,
+  });
+  if (error) return NextResponse.json({ error: error.message }, { status: botJsonError(error) });
+  return NextResponse.json({ removed: data === true });
+}

@@ -39,7 +39,7 @@ export const BOT_SCOPE_LABELS: Record<BotScope, { label: string; description: st
   },
   "channels.manage": {
     label: "Manage channels",
-    description: "Create, rename, and delete channels.",
+    description: "Create, edit, reorder, and delete channels, categories, and their role permissions.",
   },
   "webhooks.manage": {
     label: "Manage webhooks",
@@ -48,6 +48,14 @@ export const BOT_SCOPE_LABELS: Record<BotScope, { label: string; description: st
   "roles.manage": {
     label: "Manage roles",
     description: "Create, edit and delete roles, give and take members' roles, and set which roles see each channel. Only roles below its own.",
+  },
+  "servers.read": {
+    label: "Read space info",
+    description: "Read a space's name, description, icon, and member count.",
+  },
+  "audit.read": {
+    label: "Read audit log",
+    description: "Read recent moderation and management actions in a space.",
   },
 };
 
@@ -64,4 +72,6 @@ export const BOT_SCOPE_ORDER: BotScope[] = [
   "channels.manage",
   "webhooks.manage",
   "roles.manage",
+  "servers.read",
+  "audit.read",
 ];

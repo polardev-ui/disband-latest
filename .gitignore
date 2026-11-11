@@ -19,6 +19,10 @@ next-env.d.ts
 *.pem
 Thumbs.db
 
+# Internal incident reports describe live abuse and account identifiers.
+# They stay on the operator's machine, never in this public repository.
+incident-report-*.md
+
 # debug
 npm-debug.log*
 yarn-debug.log*
