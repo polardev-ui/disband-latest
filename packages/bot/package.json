@@ -1,6 +1,6 @@
 {
   "name": "@disband/bot",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Official JavaScript client for Disband bots.",
   "type": "module",
   "main": "./index.js",
@@ -25,5 +25,8 @@
     "bot",
     "chat"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@disband/bot": "^0.1.1"
+  }
 }
