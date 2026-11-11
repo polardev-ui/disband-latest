@@ -101,5 +101,5 @@ android/keystore/
 /.mascot-local/
 .env*
 
-# Database migrations are kept out of the public repo (local only).
-/supabase/migrations/
+# The whole Supabase directory is kept out of the public repo (local only).
+/supabase/
