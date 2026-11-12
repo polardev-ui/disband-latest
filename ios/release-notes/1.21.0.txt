@@ -1,0 +1,4 @@
+What's new in Disband 1.21
+
+• Bug fixes and performance improvements.
+• Plus other behind-the-scenes updates to keep things running smoothly.
