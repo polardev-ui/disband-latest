@@ -28,6 +28,8 @@ class Message:
         self.created_at = data.get("created_at")
         self.edited_at = data.get("edited_at")
         self.display_id = data.get("display_id")
+        # [{"emoji", "count", "me"}] when the message came from get_message().
+        self.reactions = data.get("reactions") or []
 
     @property
     def author_is_bot(self):

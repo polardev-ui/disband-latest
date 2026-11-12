@@ -36,14 +36,26 @@ export class REST {
   }
 
   async request(method, path, body) {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method,
-      headers: this.headers(),
-      body: body === undefined ? undefined : JSON.stringify(body),
-      redirect: "error",
-      signal: AbortSignal.timeout(this.client.requestTimeout),
-    });
-    return this._parse(res);
+    for (let attempt = 0; ; attempt += 1) {
+      const res = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers: this.headers(),
+        body: body === undefined ? undefined : JSON.stringify(body),
+        redirect: "error",
+        signal: AbortSignal.timeout(this.client.requestTimeout),
+      });
+      // A 429 means the request wasn't carried out, so it's safe to send
+      // again once the limit resets.
+      if (res.status === 429 && this.client.retryRateLimits !== false && attempt < (this.client.maxRetries ?? 3)) {
+        const after = Number(res.headers.get("retry-after"));
+        const waitMs = Math.min(Number.isFinite(after) && after > 0 ? after * 1000 : 1000 * 2 ** attempt, 60_000);
+        await res.text().catch(() => undefined);
+        this.client._emit?.("debug", `Rate limited on ${method} ${path}; retrying in ${Math.round(waitMs / 1000)}s`);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+      return this._parse(res);
+    }
   }
 
   get(path) {

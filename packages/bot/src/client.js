@@ -4,15 +4,37 @@ import { AuthError } from "./errors.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const pathSegment = (value) => encodeURIComponent(String(value));
+const messagePath = (channelId, messageId) =>
+  `/api/v1/channels/${pathSegment(channelId)}/messages/${pathSegment(messageId)}`;
+const query = (params) => {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") qs.set(key, String(value));
+  }
+  const text = qs.toString();
+  return text ? `?${text}` : "";
+};
 
 const EVENT_NAMES = new Set([
   "ready",
   "messageCreate",
   "messageUpdate",
   "messageDelete",
+  "reactionAdd",
+  "reactionRemove",
   "memberJoin",
   "memberLeave",
   "memberUpdate",
+  "channelCreate",
+  "channelUpdate",
+  "channelDelete",
+  "roleCreate",
+  "roleUpdate",
+  "roleDelete",
+  "serverUpdate",
+  "serverJoin",
+  "serverLeave",
+  "scopesUpdate",
   "interactionCreate",
   "error",
   "debug",
@@ -57,6 +79,10 @@ export class Client {
     this.baseUrl = baseUrl.href.replace(/\/+$/, "");
     this.gatewayTimeout = options.gatewayTimeout ?? 20;
     this.requestTimeout = options.requestTimeout ?? Math.max((this.gatewayTimeout + 10) * 1000, 30_000);
+    // A 429 is retried after its Retry-After, up to maxRetries times, before
+    // it surfaces as a RateLimitError.
+    this.retryRateLimits = options.retryRateLimits ?? true;
+    this.maxRetries = options.maxRetries ?? 3;
     this._rest = new REST(this);
     this._listeners = new Map();
     this._stopped = false;
@@ -191,15 +217,31 @@ export class Client {
     return new Message(message, this);
   }
 
+  /**
+   * Up to 100 messages, newest first. Page with one of `before`, `after`, or
+   * `around` (a message id or display_id).
+   */
   async listMessages(channelId, options = {}) {
-    const params = new URLSearchParams();
-    if (options.limit) params.set("limit", String(options.limit));
-    if (options.before) params.set("before", options.before);
-    const qs = params.toString();
     const { messages } = await this._rest.get(
-      `/api/v1/channels/${pathSegment(channelId)}/messages${qs ? `?${qs}` : ""}`,
+      `/api/v1/channels/${pathSegment(channelId)}/messages${query({
+        limit: options.limit,
+        before: options.before,
+        after: options.after,
+        around: options.around,
+      })}`,
     );
     return (messages ?? []).map((m) => new Message(m, this));
+  }
+
+  /** One message, with its `reactions` summary. */
+  async getMessage(channelId, messageId) {
+    const { message } = await this._rest.get(messagePath(channelId, messageId));
+    return new Message(message, this);
+  }
+
+  /** Shows "<bot> is typing…" in a channel for a few seconds. */
+  async sendTyping(channelId) {
+    await this._rest.post(`/api/v1/channels/${pathSegment(channelId)}/typing`);
   }
 
   /**
@@ -229,6 +271,56 @@ export class Client {
     return this._rest.delete(
       `/api/v1/channels/${pathSegment(channelId)}/messages/${pathSegment(messageId)}/reactions/${encodeURIComponent(String(emoji))}`,
     );
+  }
+
+  /** Every emoji on a message: `{ emoji, count, me }`. */
+  async listReactions(channelId, messageId) {
+    const { reactions } = await this._rest.get(`${messagePath(channelId, messageId)}/reactions`);
+    return reactions ?? [];
+  }
+
+  /** Who reacted with one emoji, earliest first (up to 100). */
+  async listReactionUsers(channelId, messageId, emoji, options = {}) {
+    const { users } = await this._rest.get(
+      `${messagePath(channelId, messageId)}/reactions/${encodeURIComponent(String(emoji))}${query({ limit: options.limit })}`,
+    );
+    return users ?? [];
+  }
+
+  /** Removes someone else's reaction (messages.delete + manage_messages). */
+  async removeUserReaction(channelId, messageId, emoji, userId) {
+    const data = await this._rest.delete(
+      `${messagePath(channelId, messageId)}/reactions/${encodeURIComponent(String(emoji))}/${pathSegment(userId)}`,
+    );
+    return Boolean(data?.removed);
+  }
+
+  /**
+   * Clears every reaction on a message, or one emoji's with `{ emoji }`
+   * (messages.delete + manage_messages). Returns how many were removed.
+   */
+  async clearReactions(channelId, messageId, options = {}) {
+    const data = await this._rest.delete(`${messagePath(channelId, messageId)}/reactions${query({ emoji: options.emoji })}`);
+    return data?.removed ?? 0;
+  }
+
+  /** A forum's posts, pinned first, then by latest activity. */
+  async listForumPosts(forumId, options = {}) {
+    const { posts } = await this._rest.get(`/api/v1/channels/${pathSegment(forumId)}/posts${query({ limit: options.limit })}`);
+    return posts ?? [];
+  }
+
+  /**
+   * Starts a forum post: `{ title, content, tags?, embeds?, components? }`.
+   * Returns `{ post, message }`. Reply in it with sendMessage(post.id, …).
+   */
+  async createForumPost(forumId, post) {
+    const body = { title: post?.title };
+    for (const key of ["content", "tags", "embeds", "components"]) {
+      if (post?.[key] !== undefined) body[key] = post[key];
+    }
+    const data = await this._rest.post(`/api/v1/channels/${pathSegment(forumId)}/posts`, body);
+    return { post: data.post, message: new Message(data.message, this) };
   }
 
   async listPins(channelId) {
@@ -342,8 +434,11 @@ export class Client {
     return this._rest.delete(`/api/v1/channels/${pathSegment(channelId)}/permissions/${pathSegment(roleId)}`);
   }
 
-  async listMembers(serverId) {
-    const { members } = await this._rest.get(`/api/v1/servers/${pathSegment(serverId)}/members`);
+  /** Members, optionally filtered: `{ query, role, limit }`. */
+  async listMembers(serverId, options = {}) {
+    const { members } = await this._rest.get(
+      `/api/v1/servers/${pathSegment(serverId)}/members${query({ query: options.query, role: options.role, limit: options.limit })}`,
+    );
     return members ?? [];
   }
 
@@ -469,6 +564,31 @@ export class Client {
 
   async leaveServer(serverId) {
     return this._rest.post(`/api/v1/servers/${pathSegment(serverId)}/leave`);
+  }
+
+  // ------------------------------------------------------------ the bot itself
+
+  /** The bot's own profile and custom status, plus its account scopes: `{ user, bot }`. */
+  async fetchMe() {
+    return this._rest.get("/api/v1/users/@me");
+  }
+
+  /** Sets the bot's custom status ("Watching 12 servers"); null clears it. Up to 64 characters. */
+  async setStatus(text) {
+    const { user } = await this._rest.patch("/api/v1/users/@me", { status_text: text ?? null });
+    return user?.status_text ?? null;
+  }
+
+  /** Every space the bot is in, with the scopes granted there. */
+  async listServers() {
+    const { servers } = await this._rest.get("/api/v1/users/@me/servers");
+    return servers ?? [];
+  }
+
+  /** A user's public profile, if they share a space with the bot (members.read). */
+  async getUser(userId) {
+    const { user } = await this._rest.get(`/api/v1/users/${pathSegment(userId)}`);
+    return user;
   }
 
   /**

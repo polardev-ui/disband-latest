@@ -17,12 +17,102 @@ export type BotScope =
   | "audit.read";
 
 export type MessageEventType = "messageCreate" | "messageUpdate" | "messageDelete";
+export type ReactionEventType = "reactionAdd" | "reactionRemove";
+export type ChannelEventType = "channelCreate" | "channelUpdate" | "channelDelete";
+export type RoleEventType = "roleCreate" | "roleUpdate" | "roleDelete";
+export type ServerEventType = "serverUpdate" | "serverJoin" | "serverLeave" | "scopesUpdate";
 export type BotEventType =
   | MessageEventType
+  | ReactionEventType
   | "memberJoin"
   | "memberLeave"
   | "memberUpdate"
+  | ChannelEventType
+  | RoleEventType
+  | ServerEventType
   | "interactionCreate";
+
+export interface ReactionEvent {
+  message_id: string;
+  channel_id: string;
+  server_id: string;
+  emoji: string;
+  user_id: string;
+  /** reactionAdd only. */
+  user?: { id: string; username: string | null; display_name: string | null; avatar_url: string | null; is_bot: boolean };
+}
+
+export interface ChannelEvent {
+  channel_id: string;
+  server_id: string;
+  channel: Record<string, unknown> & { id: string; name: string; type: string; parent_id: string | null };
+}
+
+export interface RoleEvent {
+  server_id: string;
+  role_id: string;
+  role: Record<string, unknown> & { id: string; name: string; position: number };
+}
+
+export interface ServerEvent {
+  server_id: string;
+  /** serverUpdate and serverJoin. */
+  server?: Record<string, unknown> & { id: string; name: string };
+  /** serverJoin and scopesUpdate. */
+  scopes?: BotScope[];
+}
+
+export interface ReactionSummary {
+  emoji: string;
+  count: number;
+  me: boolean;
+}
+
+export interface PublicUser {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  banner_url?: string | null;
+  accent_color?: string | null;
+  bio?: string | null;
+  pronouns?: string | null;
+  is_bot: boolean;
+  verified_bot?: boolean;
+  created_at?: string;
+}
+
+export interface BotServer {
+  id: string;
+  name: string;
+  icon_url: string | null;
+  owner_id: string;
+  scopes: BotScope[];
+  joined_at: string;
+}
+
+export interface ForumPost {
+  id: string;
+  forum_id: string;
+  server_id: string;
+  title: string;
+  author_id: string | null;
+  tags: string[];
+  pinned: boolean;
+  message_count: number;
+  last_message_at: string;
+  created_at: string;
+  /** In listForumPosts: the first 300 characters of the opening message. */
+  opening?: string | null;
+}
+
+export interface ForumPostInput {
+  title: string;
+  content?: string;
+  tags?: string[];
+  embeds?: unknown[];
+  components?: unknown[];
+}
 
 export interface ClientUser {
   id: string;
@@ -44,6 +134,10 @@ export interface ClientOptions {
   gatewayTimeout?: number;
   requestTimeout?: number;
   allowInsecureLocalhost?: boolean;
+  /** Retry 429s after Retry-After (default true). */
+  retryRateLimits?: boolean;
+  /** How many times to retry a 429 before throwing (default 3). */
+  maxRetries?: number;
 }
 
 export interface SendMessageOptions {
@@ -104,11 +198,17 @@ export class Client {
   baseUrl: string;
   gatewayTimeout: number;
   requestTimeout: number;
+  retryRateLimits: boolean;
+  maxRetries: number;
   user: ClientUser | null;
   readonly connected: boolean;
 
   on(event: "ready", handler: ReadyHandler): this;
   on(event: MessageEventType, handler: MessageHandler): this;
+  on(event: ReactionEventType, handler: (event: ReactionEvent) => void | Promise<void>): this;
+  on(event: ChannelEventType, handler: (event: ChannelEvent) => void | Promise<void>): this;
+  on(event: RoleEventType, handler: (event: RoleEvent) => void | Promise<void>): this;
+  on(event: ServerEventType, handler: (event: ServerEvent) => void | Promise<void>): this;
   on(event: "memberJoin" | "memberLeave" | "memberUpdate" | "interactionCreate", handler: (payload: any) => void | Promise<void>): this;
   on(event: "error", handler: ErrorHandler): this;
   on(event: "debug", handler: (message: string) => void | Promise<void>): this;
@@ -121,12 +221,24 @@ export class Client {
 
   sendMessage(channelId: string, content: string | null | undefined, options?: SendMessageOptions): Promise<Message>;
   editMessage(channelId: string, messageId: string, patch: string | MessageEditPatch): Promise<Message>;
-  listMessages(channelId: string, options?: { limit?: number; before?: string }): Promise<Message[]>;
+  listMessages(
+    channelId: string,
+    options?: { limit?: number; before?: string; after?: string; around?: string },
+  ): Promise<Message[]>;
+  getMessage(channelId: string, messageId: string): Promise<Message>;
   deleteMessage(channelId: string, messageId: string): Promise<void>;
   bulkDeleteMessages(channelId: string, messageIds: string[]): Promise<number>;
+  sendTyping(channelId: string): Promise<void>;
 
   addReaction(channelId: string, messageId: string, emoji: string): Promise<any>;
   removeReaction(channelId: string, messageId: string, emoji: string): Promise<any>;
+  listReactions(channelId: string, messageId: string): Promise<ReactionSummary[]>;
+  listReactionUsers(channelId: string, messageId: string, emoji: string, options?: { limit?: number }): Promise<PublicUser[]>;
+  removeUserReaction(channelId: string, messageId: string, emoji: string, userId: string): Promise<boolean>;
+  clearReactions(channelId: string, messageId: string, options?: { emoji?: string }): Promise<number>;
+
+  listForumPosts(forumId: string, options?: { limit?: number }): Promise<ForumPost[]>;
+  createForumPost(forumId: string, post: ForumPostInput): Promise<{ post: ForumPost; message: Message }>;
   listPins(channelId: string): Promise<any[]>;
   pinMessage(channelId: string, messageId: string): Promise<any>;
   unpinMessage(channelId: string, messageId: string): Promise<any>;
@@ -151,7 +263,7 @@ export class Client {
   setChannelPermission(channelId: string, roleId: string, overwrite?: ChannelPermissionOverwrite): Promise<any>;
   deleteChannelPermission(channelId: string, roleId: string): Promise<any>;
 
-  listMembers(serverId: string): Promise<any[]>;
+  listMembers(serverId: string, options?: { query?: string; role?: string; limit?: number }): Promise<any[]>;
   getMember(serverId: string, userId: string): Promise<any>;
   kickMember(serverId: string, userId: string): Promise<any>;
   timeoutMember(serverId: string, userId: string, timeoutMinutes: number, reason?: string): Promise<any>;
@@ -182,4 +294,9 @@ export class Client {
 
   leaveServer(serverId: string): Promise<any>;
   createInvite(serverId: string, scopes: BotScope[]): Promise<{ code: string; invite_url: string }>;
+
+  fetchMe(): Promise<{ user: PublicUser & { status_text: string | null }; bot: { id: string; name: string; scopes: BotScope[] } }>;
+  setStatus(text: string | null): Promise<string | null>;
+  listServers(): Promise<BotServer[]>;
+  getUser(userId: string): Promise<PublicUser>;
 }

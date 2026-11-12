@@ -16,12 +16,29 @@ EVENT_NAMES = {
     "messageCreate",
     "messageUpdate",
     "messageDelete",
+    "reactionAdd",
+    "reactionRemove",
     "memberJoin",
     "memberLeave",
     "memberUpdate",
+    "channelCreate",
+    "channelUpdate",
+    "channelDelete",
+    "roleCreate",
+    "roleUpdate",
+    "roleDelete",
+    "serverUpdate",
+    "serverJoin",
+    "serverLeave",
+    "scopesUpdate",
     "interactionCreate",
     "error",
 }
+
+
+def _query(**params):
+    pairs = [(k, str(v)) for k, v in params.items() if v is not None and v != ""]
+    return ("?" + urlencode(pairs)) if pairs else ""
 
 
 def _path_segment(value):
@@ -40,7 +57,7 @@ class Client:
     """
 
     def __init__(self, token, base_url="https://www.disband.dev", gateway_timeout=20,
-                 allow_insecure_localhost=False):
+                 allow_insecure_localhost=False, retry_rate_limits=True, max_retries=3):
         if not token:
             raise ValueError("A bot token is required (Client(token=...))")
         parsed = urlsplit(base_url)
@@ -52,6 +69,10 @@ class Client:
         self.token = token
         self.base_url = base_url.rstrip("/")
         self.gateway_timeout = gateway_timeout
+        # A 429 is retried after its Retry-After, up to max_retries times,
+        # before it surfaces as a RateLimitError.
+        self.retry_rate_limits = retry_rate_limits
+        self.max_retries = max_retries
         self._rest = REST(self)
         self._listeners = {name: [] for name in EVENT_NAMES}
         self._lock = threading.Lock()
@@ -210,15 +231,68 @@ class Client:
         )
         return Message(data["message"], self)
 
-    def list_messages(self, channel_id, limit=None, before=None):
-        params = []
-        if limit is not None:
-            params.append(("limit", str(limit)))
-        if before is not None:
-            params.append(("before", str(before)))
-        qs = ("?" + urlencode(params)) if params else ""
+    def list_messages(self, channel_id, limit=None, before=None, after=None, around=None):
+        """Up to 100 messages, newest first. Page with one of before, after or around."""
+        qs = _query(limit=limit, before=before, after=after, around=around)
         data = self._rest.get("/api/v1/channels/%s/messages%s" % (_path_segment(channel_id), qs))
         return [Message(m, self) for m in data.get("messages", [])]
+
+    def _message_path(self, channel_id, message_id):
+        return "/api/v1/channels/%s/messages/%s" % (_path_segment(channel_id), _path_segment(str(message_id)))
+
+    def get_message(self, channel_id, message_id):
+        """One message, with its reactions summary."""
+        data = self._rest.get(self._message_path(channel_id, message_id))
+        return Message(data["message"], self)
+
+    def send_typing(self, channel_id):
+        """Shows "<bot> is typing..." in a channel for a few seconds."""
+        self._rest.post("/api/v1/channels/%s/typing" % _path_segment(channel_id))
+
+    def list_reactions(self, channel_id, message_id):
+        """Every emoji on a message: [{"emoji", "count", "me"}]."""
+        data = self._rest.get(self._message_path(channel_id, message_id) + "/reactions")
+        return (data or {}).get("reactions", [])
+
+    def list_reaction_users(self, channel_id, message_id, emoji, limit=None):
+        """Who reacted with one emoji, earliest first (up to 100)."""
+        data = self._rest.get(
+            self._message_path(channel_id, message_id)
+            + "/reactions/%s%s" % (quote(str(emoji), safe=""), _query(limit=limit))
+        )
+        return (data or {}).get("users", [])
+
+    def remove_user_reaction(self, channel_id, message_id, emoji, user_id):
+        """Removes someone else's reaction (messages.delete + manage_messages)."""
+        data = self._rest.delete(
+            self._message_path(channel_id, message_id)
+            + "/reactions/%s/%s" % (quote(str(emoji), safe=""), _path_segment(user_id))
+        )
+        return bool((data or {}).get("removed"))
+
+    def clear_reactions(self, channel_id, message_id, emoji=None):
+        """Clears every reaction, or one emoji's. Returns how many were removed."""
+        data = self._rest.delete(self._message_path(channel_id, message_id) + "/reactions" + _query(emoji=emoji))
+        return (data or {}).get("removed", 0)
+
+    def list_forum_posts(self, forum_id, limit=None):
+        """A forum's posts, pinned first, then by latest activity."""
+        data = self._rest.get("/api/v1/channels/%s/posts%s" % (_path_segment(forum_id), _query(limit=limit)))
+        return (data or {}).get("posts", [])
+
+    def create_forum_post(self, forum_id, title, content=None, tags=None, embeds=None, components=None):
+        """Starts a forum post. Returns (post, message); reply with send_message(post["id"], ...)."""
+        body = {"title": title}
+        if content is not None:
+            body["content"] = content
+        if tags is not None:
+            body["tags"] = list(tags)
+        if embeds is not None:
+            body["embeds"] = embeds
+        if components is not None:
+            body["components"] = components
+        data = self._rest.post("/api/v1/channels/%s/posts" % _path_segment(forum_id), body)
+        return data["post"], Message(data["message"], self)
 
     def delete_message(self, channel_id, message_id):
         self._rest.delete(
@@ -328,8 +402,11 @@ class Client:
             "/api/v1/channels/%s/permissions/%s" % (_path_segment(channel_id), _path_segment(role_id))
         )
 
-    def list_members(self, server_id):
-        data = self._rest.get("/api/v1/servers/%s/members" % _path_segment(server_id))
+    def list_members(self, server_id, query=None, role=None, limit=None):
+        """Members, optionally filtered by name (query), role id, and limit."""
+        data = self._rest.get(
+            "/api/v1/servers/%s/members%s" % (_path_segment(server_id), _query(query=query, role=role, limit=limit))
+        )
         return data.get("members", [])
 
     def get_member(self, server_id, user_id):
@@ -442,6 +519,27 @@ class Client:
 
     def leave_server(self, server_id):
         return self._rest.post("/api/v1/servers/%s/leave" % _path_segment(server_id))
+
+    # ------------------------------------------------------------ the bot itself
+
+    def fetch_me(self):
+        """The bot's own profile and custom status, plus its account scopes: {"user", "bot"}."""
+        return self._rest.get("/api/v1/users/@me")
+
+    def set_status(self, text):
+        """Sets the bot's custom status ("Watching 12 servers"); None clears it. Up to 64 characters."""
+        data = self._rest.patch("/api/v1/users/@me", {"status_text": text})
+        return ((data or {}).get("user") or {}).get("status_text")
+
+    def list_servers(self):
+        """Every space the bot is in, with the scopes granted there."""
+        data = self._rest.get("/api/v1/users/@me/servers")
+        return (data or {}).get("servers", [])
+
+    def get_user(self, user_id):
+        """A user's public profile, if they share a space with the bot (members.read)."""
+        data = self._rest.get("/api/v1/users/%s" % _path_segment(user_id))
+        return (data or {}).get("user")
 
     def create_invite(self, server_id, scopes):
         if not self.user:

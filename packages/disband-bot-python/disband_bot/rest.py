@@ -1,6 +1,7 @@
 """Minimal HTTP layer for the Disband bot API (stdlib only)."""
 
 import json
+import time
 import urllib.error
 import urllib.request
 
@@ -47,10 +48,7 @@ class REST:
             raise PermissionError(response.status, message, body)
         raise HttpError(response.status, message, body)
 
-    def request(self, method, path, body=None):
-        data = None
-        if body is not None:
-            data = json.dumps(body).encode("utf-8")
+    def _send(self, method, path, data):
         req = urllib.request.Request(
             self.base_url + path,
             data=data,
@@ -64,6 +62,25 @@ class REST:
             return self._parse(e, e.read())
         except urllib.error.URLError as e:
             raise HttpError(0, "Network error: %s" % e.reason)
+
+    def request(self, method, path, body=None):
+        data = None
+        if body is not None:
+            data = json.dumps(body).encode("utf-8")
+        attempt = 0
+        while True:
+            try:
+                return self._send(method, path, data)
+            except RateLimitError as e:
+                # A 429 wasn't carried out, so it's safe to send again once
+                # the limit resets.
+                retries = getattr(self.client, "max_retries", 3)
+                if not getattr(self.client, "retry_rate_limits", True) or attempt >= retries:
+                    raise
+                after = getattr(e, "retry_after_seconds", 0) or 0
+                wait = after if after > 0 else 2 ** attempt
+                time.sleep(min(float(wait), 60.0))
+                attempt += 1
 
     def get(self, path):
         return self.request("GET", path)

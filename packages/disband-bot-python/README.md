@@ -46,6 +46,8 @@ Client(
     base_url="https://www.disband.dev",
     gateway_timeout=20,           # seconds (1–20)
     allow_insecure_localhost=False,
+    retry_rate_limits=True,       # wait out a 429's Retry-After and try again
+    max_retries=3,                # retries per request before a RateLimitError
 )
 ```
 
@@ -60,9 +62,19 @@ block. Call `client.close()` to stop.
 | `messageCreate` | `Message` | A message was posted in a visible channel. |
 | `messageUpdate` | `Message` | A message was edited. |
 | `messageDelete` | `Message` | A message was deleted (partial fields). |
+| `reactionAdd` | `dict` | Someone reacted (`message_id`, `channel_id`, `emoji`, `user_id`, `user`). |
+| `reactionRemove` | `dict` | A reaction was removed (same fields, no `user`). |
 | `memberJoin` | `dict` | A member joined a space (`members.read`). |
 | `memberLeave` | `dict` | A member left a space (`members.read`). |
 | `memberUpdate` | `dict` | A member's roles changed (`members.read`). |
+| `channelCreate` | `dict` | A channel or forum post the bot can see was made. |
+| `channelUpdate` | `dict` | Its name, topic, position or settings changed. |
+| `channelDelete` | `dict` | It was deleted. |
+| `roleCreate` / `roleUpdate` / `roleDelete` | `dict` | Roles changed (`members.read` or `roles.manage`). |
+| `serverUpdate` | `dict` | The space's name, icon, banner or owner changed. |
+| `serverJoin` | `dict` | The bot was added to a space (with its granted `scopes`). |
+| `serverLeave` | `dict` | The bot was removed from a space. |
+| `scopesUpdate` | `dict` | The scopes granted in a space changed. |
 | `interactionCreate` | `dict` | A slash command or button press for this bot. |
 | `error` | `Exception` | Gateway/API handler errors (the loop retries automatically). |
 
@@ -81,15 +93,39 @@ block. Call `client.close()` to stop.
 ```python
 msg = client.send_message(channel_id, "Hello", embeds=[...], components=[...], reply_to_id=msg_id)
 client.edit_message(channel_id, message_id, content="Edited")
-messages = client.list_messages(channel_id, limit=50, before=message_id)
+messages = client.list_messages(channel_id, limit=50, before=message_id)  # or after= / around=
+message = client.get_message(channel_id, message_id)  # message.reactions
 client.delete_message(channel_id, message_id)
 deleted = client.bulk_delete_messages(channel_id, [id1, id2])  # UUIDs, 1-100
+client.send_typing(channel_id)  # "<bot> is typing..." for a few seconds
 
 client.add_reaction(channel_id, message_id, "👍")
 client.remove_reaction(channel_id, message_id, "👍")
+reactions = client.list_reactions(channel_id, message_id)  # [{"emoji", "count", "me"}]
+users = client.list_reaction_users(channel_id, message_id, "👍", limit=100)
+client.remove_user_reaction(channel_id, message_id, "👍", user_id)  # manage_messages
+removed = client.clear_reactions(channel_id, message_id, emoji="👍")  # or all
 pins = client.list_pins(channel_id)
 client.pin_message(channel_id, message_id)
 client.unpin_message(channel_id, message_id)
+```
+
+### Forum posts
+
+```python
+posts = client.list_forum_posts(forum_id, limit=50)
+post, message = client.create_forum_post(forum_id, "Release notes", content="v2 is out", tags=["announcement"])
+client.send_message(post["id"], "Questions welcome here.")  # a post is a channel
+```
+
+### The bot itself
+
+```python
+me = client.fetch_me()  # {"user": {...}, "bot": {...}}
+client.set_status("Watching 12 servers")  # None clears it
+servers = client.list_servers()
+profile = client.get_user(user_id)  # shares a space, members.read
+found = client.list_members(server_id, query="ali", role=role_id, limit=25)
 ```
 
 ### Servers, audit

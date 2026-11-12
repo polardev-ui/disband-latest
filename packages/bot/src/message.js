@@ -19,6 +19,8 @@ export class Message {
     this.createdAt = data.created_at ?? null;
     this.editedAt = data.edited_at ?? null;
     this.displayId = data.display_id ?? null;
+    /** `{ emoji, count, me }[]` when the message came from getMessage(). */
+    this.reactions = data.reactions ?? [];
     this.raw = data;
   }
 

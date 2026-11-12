@@ -47,6 +47,8 @@ export class Message {
   createdAt: string | null;
   editedAt: string | null;
   displayId: number | null;
+  /** Filled when the message came from getMessage(). */
+  reactions: Array<{ emoji: string; count: number; me: boolean }>;
   raw: MessageData;
   readonly authorIsBot: boolean;
   edit(patch: string | MessageEditPatch): Promise<Message>;
