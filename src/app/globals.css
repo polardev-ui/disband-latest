@@ -594,6 +594,39 @@ html[data-desktop-os="linux"] .desktop-titlebar-controls {
   }
 }
 
+/* The homepage: hidden while a signed-in visitor is sent on to /app (see
+   MarketingHomeGate), and in-page links glide instead of jumping. */
+html[data-signed-in] .marketing-home {
+  visibility: hidden;
+}
+html:has(.marketing-home) {
+  scroll-behavior: smooth;
+  scroll-padding-top: 72px;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:has(.marketing-home) {
+    scroll-behavior: auto;
+  }
+}
+
+/* Developer portal pages settle in instead of snapping. */
+@keyframes portal-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[portal-in"] {
+    animation: none !important;
+  }
+}
+
 @keyframes marketing-float {
   0%, 100% {
     transform: translateY(0);
