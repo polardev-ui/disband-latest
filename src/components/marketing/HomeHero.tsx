@@ -37,7 +37,7 @@ export function HomeHero() {
   return (
     <section className="relative isolate overflow-hidden text-white">
       <Backdrop />
-      <div className="relative mx-auto grid max-w-6xl items-center gap-16 px-6 pb-24 pt-32 sm:pt-40 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-12 lg:pb-32 lg:pt-40">
+      <div className="relative mx-auto grid max-w-6xl items-center gap-16 px-6 pb-24 pt-32 sm:pt-40 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.12fr)] lg:gap-12 lg:pb-32 lg:pt-40">
         <div className="text-center lg:text-left">
           <Rise delay={0}>
             <p className="inline-flex items-center gap-2.5 rounded-full bg-white/10 py-1 pl-1.5 pr-3.5 text-[13px] font-medium tabular-nums text-white/85 ring-1 ring-white/15 backdrop-blur-sm">
@@ -83,10 +83,10 @@ export function HomeHero() {
           </Rise>
 
           <Rise delay={230}>
-            <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row lg:justify-start">
+            <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap lg:justify-start">
               <Link
                 href="/login"
-                className="group inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white px-6 text-[16px] font-bold text-[#2b2290] shadow-[0_12px_30px_-10px_rgba(10,5,60,0.6)] transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-10px_rgba(10,5,60,0.7)] active:translate-y-0 sm:w-auto"
+                className="group inline-flex h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white px-6 text-[16px] font-bold text-[#2b2290] shadow-[0_12px_30px_-10px_rgba(10,5,60,0.6)] transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-10px_rgba(10,5,60,0.7)] active:translate-y-0 sm:w-auto"
               >
                 Open Disband
                 <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] transition-transform duration-200 group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -95,7 +95,7 @@ export function HomeHero() {
               </Link>
               <a
                 href="#download"
-                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white/10 px-6 text-[16px] font-bold text-white ring-1 ring-white/20 backdrop-blur-sm transition-colors duration-200 hover:bg-white/[0.16] sm:w-auto"
+                className="inline-flex h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white/10 px-6 text-[16px] font-bold text-white ring-1 ring-white/20 backdrop-blur-sm transition-colors duration-200 hover:bg-white/[0.16] sm:w-auto"
               >
                 <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
