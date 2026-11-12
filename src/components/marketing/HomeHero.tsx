@@ -31,6 +31,12 @@ export function HomeHero() {
   // the visitor's platform straight after.
   const [download, setDownload] = useState("Download");
   useEffect(() => {
+    // Phones and tablets first: Android reports Linux and an iPad a Mac.
+    const touchMac = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || touchMac) {
+      setDownload("Get the app");
+      return;
+    }
     setDownload(DOWNLOAD_LABELS[detectClientPlatform()] ?? "Download");
   }, []);
 
