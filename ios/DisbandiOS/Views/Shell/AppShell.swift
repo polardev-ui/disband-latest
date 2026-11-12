@@ -14,19 +14,24 @@ struct AppShell: View {
     @State private var visited: Set<ShellDestination> = [.home]
 
     var body: some View {
-        ZStack {
-            ForEach(ShellDestination.allCases) { destination in
-                if visited.contains(destination) {
-                    content(for: destination)
-                        .opacity(chrome.destination == destination ? 1 : 0)
-                        .allowsHitTesting(chrome.destination == destination)
-                        .accessibilityHidden(chrome.destination != destination)
+        // The tab bar sits below the content in a plain stack, so every
+        // screen ends at its top edge. As a safe-area inset it was only
+        // honoured by some screens: the ones inside their own navigation
+        // stack (Notes, You) laid out under it, which hid the Notes text box
+        // and clipped the last row of the You page.
+        VStack(spacing: 0) {
+            ZStack {
+                ForEach(ShellDestination.allCases) { destination in
+                    if visited.contains(destination) {
+                        content(for: destination)
+                            .opacity(chrome.destination == destination ? 1 : 0)
+                            .allowsHitTesting(chrome.destination == destination)
+                            .accessibilityHidden(chrome.destination != destination)
+                    }
                 }
             }
-        }
-        // The tab bar takes its own space below the content instead of
-        // floating over it.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
             if chrome.dockVisible {
                 FloatingDock(selection: Bindable(chrome).destination,
                              badges: [.home: inboxUnread])

@@ -192,9 +192,10 @@ struct NotesTab: View {
             .padding(.horizontal, 12)
         }
         .padding(.top, 6)
-        // Sit above the floating dock whenever it's showing. The shell hides
-        // it while the software keyboard is up, and the composer drops down.
         .padding(.bottom, 8)
+        // A solid strip, so notes scrolling past never show through the gap
+        // between the box and the tab bar (or the keyboard).
+        .background(Brand.background)
         .animation(.snappy(duration: 0.25), value: chrome.dockVisible)
         .onChange(of: photoItem) { _, item in
             guard let item else { return }

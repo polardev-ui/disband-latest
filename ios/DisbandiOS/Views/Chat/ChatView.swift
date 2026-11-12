@@ -586,7 +586,7 @@ struct ChatView: View {
                         .onChanged { _ in lastUserScroll = Date() }
                         .onEnded { _ in lastUserScroll = Date() }
                 )
-                .modifier(OpenAtBottom())
+                .modifier(OpenAtBottom(followBottom: stickToBottom))
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
                 .overlay(alignment: .bottomTrailing) {
@@ -1218,19 +1218,23 @@ private struct StagedAttachment: Identifiable {
 }
 
 /**
- Open on the newest message without following every later change.
+ Open on the newest message, and keep it there while the reader is.
 
- On iOS 18 `.defaultScrollAnchor(.bottom)` also anchors size changes, so any
- new row pulled the list to the bottom — a reader scrolled up through older
- messages was thrown down whenever somebody posted. Following the bottom is
- `stickToBottom`'s job, which knows whether the reader is there.
+ Size changes anchor to the bottom only while the reader is at the bottom:
+ a link preview, image or invite card that finishes loading then pushes the
+ conversation up, the way new text does, instead of growing off the bottom
+ of the screen. Once they have scrolled up the anchor is the top, so an
+ embed loading under them never drags the list down (on iOS 18 a fixed
+ bottom anchor threw readers of older messages down whenever anyone posted).
  */
 private struct OpenAtBottom: ViewModifier {
+    var followBottom: Bool
+
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
             content
                 .defaultScrollAnchor(.bottom, for: .initialOffset)
-                .defaultScrollAnchor(.top, for: .sizeChanges)
+                .defaultScrollAnchor(followBottom ? .bottom : .top, for: .sizeChanges)
         } else {
             content.defaultScrollAnchor(.bottom)
         }

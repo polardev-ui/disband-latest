@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The message box, as on desktop: a flat rounded rectangle (12pt corners)
 /// in the composer colour with a hairline border that turns brand-coloured
-/// while typing. Attach on the left; GIF and emoji on the right, giving way
+/// while typing. Attach on the left; GIF on the right, giving way
 /// to send once there is something to send.
 struct MessageComposer: View {
     @Binding var text: String
@@ -51,27 +51,20 @@ struct MessageComposer: View {
                 sendButton
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             } else {
-                HStack(spacing: 0) {
-                    Button(action: onGif) {
-                        Text("GIF")
-                            .font(.system(size: 11, weight: .heavy))
-                            .foregroundStyle(Brand.textSecondary)
-                            .padding(.horizontal, 5)
-                            .frame(height: 20)
-                            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Brand.textSecondary, lineWidth: 1.6))
-                            .frame(width: 40, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel("Send a GIF")
-                    Button(action: onGif) {
-                        Image(systemName: "face.smiling")
-                            .font(.system(size: 21, weight: .regular))
-                            .foregroundStyle(Brand.textSecondary)
-                            .frame(width: 40, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel("Emoji and GIFs")
+                // One GIF button. The emoji face beside it opened the same
+                // GIF picker, so it was a second GIF button in disguise; the
+                // keyboard has its own emoji key.
+                Button(action: onGif) {
+                    Text("GIF")
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundStyle(Brand.textSecondary)
+                        .padding(.horizontal, 5)
+                        .frame(height: 20)
+                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Brand.textSecondary, lineWidth: 1.6))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Send a GIF")
                 .buttonStyle(PressScaleStyle(scale: 0.9))
                 .transition(.opacity)
             }
