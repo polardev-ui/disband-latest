@@ -319,7 +319,9 @@ function CodeCard() {
       <pre className="overflow-x-auto p-5 font-mono text-[13px] leading-[1.75] text-[#e6edf3]">
         <code>
           <span className={k}>import</span> {"{ Client }"} <span className={k}>from</span> <span className={s}>&quot;@disband/bot&quot;</span>;{"\n\n"}
-          <span className={k}>const</span> client = <span className={k}>new</span> <span className={f}>Client</span>({"{ token: process.env."}DISBAND_BOT_TOKEN{" });"}{"\n\n"}
+          <span className={k}>const</span> client = <span className={k}>new</span> <span className={f}>Client</span>({"{"}{"\n"}
+          {"  token: process.env.DISBAND_BOT_TOKEN,"}{"\n"}
+          {"});"}{"\n\n"}
           client.<span className={f}>on</span>(<span className={s}>&quot;messageCreate&quot;</span>, <span className={k}>async</span> (message) =&gt; {"{"}{"\n"}
           {"  "}<span className={k}>if</span> (message.content === <span className={s}>&quot;!ping&quot;</span>) {"{"}{"\n"}
           {"    "}<span className={k}>await</span> client.<span className={f}>sendTyping</span>(message.channelId);{"\n"}
