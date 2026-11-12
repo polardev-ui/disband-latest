@@ -15,10 +15,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { MarketingFooter, MarketingNav } from "./MarketingLayout";
 import { DownloadSection } from "./DownloadSection";
-import { LiveOnlineCount } from "./LiveOnlineCount";
-import { ProductFrame } from "./ProductFrame";
-
-const AUDIENCES = ["friends", "team", "raid crew", "study group", "community", "people"];
+import { HomeHero } from "./HomeHero";
 
 const FEATURES: { title: string; body: string; icon: React.ReactNode }[] = [
   {
@@ -68,44 +65,9 @@ export function MarketingHomeRedesign() {
       <MarketingNav overHero />
 
       <main>
-        <section className="aero-hero relative overflow-hidden px-6 pb-0 pt-28 text-center text-white sm:pt-36">
-          <div className="relative z-[1] mx-auto max-w-4xl">
-            <p className="inline-flex min-h-[30px] items-center gap-2 rounded-full bg-black/20 px-3 py-1 text-[13px] font-medium tabular-nums text-white/85 ring-1 ring-white/15">
-              <span className="h-2 w-2 rounded-full bg-[#4ade80]" /> <LiveOnlineCount />
-            </p>
-            <h1 className="mt-6 text-[44px] font-extrabold leading-[1.04] tracking-[-0.035em] sm:text-[72px]">
-              A place for your
-              <span className="block">
-                <span className="sr-only">people</span>
-                <RotatingWord words={AUDIENCES} />
-              </span>
-            </h1>
-            <p className="mx-auto mt-6 max-w-2xl text-[17px] leading-relaxed text-white/85 sm:text-[19px]">
-              Disband is free chat, voice and video for the people you care about: spaces, channels, forums,
-              DMs and calls on every device, with no ads and no phone number.
-            </p>
-            <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link
-                href="/login"
-                className="flex h-12 items-center rounded-xl bg-white px-7 text-[16px] font-bold text-[#2b2290] shadow-[0_6px_0_rgba(20,12,90,0.25)] transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_8px_0_rgba(20,12,90,0.25)] active:translate-y-0 active:shadow-[0_3px_0_rgba(20,12,90,0.25)]"
-              >
-                Open Disband in your browser
-              </Link>
-              <a
-                href="#download"
-                className="flex h-12 items-center rounded-xl bg-[#1d1680]/70 px-7 text-[16px] font-bold text-white ring-1 ring-white/15 transition-[transform,background-color] duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#1d1680]/90 active:translate-y-0"
-              >
-                Download
-              </a>
-            </div>
-            <p className="mt-4 text-[13px] text-white/65">Free forever · Windows, macOS, Linux, iOS, Android and web</p>
-          </div>
-          <div className="relative z-[1] mx-auto mt-14 max-w-5xl translate-y-10 px-0 sm:px-6">
-            <ProductFrame />
-          </div>
-        </section>
+        <HomeHero />
 
-        <section className="px-6 pb-20 pt-32 sm:pt-40">
+        <section className="px-6 pb-20 pt-10 sm:pt-14">
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <h2 className="text-center text-[32px] font-bold tracking-[-0.025em] text-header-primary sm:text-[44px]">
@@ -218,44 +180,6 @@ export function MarketingHomeRedesign() {
 
       <MarketingFooter />
     </div>
-  );
-}
-
-/**
- * The headline's last word, changing every few seconds. Every word sits in
- * the same grid cell, so the box is as wide as the longest and the line
- * around it never shifts; the words slide and fade rather than retype.
- * Still, on the first word, with reduced motion.
- */
-function RotatingWord({ words }: { words: string[] }) {
-  const [index, setIndex] = useState(0);
-
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const id = window.setInterval(() => {
-      if (!document.hidden) setIndex((i) => (i + 1) % words.length);
-    }, 2600);
-    return () => window.clearInterval(id);
-  }, [words.length]);
-
-  const previous = (index - 1 + words.length) % words.length;
-  return (
-    <span aria-hidden className="inline-grid overflow-hidden pb-[0.1em] align-bottom">
-      {words.map((word, i) => (
-        <span
-          key={word}
-          className={`col-start-1 row-start-1 whitespace-nowrap text-[#ffd8fb] transition-[transform,opacity] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
-            i === index
-              ? "translate-y-0 opacity-100"
-              : i === previous
-                ? "-translate-y-[55%] opacity-0"
-                : "translate-y-[55%] opacity-0"
-          }`}
-        >
-          {word}
-        </span>
-      ))}
-    </span>
   );
 }
 

@@ -609,6 +609,17 @@ html:has(.marketing-home) {
   }
 }
 
+/* The homepage hero's glows drift slowly behind the headline. */
+@keyframes hero-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(48px, 36px, 0) scale(1.08);
+  }
+}
+
 /* Developer portal pages settle in instead of snapping. */
 @keyframes portal-in {
   from {

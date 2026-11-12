@@ -60,7 +60,7 @@ function SpeakerIcon() {
  * palette (dark theme): rail and channel list on one surface with the user
  * card running under both, the conversation, and the member list.
  */
-export function ProductFrame() {
+export function ProductFrame({ compact = false }: { compact?: boolean }) {
   return (
     <div className="relative">
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#1a181e] shadow-[0_40px_90px_-30px_rgba(10,6,40,0.85)]">
@@ -142,7 +142,7 @@ export function ProductFrame() {
             </div>
           </div>
 
-          <div className="hidden w-[150px] shrink-0 border-l border-[#24212a] bg-[#1f1d23] px-2.5 py-3 lg:block">
+          <div className={`hidden w-[150px] shrink-0 border-l border-[#24212a] bg-[#1f1d23] px-2.5 py-3 ${compact ? "" : "lg:block"}`}>
             {/* Static on purpose: the hero above already shows the live count,
                 and two LiveOnlineCount instances share one presence channel. */}
             <p className="px-1.5 pb-2 text-[11px] font-semibold text-[#9d97aa]">Online — 3</p>
