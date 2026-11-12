@@ -12,6 +12,12 @@ struct ComposerTextView: UIViewRepresentable {
     @Binding var focused: Bool
     var maxLines: Int = 6
     var onPasteImages: (([Data]) -> Void)?
+    /// Bumped by the composer's emoji button: opens the keyboard on its
+    /// emoji page.
+    var emojiRequest: Int = 0
+    /// Insets that put one line on the composer's centre.
+    static let verticalInset: CGFloat = 15
+    static let minHeight: CGFloat = 52
 
     func makeUIView(context: Context) -> PasteAwareTextView {
         let view = PasteAwareTextView()
@@ -22,9 +28,9 @@ struct ComposerTextView: UIViewRepresentable {
         view.tintColor = UIColor(Brand.accent)
         view.backgroundColor = .clear
         view.isScrollEnabled = false
-        // 11pt above and below: one line sits on the 44pt buttons' centre,
-        // as the old field did, and more lines grow upward.
-        view.textContainerInset = UIEdgeInsets(top: 11, left: 0, bottom: 11, right: 0)
+        // Inset so one line sits on the 52pt row's centre, level with the
+        // buttons; more lines grow upward.
+        view.textContainerInset = UIEdgeInsets(top: Self.verticalInset, left: 0, bottom: Self.verticalInset, right: 0)
         view.textContainer.lineFragmentPadding = 0
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.text = text
@@ -35,6 +41,13 @@ struct ComposerTextView: UIViewRepresentable {
     func updateUIView(_ view: PasteAwareTextView, context: Context) {
         context.coordinator.parent = self
         view.onPasteImages = onPasteImages
+        if emojiRequest != context.coordinator.lastEmojiRequest {
+            context.coordinator.lastEmojiRequest = emojiRequest
+            view.wantsEmojiKeyboard = true
+            DispatchQueue.main.async {
+                if view.isFirstResponder { view.reloadInputViews() } else { view.becomeFirstResponder() }
+            }
+        }
         // Never overwrite while the keyboard is composing (marked text).
         if view.text != text, view.markedTextRange == nil {
             view.text = text
@@ -55,14 +68,18 @@ struct ComposerTextView: UIViewRepresentable {
         if uiView.isScrollEnabled != scrolls {
             DispatchQueue.main.async { uiView.isScrollEnabled = scrolls }
         }
-        return CGSize(width: width, height: max(44, min(fit.height, cap)))
+        return CGSize(width: width, height: max(Self.minHeight, min(fit.height, cap)))
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: ComposerTextView
-        init(_ parent: ComposerTextView) { self.parent = parent }
+        var lastEmojiRequest = 0
+        init(_ parent: ComposerTextView) {
+            self.parent = parent
+            lastEmojiRequest = parent.emojiRequest
+        }
 
         func textViewDidChange(_ textView: UITextView) {
             parent.text = textView.text
@@ -75,12 +92,24 @@ struct ComposerTextView: UIViewRepresentable {
 
         func textViewDidEndEditing(_ textView: UITextView) {
             if parent.focused { parent.focused = false }
+            // Next time it opens on the person's usual keyboard.
+            (textView as? PasteAwareTextView)?.wantsEmojiKeyboard = false
         }
     }
 }
 
 final class PasteAwareTextView: UITextView {
     var onPasteImages: (([Data]) -> Void)?
+    /// Open on the system emoji keyboard (the composer's emoji button).
+    var wantsEmojiKeyboard = false
+
+    override var textInputMode: UITextInputMode? {
+        if wantsEmojiKeyboard,
+           let emoji = UITextInputMode.activeInputModes.first(where: { $0.primaryLanguage == "emoji" }) {
+            return emoji
+        }
+        return super.textInputMode
+    }
 
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
         if action == #selector(paste(_:)), onPasteImages != nil, UIPasteboard.general.hasImages {

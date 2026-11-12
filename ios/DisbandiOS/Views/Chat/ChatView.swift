@@ -51,6 +51,7 @@ struct ChatView: View {
     @State private var initialScrollSettled = false
     @State private var showGifPicker = false
     @State private var showPollSheet = false
+    @State private var showGiftPicker = false
     @State private var showPhotoPicker = false
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var openProfile: Profile?
@@ -152,9 +153,18 @@ struct ChatView: View {
                                 onGif: { showGifPicker = true },
                                 onPhoto: { if staged.count < maxAttachments { showPhotoPicker = true } },
                                 onPoll: editingMessage == nil ? { showPollSheet = true } : nil,
+                                onGift: editingMessage == nil ? { showGiftPicker = true } : nil,
                                 placeholder: composerPlaceholder,
                                 hasAttachments: !staged.isEmpty,
                                 onPasteImages: editingMessage == nil ? { stagePasted($0) } : nil)
+                                // With the keyboard closed, sit down into the
+                                // home-indicator strip as Discord and Messages
+                                // do. Above the full 34pt safe area plus its
+                                // own padding, the box floated over a band of
+                                // empty space. With the keyboard up it keeps
+                                // its normal gap above the keys.
+                                .padding(.bottom, keyboardHeight > 0 ? 0 : -6)
+                                .animation(.easeOut(duration: 0.25), value: keyboardHeight > 0)
                                 .onChange(of: draft) {
                                     if let name = app.profile?.name, !draft.isEmpty, !draft.hasPrefix("/") {
                                         model.notifyTyping(displayName: name)
@@ -273,6 +283,12 @@ struct ChatView: View {
             model.stop()
         }
         .sheet(isPresented: $showGifPicker) { GifPickerView { sendGif($0) } }
+        .sheet(isPresented: $showGiftPicker) {
+            GiftPickerSheet { link in
+                let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                draft = trimmed.isEmpty ? link : "\(trimmed) \(link)"
+            }
+        }
         .sheet(isPresented: $showPollSheet) { PollCreateSheet { sendPoll($0) } }
         .sheet(item: $openProfile) {
             // Re-inject the services at the sheet's root: SwiftUI on Mac
