@@ -134,8 +134,10 @@ export function MarketingHomeRedesign() {
         </section>
 
         <section className="px-6 py-16">
-          <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-14">
-            <Reveal>
+          {/* grid-cols-1 and min-w-0: on a phone the code card scrolls inside
+              itself instead of widening the page past the screen. */}
+          <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-14">
+            <Reveal className="min-w-0">
               <p className="text-[13px] font-bold uppercase tracking-[0.12em] text-brand">For developers</p>
               <h2 className="mt-2 text-[30px] font-bold leading-tight tracking-[-0.025em] text-header-primary sm:text-[38px]">
                 Build the bot your space has been missing
@@ -171,7 +173,7 @@ export function MarketingHomeRedesign() {
                 </a>
               </div>
             </Reveal>
-            <Reveal delay={120}>
+            <Reveal className="min-w-0" delay={120}>
               <CodeCard />
             </Reveal>
           </div>
