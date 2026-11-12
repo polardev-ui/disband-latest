@@ -65,7 +65,7 @@ const DOCS_URL = "https://docs.disband.dev/docs/bots/";
 export function MarketingHomeRedesign() {
   return (
     <div className="marketing-home min-h-screen bg-bg-secondary text-text-normal">
-      <MarketingNav />
+      <MarketingNav overHero />
 
       <main>
         <section className="aero-hero relative overflow-hidden px-6 pb-0 pt-28 text-center text-white sm:pt-36">
