@@ -161,8 +161,10 @@ function Backdrop() {
 /**
  * The headline's last word, changing every few seconds. Every word sits in
  * the same grid cell, so the box is as wide as the longest and nothing around
- * it shifts; the words slide and fade rather than retype. Still, on the first
- * word, with reduced motion.
+ * it shifts. The change is a soft crossfade: the old word drifts up a little
+ * as it fades, easing out of view, and the new one rises into place a beat
+ * later. Words waiting their turn reset invisibly, with no transition, and
+ * nothing is clipped. Still, on the first word, with reduced motion.
  */
 function RotatingWord({ words }: { words: string[] }) {
   const [index, setIndex] = useState(0);
@@ -182,16 +184,16 @@ function RotatingWord({ words }: { words: string[] }) {
   // ("community", "study group", "people"). The negative margin hands that
   // room back, so the line doesn't move.
   return (
-    <span aria-hidden className="-mb-[0.25em] inline-grid overflow-hidden align-bottom">
+    <span aria-hidden className="-mb-[0.25em] inline-grid align-bottom">
       {words.map((word, i) => (
         <span
           key={word}
-          className={`col-start-1 row-start-1 justify-self-center whitespace-nowrap pb-[0.25em] bg-gradient-to-r from-[#ffe2fb] via-[#f5b0ff] to-[#c6b6ff] bg-clip-text text-transparent transition-[transform,opacity] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none lg:justify-self-start ${
+          className={`col-start-1 row-start-1 justify-self-center whitespace-nowrap pb-[0.25em] bg-gradient-to-r from-[#ffe2fb] via-[#f5b0ff] to-[#c6b6ff] bg-clip-text text-transparent will-change-[transform,opacity] motion-reduce:!transition-none lg:justify-self-start ${
             i === index
-              ? "translate-y-0 opacity-100"
+              ? "translate-y-0 opacity-100 transition-[transform,opacity] delay-[140ms] duration-[700ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
               : i === previous
-                ? "-translate-y-[60%] opacity-0"
-                : "translate-y-[60%] opacity-0"
+                ? "-translate-y-[0.22em] opacity-0 transition-[transform,opacity] duration-[450ms] ease-[cubic-bezier(0.4,0,1,1)]"
+                : "translate-y-[0.22em] opacity-0 transition-none"
           }`}
         >
           {word}
