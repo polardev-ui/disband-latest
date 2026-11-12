@@ -61,9 +61,15 @@ const structuredData = {
   ],
 };
 
+// Runs before the page paints. A saved session usually means the visitor is
+// on their way to /app, so the page stays hidden while MarketingHomeGate
+// checks; everyone else sees it straight away, server-rendered.
+const SIGNED_IN_HINT = `try{if(Object.keys(localStorage).some(function(k){return /^sb-.+-auth-token$/.test(k)}))document.documentElement.dataset.signedIn="1"}catch(e){}`;
+
 export default function HomeRoute() {
   return (
     <>
+      <script dangerouslySetInnerHTML={{ __html: SIGNED_IN_HINT }} />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}

@@ -2,8 +2,13 @@
 
 /*
  The homepage (Nov 2026 redesign): an indigo hero with the headline, the
- two ways in and a picture of the app, then what Disband does, the newest
- features, Disband Aero, downloads and a last call to sign up.
+ two ways in and a picture of the app, then what Disband does, building on
+ it, Disband Aero, downloads and a last call to sign up.
+
+ Built to stay still while it loads: everything renders on the server and is
+ visible without JavaScript; the headline's rotating word sits in a box as
+ wide as the longest word, so nothing around it moves; sections below the
+ fold fade in as they arrive, and nothing above it waits to.
 */
 
 import Link from "next/link";
@@ -37,8 +42,8 @@ const FEATURES: { title: string; body: string; icon: React.ReactNode }[] = [
     icon: <><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2Z" /><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1" /></>,
   },
   {
-    title: "Favorites and saved messages",
-    body: "Star the channels and chats you live in, and save messages to come back to — with reminders on Lite and Aero.",
+    title: "Favourites and saved messages",
+    body: "Star the channels and chats you live in, and save messages to come back to, with reminders on Lite and Aero.",
     icon: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z" />,
   },
   {
@@ -48,34 +53,47 @@ const FEATURES: { title: string; body: string; icon: React.ReactNode }[] = [
   },
 ];
 
+const BOT_POINTS = [
+  "Slash commands, buttons and rich embeds",
+  "Reactions, forum posts and moderation tools",
+  "Live events with no websocket to babysit",
+  "Libraries for JavaScript and Python",
+];
+
+const DOCS_URL = "https://docs.disband.dev/docs/bots/";
+
 export function MarketingHomeRedesign() {
   return (
-    <div className="min-h-screen bg-bg-secondary text-text-normal">
+    <div className="marketing-home min-h-screen bg-bg-secondary text-text-normal">
       <MarketingNav />
 
       <main>
         <section className="aero-hero relative overflow-hidden px-6 pb-0 pt-28 text-center text-white sm:pt-36">
           <div className="relative z-[1] mx-auto max-w-4xl">
-            <p className="inline-flex items-center gap-2 rounded-full bg-black/20 px-3 py-1 text-[13px] font-medium text-white/85 ring-1 ring-white/15">
+            <p className="inline-flex min-h-[30px] items-center gap-2 rounded-full bg-black/20 px-3 py-1 text-[13px] font-medium tabular-nums text-white/85 ring-1 ring-white/15">
               <span className="h-2 w-2 rounded-full bg-[#4ade80]" /> <LiveOnlineCount />
             </p>
-            <h1 className="mt-6 text-[44px] font-extrabold leading-[1.02] tracking-[-0.035em] sm:text-[72px]">
-              A place for your <TypedWord words={AUDIENCES} />
+            <h1 className="mt-6 text-[44px] font-extrabold leading-[1.04] tracking-[-0.035em] sm:text-[72px]">
+              A place for your
+              <span className="block">
+                <span className="sr-only">people</span>
+                <RotatingWord words={AUDIENCES} />
+              </span>
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-[17px] leading-relaxed text-white/85 sm:text-[19px]">
-              Disband is free chat, voice and video for the people you care about — spaces, channels, forums,
+              Disband is free chat, voice and video for the people you care about: spaces, channels, forums,
               DMs and calls on every device, with no ads and no phone number.
             </p>
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link
                 href="/login"
-                className="flex h-12 items-center rounded-xl bg-white px-7 text-[16px] font-bold text-[#2b2290] shadow-[0_6px_0_rgba(20,12,90,0.25)] transition-transform hover:-translate-y-0.5"
+                className="flex h-12 items-center rounded-xl bg-white px-7 text-[16px] font-bold text-[#2b2290] shadow-[0_6px_0_rgba(20,12,90,0.25)] transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_8px_0_rgba(20,12,90,0.25)] active:translate-y-0 active:shadow-[0_3px_0_rgba(20,12,90,0.25)]"
               >
                 Open Disband in your browser
               </Link>
               <a
                 href="#download"
-                className="flex h-12 items-center rounded-xl bg-[#1d1680]/70 px-7 text-[16px] font-bold text-white ring-1 ring-white/15 transition-transform hover:-translate-y-0.5"
+                className="flex h-12 items-center rounded-xl bg-[#1d1680]/70 px-7 text-[16px] font-bold text-white ring-1 ring-white/15 transition-[transform,background-color] duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#1d1680]/90 active:translate-y-0"
               >
                 Download
               </a>
@@ -94,14 +112,14 @@ export function MarketingHomeRedesign() {
                 Everything a group chat needs
               </h2>
               <p className="mx-auto mt-3 max-w-2xl text-center text-[17px] text-text-muted">
-                From two friends to a few thousand members — without the clutter.
+                From two friends to a few thousand members, without the clutter.
               </p>
             </Reveal>
             <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {FEATURES.map((f, i) => (
-                <Reveal key={f.title} delay={i * 70}>
-                  <div className="h-full rounded-2xl border border-border-subtle bg-bg-secondary-alt p-6 transition-colors hover:border-border-strong">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-soft text-brand">
+                <Reveal key={f.title} delay={(i % 3) * 80}>
+                  <div className="group h-full rounded-2xl border border-border-subtle bg-bg-secondary-alt p-6 transition-[border-color,transform] duration-300 ease-out hover:-translate-y-1 hover:border-border-strong motion-reduce:hover:translate-y-0">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-soft text-brand transition-transform duration-300 ease-out group-hover:scale-105">
                       <svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                         {f.icon}
                       </svg>
@@ -112,6 +130,50 @@ export function MarketingHomeRedesign() {
                 </Reveal>
               ))}
             </div>
+          </div>
+        </section>
+
+        <section className="px-6 py-16">
+          <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-14">
+            <Reveal>
+              <p className="text-[13px] font-bold uppercase tracking-[0.12em] text-brand">For developers</p>
+              <h2 className="mt-2 text-[30px] font-bold leading-tight tracking-[-0.025em] text-header-primary sm:text-[38px]">
+                Build the bot your space has been missing
+              </h2>
+              <p className="mt-3 text-[16px] leading-relaxed text-text-muted">
+                A small HTTP API and two tidy libraries. Your bot runs wherever you like; Disband hands it messages,
+                reactions, members and commands, and spaces choose exactly what it may do.
+              </p>
+              <ul className="mt-5 space-y-2.5">
+                {BOT_POINTS.map((p) => (
+                  <li key={p} className="flex items-start gap-2.5 text-[15px] text-text-normal">
+                    <svg viewBox="0 0 24 24" className="mt-0.5 h-[18px] w-[18px] shrink-0 text-brand" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="m5 12 5 5L20 7" />
+                    </svg>
+                    {p}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-7 flex flex-wrap gap-3">
+                <Link
+                  href="/developers/applications"
+                  className="inline-flex h-11 items-center rounded-xl bg-brand px-5 text-[15px] font-bold text-brand-foreground transition-colors duration-200 hover:bg-brand-hover"
+                >
+                  Open the developer portal
+                </Link>
+                <a
+                  href={DOCS_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-11 items-center rounded-xl border border-border-subtle px-5 text-[15px] font-bold text-header-primary transition-colors duration-200 hover:border-border-strong hover:bg-bg-secondary-alt"
+                >
+                  Read the docs
+                </a>
+              </div>
+            </Reveal>
+            <Reveal delay={120}>
+              <CodeCard />
+            </Reveal>
           </div>
         </section>
 
@@ -128,7 +190,7 @@ export function MarketingHomeRedesign() {
               </div>
               <Link
                 href="/login"
-                className="relative z-[1] shrink-0 rounded-xl bg-white px-6 py-3 text-[15px] font-bold text-[#2b2290] transition-transform hover:-translate-y-0.5 sm:ml-auto"
+                className="relative z-[1] shrink-0 rounded-xl bg-white px-6 py-3 text-[15px] font-bold text-[#2b2290] transition-transform duration-200 ease-out hover:-translate-y-0.5 sm:ml-auto"
               >
                 See the plans
               </Link>
@@ -144,7 +206,7 @@ export function MarketingHomeRedesign() {
             <p className="mt-3 text-[16px] text-text-muted">No ads. No phone number. Just your people.</p>
             <Link
               href="/login"
-              className="mt-8 inline-flex h-12 items-center rounded-xl bg-brand px-7 text-[16px] font-bold text-brand-foreground transition-colors hover:bg-brand-hover"
+              className="mt-8 inline-flex h-12 items-center rounded-xl bg-brand px-7 text-[16px] font-bold text-brand-foreground transition-colors duration-200 hover:bg-brand-hover"
             >
               Create an account
             </Link>
@@ -157,67 +219,67 @@ export function MarketingHomeRedesign() {
   );
 }
 
-/** Types each word, holds it, deletes it, moves on. A still word with reduced motion. */
-function TypedWord({ words }: { words: string[] }) {
-  const [text, setText] = useState(words[0]);
+/**
+ * The headline's last word, changing every few seconds. Every word sits in
+ * the same grid cell, so the box is as wide as the longest and the line
+ * around it never shifts; the words slide and fade rather than retype.
+ * Still, on the first word, with reduced motion.
+ */
+function RotatingWord({ words }: { words: string[] }) {
+  const [index, setIndex] = useState(0);
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    let word = 0;
-    let len = words[0].length;
-    let deleting = true;
-    let timer = window.setTimeout(function tick() {
-      if (deleting) {
-        len -= 1;
-        if (len <= 0) {
-          deleting = false;
-          word = (word + 1) % words.length;
-        }
-      } else {
-        len += 1;
-      }
-      const current = words[word];
-      setText(current.slice(0, Math.max(0, len)));
-      let delay = deleting ? 45 : 85;
-      if (!deleting && len >= current.length) {
-        deleting = true;
-        delay = 2200;
-      }
-      timer = window.setTimeout(tick, delay);
-    }, 2200);
-    return () => window.clearTimeout(timer);
-  }, [words]);
+    const id = window.setInterval(() => {
+      if (!document.hidden) setIndex((i) => (i + 1) % words.length);
+    }, 2600);
+    return () => window.clearInterval(id);
+  }, [words.length]);
 
+  const previous = (index - 1 + words.length) % words.length;
   return (
-    <span className="whitespace-nowrap text-[#ffd8fb]">
-      {text}
-      <span className="ml-0.5 inline-block w-[0.5em] animate-pulse text-white/70" aria-hidden>
-        |
-      </span>
+    <span aria-hidden className="inline-grid overflow-hidden pb-[0.1em] align-bottom">
+      {words.map((word, i) => (
+        <span
+          key={word}
+          className={`col-start-1 row-start-1 whitespace-nowrap text-[#ffd8fb] transition-[transform,opacity] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+            i === index
+              ? "translate-y-0 opacity-100"
+              : i === previous
+                ? "-translate-y-[55%] opacity-0"
+                : "translate-y-[55%] opacity-0"
+          }`}
+        >
+          {word}
+        </span>
+      ))}
     </span>
   );
 }
 
-/** Fades its content up the first time it scrolls into view. */
+/**
+ * Fades its content up as it scrolls into view. Visible by default, so the
+ * page reads fine before JavaScript runs; only what starts below the fold is
+ * held back to arrive.
+ */
 function Reveal({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [shown, setShown] = useState(false);
+  const [state, setState] = useState<"static" | "waiting" | "shown">("static");
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    if (typeof IntersectionObserver === "undefined") {
-      setShown(true);
-      return;
-    }
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (el.getBoundingClientRect().top < window.innerHeight * 0.92) return;
+    setState("waiting");
     const io = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setShown(true);
+          setState("shown");
           io.disconnect();
         }
       },
-      { rootMargin: "0px 0px -10% 0px" },
+      { rootMargin: "0px 0px -8% 0px" },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -226,12 +288,48 @@ function Reveal({ children, delay = 0, className = "" }: { children: React.React
   return (
     <div
       ref={ref}
-      style={{ transitionDelay: `${delay}ms` }}
-      className={`${className} h-full motion-safe:transition-[opacity,transform] motion-safe:duration-700 ${
-        shown ? "translate-y-0 opacity-100" : "motion-safe:translate-y-3 motion-safe:opacity-0"
+      style={state === "shown" ? { transitionDelay: `${delay}ms` } : undefined}
+      className={`${className} h-full ${
+        state === "waiting"
+          ? "translate-y-5 opacity-0"
+          : state === "shown"
+            ? "translate-y-0 opacity-100 transition-[opacity,transform] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            : ""
       }`}
     >
       {children}
+    </div>
+  );
+}
+
+/** A bot in a dozen lines, for the developers section. */
+function CodeCard() {
+  const k = "text-[#ff7b72]";
+  const s = "text-[#a5d6ff]";
+  const f = "text-[#d2a8ff]";
+  const c = "text-[#8b949e]";
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0f1013] shadow-[0_24px_60px_-20px_rgba(0,0,0,0.6)]">
+      <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
+        <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+        <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
+        <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+        <span className="ml-2 font-mono text-[12px] text-white/50">bot.js</span>
+      </div>
+      <pre className="overflow-x-auto p-5 font-mono text-[13px] leading-[1.75] text-[#e6edf3]">
+        <code>
+          <span className={k}>import</span> {"{ Client }"} <span className={k}>from</span> <span className={s}>&quot;@disband/bot&quot;</span>;{"\n\n"}
+          <span className={k}>const</span> client = <span className={k}>new</span> <span className={f}>Client</span>({"{ token: process.env."}DISBAND_BOT_TOKEN{" });"}{"\n\n"}
+          client.<span className={f}>on</span>(<span className={s}>&quot;messageCreate&quot;</span>, <span className={k}>async</span> (message) =&gt; {"{"}{"\n"}
+          {"  "}<span className={k}>if</span> (message.content === <span className={s}>&quot;!ping&quot;</span>) {"{"}{"\n"}
+          {"    "}<span className={k}>await</span> client.<span className={f}>sendTyping</span>(message.channelId);{"\n"}
+          {"    "}<span className={k}>await</span> message.<span className={f}>reply</span>(<span className={s}>&quot;pong&quot;</span>);{"\n"}
+          {"  }"}{"\n"}
+          {"});"}{"\n\n"}
+          <span className={c}>{"// Slash commands, buttons, forums, reactions…"}</span>{"\n"}
+          <span className={k}>await</span> client.<span className={f}>connect</span>();
+        </code>
+      </pre>
     </div>
   );
 }

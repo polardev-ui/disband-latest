@@ -85,7 +85,9 @@ export function DownloadSection() {
   const [release, setRelease] = useState<GitHubRelease | null>(null);
   const [assets, setAssets] = useState<ReleaseAsset[]>([]);
   const [loading, setLoading] = useState(true);
-  const [platform, setPlatform] = useState(detectClientPlatform());
+  // "unknown" on the first render, as on the server, so hydration matches;
+  // the effect below swaps in the visitor's platform straight after.
+  const [platform, setPlatform] = useState<ReturnType<typeof detectClientPlatform>>("unknown");
   const [macArch, setMacArch] = useState<MacArch>("unknown");
 
   useEffect(() => {

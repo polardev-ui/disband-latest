@@ -68,10 +68,16 @@ export function LiveOnlineCount({ compact = false }: { compact?: boolean }) {
         });
     };
 
-    connect();
+    // Joining presence downloads everyone's state; leave it until the page
+    // has painted and settled, so it doesn't compete with the first render.
+    const idle = typeof window.requestIdleCallback === "function" ? window.requestIdleCallback : null;
+    const idleId = idle ? idle(connect, { timeout: 2500 }) : undefined;
+    const startTimer = idle ? undefined : setTimeout(connect, 1200);
 
     return () => {
       disposedRef.current = true;
+      if (idleId !== undefined) window.cancelIdleCallback(idleId);
+      if (startTimer) clearTimeout(startTimer);
       if (retryTimer) clearTimeout(retryTimer);
       if (syncTimer) clearTimeout(syncTimer);
       const active = channel;
