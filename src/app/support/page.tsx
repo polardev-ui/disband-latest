@@ -109,7 +109,33 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const { error: err } = await getSupabaseClient().auth.signInWithOtp({
+      const supabase = getSupabaseClient();
+      // An existing account just gets a code. Banned people come here to
+      // appeal, so this step runs none of the new-account checks.
+      const first = await supabase.auth.signInWithOtp({
+        email: clean,
+        options: { shouldCreateUser: false },
+      });
+      if (!first.error) {
+        setSent(true);
+        return;
+      }
+      const noAccount =
+        first.error.code === "otp_disabled" || /signups not allowed/i.test(first.error.message);
+      if (!noAccount) throw first.error;
+
+      // No account for this address: Support makes a login for it, which is a
+      // new account like any other, so it passes the same checks and gets the
+      // sign-up ticket the database asks for.
+      const res = await apiFetch("/api/auth/signup-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: clean, purpose: "support" }),
+      });
+      const check = (await res.json().catch(() => ({}))) as { allowed?: boolean; error?: string };
+      if (!res.ok || !check.allowed) throw new Error(check.error ?? "Could not send the code.");
+
+      const { error: err } = await supabase.auth.signInWithOtp({
         email: clean,
         // Marks a login made only to reach Support (see isSupportOnlyAccount).
         options: { shouldCreateUser: true, data: { support_only: true } },

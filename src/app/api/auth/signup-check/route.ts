@@ -6,6 +6,7 @@ import { usernameContainsBlockedWord, usernameFormatError } from "@/lib/username
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { persistentRateLimitCheck, logGateEvent } from "@/lib/auth-guard";
 import { requireTurnstile } from "@/lib/turnstile";
+import { checkEmailDomain } from "@/lib/email-domain-check";
 
 // Agreed limits: 3/hr + 5/day per IP, 3/hr per email, plus existing 15/min burst guard.
 export async function POST(request: Request) {
@@ -13,7 +14,7 @@ export async function POST(request: Request) {
   const checkLimit = rateLimit(`signup-check:${checkIp}`, 15, 60_000);
   if (!checkLimit.allowed) return tooManyRequests(checkLimit.retryAfterSeconds);
 
-  let body: { email?: string; username?: string; turnstileToken?: string; platform?: string };
+  let body: { email?: string; username?: string; turnstileToken?: string; platform?: string; purpose?: string };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -25,6 +26,12 @@ export async function POST(request: Request) {
   // every other check here, and still need the ticket issued at the end.
   const isMobile = body.platform === "ios" || body.platform === "android";
   const username = body.username?.trim().toLowerCase() ?? "";
+  // The Support page signs people in with a one-time code, which makes a login
+  // for an address that has no account yet. It has no username to check.
+  const forSupport = body.purpose === "support";
+  if (forSupport && !email) {
+    return NextResponse.json({ allowed: false, error: "Enter your email address." }, { status: 400 });
+  }
 
   const sanitized = username.replace(/[^a-z0-9_]/g, "");
   const ip = getClientIp(request);
@@ -141,10 +148,17 @@ export async function POST(request: Request) {
         error: (emailCheck.error as string | undefined) ?? "That email cannot be used.",
       }, { status: 400 });
     }
+
+    // By mail server: catches temp-mail services' newest domains, and
+    // addresses whose domain can't receive mail at all.
+    const verdict = await checkEmailDomain(service, email);
+    if (!verdict.ok) {
+      return NextResponse.json({ allowed: false, error: verdict.error }, { status: 400 });
+    }
   }
 
   // The Android app picks a username after sign-up, so it may send none.
-  const formatErr = isMobile && !sanitized ? null : usernameFormatError(sanitized);
+  const formatErr = (isMobile || forSupport) && !sanitized ? null : usernameFormatError(sanitized);
   if (formatErr) {
     // Patch 4 (fail-soft): a single bad username no longer burns the whole
     // network for 24h (griefable on schools/shared IPs, and responsible for
@@ -225,18 +239,23 @@ export async function POST(request: Request) {
   }
 
   // Every check passed: issue a short-lived, single-use sign-up ticket for this
-  // email. The before-user-created auth hook (migration 0224) refuses any new
-  // account without one, so calling Supabase's /auth/v1/signup directly, and
-  // skipping this route and its captcha, no longer creates an account.
+  // email. The database refuses any new account without one (the
+  // require_signup_ticket trigger, migration 0258), so calling Supabase's
+  // /auth/v1/signup directly, skipping this route and its captcha, fails.
   if (email) {
     const { error: ticketError } = await service.from("signup_tickets").upsert({
       email,
       expires_at: new Date(Date.now() + 15 * 60_000).toISOString(),
     });
-    // Logged, not fatal: until the hook is switched on no ticket is needed,
-    // and once it is, a missing ticket is refused by Supabase anyway.
+    // Fatal now: the database refuses any account without a ticket
+    // (migration 0258), so saying "allowed" here would only lead to a
+    // confusing failure at the next step.
     if (ticketError) {
       console.error("[signup-check] Could not issue sign-up ticket:", ticketError.message);
+      return NextResponse.json(
+        { allowed: false, error: "Sign-up is temporarily unavailable. Please try again in a few minutes." },
+        { status: 503 },
+      );
     }
   }
 
