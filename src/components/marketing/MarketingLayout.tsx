@@ -89,7 +89,7 @@ export function MarketingNav({ overHero = false }: { overHero?: boolean }) {
             </Link>
             <Link
               href="/app"
-              className="rounded-full bg-white px-4 py-[7px] text-[14px] font-bold text-[#2b2290] shadow-[0_2px_12px_rgba(10,6,40,0.28)] transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-px hover:shadow-[0_6px_18px_rgba(10,6,40,0.32)] active:translate-y-0"
+              className="rounded-full bg-white px-4 py-[7px] text-[14px] font-bold text-[#2b2290] shadow-[0_2px_12px_rgba(10,6,40,0.28)] transition-[translate,box-shadow] duration-200 ease-out hover:-translate-y-px hover:shadow-[0_6px_18px_rgba(10,6,40,0.32)] active:translate-y-0"
             >
               Open Disband
             </Link>

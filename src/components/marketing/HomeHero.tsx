@@ -92,7 +92,7 @@ export function HomeHero() {
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap lg:justify-start">
               <Link
                 href="/login"
-                className="group inline-flex h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white px-6 text-[16px] font-bold text-[#2b2290] shadow-[0_12px_30px_-10px_rgba(10,5,60,0.6)] transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-10px_rgba(10,5,60,0.7)] active:translate-y-0 sm:w-auto"
+                className="group inline-flex h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white px-6 text-[16px] font-bold text-[#2b2290] shadow-[0_12px_30px_-10px_rgba(10,5,60,0.6)] transition-[translate,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-10px_rgba(10,5,60,0.7)] active:translate-y-0 sm:w-auto"
               >
                 Open Disband
                 <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] transition-transform duration-200 group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -188,11 +188,11 @@ function RotatingWord({ words }: { words: string[] }) {
       {words.map((word, i) => (
         <span
           key={word}
-          className={`col-start-1 row-start-1 justify-self-center whitespace-nowrap pb-[0.25em] bg-gradient-to-r from-[#ffe2fb] via-[#f5b0ff] to-[#c6b6ff] bg-clip-text text-transparent will-change-[transform,opacity] motion-reduce:!transition-none lg:justify-self-start ${
+          className={`col-start-1 row-start-1 justify-self-center whitespace-nowrap pb-[0.25em] bg-gradient-to-r from-[#ffe2fb] via-[#f5b0ff] to-[#c6b6ff] bg-clip-text text-transparent will-change-[translate,opacity] motion-reduce:!transition-none lg:justify-self-start ${
             i === index
-              ? "translate-y-0 opacity-100 transition-[transform,opacity] delay-[140ms] duration-[700ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
+              ? "translate-y-0 opacity-100 transition-[translate,opacity] delay-[140ms] duration-[700ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
               : i === previous
-                ? "-translate-y-[0.22em] opacity-0 transition-[transform,opacity] duration-[450ms] ease-[cubic-bezier(0.4,0,1,1)]"
+                ? "-translate-y-[0.22em] opacity-0 transition-[translate,opacity] duration-[450ms] ease-[cubic-bezier(0.4,0,1,1)]"
                 : "translate-y-[0.22em] opacity-0 transition-none"
           }`}
         >

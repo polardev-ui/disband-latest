@@ -462,7 +462,7 @@ export function DeveloperPortal() {
               const status = gatewayStatus(b.last_seen_at);
               return (
                 <button key={b.id} type="button" onClick={() => open(b.id)}
-                  className="group overflow-hidden rounded-xl border border-divider bg-bg-secondary text-left transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-brand/50 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:hover:translate-y-0">
+                  className="group overflow-hidden rounded-xl border border-divider bg-bg-secondary text-left transition-[translate,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-brand/50 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:hover:translate-y-0">
                   <div className="h-14 bg-gradient-to-r from-brand/25 via-brand/10 to-transparent" />
                   <div className="-mt-8 px-5 pb-5">
                     <span className="inline-block rounded-full border-4 border-bg-secondary"><Initial bot={b} size={56} /></span>

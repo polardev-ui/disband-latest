@@ -80,7 +80,7 @@ export function MarketingHomeRedesign() {
             <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {FEATURES.map((f, i) => (
                 <Reveal key={f.title} delay={(i % 3) * 80}>
-                  <div className="group h-full rounded-2xl border border-border-subtle bg-bg-secondary-alt p-6 transition-[border-color,transform] duration-300 ease-out hover:-translate-y-1 hover:border-border-strong motion-reduce:hover:translate-y-0">
+                  <div className="group h-full rounded-2xl border border-border-subtle bg-bg-secondary-alt p-6 transition-[border-color,translate] duration-300 ease-out hover:-translate-y-1 hover:border-border-strong motion-reduce:hover:translate-y-0">
                     <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-soft text-brand transition-transform duration-300 ease-out group-hover:scale-105">
                       <svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                         {f.icon}
@@ -219,7 +219,7 @@ function Reveal({ children, delay = 0, className = "" }: { children: React.React
         state === "waiting"
           ? "translate-y-5 opacity-0"
           : state === "shown"
-            ? "translate-y-0 opacity-100 transition-[opacity,transform] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            ? "translate-y-0 opacity-100 transition-[opacity,translate] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
             : ""
       }`}
     >
