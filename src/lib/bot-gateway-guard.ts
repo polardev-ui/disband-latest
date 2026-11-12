@@ -46,9 +46,10 @@ export async function checkBotRateLimit(
   const { max, windowSeconds } = BUCKET_LIMITS[bucket];
   const key = botBucketKey(bucket, id);
 
-  const burstWindow = Math.min(windowSeconds * 1000, 60_000);
-  const burstMax = Math.min(max, 20);
-  const burst = rateLimit(key, burstMax, burstWindow);
+  // The in-memory pre-filter only spares the database from callers already
+  // over the limit. It used to allow 20 a minute whatever the bucket, which
+  // capped reads and writes far below the documented 120 and 60.
+  const burst = rateLimit(key, max, windowSeconds * 1000);
   if (!burst.allowed) return { limited: true, retryAfterSeconds: burst.retryAfterSeconds };
 
   const hit = await persistentRateLimitCheck(service, [{ key, max, windowSeconds }]);

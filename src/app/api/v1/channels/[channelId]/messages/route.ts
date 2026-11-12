@@ -4,6 +4,7 @@ import { authenticateBot, botJsonError } from "@/lib/bot-auth";
 import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
 import { normalizeEmbeds } from "@/lib/embeds";
 import { normalizeComponents } from "@/lib/bot-commands";
+import { resolveMessageId } from "@/lib/bot-ids";
 
 export async function GET(
   request: NextRequest,
@@ -14,8 +15,14 @@ export async function GET(
     if (!bot) return NextResponse.json({ error: "Invalid bot token" }, { status: 401 });
 
     const { channelId } = await params;
-    const limit = Math.min(Math.max(Number(request.nextUrl.searchParams.get("limit") ?? 50), 1), 100);
-    const before = request.nextUrl.searchParams.get("before");
+    const search = request.nextUrl.searchParams;
+    const limit = Math.min(Math.max(Number(search.get("limit") ?? 50) || 50, 1), 100);
+    // Page by any one of these; each takes a message id or display_id.
+    const anchors = (["before", "after", "around"] as const).filter((key) => search.get(key));
+    if (anchors.length > 1) {
+      return NextResponse.json({ error: "Use only one of before, after, or around" }, { status: 400 });
+    }
+    const anchor = anchors[0];
 
     const service = getServiceSupabase();
     if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
@@ -23,11 +30,19 @@ export async function GET(
     const readGate = await checkBotRateLimit(service, "read", bot.botId);
     if (readGate.limited) return botRateLimited(readGate.retryAfterSeconds);
 
+    let anchorId: string | null = null;
+    if (anchor) {
+      anchorId = await resolveMessageId(service, search.get(anchor) ?? "", channelId);
+      if (!anchorId) return NextResponse.json({ messages: [] });
+    }
+
     const { data: messages, error } = await service.rpc("bot_list_messages", {
       p_bot_id: bot.botId,
       p_channel_id: channelId,
       p_limit: limit,
-      p_before_id: before || null,
+      p_before_id: anchor === "before" ? anchorId : null,
+      ...(anchor === "after" ? { p_after_id: anchorId } : {}),
+      ...(anchor === "around" ? { p_around_id: anchorId } : {}),
     });
 
     if (error) {

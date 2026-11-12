@@ -14,6 +14,35 @@ function statusFor(error: { message?: string }): number {
   return botJsonError(error);
 }
 
+/** One message, with a summary of its reactions (messages.read). */
+export async function GET(request: NextRequest, { params }: Params) {
+  try {
+    const bot = await authenticateBot(request);
+    if (!bot) return NextResponse.json({ error: "Invalid bot token" }, { status: 401 });
+
+    const { channelId, messageId } = await params;
+    const service = getServiceSupabase();
+    if (!service) return NextResponse.json({ error: "Service not available" }, { status: 500 });
+
+    const gate = await checkBotRateLimit(service, "read", bot.botId);
+    if (gate.limited) return botRateLimited(gate.retryAfterSeconds);
+
+    const id = await resolveMessageId(service, messageId, channelId);
+    if (!id) return NextResponse.json({ error: "Message not found" }, { status: 404 });
+
+    const { data, error } = await service.rpc("bot_get_message", {
+      p_bot_id: bot.botId,
+      p_channel_id: channelId,
+      p_message_id: id,
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: statusFor(error) });
+    return NextResponse.json({ message: data });
+  } catch (err) {
+    console.error("v1/channels/[channelId]/messages/[messageId] GET error", err);
+    return NextResponse.json({ error: "Internal space error" }, { status: 500 });
+  }
+}
+
 /**
  * Edit a message (messages.write). A bot can edit its own; with a role that
  * has Manage Messages it can edit anyone's in a channel it can see.

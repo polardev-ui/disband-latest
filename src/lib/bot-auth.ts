@@ -86,10 +86,12 @@ export async function authenticateBot(request: NextRequest): Promise<BotActor | 
 
 export function botJsonError(error: { message?: string } | null | undefined): number {
   const msg = error?.message ?? "";
-  if (/^Invalid|is required|too many/.test(msg)) return 400;
+  if (/^Invalid|is required|too many|Reply target/.test(msg)) return 400;
   if (/highest role|cannot give it|cannot change|cannot edit|cannot delete|cannot be given/.test(msg)) return 403;
   if (/revoked|not a member|does not have|permission|read-only|restricted|Only the/.test(msg)) return 403;
-  if (/not found|content is required|too long|invalid|expired|already been used|Reply target/.test(msg)) return 400;
+  // The docs promise 404 for anything missing or out of sight; this was 400.
+  if (/not found/i.test(msg)) return 404;
+  if (/content is required|too long|invalid|expired|already been used/.test(msg)) return 400;
   if (/too quickly|rate limit/.test(msg)) return 429;
   return 500;
 }

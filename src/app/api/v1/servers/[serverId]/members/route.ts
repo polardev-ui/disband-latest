@@ -27,7 +27,23 @@ export async function GET(
       return NextResponse.json({ error: error.message }, { status: botJsonError(error) });
     }
 
-    return NextResponse.json({ members: members ?? [] });
+    // Optional filters: ?query= (username or display name contains it),
+    // ?role= (a role id), ?limit= (1–1000). Without them, everyone.
+    type Member = { username?: string | null; display_name?: string | null; roles?: string[] | null };
+    const search = request.nextUrl.searchParams;
+    const query = search.get("query")?.trim().toLowerCase() ?? "";
+    const role = search.get("role")?.trim().toLowerCase() ?? "";
+    const limit = Number(search.get("limit"));
+    let list = (members ?? []) as Member[];
+    if (query) {
+      list = list.filter((m) =>
+        [m.username, m.display_name].some((v) => typeof v === "string" && v.toLowerCase().includes(query)),
+      );
+    }
+    if (role) list = list.filter((m) => (m.roles ?? []).some((r) => String(r).toLowerCase() === role));
+    if (Number.isFinite(limit) && limit >= 1) list = list.slice(0, Math.min(Math.floor(limit), 1000));
+
+    return NextResponse.json({ members: list });
   } catch (err) {
     console.error("v1/servers/[serverId]/members error", err);
     return NextResponse.json({ error: "Internal space error" }, { status: 500 });
