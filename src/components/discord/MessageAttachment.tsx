@@ -10,7 +10,7 @@ import { PollCard } from "./PollCard";
 import { ActivityCard } from "./activities/ActivityCard";
 import { AudioPlayer } from "./media/AudioPlayer";
 import { VideoPlayer } from "./VideoPlayer";
-import { safeImageUrl } from "@/lib/safe-url";
+import { isSafeUrl, safeImageUrl } from "@/lib/safe-url";
 import type { Profile } from "@/lib/supabase/types";
 import { useI18n } from "@/contexts/I18nContext";
 
@@ -169,7 +169,12 @@ export function MessageAttachment({
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-text-normal">{fileName}</p>
-        <p className="text-xs text-text-muted">{t("Couldn't load this attachment.")}</p>
+        <p className="text-xs text-text-muted">
+          {t("Couldn't load this attachment.")}{" "}
+          {isSafeUrl(url) && (
+            <a href={url} target="_blank" rel="noopener noreferrer" className="text-text-link hover:underline">{t("Open it")}</a>
+          )}
+        </p>
       </div>
     </div>
   );
@@ -268,7 +273,19 @@ export function MessageAttachment({
                     setDims(dimCache.get(url) ?? null);
                     handleMediaLoad();
                   }}
-                  onError={() => setImgError(true)}
+                  onError={(e) => {
+                    // One retry: a dropped request (flaky Wi-Fi, a busy CDN)
+                    // shouldn't leave a GIF broken for good (bug report, Nov 10).
+                    const img = e.currentTarget;
+                    if (!img.dataset.retried) {
+                      img.dataset.retried = "1";
+                      window.setTimeout(() => {
+                        img.src = img.src + (img.src.includes("?") ? "&" : "?") + "r=1";
+                      }, 800);
+                      return;
+                    }
+                    setImgError(true);
+                  }}
                 />
               </button>,
             )}

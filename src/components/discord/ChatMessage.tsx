@@ -758,9 +758,8 @@ function ChatMessageImpl({
   const highlightClass = highlight ? "!bg-brand/10 shadow-[inset_2px_0_0_0_var(--brand)]" : "";
 
   const mentionedYou = !!(
-    (currentUserId && message.mentions?.includes(currentUserId))
+    namedYou(message.mentions, body, currentUserId, currentUserName)
     || mentionsEveryone(body)
-    || mentionsUsername(body, currentUserName)
   );
   const repliedToYou = !!(
     currentUserId
@@ -772,7 +771,7 @@ function ChatMessageImpl({
   // that role's colour, as on Discord. The highest such role wins.
   const pingRoleColour = (() => {
     if (!pingedYou || !roles?.length || !myRoleIds?.length) return null;
-    if (mentionsUsername(body, currentUserName)) return null;
+    if (namedYou(message.mentions, body, currentUserId, currentUserName)) return null;
     const mine = new Set(myRoleIds);
     const slugs = new Set([...body.matchAll(/@&([a-zA-Z0-9_-]{1,64})/g)].map((m) => m[1].toLowerCase()));
     if (slugs.size === 0) return null;
@@ -1016,6 +1015,23 @@ export function shouldGroupMessages(
   return gap >= 0 && gap <= 7 * 60 * 1000;
 }
 
+/**
+ * Did this message @mention you by name? Channel messages carry the server's
+ * resolved list of mentioned user ids, so that decides: matching "@hk" against
+ * your display name lit up anyone who merely shared the name with the person
+ * mentioned (bug report, Nov 10). Messages without the list (DMs, groups)
+ * still match by name.
+ */
+function namedYou(
+  mentions: string[] | null | undefined,
+  body: string,
+  currentUserId: string | null | undefined,
+  currentUserName: string | null | undefined,
+): boolean {
+  if (Array.isArray(mentions)) return !!currentUserId && mentions.includes(currentUserId);
+  return mentionsUsername(body, currentUserName);
+}
+
 function messagePingsUser(
   msg: ChatMessageData,
   currentUserId: string,
@@ -1023,9 +1039,8 @@ function messagePingsUser(
 ): boolean {
   const body = normalizeMessageContent(msg.content);
   return !!(
-    msg.mentions?.includes(currentUserId)
+    namedYou(msg.mentions, body, currentUserId, currentUserName)
     || mentionsEveryone(body)
-    || mentionsUsername(body, currentUserName)
     || (msg.reply_to?.author_id === currentUserId && msg.author_id !== currentUserId)
   );
 }

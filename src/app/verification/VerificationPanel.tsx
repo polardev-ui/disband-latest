@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ResendConfirmation } from "@/components/auth/ResendConfirmation";
 
 export function VerificationPanel() {
   const search = useSearchParams();
@@ -23,7 +24,7 @@ export function VerificationPanel() {
       const { error } = await getSupabaseClient().auth.verifyOtp({ token_hash: tokenHash, type: type as "signup" });
       if (error) {
         setStatus("error");
-        setMessage(error.message);
+        setMessage(/expired|invalid/i.test(error.message) ? "This link has expired or was already used." : error.message);
         return;
       }
       setStatus("done");
@@ -41,6 +42,14 @@ export function VerificationPanel() {
         {status === "done" ? "You're confirmed" : status === "error" ? "Link didn't work" : "Confirming…"}
       </h1>
       <p className="mt-2 text-sm leading-relaxed text-text-muted">{message}</p>
+      {status === "error" && (
+        // Confirmation links expire; without this an unconfirmed account was
+        // stuck with no way to get a new one (bug report, Nov 11).
+        <div className="mt-6 w-full text-left">
+          <p className="mb-2 text-center text-sm text-text-muted">Send a new confirmation email:</p>
+          <ResendConfirmation defaultEmail={search.get("email") ?? ""} />
+        </div>
+      )}
       {status === "error" && (
         <Link
           href="/login"

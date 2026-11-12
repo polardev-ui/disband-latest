@@ -102,7 +102,10 @@ export function UserPanelPopup({ anchorRef, onClose, onOpenSettings, onOpenProfi
     "aria-controls": submenu === next ? flyoutId : undefined,
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => openFlyout(next, event.detail === 0),
     onPointerEnter: (event: React.PointerEvent<HTMLButtonElement>) => {
-      if (event.pointerType === "mouse") openFlyout(next);
+      // Not while the custom status editor is open: opening it grows the
+      // popup upwards, which slid "Switch accounts" under the still cursor
+      // and opened the accounts list by hover (bug report, Nov 11).
+      if (event.pointerType === "mouse" && submenu !== "custom") openFlyout(next);
     },
     onPointerLeave: scheduleClose,
     onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {

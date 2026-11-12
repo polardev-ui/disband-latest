@@ -80,7 +80,8 @@ export function GroupCallStage({
     profile: p.profile ?? members.find((m) => m.id === p.user_id),
     stream: p.user_id === selfId ? localStream : remoteStreams.get(p.user_id),
     mirrored: p.user_id === selfId,
-    ringing: ringingIds.has(p.user_id),
+    // Not once they've connected: the ring outlived the answer (bug report, Nov 12).
+    ringing: ringingIds.has(p.user_id) && !connectedPeerIds.has(p.user_id),
     muted: p.user_id === selfId ? micMuted : undefined,
     label: p.profile ?? members.find((m) => m.id === p.user_id)
       ? displayName((p.profile ?? members.find((m) => m.id === p.user_id))!)

@@ -38,6 +38,9 @@ import {
 } from "@/lib/notification-jump";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 
+/** Replies being written, by conversation, for this session. */
+const pendingReplies = new Map<string, ReplyPreview>();
+
 function NewMessagesDivider({ animate = true }: { animate?: boolean }) {
   const { t } = useI18n();
   return (
@@ -496,7 +499,25 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const prevFirstIdRef = useRef<string | null>(null);
   const prevMessageCountRef = useRef(0);
   const loadingMoreRef = useRef(false);
-  const [replyTo, setReplyTo] = useState<ReplyPreview | null>(null);
+  // The reply you were writing stays with its conversation, like the typed
+  // draft: switching channels and back used to keep the text but drop the
+  // "Replying to" (bug report, Nov 10).
+  const replyKey = typingScope ? `${typingScope.kind}:${typingScope.id}` : null;
+  const [replyTo, setReplyToState] = useState<ReplyPreview | null>(() => (replyKey ? pendingReplies.get(replyKey) ?? null : null));
+  const replyKeyRef = useRef(replyKey);
+  useEffect(() => {
+    if (replyKeyRef.current === replyKey) return;
+    replyKeyRef.current = replyKey;
+    setReplyToState(replyKey ? pendingReplies.get(replyKey) ?? null : null);
+  }, [replyKey]);
+  const setReplyTo = useCallback((reply: ReplyPreview | null) => {
+    const key = replyKeyRef.current;
+    if (key) {
+      if (reply) pendingReplies.set(key, reply);
+      else pendingReplies.delete(key);
+    }
+    setReplyToState(reply);
+  }, []);
   const [editing, setEditing] = useState<{ id: string; content: string } | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   useEffect(() => {

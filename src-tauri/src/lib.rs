@@ -117,6 +117,19 @@ pub fn run() {
             .setup(|app| {
                 build_tray(app.handle())?;
                 activity::start(app.handle());
+                // Opened at login before the display's scaling settled, the
+                // window could come up as a thin bar (bug report, Nov 8).
+                // Anything under the minimum size goes back to the default.
+                use tauri::Manager;
+                if let Some(window) = app.get_webview_window("main") {
+                    if let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) {
+                        let logical = size.to_logical::<f64>(scale);
+                        if logical.width < 880.0 || logical.height < 600.0 {
+                            let _ = window.set_size(tauri::LogicalSize::new(1280.0, 820.0));
+                            let _ = window.center();
+                        }
+                    }
+                }
                 Ok(())
             });
     }

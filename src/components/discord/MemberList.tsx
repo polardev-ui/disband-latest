@@ -117,6 +117,11 @@ export function MemberList({ serverId = null, channelId = null, members, roles, 
     [presenceMap],
   );
 
+  const onlineIds = useMemo(
+    () => new Set(useWindow ? windowed.online.map((m) => m.user_id) : []),
+    [useWindow, windowed.online],
+  );
+
   const items = useMemo<Item[]>(() => {
     const online: Member[] = [];
     const offline: Member[] = [];
@@ -323,6 +328,10 @@ export function MemberList({ serverId = null, channelId = null, members, roles, 
             (() => {
               const slot = windowed.offlineAt(item.index);
               const m = slot ? withOwner(slot, ownerId) : null;
+              // An offline page fetched a moment after the online list can
+              // still hold someone now online: they'd show in both
+              // (bug report, Nov 9). The online row wins.
+              if (m && onlineIds.has(m.user_id)) return null;
               return m ? (
                 <Row
                   key={item.key}

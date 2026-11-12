@@ -250,7 +250,10 @@ export function useGroupCallManager(
           if (lane === LANE_SCREEN_AUDIO) {
             setRemoteScreenAudio((prev) => {
               const next = new Map(prev);
-              if (track.readyState === "live") next.set(remoteId, new MediaStream([track]));
+              // A screen lane with no sender still has a "live" receive
+              // track, only muted: that drew a black "screen LIVE" tile for
+              // everyone in the call (bug reports, Nov 12).
+              if (track.readyState === "live" && !track.muted) next.set(remoteId, new MediaStream([track]));
               else next.delete(remoteId);
               return next;
             });
@@ -261,7 +264,10 @@ export function useGroupCallManager(
             // removes the tile instead of leaving a dead video element.
             setRemoteScreens((prev) => {
               const next = new Map(prev);
-              if (track.readyState === "live") next.set(remoteId, new MediaStream([track]));
+              // A screen lane with no sender still has a "live" receive
+              // track, only muted: that drew a black "screen LIVE" tile for
+              // everyone in the call (bug reports, Nov 12).
+              if (track.readyState === "live" && !track.muted) next.set(remoteId, new MediaStream([track]));
               else next.delete(remoteId);
               return next;
             });
