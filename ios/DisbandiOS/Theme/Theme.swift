@@ -81,7 +81,7 @@ extension Color {
     /// Stable color derived from an arbitrary string (used for avatar fallbacks).
     init(seed: String) {
         let palette: [UInt32] = [
-            0x5865F2, 0xEB459E, 0xED4245, 0xFAA61A,
+            0x4641D9, 0xEB459E, 0xED4245, 0xFAA61A,
             0x57F287, 0x3BA55C, 0x9B59B6, 0x1ABC9C, 0xE67E22,
         ]
         var hash: UInt32 = 5381

@@ -45,7 +45,7 @@ struct InboxPanel: View {
                     .padding(.horizontal, 8)
                 }
             }
-            .padding(.bottom, 110)
+            .padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
         .refreshable { await vm.start(currentUserId: app.currentUserId, unread: unreadStore, closed: closedDms) }

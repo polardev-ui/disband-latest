@@ -80,7 +80,7 @@ struct CatalystSheet: View {
                 }
                 .padding(16)
             }
-            .background(Brand.surface)
+            .background(Brand.background)
             .navigationTitle("Catalysts")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -109,43 +109,47 @@ struct CatalystSheet: View {
     // MARK: - Pieces
 
     private var status: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "bolt.fill")
-                .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 64, height: 64)
-                .background(
-                    LinearGradient(colors: [Color(hex: 0xFF73FA), Color(hex: 0x5865F2)],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing),
-                    in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-                )
-
-            if loading {
-                ProgressView().frame(height: 44)
-            } else {
-                Text(level.name)
-                    .font(.title3.weight(.heavy))
-                    .foregroundStyle(Brand.textPrimary)
-                Text("\(count) Catalyst\(count == 1 ? "" : "s") on \(serverName)")
-                    .font(.subheadline)
-                    .foregroundStyle(Brand.textMuted)
-                    .multilineTextAlignment(.center)
-
-                if let next {
-                    let need = next.min - count
-                    ProgressView(
-                        value: Double(max(0, count - level.min)),
-                        total: Double(max(1, next.min - level.min))
-                    )
-                    .tint(Color(hex: 0xFF73FA))
-                    .padding(.top, 2)
-                    Text("\(need) more to reach \(next.name)")
-                        .font(.caption)
-                        .foregroundStyle(Brand.textMuted)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 48, height: 48)
+                    .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loading ? "Catalysts" : level.name)
+                        .font(.system(size: 22, weight: .heavy))
+                        .foregroundStyle(.white)
+                    Text(loading ? serverName : "\(count) Catalyst\(count == 1 ? "" : "s") on \(serverName)")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .lineLimit(1)
+                }
+            }
+            if !loading, let next {
+                let progress = Double(max(0, count - level.min)) / Double(max(1, next.min - level.min))
+                VStack(alignment: .leading, spacing: 6) {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(.white.opacity(0.2))
+                            Capsule().fill(.white).frame(width: max(8, geo.size.width * progress))
+                        }
+                    }
+                    .frame(height: 8)
+                    .animation(Motion.settle, value: count)
+                    Text("\(next.min - count) more to reach \(next.name)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
                 }
             }
         }
-        .padding(.top, 8)
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(colors: [Color(hex: 0xC34BE8), Color(hex: 0x4641D9)], startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+        )
+        .riseIn()
     }
 
     @ViewBuilder
@@ -171,7 +175,9 @@ struct CatalystSheet: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Brand.elevated, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(Brand.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.white.opacity(0.06)))
+            .riseIn(delay: 0.06)
         }
     }
 
@@ -179,16 +185,28 @@ struct CatalystSheet: View {
     private var buyBox: some View {
         VStack(spacing: 14) {
             if let product {
-                Stepper(value: $quantity, in: 1...10) {
-                    HStack {
-                        Text("Quantity")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Brand.textPrimary)
-                        Spacer()
+                HStack {
+                    Text("Quantity")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Brand.textPrimary)
+                    Spacer()
+                    HStack(spacing: 0) {
+                        Button { if quantity > 1 { quantity -= 1; Haptics.select() } } label: {
+                            Image(systemName: "minus").frame(width: 40, height: 36)
+                        }
+                        .disabled(quantity <= 1)
                         Text("\(quantity)")
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundStyle(Brand.textMuted)
+                            .font(.system(size: 16, weight: .bold).monospacedDigit())
+                            .frame(minWidth: 28)
+                            .contentTransition(.numericText())
+                        Button { if quantity < 10 { quantity += 1; Haptics.select() } } label: {
+                            Image(systemName: "plus").frame(width: 40, height: 36)
+                        }
+                        .disabled(quantity >= 10)
                     }
+                    .foregroundStyle(Brand.textPrimary)
+                    .background(Brand.elevated, in: Capsule())
+                    .animation(Motion.quick, value: quantity)
                 }
 
                 Button {
@@ -201,26 +219,27 @@ struct CatalystSheet: View {
                         if ok { await reloadCount() }
                     }
                 } label: {
-                    HStack(spacing: 8) {
-                        if store.busy { ProgressView().tint(.white) }
+                    ZStack {
                         // The total is StoreKit's own price repeated, not
                         // arithmetic on it: multiplying a formatted string is
                         // wrong, and the App Store shows the real total at
                         // confirmation anyway.
-                        Text(store.busy
-                             ? "Working…"
-                             : "Buy \(quantity) · \(product.displayPrice) each")
-                            .font(.headline)
+                        if store.busy {
+                            LoadingDots()
+                        } else {
+                            Text("Buy \(quantity) · \(product.displayPrice) each").font(.system(size: 17, weight: .bold))
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
                     .background(
-                        LinearGradient(colors: [Color(hex: 0xFF73FA), Color(hex: 0x5865F2)],
+                        LinearGradient(colors: [Color(hex: 0xC34BE8), Color(hex: 0x4641D9)],
                                        startPoint: .leading, endPoint: .trailing),
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous)
                     )
                     .foregroundStyle(.white)
                 }
+                .buttonStyle(PressScaleStyle())
                 .disabled(store.busy)
 
             } else if store.loadingCatalogue {

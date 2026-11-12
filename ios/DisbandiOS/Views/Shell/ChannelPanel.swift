@@ -126,7 +126,7 @@ struct ChannelPanel: View {
                     }
                 }
             }
-            .padding(.bottom, 110)
+            .padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
         .refreshable { await load() }
@@ -344,13 +344,13 @@ struct ChannelPanel: View {
                     .foregroundStyle(Brand.textMuted)
                     .frame(width: 22)
                 Text(channel.name)
-                    .font(.body.weight(.medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Brand.textSecondary)
                     .lineLimit(1)
                 Spacer()
             }
             .padding(.horizontal, 10)
-            .frame(height: 42)
+            .frame(height: 38)
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(ChannelRowStyle())
@@ -364,11 +364,11 @@ struct ChannelPanel: View {
                                                       lockedReason: locked)) {
             HStack(spacing: 10) {
                 Image(systemName: channel.readOnly == true ? "megaphone.fill" : "number")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(unread ? Brand.textPrimary : Brand.textMuted)
                     .frame(width: 22)
                 Text(channel.name)
-                    .font(.body.weight(unread ? .bold : .medium))
+                    .font(.system(size: 16, weight: unread ? .semibold : .medium))
                     .foregroundStyle(unread ? Brand.textPrimary : Brand.textSecondary)
                     .lineLimit(1)
                 Spacer()
@@ -380,7 +380,7 @@ struct ChannelPanel: View {
                 }
             }
             .padding(.horizontal, 10)
-            .frame(height: 42)
+            .frame(height: 38)
             .contentShape(RoundedRectangle(cornerRadius: 12))
             .overlay(alignment: .leading) {
                 if unread {
@@ -412,7 +412,7 @@ struct ChannelPanel: View {
                         .frame(width: 22)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(channel.name)
-                            .font(.body.weight(.medium))
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(connected ? Brand.textPrimary : Brand.textSecondary)
                             .lineLimit(1)
                         if let topic {
@@ -432,7 +432,7 @@ struct ChannelPanel: View {
                     }
                 }
                 .padding(.horizontal, 10)
-                .frame(minHeight: 42)
+                .frame(minHeight: 38)
                 .contentShape(RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(ChannelRowStyle(highlighted: connected))

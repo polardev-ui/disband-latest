@@ -14,23 +14,23 @@ struct AppShell: View {
     @State private var visited: Set<ShellDestination> = [.home]
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            ZStack {
-                ForEach(ShellDestination.allCases) { destination in
-                    if visited.contains(destination) {
-                        content(for: destination)
-                            .opacity(chrome.destination == destination ? 1 : 0)
-                            .allowsHitTesting(chrome.destination == destination)
-                            .accessibilityHidden(chrome.destination != destination)
-                    }
+        ZStack {
+            ForEach(ShellDestination.allCases) { destination in
+                if visited.contains(destination) {
+                    content(for: destination)
+                        .opacity(chrome.destination == destination ? 1 : 0)
+                        .allowsHitTesting(chrome.destination == destination)
+                        .accessibilityHidden(chrome.destination != destination)
                 }
             }
-
+        }
+        // The tab bar takes its own space below the content instead of
+        // floating over it.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if chrome.dockVisible {
                 FloatingDock(selection: Bindable(chrome).destination,
                              badges: [.home: inboxUnread])
-                    .padding(.bottom, 6)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(.move(edge: .bottom))
             }
         }
         .background(Brand.background.ignoresSafeArea())
@@ -117,7 +117,7 @@ struct AppShell: View {
 
     /// Lets lists scroll their last rows clear of the floating dock — and
     /// drops to zero when a pushed conversation has hidden it.
-    private var dockMargin: CGFloat { chrome.dockVisible ? 84 : 0 }
+    private var dockMargin: CGFloat { 0 }
 
     private var inboxUnread: Int {
         vm.threads.reduce(0) { $0 + unreadStore.count(for: $1.id) }

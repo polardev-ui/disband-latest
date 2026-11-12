@@ -10,9 +10,11 @@ struct MessageEmbeds: View {
         let invites = MessageLinks.inviteCodes(in: text)
         let gifts = MessageLinks.giftCodes(in: text)
         let links = MessageLinks.previewURLs(in: text)
+        let bots = MessageLinks.botInviteCodes(in: text)
 
-        if !invites.isEmpty || !gifts.isEmpty || !links.isEmpty {
+        if !invites.isEmpty || !gifts.isEmpty || !links.isEmpty || !bots.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
+                ForEach(bots, id: \.self) { BotInviteCard(code: $0) }
                 ForEach(invites, id: \.self) { ServerInviteCard(code: $0) }
                 ForEach(gifts, id: \.self) { GiftClaimCard(code: $0) }
                 ForEach(links, id: \.self) { LinkPreviewCard(url: $0) }

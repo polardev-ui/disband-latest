@@ -52,7 +52,7 @@ struct AeroPaywallSheet: View {
                 }
                 .padding(16)
             }
-            .background(Brand.surface)
+            .background(Brand.background)
             .navigationTitle("Disband Aero")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -81,19 +81,34 @@ struct AeroPaywallSheet: View {
     // MARK: - Pieces
 
     private var header: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 30, weight: .bold))
-                .foregroundStyle(.black)
-                .frame(width: 68, height: 68)
-                .background(SubscriptionPlan.aeroGold,
-                            in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            Text("Everything Disband does, with the ceiling lifted.")
-                .font(.title3.weight(.semibold))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Brand.textPrimary)
+        // The desktop's Aero promo: indigo with a pink glow, white type.
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles").font(.system(size: 13, weight: .bold))
+                Text("DISBAND AERO").font(.system(size: 12, weight: .heavy)).tracking(1.2)
+            }
+            .foregroundStyle(.white.opacity(0.8))
+            Text("More of everything, for the price of a coffee")
+                .font(.system(size: 28, weight: .heavy))
+                .tracking(-0.4)
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Bigger uploads, sharper streams, an animated profile and every theme.")
+                .font(.system(size: 15))
+                .foregroundStyle(.white.opacity(0.82))
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.top, 8)
+        .padding(22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack {
+                LinearGradient(colors: [Color(hex: 0x4B43E0), Color(hex: 0x33299F)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                RadialGradient(colors: [Color(hex: 0xE055FF, alpha: 0.42), .clear], center: .topTrailing, startRadius: 0, endRadius: 260)
+                RadialGradient(colors: [Color(hex: 0x8C78FF, alpha: 0.5), .clear], center: .bottomLeading, startRadius: 0, endRadius: 220)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .riseIn()
     }
 
     private var features: some View {
@@ -101,9 +116,10 @@ struct AeroPaywallSheet: View {
             ForEach(Array(Self.perks.enumerated()), id: \.offset) { index, perk in
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: perk.symbol)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(SubscriptionPlan.aeroGold)
-                        .frame(width: 26, height: 26)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(Brand.accent.gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(perk.title)
                             .font(.subheadline.weight(.semibold))
@@ -122,7 +138,9 @@ struct AeroPaywallSheet: View {
             }
         }
         .padding(.horizontal, 16)
-        .background(Brand.elevated, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(Brand.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.white.opacity(0.06)))
+        .riseIn(delay: 0.06)
     }
 
     @ViewBuilder
@@ -142,19 +160,23 @@ struct AeroPaywallSheet: View {
                 }
 
                 Button {
+                    Haptics.tap()
                     Task { await store.purchaseAero(productId: product.id) }
                 } label: {
-                    HStack(spacing: 8) {
-                        if store.busy { ProgressView().tint(.black) }
-                        Text(store.busy ? "Working…" : "Subscribe")
-                            .font(.headline)
+                    ZStack {
+                        if store.busy {
+                            LoadingDots(color: Color(hex: 0x2B2290))
+                        } else {
+                            Text("Subscribe").font(.system(size: 17, weight: .bold))
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
-                    .background(SubscriptionPlan.aeroGold,
-                                in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .foregroundStyle(.black)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .foregroundStyle(Color(hex: 0x2B2290))
+                    .shadow(color: Color(hex: 0x0A0528, alpha: 0.5), radius: 14, y: 8)
                 }
+                .buttonStyle(PressScaleStyle())
                 .disabled(store.busy)
 
             } else if store.loadingCatalogue {

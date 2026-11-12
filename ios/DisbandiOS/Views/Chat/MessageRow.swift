@@ -106,17 +106,24 @@ struct MessageRow: View {
                  never turned off. A chat you cannot scroll is a far worse
                  failure than a tray you have to tap.
 
-                 `onLongPressGesture` has no such tail: it either fires once
+                 A plain long press has no such tail: it either fires once
                  or it does not fire at all, and there is no state left behind
                  either way. Picking an emoji is a separate tap on the tray.
 
                  `maximumDistance` keeps it honest — move more than 10pt and
                  the press fails, so a scroll or a reply swipe can never raise
                  it.
+
+                 Simultaneous, so it never takes the touch from the controls
+                 inside the message: as an exclusive long press it swallowed
+                 every Button in the row — the avatar, photos, Join Space,
+                 Authorize — and only plain tap gestures got through.
                  */
-                .onLongPressGesture(minimumDuration: 0.45, maximumDistance: 10) {
-                    onHoldReactStarted(frameBox.frame)
-                }
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.45, maximumDistance: 10).onEnded { _ in
+                        onHoldReactStarted(frameBox.frame)
+                    }
+                )
                 .onGeometryChange(for: CGRect.self) { proxy in
                     proxy.frame(in: .named("chatScroll"))
                 } action: { frame in
@@ -137,11 +144,15 @@ struct MessageRow: View {
             if grouped {
                 Color.clear.frame(width: 40)
             } else {
-                Button { tapAuthor() } label: {
-                    AvatarView(url: authorAvatar, name: authorName, size: 40,
-                               decoration: message.webhook == nil ? message.author?.equippedRingEffect : nil)
-                }
-                .buttonStyle(.plain)
+                // A tap gesture, not a Button: the row's hold-to-react
+                // gesture swallowed Button taps, so the avatar never opened
+                // the profile.
+                AvatarView(url: authorAvatar, name: authorName, size: 40,
+                           decoration: message.webhook == nil ? message.author?.equippedRingEffect : nil)
+                    .contentShape(Circle())
+                    .onTapGesture { tapAuthor() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(authorName)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -156,12 +167,11 @@ struct MessageRow: View {
                         Group {
                             // Webhooks post under their own name, with no style.
                             if message.webhook == nil, let author = message.author {
-                                StyledName(author, size: UIFont.preferredFont(forTextStyle: .subheadline).pointSize,
-                                           fallbackColor: isOwn ? Brand.accent : Brand.textPrimary)
+                                StyledName(author, size: 16, fallbackColor: Brand.textPrimary)
                             } else {
                                 Text(authorName)
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(isOwn ? Brand.accent : Brand.textPrimary)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(Brand.textPrimary)
                             }
                         }
                         .lineLimit(1)
@@ -171,7 +181,7 @@ struct MessageRow: View {
                         }
                         if isApp { AppTag() }
                         Text(RelativeTime.short(message.createdAt))
-                            .font(.caption2).foregroundStyle(Brand.textMuted)
+                            .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                     }
                 }
 
@@ -273,10 +283,14 @@ struct MessageRow: View {
                         .foregroundStyle(r.reacted ? Brand.accent : Brand.textSecondary)
                 }
                 .padding(.horizontal, 9).padding(.vertical, 5)
-                .background(r.reacted ? Brand.accent.opacity(0.2) : Brand.elevated,
-                            in: .capsule)
-                .overlay(Capsule().stroke(Brand.accent, lineWidth: r.reacted ? 1 : 0))
-                .contentShape(Capsule())
+                // The desktop's reaction pill: rounded, outlined in the brand
+                // colour when it's yours.
+                .background(r.reacted ? Brand.accent.opacity(0.18) : Brand.elevated,
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(r.reacted ? Brand.accent : Color.white.opacity(0.05), lineWidth: 1))
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .animation(Motion.quick, value: r.reacted)
                 // No hover on a phone, so "who reacted" is a press and hold.
                 // Not a Button: a Button's own tap swallowed the hold, and
                 // the message's hold-to-react (0.45 s) fired instead. This
@@ -328,21 +342,21 @@ struct MessageRow: View {
         } else if let urlString = message.attachmentUrl, let url = URL(string: urlString) {
             switch message.attachmentType {
             case .image, .gif:
-                Button { viewingMedia = ViewedMedia(url: url, kind: message.attachmentType == .gif ? .gif : .image) } label: {
-                    SizedChatImage(url: urlString)
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 4)
-                .accessibilityLabel("Open image")
+                SizedChatImage(url: urlString)
+                    .contentShape(Rectangle())
+                    .onTapGesture { viewingMedia = ViewedMedia(url: url, kind: message.attachmentType == .gif ? .gif : .image) }
+                    .padding(.top, 4)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel("Open image")
 
             case .video:
                 // Opened in the app rather than handed to Safari, so it can be
                 // scrubbed, zoomed and saved without leaving the conversation.
-                Button { viewingMedia = ViewedMedia(url: url, kind: .video) } label: {
-                    VideoThumbnail(url: url, maxWidth: 280)
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 4)
+                VideoThumbnail(url: url, maxWidth: 280)
+                    .contentShape(Rectangle())
+                    .onTapGesture { viewingMedia = ViewedMedia(url: url, kind: .video) }
+                    .padding(.top, 4)
+                    .accessibilityAddTraits(.isButton)
 
             case .poll:
                 PollCardView(pollId: urlString)
@@ -379,19 +393,19 @@ struct MessageRow: View {
                 }
                 .frame(maxWidth: 280)
             } else if let only = tiles.first, let url = URL(string: only.url) {
-                Button { viewingMedia = ViewedMedia(url: url, kind: only.type == .gif ? .gif : .image) } label: {
-                    SizedChatImage(url: only.url)
-                }
-                .buttonStyle(.plain)
+                SizedChatImage(url: only.url)
+                    .contentShape(Rectangle())
+                    .onTapGesture { viewingMedia = ViewedMedia(url: url, kind: only.type == .gif ? .gif : .image) }
+                    .accessibilityAddTraits(.isButton)
             }
 
             ForEach(rest) { item in
                 if let url = URL(string: item.url) {
                     if item.type == .video {
-                        Button { viewingMedia = ViewedMedia(url: url, kind: .video) } label: {
-                            VideoThumbnail(url: url, maxWidth: 280)
-                        }
-                        .buttonStyle(.plain)
+                        VideoThumbnail(url: url, maxWidth: 280)
+                            .contentShape(Rectangle())
+                            .onTapGesture { viewingMedia = ViewedMedia(url: url, kind: .video) }
+                            .accessibilityAddTraits(.isButton)
                     } else {
                         AttachmentFileCard(
                             url: url,
@@ -448,7 +462,7 @@ struct AppTag: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
-            .background(Color(hex: 0x5865F2), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .background(Color(hex: 0x4641D9), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
             .accessibilityLabel("App")
     }
 }

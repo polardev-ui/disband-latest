@@ -117,6 +117,7 @@ struct DisbandiOSApp: App {
                         // straight away; the chosen status stays saved.
                         presence.stop()
                     }
+                    if phase == .active, appState.currentUserId != nil { StreakService.shared.recordVisit() }
                     guard phase == .active, let uid = appState.currentUserId else { return }
                     // Coming back: re-read the status chosen on any device
                     // (Online set on desktop shows here too), then rejoin.

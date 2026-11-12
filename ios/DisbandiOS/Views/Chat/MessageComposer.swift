@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// The message box: a single capsule floating above the conversation rather
-/// than a bar bolted to the bottom edge. Attach sits inside it on the left;
-/// send slides in on the right only once there is something to send.
+/// The message box, as on desktop: a flat rounded rectangle (12pt corners)
+/// in the composer colour with a hairline border that turns brand-coloured
+/// while typing. Attach on the left; GIF and emoji on the right, giving way
+/// to send once there is something to send.
 struct MessageComposer: View {
     @Binding var text: String
     var uploading: Bool = false
@@ -50,40 +51,42 @@ struct MessageComposer: View {
                 sendButton
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             } else {
-                // While the box is empty, GIFs are one tap away on the right
-                // (as in Discord), not tucked inside the attach menu.
-                Button(action: onGif) {
-                    Image(systemName: "face.smiling")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(Brand.textMuted)
-                        .frame(width: 40, height: 44)
-                        .contentShape(Rectangle())
+                HStack(spacing: 0) {
+                    Button(action: onGif) {
+                        Text("GIF")
+                            .font(.system(size: 11, weight: .heavy))
+                            .foregroundStyle(Brand.textSecondary)
+                            .padding(.horizontal, 5)
+                            .frame(height: 20)
+                            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Brand.textSecondary, lineWidth: 1.6))
+                            .frame(width: 40, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Send a GIF")
+                    Button(action: onGif) {
+                        Image(systemName: "face.smiling")
+                            .font(.system(size: 21, weight: .regular))
+                            .foregroundStyle(Brand.textSecondary)
+                            .frame(width: 40, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Emoji and GIFs")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Send a GIF")
+                .buttonStyle(PressScaleStyle(scale: 0.9))
                 .transition(.opacity)
             }
         }
-        .padding(.leading, 4)
+        .padding(.leading, 6)
         .padding(.trailing, 4)
-        .padding(.vertical, 3)
-        .background {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .fill(Brand.elevated.opacity(0.75))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .strokeBorder(focused ? Brand.accent.opacity(0.55) : Color.white.opacity(0.07),
-                                      lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
-        }
-        .animation(.snappy(duration: 0.22), value: canSend)
+        .padding(.vertical, 2)
+        .background(Brand.elevated, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(focused ? Brand.accent.opacity(0.7) : Color.white.opacity(0.06), lineWidth: 1)
+        )
+        .animation(Motion.quick, value: canSend)
         .animation(.easeOut(duration: 0.15), value: focused)
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
         .padding(.top, 6)
         .padding(.bottom, 8)
         // Swiping down on the composer dismisses the keyboard (the iOS
@@ -110,10 +113,10 @@ struct MessageComposer: View {
                     ProgressView().controlSize(.small)
                 } else {
                     Image(systemName: "plus")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(Brand.textPrimary)
-                        .frame(width: 36, height: 36)
-                        .background(Brand.surface, in: Circle())
+                        .font(.system(size: 14, weight: .heavy))
+                        .foregroundStyle(Brand.elevated)
+                        .frame(width: 26, height: 26)
+                        .background(Brand.textSecondary, in: Circle())
                 }
             }
             .frame(width: 44, height: 44)
@@ -125,11 +128,11 @@ struct MessageComposer: View {
 
     private var sendButton: some View {
         Button(action: onSend) {
-            Image(systemName: "arrow.up")
-                .font(.system(size: 17, weight: .bold))
+            Image(systemName: "paperplane.fill")
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background(Brand.accent.gradient, in: Circle())
+                .frame(width: 36, height: 32)
+                .background(Brand.accent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }

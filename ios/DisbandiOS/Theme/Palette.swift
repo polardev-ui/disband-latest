@@ -40,13 +40,15 @@ struct ThemeDefinition: Identifiable, Sendable {
 enum Themes {
     static let all: [ThemeDefinition] = [
         ThemeDefinition(
-            id: .dark, label: "Disband Dark", detail: "Classic Disband dark theme",
+            id: .dark, label: "Disband Dark", detail: "The desktop app's own colours",
+            // The desktop's dark tokens (globals.css :root): floating #141217,
+            // sidebar #1a181e, chat #1f1d23, hover #26232b, brand #4641d9.
             palette: Palette(
-                background: Color(hex: 0x1E1F22), surface: Color(hex: 0x2B2D31),
-                surfaceRaised: Color(hex: 0x313338), elevated: Color(hex: 0x35373C),
-                accent: Color(hex: 0x5865F2), accentSoft: Color(hex: 0x4752C4),
-                textPrimary: Color(hex: 0xF2F3F5), textSecondary: Color(hex: 0xB5BAC1),
-                textMuted: Color(hex: 0x949BA4), divider: Color(hex: 0x3F4147),
+                background: Color(hex: 0x141217), surface: Color(hex: 0x1A181E),
+                surfaceRaised: Color(hex: 0x1F1D23), elevated: Color(hex: 0x26232B),
+                accent: Color(hex: 0x4641D9), accentSoft: Color(hex: 0x3A35C2),
+                textPrimary: Color(hex: 0xF4F4F6), textSecondary: Color(hex: 0xCECBD4),
+                textMuted: Color(hex: 0x9D97AA), divider: Color(hex: 0x2C2932),
                 colorScheme: .dark),
             requiredPlan: nil),
 

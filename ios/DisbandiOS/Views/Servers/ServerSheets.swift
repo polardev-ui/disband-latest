@@ -397,7 +397,7 @@ struct ServerBadgeView: View {
                 return path
             }
 
-            let bg: Color = kind == .verified ? Color(hex: 0x23A55A) : kind == .partner ? Color(hex: 0x5865F2) : .white
+            let bg: Color = kind == .verified ? Color(hex: 0x23A55A) : kind == .partner ? Color(hex: 0x4641D9) : .white
             let seal = poly(Self.scallop, closed: true)
             ctx.fill(seal, with: .color(bg))
             ctx.stroke(seal, with: .color(bg), style: StrokeStyle(lineWidth: 1.2 * s, lineJoin: .round))

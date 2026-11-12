@@ -1,8 +1,12 @@
 import Supabase
 import SwiftUI
+import UIKit
 
-/// A read-only view of another user's profile, presented as a sheet from
-/// anywhere a user appears (chat, DM list, friends, server members).
+/// Someone's profile, as the desktop's profile popout: the banner, the avatar
+/// sitting on its edge with a ring, quick actions beside it, and one inset
+/// panel holding the name, badges, About Me, Member Since, what they're
+/// playing or listening to, and a "Message @them" field that sends straight
+/// to their DMs. Opens at half height; drag up for the rest.
 struct ProfileDetailView: View {
     let profile: Profile
     /// The signed-in user, handed in by the presenter.
@@ -11,7 +15,7 @@ struct ProfileDetailView: View {
     /// values into `.sheet` content (FB16112395). A required
     /// `@Environment(AppState.self)` therefore trapped inside SwiftUI while
     /// this sheet was being presented — the bot-profile crash. Passing the
-    /// two values this view needs keeps the sheet independent of the sheet's
+    /// values this view needs keeps the sheet independent of the sheet's
     /// environment; `\.dismiss` is the only environment value read here, and
     /// it always exists.
     var viewerId: String?
@@ -25,6 +29,7 @@ struct ProfileDetailView: View {
     @State private var relation: FriendshipStatus?
     @State private var working = false
     @State private var error: String?
+    @State private var notice: String?
     /// The DM opened from here when no presenter handles it (e.g. a profile
     /// opened from a space's chat), shown inside this sheet's stack.
     @State private var openedDm: ChatSource?
@@ -33,10 +38,13 @@ struct ProfileDetailView: View {
     /// one is fetched, and refreshed while the sheet is open so a track
     /// change shows up.
     @State private var full: Profile?
+    @State private var draft = ""
+    @State private var sending = false
+    @FocusState private var messageFocused: Bool
 
     private var shown: Profile { full ?? profile }
-
     private var isSelf: Bool { profile.id == viewerId }
+    private var isBot: Bool { shown.isBot == true }
 
     /// Live presence for this profile. The current user's own status is read
     /// from the presence channel too (falling back to their stored status only
@@ -47,42 +55,33 @@ struct ProfileDetailView: View {
         presence?.status(for: profile.id, fallback: isSelf ? profile.status : .offline) ?? (isSelf ? profile.status : .offline)
     }
 
+    private var bannerHeight: CGFloat { shown.bannerUrl == nil ? 72 : 124 }
+    private let avatarSize: CGFloat = 84
+    private let ringWidth: CGFloat = 6
+
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 0) {
-                    banner
-                    VStack(alignment: .leading, spacing: 16) {
-                        header
-                        if let activity = shown.activity, activity.isLive() {
-                            GameActivityCard(activity: activity)
-                        }
-                        if let listening = shown.listening, listening.isCurrent() {
-                            ListeningCard(listening: listening)
-                        }
-                        if let bio = profile.bio, !bio.isEmpty {
-                            section("About Me", body: bio)
-                        }
-                        if !isSelf { actions }
-                        if let error {
-                            Text(error).font(.footnote).foregroundStyle(Brand.dnd)
-                        }
-                    }
-                    .padding(20)
+                VStack(alignment: .leading, spacing: 0) {
+                    top
+                    panel
+                        .padding(.horizontal, 14)
+                        .padding(.top, 12)
+                        .padding(.bottom, 28)
                 }
             }
-            .background(Brand.background)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
+            .background(Brand.surface)
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $openedDm) { source in
                 ChatView(source: source, callPeer: profile)
             }
         }
-        .presentationDetents([.large])
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(24)
+        .presentationBackground(Brand.surface)
         .task { await loadRelation() }
         .task(id: profile.id) {
             while !Task.isCancelled {
@@ -92,117 +91,236 @@ struct ProfileDetailView: View {
         }
     }
 
-    private var banner: some View {
-        ZStack(alignment: .bottomLeading) {
-            BannerImage(url: profile.bannerUrl, height: 140) { accentGradient }
+    // MARK: - Banner, avatar, quick actions
 
-            AvatarView(url: profile.avatarUrl, name: profile.name, size: 88,
-                       status: liveStatus, ringColors: accentColors, ringWidth: 5,
-                       decoration: profile.equippedRingEffect)
-                .background(Circle().fill(Brand.background).padding(-3))
-                .padding(.leading, 18)
-                .offset(y: 44)
+    private var top: some View {
+        VStack(spacing: 0) {
+            BannerImage(url: shown.bannerUrl, height: bannerHeight) { accentGradient }
+            HStack(spacing: 8) {
+                Spacer(minLength: avatarSize + ringWidth * 2 + 24)
+                quickActions
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .frame(minHeight: 52, alignment: .top)
         }
-        .padding(.bottom, 44)
+        .overlay(alignment: .topLeading) {
+            AvatarView(url: shown.avatarUrl, name: shown.name, size: avatarSize,
+                       status: liveStatus, ringColors: accentColors, ringWidth: 4,
+                       decoration: shown.equippedRingEffect)
+                .padding(ringWidth)
+                .background(Circle().fill(Brand.surface))
+                .padding(.leading, 12)
+                .padding(.top, bannerHeight - (avatarSize + ringWidth * 2) / 2)
+                .accessibilityHidden(true)
+        }
+    }
+
+    @ViewBuilder private var quickActions: some View {
+        if !isSelf {
+            if relation == nil && !isBot {
+                roundButton("person.fill.badge.plus", label: "Add Friend") { Task { await addFriend() } }
+            }
+            Menu {
+                Button { Task { await startDm() } } label: { Label("Message", systemImage: "bubble.left") }
+                if let handle = shown.username {
+                    Button {
+                        UIPasteboard.general.string = handle
+                        Haptics.success()
+                        notice = "Username copied."
+                    } label: { Label("Copy Username", systemImage: "doc.on.doc") }
+                }
+                Divider()
+                switch relation {
+                case .accepted:
+                    Button(role: .destructive) { Task { await unfriend() } } label: {
+                        Label("Remove Friend", systemImage: "person.fill.xmark")
+                    }
+                case .blocked:
+                    Button { Task { await unblock() } } label: { Label("Unblock", systemImage: "hand.raised.slash") }
+                default:
+                    EmptyView()
+                }
+                if relation != .blocked {
+                    Button(role: .destructive) { Task { await block() } } label: {
+                        Label("Block", systemImage: "hand.raised.fill")
+                    }
+                }
+            } label: {
+                roundIcon("ellipsis")
+            }
+            .accessibilityLabel("More")
+        }
+    }
+
+    private func roundButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.tap()
+            action()
+        } label: { roundIcon(icon) }
+        .buttonStyle(PressScaleStyle(scale: 0.9))
+        .disabled(working)
+        .accessibilityLabel(label)
+    }
+
+    private func roundIcon(_ icon: String) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(Brand.textPrimary)
+            .frame(width: 36, height: 36)
+            .background(Brand.elevated, in: Circle())
     }
 
     private var accentColors: [Color] {
-        [Color(hexString: profile.accentColor) ?? Brand.accent,
-         Color(hexString: profile.accentColor2) ?? Brand.accentSoft]
+        [Color(hexString: shown.accentColor) ?? Brand.accent,
+         Color(hexString: shown.accentColor2) ?? Brand.accentSoft]
     }
 
     private var accentGradient: some View {
         LinearGradient(colors: accentColors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            StyledName(shown, size: 22, weight: .bold)
+    // MARK: - Panel
+
+    private var panel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            identity
+
+            Rectangle().fill(Brand.divider).frame(height: 1).padding(.vertical, 12)
+
+            VStack(alignment: .leading, spacing: 14) {
+                if let bio = shown.bio?.trimmingCharacters(in: .whitespacesAndNewlines), !bio.isEmpty {
+                    section("About Me") {
+                        Text(bio)
+                            .font(.system(size: 15))
+                            .foregroundStyle(Brand.textPrimary.opacity(0.9))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
+                }
+                if let since = memberSince {
+                    section("Member Since") {
+                        HStack(spacing: 8) {
+                            Image("DisbandMark")
+                                .resizable().scaledToFit()
+                                .frame(width: 16, height: 16)
+                                .opacity(0.85)
+                            Text(since)
+                                .font(.system(size: 15))
+                                .foregroundStyle(Brand.textPrimary.opacity(0.9))
+                        }
+                    }
+                }
+                if let activity = shown.activity, activity.isLive() {
+                    GameActivityCard(activity: activity)
+                }
+                if let listening = shown.listening, listening.isCurrent() {
+                    ListeningCard(listening: listening)
+                }
+
+                if !isSelf { messageArea }
+                if isBot { AuthorizeAppButton(userId: shown.id, viewerId: viewerId) }
+
+                if let error {
+                    Text(error).font(.system(size: 13)).foregroundStyle(Brand.dnd)
+                } else if let notice {
+                    Text(notice).font(.system(size: 13)).foregroundStyle(Brand.textMuted)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Brand.background, in: .rect(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.06)))
+        .animation(Motion.quick, value: error)
+        .animation(Motion.quick, value: notice)
+    }
+
+    private var identity: some View {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Text("@\(profile.handle)")
-                if let pronouns = profile.pronouns, !pronouns.isEmpty {
-                    Text("·")
-                    Text(pronouns)
+                StyledName(shown, size: 22, weight: .bold)
+                    .lineLimit(1)
+                if isBot { AppTag() }
+            }
+            HStack(spacing: 5) {
+                if let handle = shown.username { Text(handle) }
+                if let pronouns = shown.pronouns?.trimmingCharacters(in: .whitespaces), !pronouns.isEmpty {
+                    Text("•").foregroundStyle(Brand.textMuted)
+                    Text(pronouns).foregroundStyle(Brand.textSecondary)
                 }
             }
-            .font(.subheadline)
-            .foregroundStyle(Brand.textMuted)
-            if let note = profile.activeStatusNote {
-                Text(note)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Brand.textPrimary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Brand.elevated, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .padding(.top, 8)
-            }
-            // On its own line, with the full width to wrap into. Beside the
-            // name it had whatever the name left over, which on a long name was
-            // room for about two badges.
-            UserBadgesView(profile: profile, size: 15, showsGuildTag: true)
+            .font(.system(size: 14))
+            .foregroundStyle(Brand.textPrimary)
+            UserBadgesView(profile: shown, size: 20, showsGuildTag: true)
                 .padding(.top, 4)
+            if let note = shown.activeStatusNote {
+                Text(note)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Brand.textPrimary.opacity(0.9))
+                    .padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func section(_ title: String, body: String) -> some View {
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(Brand.textMuted)
-            Text(body).foregroundStyle(Brand.textSecondary)
+            DSCaption(text: title)
+            content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(Brand.surface, in: .rect(cornerRadius: 14))
     }
 
-    @ViewBuilder private var actions: some View {
-        VStack(spacing: 10) {
-            Button {
-                Task { await startDm() }
-            } label: {
-                Label("Message", systemImage: "bubble.left.fill")
-                    .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(Brand.accent, in: .rect(cornerRadius: 12))
-                    .foregroundStyle(.white)
-            }
-
-            switch relation {
-            case .accepted:
-                Button(role: .destructive) { Task { await unfriend() } } label: {
-                    actionLabel("Remove Friend", "person.fill.xmark")
-                }
-            case .pending:
-                Text("Friend request pending")
-                    .font(.subheadline).foregroundStyle(Brand.textMuted)
-                    .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(Brand.surface, in: .rect(cornerRadius: 12))
-            case .blocked:
-                Button { Task { await unblock() } } label: {
-                    actionLabel("Unblock", "hand.raised.slash")
-                }
-            default:
-                Button { Task { await addFriend() } } label: {
-                    Label("Add Friend", systemImage: "person.fill.badge.plus")
-                        .frame(maxWidth: .infinity).padding(.vertical, 12)
-                        .background(Brand.surface, in: .rect(cornerRadius: 12))
-                        .foregroundStyle(Brand.textPrimary)
-                }
-            }
-
-            if relation != .blocked {
-                Button(role: .destructive) { Task { await block() } } label: {
-                    actionLabel("Block", "hand.raised.fill")
+    /// "Message @them", sent straight to their DMs, then the DM opens. People
+    /// you can't message yet (no friendship, no shared space) get the friend
+    /// request button instead, as on desktop.
+    @ViewBuilder private var messageArea: some View {
+        if relation == .blocked {
+            EmptyView()
+        } else if relation == .pending {
+            Text("Friend request pending")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Brand.textMuted)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(Brand.elevated, in: .rect(cornerRadius: 12))
+        } else {
+            HStack(spacing: 8) {
+                TextField("Message @\(shown.username ?? shown.name)", text: $draft)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Brand.textPrimary)
+                    .focused($messageFocused)
+                    .submitLabel(.send)
+                    .onSubmit { Task { await sendQuick() } }
+                if sending {
+                    LoadingDots(color: Brand.textMuted, size: 5)
+                } else if !draft.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Button { Task { await sendQuick() } } label: {
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 30, height: 30)
+                            .background(Brand.accent, in: .rect(cornerRadius: 8))
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                    .accessibilityLabel("Send")
                 }
             }
+            .padding(.leading, 12)
+            .padding(.trailing, 6)
+            .frame(height: 44)
+            .background(Brand.elevated, in: .rect(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(messageFocused ? Brand.accent : Color.white.opacity(0.06), lineWidth: messageFocused ? 1.5 : 1))
+            .animation(Motion.quick, value: messageFocused)
+            .animation(Motion.quick, value: draft.isEmpty)
         }
-        .disabled(working)
     }
 
-    private func actionLabel(_ title: String, _ icon: String) -> some View {
-        Label(title, systemImage: icon)
-            .frame(maxWidth: .infinity).padding(.vertical, 12)
-            .background(Brand.surface, in: .rect(cornerRadius: 12))
-            .foregroundStyle(Brand.dnd)
+    private var memberSince: String? {
+        guard let date = RelativeTime.date(from: shown.createdAt) else { return nil }
+        return date.formatted(.dateTime.day().month(.abbreviated).year())
     }
 
     // MARK: - Actions
@@ -214,6 +332,27 @@ struct ProfileDetailView: View {
             (f.requesterId == uid && f.addresseeId == profile.id) ||
             (f.requesterId == profile.id && f.addresseeId == uid)
         }?.status
+    }
+
+    private func sendQuick() async {
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !sending, let uid = viewerId else { return }
+        sending = true; error = nil
+        defer { sending = false }
+        do {
+            let threadId = try await DatabaseService.getOrCreateDmThread(friendId: profile.id)
+            _ = try await DatabaseService.sendDmMessage(threadId: threadId, authorId: uid, content: text)
+            draft = ""
+            Haptics.success()
+            if let onStartDM {
+                onStartDM(profile)
+                dismiss()
+            } else {
+                openedDm = .dm(threadId: threadId, title: profile.name)
+            }
+        } catch {
+            self.error = (error as? PostgrestError)?.message ?? error.localizedDescription
+        }
     }
 
     /// Opens the DM, or explains why not (not friends and no shared space,
@@ -233,26 +372,29 @@ struct ProfileDetailView: View {
         }
     }
 
-    private func run(_ op: @escaping () async throws -> Void) async {
-        guard let _ = viewerId else { return }
-        working = true; error = nil
-        do { try await op(); await loadRelation() }
-        catch { self.error = error.localizedDescription }
+    private func run(_ success: String? = nil, _ op: @escaping () async throws -> Void) async {
+        guard viewerId != nil else { return }
+        working = true; error = nil; notice = nil
+        do {
+            try await op()
+            await loadRelation()
+            if let success { notice = success; Haptics.success() }
+        } catch { self.error = error.localizedDescription }
         working = false
     }
 
     private func addFriend() async {
         guard let uid = viewerId else { return }
-        await run { try await DatabaseService.sendFriendRequest(from: uid, to: profile.id) }
+        await run("Friend request sent.") { try await DatabaseService.sendFriendRequest(from: uid, to: profile.id) }
     }
     private func unfriend() async {
         guard let uid = viewerId else { return }
-        await run { try await DatabaseService.removeFriend(currentUserId: uid, otherUserId: profile.id) }
+        await run("Removed from your friends.") { try await DatabaseService.removeFriend(currentUserId: uid, otherUserId: profile.id) }
     }
     private func block() async {
-        await run { try await DatabaseService.blockUser(profile.id) }
+        await run("Blocked.") { try await DatabaseService.blockUser(profile.id) }
     }
     private func unblock() async {
-        await run { try await DatabaseService.unblockUser(profile.id) }
+        await run("Unblocked.") { try await DatabaseService.unblockUser(profile.id) }
     }
 }

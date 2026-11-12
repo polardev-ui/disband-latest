@@ -1,64 +1,55 @@
 import SwiftUI
 
-/// The bottom navigation: a floating glass capsule, not a system tab bar.
-///
-/// Only the current destination shows its name — it grows into a filled
-/// accent pill that slides between icons — so the dock stays compact and the
-/// active place is unmistakable at a glance.
+/// The bottom navigation: a solid, full-width bar that takes its own space,
+/// so nothing scrolls underneath it. (It was a floating glass capsule drawn
+/// over the content, which covered the last channel and the last row of
+/// every list.) Icon over label, the current place in white, unread counts
+/// as red badges, a small spring on selection.
 struct FloatingDock: View {
     @Binding var selection: ShellDestination
     var badges: [ShellDestination: Int] = [:]
-    @Namespace private var pill
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 0) {
             ForEach(ShellDestination.allCases) { destination in
                 item(destination)
             }
         }
-        .padding(6)
+        .padding(.top, 6)
+        .padding(.bottom, 2)
         .background {
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Brand.surface.opacity(0.55)))
-                .overlay(Capsule().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-                .shadow(color: .black.opacity(0.35), radius: 18, y: 8)
+            Brand.surface
+                .overlay(alignment: .top) { Rectangle().fill(Brand.divider).frame(height: 0.5) }
+                .ignoresSafeArea(edges: .bottom)
         }
-        .animation(.snappy(duration: 0.32), value: selection)
     }
 
     private func item(_ destination: ShellDestination) -> some View {
         let active = destination == selection
         return Button {
             guard !active else { return }
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-            selection = destination
+            Haptics.select()
+            // Instant, like the system tab bar: a crossfade animated every
+            // kept-alive screen at once and made switching feel slow.
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { selection = destination }
         } label: {
-            HStack(spacing: 7) {
+            VStack(spacing: 3) {
                 Image(systemName: destination.symbol)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 20, weight: active ? .semibold : .regular))
+                    .symbolEffect(.bounce, value: active)
+                    .frame(height: 24)
                     .overlay(alignment: .topTrailing) { badge(for: destination) }
-                if active {
-                    Text(destination.title)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                        .fixedSize()
-                        .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .leading)))
-                }
+                Text(destination.title)
+                    .font(.system(size: 11, weight: active ? .semibold : .medium))
             }
-            .foregroundStyle(active ? Color.white : Brand.textMuted)
-            .padding(.horizontal, active ? 16 : 14)
-            .frame(height: 46)
-            .background {
-                if active {
-                    Capsule()
-                        .fill(Brand.accent.gradient)
-                        .matchedGeometryEffect(id: "pill", in: pill)
-                }
-            }
-            .contentShape(Capsule())
+            .foregroundStyle(active ? Brand.textPrimary : Brand.textMuted)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScaleStyle(scale: 0.92))
         .accessibilityLabel(destination.title)
         .accessibilityAddTraits(active ? .isSelected : [])
     }
@@ -71,7 +62,8 @@ struct FloatingDock: View {
                 .padding(.horizontal, 4)
                 .frame(minWidth: 16, minHeight: 16)
                 .background(Brand.dnd, in: Capsule())
-                .offset(x: 10, y: -8)
+                .overlay(Capsule().strokeBorder(Brand.surface, lineWidth: 2))
+                .offset(x: 12, y: -6)
         }
     }
 }

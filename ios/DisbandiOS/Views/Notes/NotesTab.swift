@@ -194,7 +194,7 @@ struct NotesTab: View {
         .padding(.top, 6)
         // Sit above the floating dock whenever it's showing. The shell hides
         // it while the software keyboard is up, and the composer drops down.
-        .padding(.bottom, chrome.dockVisible ? 72 : 8)
+        .padding(.bottom, 8)
         .animation(.snappy(duration: 0.25), value: chrome.dockVisible)
         .onChange(of: photoItem) { _, item in
             guard let item else { return }

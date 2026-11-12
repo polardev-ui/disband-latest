@@ -100,6 +100,11 @@ enum MessageLinks {
         pattern: #"(?:https?://[^\s]+)?/gift/([a-zA-Z0-9]{10})\b"#,
         options: [.caseInsensitive]
     )
+    // Bot invite links render as an "Authorize App" card (web: bot-invite-links.ts).
+    private static let botInviteRegex = try! NSRegularExpression(
+        pattern: #"(?:https?://)?(?:www\.)?disband\.dev/bot-invite/([a-z0-9]{16,64})\b/?"#,
+        options: [.caseInsensitive]
+    )
     private static let urlRegex = try! NSRegularExpression(
         pattern: #"https?://[^\s<>\[\]()]+[^\s<>\[\]().,;:!?'"`]"#,
         options: [.caseInsensitive]
@@ -112,6 +117,18 @@ enum MessageLinks {
             guard match.numberOfRanges > 1,
                   let r = Range(match.range(at: 1), in: text) else { continue }
             let code = String(text[r])
+            if !codes.contains(code) { codes.append(code) }
+        }
+        return codes
+    }
+
+    static func botInviteCodes(in text: String) -> [String] {
+        let range = NSRange(text.startIndex..., in: text)
+        var codes: [String] = []
+        for match in botInviteRegex.matches(in: text, range: range) {
+            guard match.numberOfRanges > 1,
+                  let r = Range(match.range(at: 1), in: text) else { continue }
+            let code = String(text[r]).lowercased()
             if !codes.contains(code) { codes.append(code) }
         }
         return codes
@@ -139,6 +156,7 @@ enum MessageLinks {
             // Skip a link that is already being shown as an invite card.
             if let code = inviteCodes(in: url).first, invites.contains(code) { continue }
             if !giftCodes(in: url).isEmpty { continue }
+            if !botInviteCodes(in: url).isEmpty { continue }
             if urls.contains(url) { continue }
             urls.append(url)
             if urls.count >= max { break }

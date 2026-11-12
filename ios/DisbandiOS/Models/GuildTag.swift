@@ -67,7 +67,7 @@ struct GuildTag: Codable, Identifiable, Hashable, Sendable {
     /// web's `guildTagForeground`.
     var foreground: Color {
         guard let normalized = GuildTag.normalizedColor(color) else { return .white }
-        let value = UInt32(normalized.dropFirst(), radix: 16) ?? 0x5865F2
+        let value = UInt32(normalized.dropFirst(), radix: 16) ?? 0x4641D9
         let channels = [Double((value >> 16) & 0xFF) / 255,
                         Double((value >> 8) & 0xFF) / 255,
                         Double(value & 0xFF) / 255].map { channel in

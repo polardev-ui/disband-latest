@@ -177,9 +177,9 @@ struct SettingsRowLabel: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 30, height: 30)
-                .background(tint.gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .background(tint.gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             Text(title)
-                .font(.body.weight(.medium))
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(destructive ? Brand.dnd : Brand.textPrimary)
             Spacer(minLength: 8)
             if let detail {
@@ -206,7 +206,8 @@ struct SettingsGroup<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) { content() }
-            .background(Brand.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(Brand.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.white.opacity(0.06)))
             .padding(.horizontal, 16)
     }
 }

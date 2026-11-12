@@ -25,6 +25,23 @@ struct SettingsView: View {
     @State private var spotifyBusy = false
     @State private var spotifyError: String?
     @State private var confirmSpotifyDisconnect = false
+    @State private var streak = StreakService.shared
+    @AppStorage("settings.showStreak") private var showStreak = true
+    @AppStorage("settings.haptics") private var haptics = true
+    @State private var cacheCleared = false
+
+    private static func hourLabel(_ hour: Int) -> String {
+        var c = DateComponents()
+        c.hour = hour
+        c.minute = 0
+        let date = Calendar.current.date(from: c) ?? Date()
+        return date.formatted(date: .omitted, time: .shortened)
+    }
+
+    private static func cacheSize() -> String {
+        let bytes = URLCache.shared.currentDiskUsage + URLCache.shared.currentMemoryUsage
+        return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+    }
 
     private enum BillingPrompt: String, Identifiable {
         case cancel, resume
@@ -113,7 +130,7 @@ struct SettingsView: View {
 
                 SectionCaption("Notifications")
                 SettingsGroup {
-                    SettingsToggleRow(symbol: "speaker.wave.2.fill", tint: Color(hex: 0x5865F2),
+                    SettingsToggleRow(symbol: "speaker.wave.2.fill", tint: Color(hex: 0x4641D9),
                                       title: "Sound effects", isOn: $sound)
                     SettingsDivider()
                     SettingsToggleRow(symbol: "bell.fill", tint: Color(hex: 0xF23F43),
@@ -124,6 +141,51 @@ struct SettingsView: View {
                 SettingsGroup {
                     SettingsToggleRow(symbol: "link", tint: Color(hex: 0x1ABC9C),
                                       title: "Link previews", isOn: $linkPreviews)
+                }
+
+                SectionCaption("Daily streak")
+                SettingsGroup {
+                    SettingsToggleRow(symbol: "flame.fill", tint: Color(hex: 0xFF7A45),
+                                      title: "Daily reminder", isOn: $streak.reminderEnabled)
+                    if streak.reminderEnabled {
+                        SettingsDivider()
+                        HStack(spacing: 12) {
+                            SettingsRowLabel(symbol: "clock.fill", tint: Color(hex: 0xF0B232),
+                                             title: "Remind me at", showsChevron: false)
+                                .padding(.trailing, -14)
+                            Picker("Remind me at", selection: $streak.reminderHour) {
+                                ForEach(Array(stride(from: 8, through: 22, by: 1)), id: \.self) { hour in
+                                    Text(Self.hourLabel(hour)).tag(hour)
+                                }
+                            }
+                            .labelsHidden()
+                            .tint(Brand.textSecondary)
+                            .padding(.trailing, 8)
+                        }
+                        .transition(.opacity)
+                    }
+                    SettingsDivider()
+                    SettingsToggleRow(symbol: "eye.fill", tint: Color(hex: 0xEB459E),
+                                      title: "Show streak on You", isOn: $showStreak)
+                }
+                .animation(Motion.quick, value: streak.reminderEnabled)
+
+                SectionCaption("App")
+                SettingsGroup {
+                    SettingsToggleRow(symbol: "iphone.radiowaves.left.and.right", tint: Color(hex: 0x9B59B6),
+                                      title: "Haptic feedback", isOn: $haptics)
+                    SettingsDivider()
+                    Button {
+                        URLCache.shared.removeAllCachedResponses()
+                        Haptics.success()
+                        cacheCleared = true
+                    } label: {
+                        SettingsRowLabel(symbol: "internaldrive.fill", tint: Color(hex: 0x4E5058),
+                                         title: "Clear image cache",
+                                         detail: cacheCleared ? "Cleared" : Self.cacheSize(),
+                                         showsChevron: false)
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 SectionCaption("Connections")
@@ -159,7 +221,7 @@ struct SettingsView: View {
 
                 SectionCaption("Privacy & Safety")
                 SettingsGroup {
-                    SettingsToggleRow(symbol: "tray.fill", tint: Color(hex: 0x5865F2),
+                    SettingsToggleRow(symbol: "tray.fill", tint: Color(hex: 0x4641D9),
                                       title: "Allow message requests", isOn: $messageRequests)
                 }
                 Text("People who share a space with you can send you a message. It goes to Message Requests until you reply or accept. Friends can always message you, and the official Disband space doesn't count.")

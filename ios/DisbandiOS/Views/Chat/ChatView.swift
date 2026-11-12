@@ -629,7 +629,11 @@ struct ChatView: View {
                     } else if nearBottom {
                         stickToBottom = true
                     }
-                    if stickToBottom, model.messages.last != nil {
+                    // Only when something below the screen's edge appeared (a
+                    // new message, an image finishing loading). This runs on
+                    // every scroll frame, and scrolling to the bottom each
+                    // time made a busy channel fight its own scrolling.
+                    if stickToBottom, model.messages.last != nil, maxY - viewport.size.height > 2, !userScrolling {
                         proxy.scrollTo(Self.bottomId, anchor: .bottom)
                     }
                 }

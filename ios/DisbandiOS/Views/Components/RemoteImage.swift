@@ -20,6 +20,9 @@ struct RemoteImage<Placeholder: View>: View {
     let url: String?
     var contentMode: ContentMode = .fill
     @ViewBuilder var placeholder: () -> Placeholder
+    /// Told the picture once it's available (from cache or the network), so
+    /// a caller can size itself to the real shape.
+    var onLoad: ((UIImage) -> Void)? = nil
 
     @State private var image: UIImage?
 
@@ -59,9 +62,9 @@ struct RemoteImage<Placeholder: View>: View {
 
     private func load() async {
         guard let url, let parsed = URL(string: url) else { image = nil; return }
-        if image != nil, ImageCache.shared.image(for: url) === image { return }
+        if let current = image, ImageCache.shared.image(for: url) === current { onLoad?(current); return }
         image = nil
-        if let cached = ImageCache.shared.image(for: url) { image = cached; return }
+        if let cached = ImageCache.shared.image(for: url) { image = cached; onLoad?(cached); return }
 
         for attempt in 0..<4 {
             if Task.isCancelled { return }
@@ -74,7 +77,7 @@ struct RemoteImage<Placeholder: View>: View {
                 if let img = AnimatedImageDecoder.decode(data) ?? UIImage(data: data) {
                     ImageCache.shared.set(img, for: url)
                     MediaSize.shared.record(img, for: url)
-                    if !Task.isCancelled { image = img }
+                    if !Task.isCancelled { image = img; onLoad?(img) }
                     return
                 }
             } catch {
@@ -163,17 +166,26 @@ final class MediaSize {
 /// moves the conversation.
 struct SizedChatImage: View {
     let url: String
-    var maxWidth: CGFloat = 260
-    var maxHeight: CGFloat = 280
+    var maxWidth: CGFloat = 280
+    var maxHeight: CGFloat = 320
+
+    /// The picture's real shape. Read from the remembered sizes at first,
+    /// then from the image itself once it arrives: the box used to be
+    /// computed once, so a GIF seen for the first time stayed in a 4:3 crop.
+    @State private var aspect: Double?
 
     var body: some View {
-        let box = MediaSize.box(aspect: MediaSize.shared.aspect(for: url),
+        let box = MediaSize.box(aspect: aspect ?? MediaSize.shared.aspect(for: url),
                                 maxWidth: maxWidth, maxHeight: maxHeight)
-        RemoteImage(url: url, contentMode: .fill) {
+        RemoteImage(url: url, contentMode: .fill, placeholder: {
             Rectangle().fill(Brand.elevated)
                 .overlay(ProgressView().tint(Brand.textMuted))
-        }
+        }, onLoad: { image in
+            guard image.size.height > 0 else { return }
+            let real = Double(image.size.width / image.size.height)
+            if aspect != real { withAnimation(Motion.quick) { aspect = real } }
+        })
         .frame(width: box.width, height: box.height)
-        .clipShape(.rect(cornerRadius: 10))
+        .clipShape(.rect(cornerRadius: 8))
     }
 }

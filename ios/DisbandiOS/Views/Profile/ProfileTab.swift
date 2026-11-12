@@ -1,4 +1,5 @@
 import PhotosUI
+import Supabase
 import SwiftUI
 
 struct ProfileTab: View {
@@ -16,6 +17,11 @@ struct ProfileTab: View {
     @State private var showPaywall = false
     @State private var showNotifications = false
     @State private var staffAccess: StaffAPI.Access?
+    @AppStorage("settings.showStreak") private var showStreak = true
+    @State private var friendCount: Int?
+    /// How far the banner has scrolled (negative once it moves up).
+    @State private var bannerOffset: CGFloat = 0
+    @State private var spaceCount: Int?
 
     private var profile: Profile? { app.profile }
 
@@ -28,24 +34,17 @@ struct ProfileTab: View {
 
     var body: some View {
         NavigationStack {
+            GeometryReader { root in
             ScrollView {
                 VStack(spacing: 0) {
-                    ScreenHeader("You") {
-                        HStack(spacing: 6) {
-                            // The inbox for everything a push would have told
-                            // you about — and the only way to see what you
-                            // missed once a push has been swiped away.
-                            HeaderIconButton(symbol: "bell.fill", label: "Notifications") {
-                                showNotifications = true
-                            }
-                            HeaderIconButton(symbol: "pencil", label: "Edit profile") { showEdit = true }
-                        }
-                    }
+                    hero(topInset: root.safeAreaInsets.top)
                     if profile == nil, let problem = app.profileError {
-                        profileErrorCard(problem).padding(.horizontal, 16).padding(.bottom, 12)
+                        profileErrorCard(problem).padding(.horizontal, 16).padding(.top, 12)
                     }
-                    hero.padding(.horizontal, 16)
-                    planCard.padding(.horizontal, 16).padding(.top, 12)
+                    planCard.padding(.horizontal, 16).padding(.top, 14)
+                    if showStreak {
+                        DailyStreakCard().padding(.horizontal, 16).padding(.top, 12)
+                    }
 
                     SectionCaption("Account")
                     SettingsGroup {
@@ -93,7 +92,7 @@ struct ProfileTab: View {
                             NavigationLink {
                                 StaffToolsView(isManager: staffAccess.isManager).hidesDock().solidNavigationBar()
                             } label: {
-                                SettingsRowLabel(symbol: "shield.lefthalf.filled", tint: Color(hex: 0x5865F2),
+                                SettingsRowLabel(symbol: "shield.lefthalf.filled", tint: Color(hex: 0x4641D9),
                                                  title: "Disband Staff", detail: staffAccess.isManager ? "Manager" : nil)
                             }
                         }
@@ -128,9 +127,22 @@ struct ProfileTab: View {
                 .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
-            .statusBarScrim()
+            .ignoresSafeArea(edges: .top)
+            // A solid strip behind the status bar once the banner has
+            // scrolled away, so the clock never sits on top of a card.
+            .overlay(alignment: .top) {
+                Brand.background
+                    .frame(height: root.safeAreaInsets.top)
+                    .overlay(alignment: .bottom) { Rectangle().fill(Brand.divider).frame(height: 0.5) }
+                    .opacity(bannerOffset < -(bannerHeight - 8) ? 1 : 0)
+                    .animation(.easeOut(duration: 0.18), value: bannerOffset < -(bannerHeight - 8))
+                    .ignoresSafeArea(edges: .top)
+                    .allowsHitTesting(false)
+            }
+            }
             .background(Brand.background)
             .toolbar(.hidden, for: .navigationBar)
+            .task(id: app.currentUserId) { await loadCounts() }
             .sheet(isPresented: $showPaywall) { AeroPaywallSheet() }
             .task(id: app.currentUserId) {
                 if let uid = app.currentUserId { staffAccess = await StaffAPI.access(for: uid) }
@@ -176,105 +188,237 @@ struct ProfileTab: View {
 
     // MARK: - Hero
 
-    /// Banner, avatar, identity and status as one card. Tapping the banner or
-    /// avatar replaces it.
-    private var hero: some View {
-        VStack(spacing: 0) {
+    private let bannerHeight: CGFloat = 150
+
+    /// As on the desktop's profile: a full-width banner (stretching when you
+    /// pull down), the avatar sitting on its edge in a thick ring, name and
+    /// badges, Edit Profile and Status, your numbers, then the inset panel.
+    /// Tapping the banner or avatar replaces it.
+    private func hero(topInset: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            banner(topInset: topInset)
+
+            PhotosPicker(selection: $avatarItem, matching: .images) {
+                AvatarView(url: profile?.avatarUrl, name: profile?.name ?? "?", size: 96,
+                           status: ownStatus, ringColors: accentColors, ringWidth: 4,
+                           decoration: profile?.equippedRingEffect)
+                    .padding(6)
+                    .background(Circle().fill(Brand.background))
+                    .overlay(alignment: .bottomTrailing) {
+                        if uploading { ProgressView().controlSize(.small) } else { editPip("camera.fill").offset(x: -4, y: -4) }
+                    }
+            }
+            .buttonStyle(PressScaleStyle(scale: 0.95))
+            .accessibilityLabel("Change avatar")
+            .padding(.leading, 10)
+            .padding(.top, -54)
+
+            identity.padding(.horizontal, 16).padding(.top, 8)
+            actionRow.padding(.horizontal, 16).padding(.top, 14)
+            statsRow.padding(.horizontal, 16).padding(.top, 12)
+            panel.padding(.horizontal, 16).padding(.top, 12)
+        }
+    }
+
+    private func banner(topInset: CGFloat) -> some View {
+        GeometryReader { geo in
+            let pull = max(0, geo.frame(in: .scrollView).minY)
             PhotosPicker(selection: $bannerItem, matching: .images) {
-                BannerImage(url: profile?.bannerUrl, height: 124) { accentGradient }
-                    .overlay(alignment: .topTrailing) { editPip("photo").padding(10) }
+                BannerImage(url: profile?.bannerUrl, height: bannerHeight + topInset + pull) { accentGradient }
+                    .overlay(alignment: .bottom) {
+                        LinearGradient(colors: [.clear, Brand.background.opacity(0.35)], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 50)
+                    }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Change banner")
-
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .bottom) {
-                    PhotosPicker(selection: $avatarItem, matching: .images) {
-                        AvatarView(url: profile?.avatarUrl, name: profile?.name ?? "?", size: 88,
-                                   status: ownStatus, ringColors: accentColors, ringWidth: 4,
-                                   decoration: profile?.equippedRingEffect)
-                            .background(Circle().fill(Brand.surface).padding(-5))
-                            .overlay(alignment: .bottomTrailing) {
-                                if uploading { ProgressView().controlSize(.small) } else { editPip("camera.fill") }
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Change avatar")
-                    Spacer(minLength: 0)
-                }
-                .padding(.top, -46)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    if let profile {
-                        StyledName(profile, size: 22, weight: .bold).lineLimit(1)
-                    } else {
-                        Text("Loading…")
-                            .font(.title2.bold())
-                            .foregroundStyle(Brand.textPrimary)
-                    }
-                    HStack(spacing: 6) {
-                        Text("@\(profile?.handle ?? "user")")
-                        if let pronouns = profile?.pronouns, !pronouns.isEmpty {
-                            Text("·")
-                            Text(pronouns)
-                        }
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(Brand.textMuted)
-                    if let profile {
-                        UserBadgesView(profile: profile, size: 15, showsGuildTag: true)
-                            .padding(.top, 4)
-                    }
-                }
-
-                statusBubble
-
-                // What others see you doing. A game comes from your desktop
-                // app; music from Spotify on any of your devices.
-                if let activity = profile?.activity, activity.isLive() {
-                    GameActivityCard(activity: activity)
-                }
-                if let listening = music.current ?? profile?.listening, listening.isCurrent() {
-                    ListeningCard(listening: listening)
-                }
-
-                if let bio = profile?.bio, !bio.isEmpty {
-                    Text(bio)
-                        .font(.subheadline)
-                        .foregroundStyle(Brand.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .offset(y: -pull)
         }
-        .background(Brand.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .frame(height: bannerHeight + topInset)
+        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .scrollView).minY } action: { bannerOffset = $0 }
+        .overlay(alignment: .topTrailing) {
+            HStack(spacing: 8) {
+                // The inbox for everything a push would have told you about —
+                // and the only way to see what you missed once a push has
+                // been swiped away.
+                bannerButton("bell.fill", label: "Notifications") { showNotifications = true }
+                NavigationLink { SettingsView().hidesDock() } label: { bannerIcon("gearshape.fill") }
+                    .accessibilityLabel("Settings")
+            }
+            .padding(.top, topInset + 6)
+            .padding(.trailing, 14)
+        }
     }
 
-    /// Your custom status, as others see it — tap to change it.
-    private var statusBubble: some View {
-        Button { showStatus = true } label: {
-            HStack(spacing: 10) {
-                Circle().fill((ownStatus ?? .online).color).frame(width: 10, height: 10)
-                Text(profile?.activeStatusNote ?? "Set a status")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(profile?.activeStatusNote == nil ? Brand.textMuted : Brand.textPrimary)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                if let expires = RelativeTime.date(from: profile?.statusExpiresAt), profile?.activeStatusNote != nil {
-                    Text("until \(expires.formatted(date: .omitted, time: .shortened))")
-                        .font(.caption).foregroundStyle(Brand.textMuted)
-                }
-                Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(Brand.textMuted)
+    private func bannerButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.tap()
+            action()
+        } label: { bannerIcon(icon) }
+        .buttonStyle(PressScaleStyle(scale: 0.9))
+        .accessibilityLabel(label)
+    }
+
+    private func bannerIcon(_ icon: String) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 36, height: 36)
+            .background(.black.opacity(0.4), in: Circle())
+            .background(.ultraThinMaterial, in: Circle())
+    }
+
+    private var identity: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            if let profile {
+                StyledName(profile, size: 24, weight: .bold).lineLimit(1)
+            } else {
+                Text("Loading…").font(.system(size: 24, weight: .bold)).foregroundStyle(Brand.textPrimary)
             }
-            .padding(.horizontal, 14)
-            .frame(height: 44)
-            .background(Brand.elevated, in: Capsule())
+            HStack(spacing: 5) {
+                Text(profile?.handle ?? "user").foregroundStyle(Brand.textPrimary)
+                if let pronouns = profile?.pronouns?.trimmingCharacters(in: .whitespaces), !pronouns.isEmpty {
+                    Text("•").foregroundStyle(Brand.textMuted)
+                    Text(pronouns).foregroundStyle(Brand.textSecondary)
+                }
+            }
+            .font(.system(size: 15))
+            if let profile {
+                UserBadgesView(profile: profile, size: 20, showsGuildTag: true).padding(.top, 6)
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Status")
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 10) {
+            Button {
+                Haptics.tap()
+                showEdit = true
+            } label: {
+                Label("Edit Profile", systemImage: "pencil")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 42)
+                    .background(Brand.accent, in: .rect(cornerRadius: 12))
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(PressScaleStyle())
+
+            Button {
+                Haptics.tap()
+                showStatus = true
+            } label: {
+                HStack(spacing: 8) {
+                    Circle().fill((ownStatus ?? .online).color).frame(width: 10, height: 10)
+                    Text(profile?.activeStatusNote ?? ownStatus?.label ?? "Status")
+                        .lineLimit(1)
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity)
+                .frame(height: 42)
+                .background(Brand.elevated, in: .rect(cornerRadius: 12))
+                .foregroundStyle(Brand.textPrimary)
+            }
+            .buttonStyle(PressScaleStyle())
+            .accessibilityLabel("Status")
+        }
+    }
+
+    /// Your streak, friends and spaces at a glance.
+    private var statsRow: some View {
+        HStack(spacing: 10) {
+            statTile(value: StreakService.shared.current, label: "Day streak", icon: "flame.fill",
+                     tint: Color(hex: 0xFF7A45))
+            statTile(value: friendCount, label: "Friends", icon: "person.2.fill", tint: Brand.accent)
+            statTile(value: spaceCount, label: "Spaces", icon: "square.grid.2x2.fill", tint: Color(hex: 0x3BA55C))
+        }
+    }
+
+    private func statTile(value: Int?, label: String, icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(tint)
+            Text(value.map(String.init) ?? "–")
+                .font(.system(size: 20, weight: .heavy))
+                .foregroundStyle(Brand.textPrimary)
+                .contentTransition(.numericText())
+            Text(label)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Brand.textMuted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Brand.surface, in: .rect(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.05)))
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The inset panel, as on desktop: what you're doing, About Me, Member Since.
+    private var panel: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let activity = profile?.activity, activity.isLive() {
+                GameActivityCard(activity: activity)
+            }
+            if let listening = music.current ?? profile?.listening, listening.isCurrent() {
+                ListeningCard(listening: listening)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                DSCaption(text: "About me")
+                if let bio = profile?.bio?.trimmingCharacters(in: .whitespacesAndNewlines), !bio.isEmpty {
+                    Text(bio)
+                        .font(.system(size: 15))
+                        .foregroundStyle(Brand.textPrimary.opacity(0.9))
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Button { showEdit = true } label: {
+                        Label("Add a few words about yourself", systemImage: "plus.circle.fill")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Brand.accent)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if let joined = RelativeTime.date(from: profile?.createdAt) {
+                VStack(alignment: .leading, spacing: 6) {
+                    DSCaption(text: "Member since")
+                    HStack(spacing: 8) {
+                        Image("DisbandMark").resizable().scaledToFit()
+                            .frame(width: 16, height: 16).opacity(0.85)
+                        Text(joined.formatted(.dateTime.day().month(.abbreviated).year()))
+                            .font(.system(size: 15))
+                            .foregroundStyle(Brand.textPrimary.opacity(0.9))
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Brand.surface, in: .rect(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.05)))
+    }
+
+    private func loadCounts() async {
+        guard let uid = app.currentUserId else { return }
+        let client = SupabaseManager.client
+        async let friends = try? client.from("friendships")
+            .select("id", head: true, count: .exact)
+            .eq("status", value: "accepted")
+            .or("requester_id.eq.\(uid),addressee_id.eq.\(uid)")
+            .execute().count
+        async let spaces = try? client.from("server_members")
+            .select("server_id", head: true, count: .exact)
+            .eq("user_id", value: uid)
+            .execute().count
+        let (f, sp) = await (friends, spaces)
+        withAnimation(Motion.quick) {
+            if let f { friendCount = f }
+            if let sp { spaceCount = sp }
+        }
     }
 
     private func editPip(_ systemImage: String) -> some View {
@@ -327,29 +471,48 @@ struct ProfileTab: View {
                         .strokeBorder(SubscriptionPlan.aeroGold.opacity(0.45), lineWidth: 1))
             }
         } else {
-            Button { showPaywall = true } label: {
-                SurfaceCard {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Disband Free").font(.headline).foregroundStyle(Brand.textPrimary)
-                            Spacer()
-                            Text("AERO")
-                                .font(.caption2.weight(.heavy))
-                                .padding(.horizontal, 8).frame(height: 20)
-                                .background(SubscriptionPlan.aeroGold.opacity(0.2), in: Capsule())
-                                .foregroundStyle(SubscriptionPlan.aeroGold)
-                        }
-                        Text("Aero adds 500 MB uploads, 1440p video, animated avatars and banners, 4 Catalysts a month, and every theme.")
-                            .font(.subheadline).foregroundStyle(Brand.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        HStack(spacing: 4) {
-                            Text("See Aero")
-                            Image(systemName: "chevron.right").font(.caption2.weight(.bold))
-                        }
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(SubscriptionPlan.aeroGold)
+            Button {
+                Haptics.tap()
+                showPaywall = true
+            } label: {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "sparkles").font(.system(size: 13, weight: .bold))
+                        Text("DISBAND AERO").font(.system(size: 12, weight: .heavy)).tracking(1)
+                        Spacer()
+                        Text("From $2.99")
+                            .font(.system(size: 12, weight: .bold))
+                            .padding(.horizontal, 10).frame(height: 24)
+                            .background(.white.opacity(0.16), in: Capsule())
+                    }
+                    .foregroundStyle(.white.opacity(0.85))
+                    Text("More of everything, for the price of a coffee")
+                        .font(.system(size: 20, weight: .heavy))
+                        .foregroundStyle(.white)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("500 MB uploads, 1440p streams, animated profiles, every theme and 4 Catalysts a month.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 6) {
+                        Text("See the plans")
+                        Image(systemName: "arrow.right")
+                    }
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Color(hex: 0x2B2290))
+                    .padding(.horizontal, 16).frame(height: 38)
+                    .background(.white, in: Capsule())
+                    .padding(.top, 4)
+                }
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background {
+                    ZStack {
+                        LinearGradient(colors: [Color(hex: 0x4B43E0), Color(hex: 0x33299F)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        RadialGradient(colors: [Color(hex: 0xE055FF, alpha: 0.4), .clear], center: .topTrailing, startRadius: 0, endRadius: 220)
                     }
                 }
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             }
             .buttonStyle(.plain)
         }

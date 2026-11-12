@@ -24,152 +24,167 @@ struct AuthView: View {
                 && password == confirmPassword && usernameProblem == nil)
     }
 
+    private var submitDisabled: Bool {
+        mode == .signUp ? !signupValid : email.isEmpty || password.isEmpty
+    }
+
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                header
-
-                VStack(spacing: 14) {
-                    if mode == .signUp {
-                        field(icon: "person.fill", placeholder: "Username", text: $username,
-                              keyboard: .default, secure: false)
+        GeometryReader { screen in
+            ScrollView {
+                VStack(spacing: 22) {
+                    // The wordmark sits above the card, as on desktop.
+                    HStack(spacing: 10) {
+                        Image("DisbandMark")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 34, height: 34)
+                            .foregroundStyle(.white)
+                        Text("Disband")
+                            .font(.system(size: 24, weight: .heavy))
+                            .tracking(-0.3)
+                            .foregroundStyle(.white)
                     }
-                    field(icon: "envelope.fill", placeholder: "Email", text: $email,
-                          keyboard: .emailAddress, secure: false)
-                    field(icon: "lock.fill", placeholder: "Password", text: $password,
-                          keyboard: .default, secure: true)
-                    if mode == .signUp {
-                        field(icon: "lock.shield.fill", placeholder: "Confirm password", text: $confirmPassword,
-                              keyboard: .default, secure: true)
-                    }
-                }
-                .task(id: username) {
-                    // Live availability while choosing a name at sign-up.
-                    // Mirrors the ProfileTab editor: empty/short/invalid input
-                    // clears the message rather than spamming the RPC.
-                    guard mode == .signUp else { usernameProblem = nil; return }
-                    let candidate = normalizedUsername
-                    guard candidate.count >= 2 else { usernameProblem = nil; return }
-                    usernameProblem = await DatabaseService.usernameUnavailableReason(candidate)
-                }
+                    .riseIn()
 
-                if mode == .signUp, !confirmPassword.isEmpty, password != confirmPassword {
-                    Text("Passwords don't match yet.")
+                    DSCard(padding: 26) {
+                        VStack(spacing: 18) {
+                            header
+                            fields
+                            messages
+                            DSPrimaryButton(title: mode == .signIn ? "Log In" : "Create account",
+                                            busy: busy, disabled: submitDisabled, action: submit)
+                            switcher
+                        }
+                    }
+                    .riseIn(delay: 0.08)
+
+                    Text("By continuing you agree to Disband's Terms and Privacy Policy.")
                         .font(.footnote)
-                        .foregroundStyle(Brand.dnd)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .foregroundStyle(.white.opacity(0.65))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                        .riseIn(delay: 0.16)
                 }
-
-                if let problem = mode == .signUp ? usernameProblem : nil {
-                    Text(problem)
-                        .font(.footnote)
-                        .foregroundStyle(Brand.dnd)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                if let notice = app.authNotice {
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "envelope.badge.fill")
-                        Text(notice)
-                    }
-                    .font(.footnote)
-                    .foregroundStyle(Brand.online)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .transition(.opacity)
-                }
-
-                if let error = app.authError {
-                    Text(error)
-                        .font(.footnote)
-                        .foregroundStyle(Brand.dnd)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                Button(action: submit) {
-                    HStack {
-                        if busy { ProgressView().tint(.white) }
-                        Text(mode == .signIn ? "Log In" : "Create Account")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Brand.accent, in: .rect(cornerRadius: 12))
-                    .foregroundStyle(.white)
-                }
-                .disabled(busy || (mode == .signUp ? !signupValid : email.isEmpty || password.isEmpty))
-                .opacity(busy || (mode == .signUp ? !signupValid : email.isEmpty || password.isEmpty) ? 0.6 : 1)
-
-                if mode == .signIn {
-                    Button("Forgot password?") {
-                        Task { await app.sendPasswordReset(email: email) }
-                    }
-                    .font(.footnote)
-                    .foregroundStyle(Brand.accent)
-                }
-
-                Divider().overlay(Brand.elevated)
-
-                Button {
-                    withAnimation { mode = mode == .signIn ? .signUp : .signIn }
-                    app.authError = nil
-                    app.authNotice = nil
-                    usernameProblem = nil
-                    confirmPassword = ""
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(mode == .signIn ? "New to Disband?" : "Already have an account?")
-                            .foregroundStyle(Brand.textMuted)
-                        Text(mode == .signIn ? "Sign up" : "Log in")
-                            .foregroundStyle(Brand.accent).fontWeight(.semibold)
-                    }
-                    .font(.subheadline)
-                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 24)
+                .frame(maxWidth: 480)
+                // Centred on the screen when it fits, scrolling when it doesn't.
+                .frame(maxWidth: .infinity, minHeight: screen.size.height)
             }
-            .padding(24)
-            .frame(maxWidth: 480)
-            .frame(maxWidth: .infinity)
+            .scrollDismissesKeyboard(.interactively)
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .scrollDismissesKeyboard(.interactively)
+        .background { AeroBackground() }
+        .preferredColorScheme(.dark)
+        .animation(Motion.settle, value: mode)
     }
 
     private var header: some View {
-        VStack(spacing: 10) {
-            // The Disband mark, template-rendered so it follows the theme's
-            // text colour instead of vanishing on a light background.
-            Image("DisbandMark")
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 112, height: 112)
-                .foregroundStyle(Brand.textPrimary)
-            Text("Disband")
-                .font(.largeTitle.bold())
-                .foregroundStyle(Brand.textPrimary)
+        VStack(spacing: 6) {
             Text(mode == .signIn ? "Welcome back!" : "Create your account")
-                .font(.subheadline)
-                .foregroundStyle(Brand.textMuted)
+                .font(.system(size: 26, weight: .bold))
+                .tracking(-0.3)
+                .foregroundStyle(Brand.textPrimary)
+                .contentTransition(.opacity)
+            Text(mode == .signIn ? "We're so excited to see you again!" : "Free to join. No card required.")
+                .font(.system(size: 15))
+                .foregroundStyle(Brand.textSecondary)
+                .contentTransition(.opacity)
         }
-        .padding(.top, 48)
+        .multilineTextAlignment(.center)
+        .padding(.bottom, 4)
     }
 
-    private func field(icon: String, placeholder: String, text: Binding<String>,
-                       keyboard: UIKeyboardType, secure: Bool) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon).foregroundStyle(Brand.textMuted).frame(width: 20)
-            Group {
-                if secure {
-                    SecureField(placeholder, text: text)
-                } else {
-                    TextField(placeholder, text: text)
-                        .keyboardType(keyboard)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+    private var fields: some View {
+        VStack(spacing: 16) {
+            if mode == .signUp {
+                VStack(alignment: .leading, spacing: 6) {
+                    DSField(label: "Username", placeholder: "your_name", text: $username, contentType: .username)
+                    if !username.isEmpty {
+                        Text("Will be saved as @\(normalizedUsername.isEmpty ? "…" : normalizedUsername)")
+                            .font(.caption)
+                            .foregroundStyle(Brand.textMuted)
+                    }
                 }
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
-            .foregroundStyle(Brand.textPrimary)
+            DSField(label: "Email", placeholder: "you@example.com", text: $email,
+                    keyboard: .emailAddress, contentType: .emailAddress)
+            DSField(label: "Password", placeholder: mode == .signUp ? "At least 6 characters" : "Password",
+                    text: $password, secure: true,
+                    contentType: mode == .signUp ? .newPassword : .password,
+                    trailing: mode == .signIn ? AnyView(
+                        Button("Forgot?") {
+                            Haptics.tap()
+                            Task { await app.sendPasswordReset(email: email) }
+                        }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color(hex: 0x6CCFF9))
+                    ) : nil)
+            if mode == .signUp {
+                DSField(label: "Confirm password", placeholder: "Type it again", text: $confirmPassword,
+                        secure: true, contentType: .newPassword)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
-        .padding(14)
-        .background(Brand.surface, in: .rect(cornerRadius: 12))
+        .task(id: username) {
+            // Live availability while choosing a name at sign-up.
+            guard mode == .signUp else { usernameProblem = nil; return }
+            let candidate = normalizedUsername
+            guard candidate.count >= 2 else { usernameProblem = nil; return }
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            usernameProblem = await DatabaseService.usernameUnavailableReason(candidate)
+        }
+    }
+
+    @ViewBuilder private var messages: some View {
+        if mode == .signUp, !confirmPassword.isEmpty, password != confirmPassword {
+            notice("Passwords don't match yet.", icon: "exclamationmark.circle.fill", color: Brand.dnd)
+        }
+        if mode == .signUp, let problem = usernameProblem {
+            notice(problem, icon: "exclamationmark.circle.fill", color: Brand.dnd)
+        }
+        if let notice = app.authNotice {
+            self.notice(notice, icon: "envelope.badge.fill", color: Brand.online)
+        }
+        if let error = app.authError {
+            notice(error, icon: "exclamationmark.triangle.fill", color: Brand.dnd)
+        }
+    }
+
+    private func notice(_ text: String, icon: String, color: Color) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+            Text(text).fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.system(size: 14))
+        .foregroundStyle(color)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(color.opacity(0.1), in: .rect(cornerRadius: 10))
+        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+    }
+
+    private var switcher: some View {
+        Button {
+            Haptics.select()
+            withAnimation(Motion.settle) { mode = mode == .signIn ? .signUp : .signIn }
+            app.authError = nil
+            app.authNotice = nil
+            usernameProblem = nil
+            confirmPassword = ""
+        } label: {
+            HStack(spacing: 4) {
+                Text(mode == .signIn ? "Need an account?" : "Already have an account?")
+                    .foregroundStyle(Brand.textMuted)
+                Text(mode == .signIn ? "Register" : "Log in")
+                    .foregroundStyle(Color(hex: 0x6CCFF9)).fontWeight(.semibold)
+            }
+            .font(.system(size: 14))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func submit() {
@@ -180,6 +195,7 @@ struct AuthView: View {
             } else {
                 guard password == confirmPassword else {
                     app.authError = "Passwords don't match. Re-enter them and try again."
+                    Haptics.warning()
                     withAnimation { busy = false }
                     return
                 }
