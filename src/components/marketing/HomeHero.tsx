@@ -176,12 +176,17 @@ function RotatingWord({ words }: { words: string[] }) {
   }, [words.length]);
 
   const previous = (index - 1 + words.length) % words.length;
+  // Each word gets 0.25em of padding below it: the headline's tight line
+  // height leaves no room for the tails of y, g and p, and a gradient fill
+  // only paints inside the word's own box, so without it they were cut off
+  // ("community", "study group", "people"). The negative margin hands that
+  // room back, so the line doesn't move.
   return (
-    <span aria-hidden className="inline-grid overflow-hidden pb-[0.12em] align-bottom">
+    <span aria-hidden className="-mb-[0.25em] inline-grid overflow-hidden align-bottom">
       {words.map((word, i) => (
         <span
           key={word}
-          className={`col-start-1 row-start-1 justify-self-center whitespace-nowrap bg-gradient-to-r from-[#ffe2fb] via-[#f5b0ff] to-[#c6b6ff] bg-clip-text text-transparent transition-[transform,opacity] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none lg:justify-self-start ${
+          className={`col-start-1 row-start-1 justify-self-center whitespace-nowrap pb-[0.25em] bg-gradient-to-r from-[#ffe2fb] via-[#f5b0ff] to-[#c6b6ff] bg-clip-text text-transparent transition-[transform,opacity] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none lg:justify-self-start ${
             i === index
               ? "translate-y-0 opacity-100"
               : i === previous
