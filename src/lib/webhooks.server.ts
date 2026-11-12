@@ -2,6 +2,7 @@ import { randomBytes, randomInt } from "node:crypto";
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeEmbeds, safeEmbedUrl, type Embed } from "@/lib/embeds";
+import { issueServerSignupTicket } from "@/lib/server-signup-ticket";
 
 /*
  Server side of Discord-compatible webhooks.
@@ -214,8 +215,10 @@ export function webhookRpcError(error: { message?: string; code?: string }): Nex
 */
 export async function createWebhookIdentity(service: SupabaseClient, name: string, avatarUrl: string | null): Promise<string> {
   const handle = `webhook_${randomBytes(6).toString("hex")}`;
+  const email = `${handle}@webhooks.disband.dev`;
+  await issueServerSignupTicket(service, email);
   const { data, error } = await service.auth.admin.createUser({
-    email: `${handle}@webhooks.disband.dev`,
+    email,
     password: randomBytes(24).toString("base64url"),
     email_confirm: true,
     app_metadata: { created_by: "server" },

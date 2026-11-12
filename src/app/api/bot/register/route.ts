@@ -4,6 +4,7 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import { getUserFromRequest } from "@/lib/server-auth";
 import { BOT_SCOPES, hashBotToken, isBotScope } from "@/lib/bot-auth";
 import { checkBotRateLimit, botRateLimited } from "@/lib/bot-gateway-guard";
+import { issueServerSignupTicket } from "@/lib/server-signup-ticket";
 
 const MAX_BOTS_PER_OWNER = 5;
 
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
 
     const botEmail = `bot-${randomBytes(6).toString("hex")}@bots.disband.dev`;
     const botPassword = randomBytes(24).toString("base64url");
+    await issueServerSignupTicket(service, botEmail);
     const { data: botUser, error: createUserError } = await service.auth.admin.createUser({
       email: botEmail,
       password: botPassword,

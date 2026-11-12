@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DeepSeekChatMessage } from "@/lib/deepseek";
+import { issueServerSignupTicket } from "@/lib/server-signup-ticket";
 
 /**
  * Tether's identity server-side.
@@ -104,6 +105,7 @@ export async function ensureTetherUser(service: ServiceClient): Promise<string |
 
   // 3) Provision fresh.
   const password = randomBytes(24).toString("base64url");
+  await issueServerSignupTicket(service, TETHER_EMAIL).catch(() => undefined);
   const { data: created, error: createError } = await service.auth.admin.createUser({
     email: TETHER_EMAIL,
     password,

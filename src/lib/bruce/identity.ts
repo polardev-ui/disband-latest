@@ -7,6 +7,7 @@
 
 import { randomBytes } from "node:crypto";
 import { hashBotToken, BOT_SCOPES } from "@/lib/bot-auth";
+import { issueServerSignupTicket } from "@/lib/server-signup-ticket";
 import type { Service } from "./kit";
 import { slashCommands, type Identity } from "./index";
 
@@ -46,6 +47,7 @@ export async function ensureBruce(service: Service): Promise<Identity | null> {
 
   let userId = await findAuthUser(service);
   if (!userId) {
+    await issueServerSignupTicket(service, BRUCE_EMAIL).catch(() => undefined);
     const { data, error } = await service.auth.admin.createUser({
       email: BRUCE_EMAIL,
       password: randomBytes(24).toString("base64url"),
