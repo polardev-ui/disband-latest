@@ -4985,77 +4985,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (userId) await loadNotes(userId);
   }, [persistActiveServerChannel, userId, loadNotes]);
 
-  const selectServer = useCallback(async (serverId: string) => {
-    markActivity();
-    if (viewModeRef.current === "space" && activeServerRef.current === serverId && activeChannelRef.current) return;
-    persistActiveServerChannel();
-    viewModeRef.current = "space";
-    activeServerRef.current = serverId;
-    activeChannelRef.current = null;
-    activeDmRef.current = null;
-    activeGroupRef.current = null;
-    setViewMode("space");
-    setActiveServerId(serverId);
-    setActiveDmThreadId(null);
-    setActiveGroupChatId(null);
-    clearServerIndicator(serverId);
-    // A space you've been in comes back as you left it: its channel rail,
-    // roster and last channel's messages paint now, and refresh behind.
-    let painted = false;
-    if (restoreSpaceSnapshot(serverId)) {
-      const snap = spaceSnapshotsRef.current.get(serverId)!;
-      const savedId = getLastChannelId(serverId);
-      const target = snap.channels.find((c) => c.id === savedId)
-        ?? snap.channels.find((c) => c.type === "text" && !c.parent_id) ?? snap.channels[0];
-      if (target) {
-        activeChannelRef.current = target.id;
-        setActiveChannelId(target.id);
-        painted = restoreChannelSnapshot(target.id);
-      }
-    }
-    if (!painted) {
-      if (!activeChannelRef.current) setActiveChannelId(null);
-      setMessages([]);
-      setMessagesLoading(true);
-      setChannelHasMore(false);
-    }
-    const channelRows = await loadServerDetails(serverId).catch(() => []);
-    // A slow response from a previous navigation must not select a channel.
-    if (activeServerRef.current !== serverId || viewModeRef.current !== "space") return;
-    const savedId = getLastChannelId(serverId);
-    const target = channelRows.find(c => c.id === activeChannelRef.current)
-      ?? channelRows.find(c => c.id === savedId)
-      ?? channelRows.find(c => c.type === "text" && !c.parent_id) ?? channelRows[0];
-    if (target) {
-      // The fallback selector may already have loaded this channel while the
-      // server details request was pending. Never clear that loaded result.
-      if (activeChannelRef.current !== target.id) {
-        activeChannelRef.current = target.id;
-        setActiveChannelId(target.id);
-        setMessages([]);
-        setMessagesLoading(true);
-      }
-      await loadMessages(target.id);
-    } else {
-      setMessagesLoading(false);
-    }
-  }, [loadServerDetails, loadMessages, clearServerIndicator, persistActiveServerChannel, markActivity, restoreSpaceSnapshot, restoreChannelSnapshot]);
-
-  const selectChannel = useCallback((channelId: string) => {
-    markActivity();
-    if (activeChannelRef.current === channelId && viewModeRef.current === "space") return;
-    viewModeRef.current = "space";
-    activeChannelRef.current = channelId;
-    setActiveChannelId(channelId);
-    setActiveDmThreadId(null);
-    setActiveGroupChatId(null);
-
-    if (!restoreChannelSnapshot(channelId)) {
-      setMessages([]);
-      setMessagesLoading(true);
-      setChannelHasMore(false);
-    }
-    if (viewMode !== "space") setViewMode("space");
+  /**
+   * Everything opening a channel does to its unread state: clears its dot,
+   * its mention count (here and on the space's badge) and, through
+   * channel_reads, the same on every other device. Shared by picking a
+   * channel and by a space reopening on the channel you left it in, which
+   * used to skip this, so its pings stayed until you switched channels.
+   */
+  const markChannelSeen = useCallback((channelId: string) => {
     const channel = channels.find((c) => c.id === channelId) ?? channelsRef.current.find((c) => c.id === channelId);
     // Shared read state (0229): clears this channel on every other device.
     // PostgREST builders are lazy, so the request needs a `then`.
@@ -5097,7 +5034,86 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Opening the channel is the acknowledgement. Persist it so a restart does
     // not repaint the mention we just read.
     void markChannelMentionsRead(channelId);
-  }, [viewMode, channels, clearServerIndicator, markActivity, markChannelMentionsRead, restoreChannelSnapshot]);
+  }, [channels, clearServerIndicator, markChannelMentionsRead]);
+
+  const selectServer = useCallback(async (serverId: string) => {
+    markActivity();
+    if (viewModeRef.current === "space" && activeServerRef.current === serverId && activeChannelRef.current) return;
+    persistActiveServerChannel();
+    viewModeRef.current = "space";
+    activeServerRef.current = serverId;
+    activeChannelRef.current = null;
+    activeDmRef.current = null;
+    activeGroupRef.current = null;
+    setViewMode("space");
+    setActiveServerId(serverId);
+    setActiveDmThreadId(null);
+    setActiveGroupChatId(null);
+    clearServerIndicator(serverId);
+    // A space you've been in comes back as you left it: its channel rail,
+    // roster and last channel's messages paint now, and refresh behind.
+    let painted = false;
+    // Which channel was marked read already, so it's only done once.
+    let seenId: string | null = null;
+    if (restoreSpaceSnapshot(serverId)) {
+      const snap = spaceSnapshotsRef.current.get(serverId)!;
+      const savedId = getLastChannelId(serverId);
+      const target = snap.channels.find((c) => c.id === savedId)
+        ?? snap.channels.find((c) => c.type === "text" && !c.parent_id) ?? snap.channels[0];
+      if (target) {
+        activeChannelRef.current = target.id;
+        setActiveChannelId(target.id);
+        painted = restoreChannelSnapshot(target.id);
+        markChannelSeen(target.id);
+        seenId = target.id;
+      }
+    }
+    if (!painted) {
+      if (!activeChannelRef.current) setActiveChannelId(null);
+      setMessages([]);
+      setMessagesLoading(true);
+      setChannelHasMore(false);
+    }
+    const channelRows = await loadServerDetails(serverId).catch(() => []);
+    // A slow response from a previous navigation must not select a channel.
+    if (activeServerRef.current !== serverId || viewModeRef.current !== "space") return;
+    const savedId = getLastChannelId(serverId);
+    const target = channelRows.find(c => c.id === activeChannelRef.current)
+      ?? channelRows.find(c => c.id === savedId)
+      ?? channelRows.find(c => c.type === "text" && !c.parent_id) ?? channelRows[0];
+    if (target) {
+      // The fallback selector may already have loaded this channel while the
+      // server details request was pending. Never clear that loaded result.
+      if (activeChannelRef.current !== target.id) {
+        activeChannelRef.current = target.id;
+        setActiveChannelId(target.id);
+        setMessages([]);
+        setMessagesLoading(true);
+      }
+      if (seenId !== target.id) markChannelSeen(target.id);
+      await loadMessages(target.id);
+    } else {
+      setMessagesLoading(false);
+    }
+  }, [loadServerDetails, loadMessages, clearServerIndicator, persistActiveServerChannel, markActivity, restoreSpaceSnapshot, restoreChannelSnapshot, markChannelSeen]);
+
+  const selectChannel = useCallback((channelId: string) => {
+    markActivity();
+    if (activeChannelRef.current === channelId && viewModeRef.current === "space") return;
+    viewModeRef.current = "space";
+    activeChannelRef.current = channelId;
+    setActiveChannelId(channelId);
+    setActiveDmThreadId(null);
+    setActiveGroupChatId(null);
+
+    if (!restoreChannelSnapshot(channelId)) {
+      setMessages([]);
+      setMessagesLoading(true);
+      setChannelHasMore(false);
+    }
+    if (viewMode !== "space") setViewMode("space");
+    markChannelSeen(channelId);
+  }, [viewMode, markActivity, markChannelSeen, restoreChannelSnapshot]);
 
   const selectDmThread = useCallback(async (threadId: string) => {
     markActivity();
