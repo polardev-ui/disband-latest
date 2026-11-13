@@ -45,9 +45,14 @@ pub fn start(app: &AppHandle) {
         .maximizable(false)
         .minimizable(false)
         .decorations(false)
+        // Transparent, so the page can draw the window as a rounded card
+        // (Discord's look) instead of a sharp-cornered rectangle. macOS needs
+        // `macOSPrivateApi` for this, set in tauri.conf.json.
+        .transparent(true)
+        .shadow(true)
         .center()
         .focused(true)
-        .background_color(tauri::window::Color(17, 17, 20, 255))
+        .background_color(tauri::window::Color(0, 0, 0, 0))
         .build();
     if built.is_err() {
         show_main(app);
