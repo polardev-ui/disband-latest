@@ -386,3 +386,63 @@
 @keyframes agl-sway { from { transform: skewX(-1.8deg); } to { transform: skewX(2deg); } }
 .agl-palm { animation: agl-palm 1.2s cubic-bezier(.3, 1.35, .5, 1) var(--d) both; }
 @keyframes agl-palm { from { transform: scale(.6, 0); } }
+
+/* ---------------------------------------------------------------- cat ears */
+
+/* Sizing, as Discord does it: the card makes room above itself and only its
+   own area keeps the card background, so the ears stand out over the top
+   edge instead of being squeezed into the corners. */
+.fx-overlay-host:has(.skin-cat-ears) {
+  --ce-room: 58px;
+  padding-top: var(--ce-room) !important;
+  background-clip: content-box !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+.skin-cat-ears { --ce-ear: min(118px, 34%); overflow: visible; }
+
+/* The ears pop up from behind the card, then flick one at a time and now
+   and then shake together. Pivot: the base of each ear. */
+.ce-ear { overflow: visible; }
+.ce-pop { transform-origin: 40px 110px; animation: ce-pop .8s cubic-bezier(.3, 1.6, .5, 1) .15s both; }
+.ce-ear-r .ce-pop { animation-delay: .3s; }
+@keyframes ce-pop { from { transform: translateY(70px) scale(.6); opacity: 0; } 40% { opacity: 1; } }
+.ce-twitch { transform-origin: 40px 110px; animation: ce-twitch-l 5.2s ease-in-out 1.2s infinite; }
+.ce-ear-r .ce-twitch { animation-name: ce-twitch-r; animation-delay: 1.8s; }
+@keyframes ce-twitch-l {
+  0%, 30%, 100% { transform: rotate(0deg); }
+  33% { transform: rotate(-14deg) scaleY(.92); }
+  36% { transform: rotate(4deg); }
+  39% { transform: rotate(0deg); }
+  78% { transform: rotate(0deg); }
+  80% { transform: rotate(-7deg); }
+  82% { transform: rotate(7deg); }
+  84% { transform: rotate(-5deg); }
+  86% { transform: rotate(4deg); }
+  88% { transform: rotate(0deg); }
+}
+@keyframes ce-twitch-r {
+  0%, 50%, 100% { transform: rotate(0deg); }
+  53% { transform: rotate(-16deg) scaleY(.9); }
+  56% { transform: rotate(5deg); }
+  59% { transform: rotate(0deg); }
+  68% { transform: rotate(0deg); }
+  70% { transform: rotate(-7deg); }
+  72% { transform: rotate(7deg); }
+  74% { transform: rotate(-5deg); }
+  76% { transform: rotate(4deg); }
+  78% { transform: rotate(0deg); }
+}
+
+/* The blush: either side, about halfway down. It warms up and fades, and
+   the little marks wiggle. */
+.ce-blush { position: absolute; top: 46%; display: block; width: 28%; animation: ce-blush-in 1s ease-out .9s both; }
+.ce-blush-l { left: 9%; }
+.ce-blush-r { right: 9%; }
+.ce-blush-sprite { width: 100%; height: auto; }
+@keyframes ce-blush-in { from { opacity: 0; transform: scale(.7); } }
+.ce-glow { transform-origin: 50px 32px; animation: ce-glow 3.4s ease-in-out infinite alternate; }
+@keyframes ce-glow { from { opacity: .55; transform: scale(.92); } to { opacity: 1; transform: scale(1.06); } }
+.ce-mark { transform-origin: 46px 34px; animation: ce-mark 2.4s ease-in-out infinite; }
+.ce-blush-r .ce-mark { animation-delay: -1.2s; }
+@keyframes ce-mark { 0%, 70%, 100% { transform: rotate(0deg); } 76% { transform: rotate(-8deg); } 84% { transform: rotate(6deg); } 92% { transform: rotate(-3deg); } }

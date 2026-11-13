@@ -239,6 +239,7 @@ const SKIN_ITEMS: ShopItem[] = ([
   { id: "fx-event-horizon", name: "Event Horizon", description: "A black hole turning in the corner, a ringed planet with a moon of its own, and the odd shooting star.", priceCents: 649, skin: "event-horizon" },
   { id: "fx-sugar-rush", name: "Sugar Rush", description: "Pink icing dripping from the top, a sprinkled doughnut, a swirly lollipop and a shower of sprinkles.", priceCents: 549, skin: "sugar-rush" },
   { id: "fx-deep-end", name: "Deep End", description: "Sunlight through the waves, kelp swaying either side, a drifting jellyfish and a clam that keeps its pearl.", priceCents: 649, skin: "deep-end" },
+  { id: "fx-cat-ears", name: "Cat Ears", description: "Fluffy black cat ears that twitch and shake, and a blush that comes and goes. :3", priceCents: 499, skin: "cat-ears" },
   { id: "fx-afterglow", name: "Afterglow", description: "A striped sun setting between neon mountains, a grid floor that runs on forever, and palms in the breeze.", priceCents: 599, skin: "afterglow" },
 ] satisfies Omit<ShopItem, "category" | "className">[]).map((item) => ({ ...item, category: "overlay" as const, className: "fx-overlay-art" }));
 

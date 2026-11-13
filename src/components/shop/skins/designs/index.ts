@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import type { SkinProps } from "../Skin";
 import { Afterglow } from "./afterglow";
+import { CatEars } from "./catEars";
 import { DeepEnd } from "./deepEnd";
 import { EventHorizon } from "./eventHorizon";
 import { NightBloom } from "./nightBloom";
 import { Snowbound } from "./snowbound";
 import { SugarRush } from "./sugarRush";
 
-export type SkinDesign = "night-bloom" | "snowbound" | "event-horizon" | "sugar-rush" | "deep-end" | "afterglow";
+export type SkinDesign = "night-bloom" | "snowbound" | "event-horizon" | "sugar-rush" | "deep-end" | "afterglow" | "cat-ears";
 
 export const SKINS: Record<SkinDesign, (props: SkinProps) => ReactNode> = {
   "night-bloom": NightBloom,
@@ -16,6 +17,7 @@ export const SKINS: Record<SkinDesign, (props: SkinProps) => ReactNode> = {
   "sugar-rush": SugarRush,
   "deep-end": DeepEnd,
   afterglow: Afterglow,
+  "cat-ears": CatEars,
 };
 
 /**
@@ -32,4 +34,6 @@ export const SKIN_FLOOR: Record<SkinDesign, number> = {
   "sugar-rush": 18,
   "deep-end": 19,
   afterglow: 17,
+  // Nothing at the bottom: the ears and blush sit above the text.
+  "cat-ears": 0,
 };
