@@ -45,6 +45,10 @@ struct ChatView: View {
     /// the content also moves the bottom away, and that used to switch
     /// following off, so the chat stopped short of the newest message.
     @State private var lastUserScroll = Date.distantPast
+    /// A finger is on the list, or it is still coasting from a flick. Comes
+    /// from the scroll view itself (iOS 18+), so it is right however the
+    /// touch got there; the drag gesture below is the fallback before that.
+    @State private var userIsScrolling = false
     /// The first page has painted and the initial scroll-to-bottom has had a
     /// chance to land. Until then the lazy stack can report the history
     /// sentinel at the top of the viewport, which must not trigger paging.
@@ -88,6 +92,14 @@ struct ChatView: View {
     /// Height of the software keyboard, so the message list can keep the
     /// newest message above the composer when it opens.
     @State private var keyboardHeight: CGFloat = 0
+    /// Unread messages waiting when the chat was opened (DMs and groups).
+    @State private var unreadAtOpen = 0
+    /// The first of those: the "NEW" line is drawn above it.
+    @State private var unreadAnchorId: String?
+    /// Messages that arrived while the reader was scrolled up.
+    @State private var missedCount = 0
+    /// A message lit for a moment after jumping to it from a reply.
+    @State private var highlightedId: String?
 
     /// The DM peer, when `source` is `.dm`. Enables the header call button.
     var callPeer: Profile?
@@ -251,6 +263,7 @@ struct ChatView: View {
         .task {
             switch model.source {
             case .dm(let threadId, _):
+                unreadAtOpen = unreadStore.count(for: threadId)
                 unreadStore.markActive(threadId: threadId)
                 // Opening the chat always brings its row back, even if the
                 // user closed it from the list earlier.
@@ -259,6 +272,7 @@ struct ChatView: View {
                 // survives relaunch.
                 Task { try? await DatabaseService.markDmRead(threadId: threadId) }
             case .group(let groupId, _):
+                unreadAtOpen = unreadStore.countGroup(for: groupId)
                 unreadStore.markGroupActive(groupId: groupId)
                 Task { try? await DatabaseService.markGroupRead(groupId: groupId) }
             case .channel(let channelId, _):
@@ -269,6 +283,7 @@ struct ChatView: View {
             // Silences push banners for this conversation while it is open.
             ActiveChat.shared.open(model.source.notificationSourceId)
             await model.start(currentUserId: app.currentUserId, profile: app.profile)
+            placeUnreadLine()
         }
         .onDisappear {
             switch model.source {
@@ -296,7 +311,8 @@ struct ChatView: View {
             // into a sheet (FB16112395), and the chat opened by "Message"
             // needs all of these. The profile itself takes its viewer values
             // directly for the same reason.
-            ProfileDetailView(profile: $0, viewerId: app.currentUserId, presence: presence)
+            ProfileDetailView(profile: $0, viewerId: app.currentUserId, presence: presence,
+                              onCall: call.phase == .idle ? { peer in Task { await call.startCall(peer: peer) } } : nil)
                 .environment(app)
                 .environment(call)
                 .environment(unreadStore)
@@ -376,41 +392,152 @@ struct ChatView: View {
         }
     }
 
-    /// Title and a status line, centred the way iOS conversation screens are:
-    /// "#general / ● 16 Online", "Riley / Online", "Weekend plans / 4 members".
+    /// Who or where this is, at a glance: the person's avatar with their
+    /// live status (a DM), the group's picture, or the channel's #, then the
+    /// name and a status line: "● 16 Online", "Online", "4 members".
     private var headerTitle: some View {
         Button {
-            if case .dm = model.source, let peer = callPeer { openProfile = peer }
+            if case .dm = model.source, let peer = callPeer {
+                Haptics.tap()
+                openProfile = peer
+            }
         } label: {
-            VStack(spacing: 1) {
-                HStack(spacing: 4) {
-                    Text(model.source.title)
-                        .font(.headline)
-                        .foregroundStyle(Brand.textPrimary)
-                        .lineLimit(1)
-                    if case .dm = model.source, callPeer != nil {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Brand.textMuted)
-                    }
-                }
-                if let subtitle = headerSubtitle {
+            HStack(spacing: 9) {
+                headerIcon
+                VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 4) {
-                        if let dot = subtitle.dot {
-                            Circle().fill(dot).frame(width: 7, height: 7)
+                        Text(headerName)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Brand.textPrimary)
+                            .lineLimit(1)
+                        if case .dm = model.source, callPeer != nil {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(Brand.textMuted)
                         }
-                        Text(subtitle.text)
-                            .font(.caption)
-                            .foregroundStyle(Brand.textMuted)
-                            .contentTransition(.numericText())
                     }
-                    .transition(.opacity)
+                    if let subtitle = headerSubtitle {
+                        HStack(spacing: 4) {
+                            if let dot = subtitle.dot, !isDm {
+                                Circle().fill(dot).frame(width: 6, height: 6)
+                            }
+                            Text(subtitle.text)
+                                .font(.system(size: 12))
+                                .foregroundStyle(Brand.textMuted)
+                                .contentTransition(.numericText())
+                        }
+                        .transition(.opacity)
+                    }
                 }
             }
             .animation(.snappy, value: onlineCount)
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+    }
+
+    private var isDm: Bool {
+        if case .dm = model.source { return true }
+        return false
+    }
+
+    /// The channel's name without its "#": the glyph is drawn beside it.
+    private var headerName: String {
+        if case .channel(_, let name) = model.source { return name }
+        return model.source.title
+    }
+
+    @ViewBuilder private var headerIcon: some View {
+        switch model.source {
+        case .dm:
+            if let peer = callPeer {
+                AvatarView(url: peer.avatarUrl, name: peer.name, size: 32,
+                           status: presence.status(for: peer.id))
+            }
+        case .group(let id, let name):
+            AvatarView(url: directMessages.groups.first { $0.id == id }?.iconUrl, name: name, size: 32)
+        case .channel:
+            Image(systemName: "number")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(Brand.textSecondary)
+                .frame(width: 30, height: 30)
+                .background(Brand.elevated, in: Circle())
+        }
+    }
+
+    // MARK: - Start of the conversation
+
+    /// The top of the history, once there is nothing older to load: who you
+    /// are talking to, or which channel this is.
+    private var conversationStart: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            switch model.source {
+            case .dm(_, let title):
+                if let peer = callPeer {
+                    AvatarView(url: peer.avatarUrl, name: peer.name, size: 72,
+                               decoration: peer.equippedRingEffect)
+                        .contentShape(Circle())
+                        .onTapGesture { openProfile = peer }
+                    StyledName(peer, size: 26, weight: .bold)
+                    if let handle = peer.username {
+                        Text(handle).font(.system(size: 15, weight: .medium)).foregroundStyle(Brand.textSecondary)
+                    }
+                } else {
+                    Text(title).font(.system(size: 26, weight: .bold)).foregroundStyle(Brand.textPrimary)
+                }
+                Text("This is the very beginning of your direct messages with \(callPeer?.name ?? title).")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Brand.textMuted)
+            case .group(let id, let name):
+                AvatarView(url: directMessages.groups.first { $0.id == id }?.iconUrl, name: name, size: 72)
+                Text(name).font(.system(size: 26, weight: .bold)).foregroundStyle(Brand.textPrimary)
+                Text("Welcome to the beginning of the \(name) group.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Brand.textMuted)
+            case .channel(_, let name):
+                Image(systemName: "number")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundStyle(Brand.textPrimary)
+                    .frame(width: 68, height: 68)
+                    .background(Brand.elevated, in: Circle())
+                Text("Welcome to #\(name)!").font(.system(size: 26, weight: .bold)).foregroundStyle(Brand.textPrimary)
+                Text("This is the start of the #\(name) channel.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Brand.textMuted)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.top, 24)
+        .padding(.bottom, 6)
+    }
+
+    /// Where the "NEW" line goes: above the oldest message that was unread
+    /// when the chat opened.
+    private func placeUnreadLine() {
+        guard unreadAtOpen > 0, unreadAnchorId == nil else { return }
+        let theirs = model.messages.filter { $0.authorId != app.currentUserId }
+        guard !theirs.isEmpty else { return }
+        let first = theirs[max(0, theirs.count - unreadAtOpen)]
+        withAnimation(Motion.quick) { unreadAnchorId = first.id }
+    }
+
+    /// Scrolls to a message (the one a reply points at) and lights it briefly.
+    private func jump(to id: String, using proxy: ScrollViewProxy) {
+        guard model.messages.contains(where: { $0.id == id }) else { return }
+        Haptics.tap()
+        stickToBottom = false
+        lastUserScroll = Date()
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) {
+            proxy.scrollTo(id, anchor: .center)
+        }
+        withAnimation(.easeOut(duration: 0.2)) { highlightedId = id }
+        Task {
+            try? await Task.sleep(for: .milliseconds(1400))
+            withAnimation(.easeOut(duration: 0.5)) {
+                if highlightedId == id { highlightedId = nil }
+            }
+        }
     }
 
     private var headerSubtitle: (text: String, dot: Color?)? {
@@ -525,8 +652,10 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     if model.loading && model.messages.isEmpty {
-                        StateView(kind: .loading)
-                            .frame(maxWidth: .infinity, minHeight: viewport.size.height)
+                        // The shape of a conversation, bottom-aligned where
+                        // the messages will land, instead of a spinner.
+                        SkeletonMessageList()
+                            .frame(maxWidth: .infinity, minHeight: viewport.size.height, alignment: .bottom)
                     } else if let error = model.loadError, model.messages.isEmpty {
                         StateView(kind: .error, title: error, retry: { await model.load() })
                             .frame(maxWidth: .infinity, minHeight: viewport.size.height)
@@ -538,6 +667,8 @@ struct ChatView: View {
                         LazyVStack(alignment: .leading, spacing: 2) {
                             if model.hasMoreHistory {
                                 olderHistoryLoader
+                            } else {
+                                conversationStart
                             }
 
                             ForEach(Array(model.messages.enumerated()), id: \.element.id) { index, message in
@@ -549,6 +680,9 @@ struct ChatView: View {
                               VStack(alignment: .leading, spacing: 2) {
                                 if startsNewDay(at: index) {
                                     ChatDayDivider(timestamp: message.createdAt)
+                                }
+                                if message.id == unreadAnchorId {
+                                    NewMessagesDivider()
                                 }
 
                                 MessageRow(
@@ -567,7 +701,9 @@ struct ChatView: View {
                                     onToggleReaction: { emoji in
                                         Task { await model.toggleReaction(messageId: message.id, emoji: emoji) }
                                     },
-                                    onHoldReactStarted: { frame in holdReactStarted(frame, message: message) }
+                                    onHoldReactStarted: { frame in holdReactStarted(frame, message: message) },
+                                    highlighted: message.id == highlightedId,
+                                    onTapReply: { id in jump(to: id, using: proxy) }
                                 )
                               }
                               .id(message.id)
@@ -602,6 +738,10 @@ struct ChatView: View {
                         .onChanged { _ in lastUserScroll = Date() }
                         .onEnded { _ in lastUserScroll = Date() }
                 )
+                .modifier(UserScrollPhase { active in
+                    userIsScrolling = active
+                    lastUserScroll = Date()
+                })
                 .modifier(OpenAtBottom(followBottom: stickToBottom))
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
@@ -613,15 +753,32 @@ struct ChatView: View {
                                 proxy.scrollTo(Self.bottomId, anchor: .bottom)
                             }
                         } label: {
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(Brand.textPrimary)
-                                .frame(width: 38, height: 38)
-                                .background(.ultraThinMaterial, in: Circle())
-                                .overlay(Circle().strokeBorder(Brand.divider, lineWidth: 1))
-                                .shadow(color: .black.opacity(0.28), radius: 10, y: 4)
+                            // Grows into "3 new" when messages arrive while
+                            // you're reading further up.
+                            HStack(spacing: 6) {
+                                if missedCount > 0 {
+                                    Text("\(missedCount) new")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .contentTransition(.numericText())
+                                }
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 14, weight: .bold))
+                            }
+                            .foregroundStyle(missedCount > 0 ? Color.white : Brand.textPrimary)
+                            .padding(.horizontal, missedCount > 0 ? 14 : 0)
+                            .frame(minWidth: 38, minHeight: 38)
+                            .background {
+                                if missedCount > 0 {
+                                    Capsule().fill(Brand.accent)
+                                } else {
+                                    Circle().fill(.ultraThinMaterial)
+                                }
+                            }
+                            .overlay(Capsule().strokeBorder(missedCount > 0 ? Color.white.opacity(0.18) : Brand.divider, lineWidth: 1))
+                            .shadow(color: .black.opacity(0.28), radius: 10, y: 4)
+                            .animation(Motion.pop, value: missedCount)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(PressScaleStyle(scale: 0.92))
                         .padding(.trailing, 16)
                         // Above the typing pill, which shares this corner.
                         .padding(.bottom, model.typers.isEmpty ? 10 : 52)
@@ -639,7 +796,7 @@ struct ChatView: View {
                     // the "follow the bottom" state on until that happens;
                     // otherwise the top sentinel sees `!stickToBottom` and
                     // starts paging history on open.
-                    let userScrolling = Date().timeIntervalSince(lastUserScroll) < 1.2
+                    let userScrolling = userIsScrolling || Date().timeIntervalSince(lastUserScroll) < 1.2
                     if initialScrollSettled && userScrolling {
                         if stickToBottom != nearBottom { stickToBottom = nearBottom }
                     } else if nearBottom {
@@ -669,6 +826,17 @@ struct ChatView: View {
                     guard initialScrollSettled, !stickToBottom, minY > -140,
                           model.hasMoreHistory, !model.loadingOlder else { return }
                     Task { await loadOlder(using: proxy) }
+                }
+                .onChange(of: model.messages.last?.id) { old, new in
+                    // Someone else's message landed while you were reading
+                    // further up: count it on the jump button.
+                    guard old != nil, new != old, !stickToBottom, let last = model.messages.last,
+                          last.authorId != app.currentUserId else { return }
+                    missedCount += 1
+                    Haptics.soft()
+                }
+                .onChange(of: stickToBottom) { _, following in
+                    if following { missedCount = 0 }
                 }
                 .onChange(of: model.messages.count) {
                     if stickToBottom, model.messages.last != nil {
@@ -1254,6 +1422,46 @@ private struct OpenAtBottom: ViewModifier {
         } else {
             content.defaultScrollAnchor(.bottom)
         }
+    }
+}
+
+/// Reports whether the reader is moving the list: a finger on it, or the
+/// coast after a flick. A scroll the app started (jumping to the newest
+/// message) does not count.
+private struct UserScrollPhase: ViewModifier {
+    let onChange: (Bool) -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollPhaseChange { _, phase in
+                switch phase {
+                case .tracking, .interacting, .decelerating: onChange(true)
+                default: onChange(false)
+                }
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// The red "NEW" line above the first message you haven't read.
+private struct NewMessagesDivider: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Rectangle().fill(Brand.dnd.opacity(0.7)).frame(height: 1)
+            Text("NEW")
+                .font(.system(size: 10, weight: .heavy))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 6)
+                .frame(height: 16)
+                .background(Brand.dnd, in: Capsule())
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 12)
+        .padding(.top, 10)
+        .transition(.opacity)
+        .accessibilityLabel("New messages")
     }
 }
 

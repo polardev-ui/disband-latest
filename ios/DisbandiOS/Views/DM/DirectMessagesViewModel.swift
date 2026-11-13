@@ -69,6 +69,15 @@ final class DirectMessagesViewModel {
         if startedForUserId != currentUserId { stop() }
         self.currentUserId = currentUserId
         self.startedForUserId = currentUserId
+        // Paint the last list we saw straight away; the fresh one replaces
+        // it when it arrives. A cold launch used to sit on a spinner for
+        // the whole round trip.
+        if threads.isEmpty, groups.isEmpty, let uid = currentUserId, let saved = InboxCache.load(for: uid) {
+            threads = sortByRecency(saved.threads)
+            groups = saved.groups
+            loading = false
+            hasLoadedOnce = true
+        }
         await load(currentUserId: currentUserId)
         await subscribeToMessages()
     }
@@ -123,6 +132,7 @@ final class DirectMessagesViewModel {
             let (loadedThreads, loadedGroups, dmUnread, grpUnread) = try await (t, g, dmU, grpU)
             threads = sortByRecency(loadedThreads)
             groups = loadedGroups
+            InboxCache.save(threads: threads, groups: groups, for: uid)
             // Reconcile from server so messages received while the app was
             // closed (which realtime never delivered) still show as unread.
             unreadStore?.seedUnread(Dictionary(uniqueKeysWithValues: dmUnread.map { ($0.threadId, $0.unreadCount) }))
@@ -259,5 +269,56 @@ final class DirectMessagesViewModel {
 
     private func sortByRecency(_ list: [DmThread]) -> [DmThread] {
         list.sorted { Self.recency($0) > Self.recency($1) }
+    }
+}
+
+
+/// The Messages list as it was last seen, kept on disk (in the app's cache
+/// folder, per account) so the list is on screen the moment the app opens.
+/// Removed on sign-out.
+enum InboxCache {
+    private struct SavedThread: Codable {
+        let thread: DmThread
+        let friend: Profile?
+    }
+    private struct Saved: Codable {
+        let threads: [SavedThread]
+        let groups: [GroupChat]
+    }
+
+    private static var folder: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+    }
+    private static func file(for userId: String) -> URL? {
+        folder?.appendingPathComponent("inbox-\(userId).json")
+    }
+
+    static func load(for userId: String) -> (threads: [DmThread], groups: [GroupChat])? {
+        guard let url = file(for: userId), let data = try? Data(contentsOf: url),
+              let saved = try? JSONDecoder().decode(Saved.self, from: data) else { return nil }
+        let threads = saved.threads.map { item -> DmThread in
+            var thread = item.thread
+            thread.friend = item.friend
+            return thread
+        }
+        return (threads, saved.groups)
+    }
+
+    static func save(threads: [DmThread], groups: [GroupChat], for userId: String) {
+        guard let url = file(for: userId) else { return }
+        let saved = Saved(threads: threads.prefix(120).map { SavedThread(thread: $0, friend: $0.friend) },
+                          groups: groups)
+        Task.detached(priority: .utility) {
+            guard let data = try? JSONEncoder().encode(saved) else { return }
+            try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        }
+    }
+
+    /// Every account's saved list. Called when signing out.
+    static func clear() {
+        guard let folder, let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { return }
+        for file in files where file.lastPathComponent.hasPrefix("inbox-") {
+            try? FileManager.default.removeItem(at: file)
+        }
     }
 }

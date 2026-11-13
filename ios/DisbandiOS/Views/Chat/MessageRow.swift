@@ -23,8 +23,14 @@ struct MessageRow: View {
     /// The hold completed: the row reports its own frame, in the `chatScroll`
     /// coordinate space, so the tray can be anchored above it.
     var onHoldReactStarted: (CGRect) -> Void = { _ in }
+    /// Lit for a moment after jumping here from a reply.
+    var highlighted: Bool = false
+    /// Tapping the reply line jumps to the message it answers.
+    var onTapReply: ((String) -> Void)? = nil
 
     @State private var dragOffset: CGFloat = 0
+    /// Whether the drag in progress is a reply swipe (nil until it has moved).
+    @State private var swipeIsReply: Bool?
     /// The row's frame in `chatScroll` space, so the hold-to-react tray has
     /// a live anchor when the gesture begins.
     ///
@@ -86,13 +92,20 @@ struct MessageRow: View {
                 // A reply to your message is a ping — addressed at you as
                 // directly as an @mention — and read exactly like ordinary
                 // traffic until it was marked.
-                .background(pingedYou ? Brand.idle.opacity(0.12) : Brand.surfaceRaised)
+                .background(highlighted ? Brand.accent.opacity(0.2)
+                            : pingedYou ? Brand.idle.opacity(0.12) : Brand.surfaceRaised)
+                // Only a message that has just been sent or has just come
+                // in eases up into place; history never animates.
+                .modifier(ArrivalPop(animate: message.pending || (!isOwn && arrivedJustNow)))
                 // Discord's gold edge, so a ping stands out at a glance.
                 .overlay(alignment: .leading) {
                     if pingedYou { Rectangle().fill(Brand.idle).frame(width: 2) }
                 }
                 .offset(x: dragOffset)
-                .gesture(swipeToReply)
+                // Simultaneous, and only for sideways drags (see below): as
+                // an exclusive gesture it could take a fast vertical flick
+                // away from the list, and the chat then didn't scroll.
+                .simultaneousGesture(swipeToReply)
                 /*
                  Hold still on a message and the tray appears. That is the
                  whole gesture.
@@ -139,7 +152,18 @@ struct MessageRow: View {
         }
     }
 
+    /// Created within the last couple of seconds, so it is arriving live
+    /// rather than being read back from history.
+    private var arrivedJustNow: Bool {
+        guard let date = RelativeTime.date(from: message.createdAt) else { return false }
+        return abs(Date().timeIntervalSince(date)) < 2.5
+    }
+
     private var content: some View {
+      VStack(alignment: .leading, spacing: 3) {
+        // The message this one answers, joined to the avatar by an elbow
+        // line, as on desktop.
+        if let replyTo { replyPreview(replyTo) }
         HStack(alignment: .top, spacing: 12) {
             if grouped {
                 Color.clear.frame(width: 40)
@@ -156,7 +180,6 @@ struct MessageRow: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                if let replyTo { replyPreview(replyTo) }
                 // "kai used /fact" above a bot's answer to a command.
                 if let interaction = message.interaction, interaction.type == "command", interaction.name != nil {
                     InteractionHeader(interaction: interaction)
@@ -245,6 +268,7 @@ struct MessageRow: View {
             }
             Spacer(minLength: 0)
         }
+      }
         .padding(.horizontal, 16)
         // Grouped rows are the same author continuing, so they stay tight — a
         // run of messages from one person should read as one block. A
@@ -258,16 +282,29 @@ struct MessageRow: View {
     // MARK: - Reply preview
 
     private func replyPreview(_ replied: DisplayMessage) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: "arrowshape.turn.up.left.fill")
-                .font(.caption2).foregroundStyle(Brand.textMuted)
-            Text(replied.author?.name ?? "Unknown")
-                .font(.caption2.weight(.semibold)).foregroundStyle(Brand.textMuted)
-            Text(replied.content.isEmpty ? "attachment" : replied.content)
-                .font(.caption2).foregroundStyle(Brand.textMuted)
+        let name = replied.webhook?.name ?? replied.author?.name ?? "Unknown"
+        return HStack(spacing: 5) {
+            ReplyElbow()
+                .stroke(Brand.textMuted.opacity(0.5), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .frame(width: 27, height: 10)
+                .offset(y: 5)
+                .padding(.leading, 20)
+            AvatarView(url: replied.webhook?.avatarUrl ?? replied.author?.avatarUrl, name: name, size: 16)
+            Text(name)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Brand.textSecondary)
+                .lineLimit(1)
+                .layoutPriority(1)
+            Text(replied.content.isEmpty ? "Attachment" : replied.content)
+                .font(.system(size: 13))
+                .foregroundStyle(Brand.textMuted)
                 .lineLimit(1)
         }
         .padding(.bottom, 1)
+        .contentShape(Rectangle())
+        .onTapGesture { onTapReply?(replied.id) }
+        .accessibilityLabel("Replying to \(name)")
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Reaction chips
@@ -313,16 +350,29 @@ struct MessageRow: View {
 
     // MARK: - Swipe
 
+    /// Swipe left on a message to reply.
+    ///
+    /// The drag decides what it is once, on its first movement: mostly
+    /// sideways and leftwards is a reply swipe; anything else is the reader
+    /// scrolling, and the row stays out of it for the rest of that touch.
     private var swipeToReply: some Gesture {
         DragGesture(minimumDistance: 18)
             .onChanged { value in
-                if value.translation.width < 0 {
-                    dragOffset = max(value.translation.width, -80)
+                if swipeIsReply == nil {
+                    let size = value.translation
+                    swipeIsReply = size.width < 0 && abs(size.width) > abs(size.height) * 1.4
                 }
+                guard swipeIsReply == true else { return }
+                let pulled = max(value.translation.width, -80)
+                if dragOffset > -55, pulled <= -55 { Haptics.tap() }
+                dragOffset = pulled
             }
             .onEnded { value in
+                let wasReply = swipeIsReply == true
+                swipeIsReply = nil
+                guard wasReply else { return }
                 if value.translation.width < -55 { onReply() }
-                withAnimation(.spring(response: 0.3)) { dragOffset = 0 }
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { dragOffset = 0 }
             }
     }
 
@@ -464,5 +514,38 @@ struct AppTag: View {
             .padding(.vertical, 2)
             .background(Color(hex: 0x4641D9), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
             .accessibilityLabel("App")
+    }
+}
+
+
+/// The line from a reply up and across to the message it answers.
+private struct ReplyElbow: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let radius: CGFloat = 6
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + radius))
+        path.addQuadCurve(to: CGPoint(x: rect.minX + radius, y: rect.minY),
+                          control: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        return path
+    }
+}
+
+/// Eases a just-arrived message up into place. Whether to animate is decided
+/// once, when the row is first made, so scrolling history never replays it.
+private struct ArrivalPop: ViewModifier {
+    @State private var shown: Bool
+
+    init(animate: Bool) { _shown = State(initialValue: !animate) }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 12)
+            .onAppear {
+                guard !shown else { return }
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) { shown = true }
+            }
     }
 }

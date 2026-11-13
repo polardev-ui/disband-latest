@@ -271,3 +271,123 @@ private struct RiseIn: ViewModifier {
             }
     }
 }
+
+// MARK: - Skeletons
+
+/// A soft highlight that sweeps across placeholder shapes while something
+/// loads. Still with reduce motion.
+private struct Shimmer: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase: CGFloat = -1
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                if !reduceMotion {
+                    GeometryReader { geo in
+                        LinearGradient(colors: [.clear, Color.white.opacity(0.07), .clear],
+                                       startPoint: .leading, endPoint: .trailing)
+                            .frame(width: geo.size.width * 0.6)
+                            .offset(x: phase * geo.size.width)
+                    }
+                    .allowsHitTesting(false)
+                }
+            }
+            .mask(content)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.linear(duration: 1.25).repeatForever(autoreverses: false)) { phase = 1.4 }
+            }
+    }
+}
+
+extension View {
+    func shimmering() -> some View { modifier(Shimmer()) }
+}
+
+/// One placeholder bar or circle.
+struct SkeletonBlock: View {
+    var width: CGFloat? = nil
+    var height: CGFloat = 12
+    var radius: CGFloat = 6
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(Brand.elevated)
+            .frame(width: width, height: height)
+    }
+}
+
+/// A conversation taking shape: avatars, names and lines of text, in place
+/// of a spinner in the middle of an empty screen. The layout matches real
+/// rows, so the messages land where the placeholders were.
+struct SkeletonMessageList: View {
+    private static let rows: [(name: CGFloat, lines: [CGFloat])] = [
+        (96, [210]), (70, [260, 150]), (120, [180]), (84, [240, 220, 90]),
+        (104, [130]), (76, [250, 170]), (92, [200]),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            ForEach(Array(Self.rows.enumerated()), id: \.offset) { _, row in
+                HStack(alignment: .top, spacing: 12) {
+                    Circle().fill(Brand.elevated).frame(width: 40, height: 40)
+                    VStack(alignment: .leading, spacing: 8) {
+                        SkeletonBlock(width: row.name, height: 13)
+                        ForEach(Array(row.lines.enumerated()), id: \.offset) { _, width in
+                            SkeletonBlock(width: width, height: 12)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+        .shimmering()
+        .accessibilityLabel("Loading messages")
+    }
+}
+
+/// Placeholder rows for lists of people and conversations.
+struct SkeletonRows: View {
+    var count = 8
+    var avatar: CGFloat = 44
+
+    var body: some View {
+        VStack(spacing: 14) {
+            ForEach(0..<count, id: \.self) { index in
+                HStack(spacing: 12) {
+                    Circle().fill(Brand.elevated).frame(width: avatar, height: avatar)
+                    VStack(alignment: .leading, spacing: 8) {
+                        SkeletonBlock(width: CGFloat([120, 90, 150, 104][index % 4]), height: 13)
+                        SkeletonBlock(width: CGFloat([200, 160, 230, 140][index % 4]), height: 11)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .shimmering()
+        .accessibilityLabel("Loading")
+    }
+}
+
+/// Placeholder rows for a channel list.
+struct SkeletonChannels: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(0..<10, id: \.self) { index in
+                if index == 0 || index == 5 {
+                    SkeletonBlock(width: 70, height: 10).padding(.top, index == 0 ? 0 : 8)
+                }
+                HStack(spacing: 12) {
+                    SkeletonBlock(width: 20, height: 20, radius: 6)
+                    SkeletonBlock(width: CGFloat([110, 80, 140, 96, 124][index % 5]), height: 13)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .shimmering()
+        .accessibilityLabel("Loading channels")
+    }
+}

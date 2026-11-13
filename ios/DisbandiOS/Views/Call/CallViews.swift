@@ -79,43 +79,48 @@ struct IncomingCallOverlay: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.85).ignoresSafeArea()
+            // The caller's own picture, blurred, behind everything: the same
+            // backdrop the call screen opens onto when you answer.
+            BlurredAvatarBackdrop(url: call.incoming?.profile?.avatarUrl,
+                                  name: call.incoming?.callerName ?? "Disband")
+                .overlay(Color.black.opacity(0.35))
+                .ignoresSafeArea()
+                .transition(.opacity)
 
             VStack(spacing: 0) {
                 Spacer()
-                Text("INCOMING VOICE CALL")
-                    .font(.caption.weight(.heavy))
-                    .tracking(2)
-                    .foregroundStyle(Brand.textMuted)
-                    .padding(.bottom, 28)
-
-                ZStack {
-                    Circle()
-                        .fill(Brand.accent.opacity(0.2))
-                        .frame(width: 150, height: 150)
-                        .scaleEffect(pulse ? 1.4 : 1.0)
-                        .opacity(pulse ? 0 : 0.8)
-                    if let profile = call.incoming?.profile {
-                        AvatarView(url: profile.avatarUrl, name: profile.name, size: 108)
-                    } else {
-                        Circle()
-                            .fill(Brand.accent)
-                            .frame(width: 108, height: 108)
-                            .overlay(
-                                Text(call.incoming?.callerName.prefix(1).uppercased() ?? "?")
-                                    .font(.system(size: 44, weight: .bold))
-                                    .foregroundStyle(.white)
-                            )
-                    }
+                HStack(spacing: 6) {
+                    Image(systemName: "phone.fill").font(.system(size: 11, weight: .bold))
+                    Text("INCOMING VOICE CALL")
+                        .font(.caption.weight(.heavy))
+                        .tracking(2)
                 }
-                .padding(.bottom, 28)
+                .foregroundStyle(.white.opacity(0.75))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.ultraThinMaterial, in: Capsule())
+                .padding(.bottom, 12)
+
+                CallPulseAvatar(url: call.incoming?.profile?.avatarUrl,
+                                name: call.incoming?.callerName ?? "?",
+                                size: 116, waiting: true)
+                    .scaleEffect(pulse ? 1 : 0.86)
+                    .opacity(pulse ? 1 : 0)
 
                 Text(call.incoming?.callerName ?? "Someone")
-                    .font(.title2.bold())
-                    .foregroundStyle(Brand.textPrimary)
-                Text("is calling you...")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                if let handle = call.incoming?.profile?.username {
+                    Text("@\(handle)")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .padding(.top, 4)
+                }
+                Text("is calling you\u{2026}")
                     .font(.subheadline)
-                    .foregroundStyle(Brand.textMuted)
+                    .foregroundStyle(.white.opacity(0.7))
                     .padding(.top, 6)
 
                 Spacer()
@@ -133,11 +138,9 @@ struct IncomingCallOverlay: View {
             revealLayer
         }
         .onAppear {
-            pulse = true
             dismissKeyboard()
-            withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) {
-                pulse = false
-            }
+            // The avatar springs in once; the rings around it do the rest.
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.72)) { pulse = true }
         }
     }
 

@@ -8,6 +8,7 @@ struct SpacesView: View {
     @Environment(DmUnreadStore.self) private var unreadStore
     @Environment(DirectMessagesViewModel.self) private var vm
     @Environment(VoiceSession.self) private var voice
+    @Environment(ShellChrome.self) private var chrome
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     @State private var servers: [Server] = []
@@ -26,6 +27,13 @@ struct SpacesView: View {
             if sizeClass == .regular { splitLayout } else { stackLayout }
         }
         .task { await loadServers() }
+        // Tapping Home while already on it: close the open conversation,
+        // or from a space's channels go back to your messages.
+        .onChange(of: chrome.reselected[.home]) { _, _ in
+            withAnimation(Motion.settle) {
+                if !path.isEmpty { path = NavigationPath() } else { selection = .inbox }
+            }
+        }
         .task(id: app.currentUserId) {
             if app.currentUserId == nil { ChannelUnreadStore.shared.reset() } else { ChannelUnreadStore.shared.start() }
         }

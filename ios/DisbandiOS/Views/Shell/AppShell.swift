@@ -3,7 +3,9 @@ import SwiftUI
 /// The signed-in app: four destinations under a floating dock, with voice
 /// layered above everything so a call survives any navigation.
 struct AppShell: View {
+    @Environment(AppState.self) private var app
     @Environment(CallManager.self) private var call
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(VoiceSession.self) private var voice
     @Environment(DmUnreadStore.self) private var unreadStore
     @Environment(DirectMessagesViewModel.self) private var vm
@@ -34,7 +36,8 @@ struct AppShell: View {
 
             if chrome.dockVisible {
                 FloatingDock(selection: Bindable(chrome).destination,
-                             badges: [.home: inboxUnread])
+                             badges: [.home: inboxUnread, .friends: chrome.friendRequests],
+                             onReselect: { chrome.reselect($0) })
                     .transition(.move(edge: .bottom))
             }
         }
@@ -85,6 +88,16 @@ struct AppShell: View {
         .animation(.snappy(duration: 0.32), value: voice.minimized)
         .animation(.snappy(duration: 0.3), value: voice.incomingRing)
         .onChange(of: chrome.destination) { _, next in visited.insert(next) }
+        // Friend requests waiting, for the badge on the Friends tab: counted
+        // at sign-in, when the app comes back, and when you leave Friends
+        // (which keeps it exact while you are there).
+        .task(id: app.currentUserId) { await refreshFriendRequests() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await refreshFriendRequests() } }
+        }
+        .onChange(of: chrome.destination) { previous, _ in
+            if previous == .friends { Task { await refreshFriendRequests() } }
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             withAnimation(.snappy(duration: 0.25)) { chrome.keyboardVisible = true }
         }
@@ -123,6 +136,12 @@ struct AppShell: View {
     /// Lets lists scroll their last rows clear of the floating dock — and
     /// drops to zero when a pushed conversation has hidden it.
     private var dockMargin: CGFloat { 0 }
+
+    private func refreshFriendRequests() async {
+        guard let uid = app.currentUserId else { chrome.friendRequests = 0; return }
+        let count = await DatabaseService.incomingFriendRequestCount(userId: uid)
+        withAnimation(Motion.pop) { chrome.friendRequests = count }
+    }
 
     private var inboxUnread: Int {
         vm.threads.reduce(0) { $0 + unreadStore.count(for: $1.id) }

@@ -43,6 +43,13 @@ final class ShellChrome {
 
     var dockVisible: Bool { dockHiders.isEmpty && !keyboardVisible }
 
+    /// Friend requests waiting for an answer, shown on the Friends tab.
+    var friendRequests = 0
+    /// Bumped when the tab you are already on is tapped again. Each screen
+    /// that can go "back to the start" watches its own counter.
+    private(set) var reselected: [ShellDestination: Int] = [:]
+    func reselect(_ destination: ShellDestination) { reselected[destination, default: 0] += 1 }
+
     func hideDock(_ token: UUID) { dockHiders.insert(token) }
     func showDock(_ token: UUID) { dockHiders.remove(token) }
 }

@@ -114,8 +114,9 @@ struct ChannelPanel: View {
             VStack(alignment: .leading, spacing: 0) {
                 header
                 if loading {
-                    ProgressView().tint(Brand.accent)
-                        .frame(maxWidth: .infinity).padding(.top, 60)
+                    SkeletonChannels()
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
                 } else if channels.isEmpty {
                     Text("No channels yet.")
                         .font(.subheadline).foregroundStyle(Brand.textMuted)
@@ -481,7 +482,33 @@ struct ChannelPanel: View {
                  serverName: server.name, serverIcon: server.iconUrl)
     }
 
+    /// What each space's list looked like last time, so switching spaces
+    /// shows the channels at once and refreshes them underneath. In memory
+    /// only; a relaunch starts clean.
+    private struct Snapshot {
+        var channels: [Channel]
+        var categories: [ChannelCategory]
+        var effects: [String: ChannelEffect]
+        var permissions: [String: Bool]
+    }
+    @MainActor private static var snapshots: [String: Snapshot] = [:]
+
     private func load() async {
+        if loading || channels.first?.serverId != server.id {
+            if let saved = Self.snapshots[server.id] {
+                channels = saved.channels
+                categories = saved.categories
+                effects = saved.effects
+                permissions = saved.permissions
+                loading = false
+            } else if !channels.isEmpty {
+                // Another space's channels are still on screen and this one
+                // has never been opened: show placeholders, not the wrong list.
+                channels = []
+                categories = []
+                loading = true
+            }
+        }
         let client = SupabaseManager.client
         async let loadedChannels = try? DatabaseService.channels(serverId: server.id)
         async let loadedCategories = try? DatabaseService.categories(serverId: server.id)
@@ -499,6 +526,10 @@ struct ChannelPanel: View {
         permissions = await loadedPermissions ?? [:]
         timedOutUntil = await loadedTimeout
         loading = false
+        if !channels.isEmpty {
+            Self.snapshots[server.id] = Snapshot(channels: channels, categories: categories,
+                                                 effects: effects, permissions: permissions)
+        }
         await refreshOccupants()
     }
 

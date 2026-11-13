@@ -23,6 +23,8 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.25), value: app.phase)
         .overlay { callOverlay }
         .animation(.easeInOut(duration: 0.25), value: call.phase)
+        .animation(.spring(response: 0.4, dampingFraction: 0.86), value: call.minimized)
+        .animation(.spring(response: 0.4, dampingFraction: 0.86), value: call.callNotice)
     }
 
     /// Global call UI layered above the whole app (incoming ring, then the
@@ -46,11 +48,25 @@ struct RootView: View {
                     }
                     .transition(.move(edge: .top).combined(with: .opacity))
                 } else {
+                    // Grows in from slightly smaller and fades, rather than
+                    // cutting straight to black.
                     FaceTimeCallView(call: call)
-                        .transition(.opacity)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.94)),
+                            removal: .opacity.combined(with: .scale(scale: 0.96))))
                 }
             case .idle:
-                EmptyView()
+                // How the last call ended ("declined", "No answer",
+                // "Call dropped"), for a few seconds.
+                if let notice = call.callNotice {
+                    VStack {
+                        CallNoticeToast(text: notice)
+                            .padding(.top, 6)
+                        Spacer()
+                    }
+                    .allowsHitTesting(false)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
         }
     }

@@ -35,6 +35,15 @@ enum DatabaseService {
             .execute().value
     }
 
+    /// Friend requests waiting for this person's answer (the Friends badge).
+    static func incomingFriendRequestCount(userId: String) async -> Int {
+        (try? await client.from("friendships")
+            .select("id", head: true, count: .exact)
+            .eq("addressee_id", value: userId)
+            .eq("status", value: "pending")
+            .execute().count) ?? 0
+    }
+
     static func channels(serverId: String) async throws -> [Channel] {
         try await client
             .from("channels")

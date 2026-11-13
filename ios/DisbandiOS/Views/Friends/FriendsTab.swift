@@ -3,6 +3,8 @@ import SwiftUI
 struct FriendsTab: View {
     @Environment(AppState.self) private var app
     @Environment(PresenceService.self) private var presence
+    /// Optional: the tab can be shown outside the shell, which has no dock.
+    @Environment(ShellChrome.self) private var chrome: ShellChrome?
     @State private var friendships: [Friendship] = []
     @State private var loading = true
     @State private var showAdd = false
@@ -103,7 +105,7 @@ struct FriendsTab: View {
                     }
 
                     if loading {
-                        ProgressView().tint(Brand.accent).padding(.top, 60)
+                        SkeletonRows(count: 8).padding(.horizontal, 20).padding(.top, 10)
                     } else if filter == .pending {
                         pendingContent
                     } else {
@@ -326,6 +328,8 @@ struct FriendsTab: View {
     private func load() async {
         friendships = (try? await DatabaseService.friendships(currentUserId: uid)) ?? []
         loading = false
+        // Keeps the dock's Friends badge exact as requests are answered.
+        withAnimation(Motion.pop) { chrome?.friendRequests = incoming.count }
     }
 }
 

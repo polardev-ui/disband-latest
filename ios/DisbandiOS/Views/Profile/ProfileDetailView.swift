@@ -3,10 +3,11 @@ import SwiftUI
 import UIKit
 
 /// Someone's profile, as the desktop's profile popout: the banner, the avatar
-/// sitting on its edge with a ring, quick actions beside it, and one inset
-/// panel holding the name, badges, About Me, Member Since, what they're
-/// playing or listening to, and a "Message @them" field that sends straight
-/// to their DMs. Opens at half height; drag up for the rest.
+/// sitting on its edge with a ring (tap it to see it full size), the name and
+/// badges, a row of action tiles (Message, Call, Add Friend), and one inset
+/// panel with About Me, Member Since, what they're playing or listening to,
+/// the friends and spaces you share, and a "Message @them" field that sends
+/// straight to their DMs. Opens at half height; drag up for the rest.
 struct ProfileDetailView: View {
     let profile: Profile
     /// The signed-in user, handed in by the presenter.
@@ -23,6 +24,8 @@ struct ProfileDetailView: View {
     var presence: PresenceService?
     /// Called when the viewer taps "Message" — the presenter handles navigation.
     var onStartDM: ((Profile) -> Void)? = nil
+    /// Starts a call with them. Nil where calling isn't offered.
+    var onCall: ((Profile) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
 
@@ -40,6 +43,12 @@ struct ProfileDetailView: View {
     @State private var full: Profile?
     @State private var draft = ""
     @State private var sending = false
+    /// Friends and spaces the viewer shares with them.
+    @State private var mutualFriends: [MutualPerson] = []
+    @State private var mutualSpaces: [MutualSpace] = []
+    @State private var showMutualFriends = false
+    @State private var showMutualSpaces = false
+    @State private var viewingAvatar = false
     @FocusState private var messageFocused: Bool
 
     private var shown: Profile { full ?? profile }
@@ -64,10 +73,20 @@ struct ProfileDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     top
+                    identity
+                        .padding(.horizontal, 16)
+                        .padding(.top, 4)
+                    if !isSelf {
+                        actionTiles
+                            .padding(.horizontal, 14)
+                            .padding(.top, 14)
+                            .riseIn(delay: 0.03)
+                    }
                     panel
                         .padding(.horizontal, 14)
                         .padding(.top, 12)
                         .padding(.bottom, 28)
+                        .riseIn(delay: 0.08)
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
@@ -83,6 +102,12 @@ struct ProfileDetailView: View {
         .presentationCornerRadius(24)
         .presentationBackground(Brand.surface)
         .task { await loadRelation() }
+        .task(id: profile.id) { await loadMutuals() }
+        .fullScreenCover(isPresented: $viewingAvatar) {
+            if let link = shown.avatarUrl, let url = URL(string: link) {
+                MediaViewer(url: url, kind: .image)
+            }
+        }
         .task(id: profile.id) {
             while !Task.isCancelled {
                 if let fresh = try? await DatabaseService.profile(id: profile.id) { full = fresh }
@@ -98,7 +123,7 @@ struct ProfileDetailView: View {
             BannerImage(url: shown.bannerUrl, height: bannerHeight) { accentGradient }
             HStack(spacing: 8) {
                 Spacer(minLength: avatarSize + ringWidth * 2 + 24)
-                quickActions
+                moreMenu
             }
             .padding(.horizontal, 14)
             .padding(.top, 10)
@@ -112,17 +137,20 @@ struct ProfileDetailView: View {
                 .background(Circle().fill(Brand.surface))
                 .padding(.leading, 12)
                 .padding(.top, bannerHeight - (avatarSize + ringWidth * 2) / 2)
-                .accessibilityHidden(true)
+                .contentShape(Circle())
+                .onTapGesture {
+                    guard shown.avatarUrl != nil else { return }
+                    Haptics.tap()
+                    viewingAvatar = true
+                }
+                .accessibilityLabel("View avatar")
+                .accessibilityAddTraits(.isButton)
         }
     }
 
-    @ViewBuilder private var quickActions: some View {
+    @ViewBuilder private var moreMenu: some View {
         if !isSelf {
-            if relation == nil && !isBot {
-                roundButton("person.fill.badge.plus", label: "Add Friend") { Task { await addFriend() } }
-            }
             Menu {
-                Button { Task { await startDm() } } label: { Label("Message", systemImage: "bubble.left") }
                 if let handle = shown.username {
                     Button {
                         UIPasteboard.general.string = handle
@@ -153,14 +181,60 @@ struct ProfileDetailView: View {
         }
     }
 
-    private func roundButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
+    /// The things you do most with a person, as big tiles under their name.
+    private var actionTiles: some View {
+        HStack(spacing: 10) {
+            if relation != .blocked {
+                tile("Message", icon: "bubble.left.fill", primary: true) { Task { await startDm() } }
+            }
+            if let onCall, !isBot, relation != .blocked {
+                tile("Call", icon: "phone.fill") {
+                    onCall(profile)
+                    dismiss()
+                }
+            }
+            if !isBot {
+                switch relation {
+                case .accepted:
+                    tile("Friends", icon: "person.fill.checkmark", tint: Brand.online, enabled: false) {}
+                case .pending:
+                    tile("Pending", icon: "clock.fill", enabled: false) {}
+                case .blocked:
+                    tile("Unblock", icon: "hand.raised.slash.fill") { Task { await unblock() } }
+                default:
+                    tile("Add Friend", icon: "person.fill.badge.plus") { Task { await addFriend() } }
+                }
+            }
+        }
+        .disabled(working)
+        .animation(Motion.quick, value: relation)
+    }
+
+    private func tile(_ title: String, icon: String, primary: Bool = false, tint: Color? = nil,
+                      enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button {
             Haptics.tap()
             action()
-        } label: { roundIcon(icon) }
-        .buttonStyle(PressScaleStyle(scale: 0.9))
-        .disabled(working)
-        .accessibilityLabel(label)
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(primary ? Color.white : (tint ?? Brand.textPrimary))
+                    .frame(height: 22)
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(primary ? Color.white : Brand.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 62)
+            .background(primary ? Brand.accent : Brand.elevated, in: .rect(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.white.opacity(primary ? 0.14 : 0.05)))
+        }
+        .buttonStyle(PressScaleStyle(scale: 0.95))
+        .disabled(!enabled)
+        .accessibilityLabel(title)
     }
 
     private func roundIcon(_ icon: String) -> some View {
@@ -184,10 +258,6 @@ struct ProfileDetailView: View {
 
     private var panel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            identity
-
-            Rectangle().fill(Brand.divider).frame(height: 1).padding(.vertical, 12)
-
             VStack(alignment: .leading, spacing: 14) {
                 if let bio = shown.bio?.trimmingCharacters(in: .whitespacesAndNewlines), !bio.isEmpty {
                     section("About Me") {
@@ -218,6 +288,9 @@ struct ProfileDetailView: View {
                     ListeningCard(listening: listening)
                 }
 
+                if !mutualFriends.isEmpty { mutualFriendsSection }
+                if !mutualSpaces.isEmpty { mutualSpacesSection }
+
                 if !isSelf { messageArea }
                 if isBot { AuthorizeAppButton(userId: shown.id, viewerId: viewerId) }
 
@@ -234,6 +307,87 @@ struct ProfileDetailView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.06)))
         .animation(Motion.quick, value: error)
         .animation(Motion.quick, value: notice)
+        .animation(Motion.settle, value: mutualFriends.count + mutualSpaces.count)
+    }
+
+    // MARK: - Mutuals
+
+    private var mutualFriendsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            mutualHeader("\(mutualFriends.count) Mutual Friend\(mutualFriends.count == 1 ? "" : "s")",
+                         open: $showMutualFriends) {
+                HStack(spacing: -8) {
+                    ForEach(mutualFriends.prefix(5)) { person in
+                        AvatarView(url: person.avatarUrl, name: person.name, size: 24)
+                            .overlay(Circle().strokeBorder(Brand.background, lineWidth: 2))
+                    }
+                }
+            }
+            if showMutualFriends {
+                VStack(spacing: 8) {
+                    ForEach(mutualFriends) { person in
+                        HStack(spacing: 10) {
+                            AvatarView(url: person.avatarUrl, name: person.name, size: 32,
+                                       status: presence?.status(for: person.id))
+                            Text(person.name).font(.system(size: 15, weight: .medium)).foregroundStyle(Brand.textPrimary)
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private var mutualSpacesSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            mutualHeader("\(mutualSpaces.count) Mutual Space\(mutualSpaces.count == 1 ? "" : "s")",
+                         open: $showMutualSpaces) {
+                HStack(spacing: -8) {
+                    ForEach(mutualSpaces.prefix(5)) { space in
+                        AvatarView(url: space.iconUrl, name: space.name, size: 24)
+                            .overlay(Circle().strokeBorder(Brand.background, lineWidth: 2))
+                    }
+                }
+            }
+            if showMutualSpaces {
+                VStack(spacing: 8) {
+                    ForEach(mutualSpaces) { space in
+                        HStack(spacing: 10) {
+                            AvatarView(url: space.iconUrl, name: space.name, size: 32)
+                            Text(space.name).font(.system(size: 15, weight: .medium)).foregroundStyle(Brand.textPrimary)
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private func mutualHeader<Icons: View>(_ title: String, open: Binding<Bool>,
+                                           @ViewBuilder icons: () -> Icons) -> some View {
+        Button {
+            Haptics.select()
+            withAnimation(Motion.quick) { open.wrappedValue.toggle() }
+        } label: {
+            HStack(spacing: 10) {
+                icons()
+                Text(title.uppercased())
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(0.6)
+                    .foregroundStyle(Brand.textMuted)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Brand.textMuted)
+                    .rotationEffect(.degrees(open.wrappedValue ? 180 : 0))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var identity: some View {
@@ -334,6 +488,26 @@ struct ProfileDetailView: View {
         }?.status
     }
 
+    private func loadMutuals() async {
+        guard viewerId != nil, !isSelf else { return }
+        let client = SupabaseManager.client
+        async let friendIds: [String]? = try? client
+            .rpc("mutual_friend_ids", params: ["p_user_id": profile.id]).execute().value
+        async let spaceIds: [String]? = try? client
+            .rpc("mutual_server_ids", params: ["p_user_id": profile.id]).execute().value
+        let (friends, spaces) = await (friendIds ?? [], spaceIds ?? [])
+
+        async let people: [MutualPerson]? = friends.isEmpty ? [] : try? client.from("profiles")
+            .select("id, username, display_name, avatar_url")
+            .in("id", values: Array(friends.prefix(40))).execute().value
+        async let servers: [MutualSpace]? = spaces.isEmpty ? [] : try? client.from("servers")
+            .select("id, name, icon_url")
+            .in("id", values: Array(spaces.prefix(40))).execute().value
+        let (loadedPeople, loadedSpaces) = await (people ?? [], servers ?? [])
+        mutualFriends = loadedPeople.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        mutualSpaces = loadedSpaces.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
     private func sendQuick() async {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !sending, let uid = viewerId else { return }
@@ -396,5 +570,34 @@ struct ProfileDetailView: View {
     }
     private func unblock() async {
         await run("Unblocked.") { try await DatabaseService.unblockUser(profile.id) }
+    }
+}
+
+
+/// A friend the viewer shares with the profile on screen.
+struct MutualPerson: Decodable, Identifiable, Hashable {
+    let id: String
+    let username: String?
+    let displayName: String?
+    let avatarUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, username
+        case displayName = "display_name"
+        case avatarUrl = "avatar_url"
+    }
+
+    var name: String { Profile.visible(displayName) ?? Profile.visible(username) ?? "Unknown" }
+}
+
+/// A space both people are in.
+struct MutualSpace: Decodable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let iconUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name
+        case iconUrl = "icon_url"
     }
 }

@@ -140,7 +140,27 @@ struct Profile: Codable, Identifiable, Hashable {
     static func visible(_ value: String?) -> String? {
         guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines.union(.controlCharacters)),
               !trimmed.isEmpty else { return nil }
+        // Something in it has to actually draw. Names made of Hangul fillers,
+        // the blank Braille cell, a combining mark with no letter under it or
+        // code points nothing is assigned to are all "blank name" tricks, and
+        // each left an empty row in every list.
+        guard trimmed.unicodeScalars.contains(where: Profile.draws) else { return nil }
         return trimmed
+    }
+
+    /// False for scalars that put no ink on screen by themselves.
+    private static func draws(_ scalar: Unicode.Scalar) -> Bool {
+        let properties = scalar.properties
+        if properties.isWhitespace || properties.isDefaultIgnorableCodePoint { return false }
+        if scalar.value == 0x2800 { return false }   // Braille pattern blank
+        switch properties.generalCategory {
+        case .control, .format, .unassigned, .surrogate,
+             .nonspacingMark, .enclosingMark,
+             .spaceSeparator, .lineSeparator, .paragraphSeparator:
+            return false
+        default:
+            return true
+        }
     }
 
     /// The custom status, or nil once it has expired — the port of the web's

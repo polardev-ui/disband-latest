@@ -51,7 +51,12 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
     /// costs the fastest routes and can leave a call with no viable pair at
     /// all. They are held here and flushed once the description lands.
     private var pendingCandidates: [RTCIceCandidate] = []
-    private var hasRemoteDescription = false
+    private(set) var hasRemoteDescription = false
+
+    /// An offer is out and its answer hasn't been applied yet.
+    var awaitingAnswer: Bool { pc.signalingState == .haveLocalOffer }
+    /// The offer or answer this side last set.
+    var localDescription: RTCSessionDescription? { pc.localDescription }
 
     private(set) var audioTrack: RTCAudioTrack
     private(set) var remoteAudioTrack: RTCAudioTrack?
@@ -95,6 +100,12 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
         // fetched per session, so the caller resolves them before dialling.
         config.iceServers = iceServers
         config.continualGatheringPolicy = .gatherContinually
+        // Same as desktop: one transport for everything, and a pool of
+        // candidates gathered before the offer or answer exists, so the
+        // connection can form the moment descriptions are exchanged.
+        config.bundlePolicy = .maxBundle
+        config.rtcpMuxPolicy = .require
+        config.iceCandidatePoolSize = 10
         let constraints = RTCMediaConstraints(
             mandatoryConstraints: nil,
             optionalConstraints: ["DtlsSrtpKeyAgreement": "true"]
@@ -239,10 +250,16 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
         await flushPendingCandidates()
     }
 
-    func makeOffer() async throws -> RTCSessionDescription {
+    /// `iceRestart` asks for fresh ICE credentials, which is how a call that
+    /// lost its route (Wi-Fi to mobile data, a dead relay) finds a new one
+    /// without hanging up.
+    func makeOffer(iceRestart: Bool = false) async throws -> RTCSessionDescription {
         await waitUntilStable()
+        let constraints = RTCMediaConstraints(
+            mandatoryConstraints: iceRestart ? ["IceRestart": "true"] : nil,
+            optionalConstraints: nil)
         let offer = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<RTCSessionDescription, Error>) in
-            pc.offer(for: RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)) { description, error in
+            pc.offer(for: constraints) { description, error in
                 if let description {
                     cont.resume(returning: description)
                 } else {
@@ -326,8 +343,12 @@ final class WebRTCEngine: NSObject, RTCPeerConnectionDelegate {
                         didChange newState: RTCPeerConnectionState) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            // The call manager decides what a drop means: `.disconnected` is
+            // usually a blip that heals by itself, and `.failed` can often be
+            // recovered with an ICE restart. Ending the call on either one
+            // hung up on people whenever their network wobbled.
             self.onConnectionStateChange(newState)
-            if newState == .disconnected || newState == .failed || newState == .closed {
+            if newState == .closed {
                 self.onConnectionFailed()
             }
         }

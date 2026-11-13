@@ -299,6 +299,7 @@ final class AppState {
         // this phone and the next account is never registered.
         await PushManager.shared.unregisterCurrentDevice()
         await VoipPushService.shared.unregisterCurrentDevice()
+        InboxCache.clear()
         try? await client.auth.signOut()
     }
 
@@ -306,6 +307,7 @@ final class AppState {
         guard currentUserId != nil else { return "You're not signed in." }
         do {
             try await client.rpc("delete_my_account").execute()
+            InboxCache.clear()
             try? await client.auth.signOut()
             session = nil
             profile = nil

@@ -26,21 +26,20 @@ struct ConversationRow: View {
                 .fill(unread > 0 ? Brand.accent : Color.clear)
                 .frame(width: 8, height: 8)
 
-            AvatarView(url: iconUrl, name: name, size: 44, status: status)
+            AvatarView(url: iconUrl, name: name, size: 46, status: status)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Group {
                         if let nameStyle, nameStyle != NameStyle() {
                             StyledName(text: name, style: nameStyle,
-                                       size: UIFont.preferredFont(forTextStyle: .subheadline).pointSize,
-                                       weight: unread > 0 ? .semibold : .regular,
-                                       fallbackColor: unread > 0 ? Brand.textPrimary : Brand.textSecondary)
+                                       size: 16,
+                                       weight: unread > 0 ? .bold : .medium,
+                                       fallbackColor: Brand.textPrimary)
                         } else {
                             Text(name)
-                                .font(.subheadline)
-                                .fontWeight(unread > 0 ? .semibold : .regular)
-                                .foregroundStyle(unread > 0 ? Brand.textPrimary : Brand.textSecondary)
+                                .font(.system(size: 16, weight: unread > 0 ? .bold : .medium))
+                                .foregroundStyle(Brand.textPrimary)
                         }
                     }
                     .lineLimit(1)
@@ -56,23 +55,26 @@ struct ConversationRow: View {
 
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(bottomLine)
-                        .font(.subheadline)
-                        .foregroundStyle(unread > 0 ? Brand.accent : Brand.textMuted)
+                        .font(.system(size: 14, weight: unread > 0 ? .medium : .regular))
+                        .foregroundStyle(unread > 0 ? Brand.textPrimary : Brand.textMuted)
                         .lineLimit(1)
                     Spacer(minLength: 6)
                     if unread > 0 {
-                        Text("\(unread)")
+                        Text(unread > 99 ? "99+" : "\(unread)")
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(Brand.danger))
+                            .contentTransition(.numericText())
+                            .transition(.scale.combined(with: .opacity))
                     }
                 }
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 7)
         .contentShape(Rectangle())
+        .animation(Motion.pop, value: unread)
     }
 
     private var bottomLine: String {

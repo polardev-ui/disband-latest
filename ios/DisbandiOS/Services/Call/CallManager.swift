@@ -55,6 +55,10 @@ final class CallManager {
     /// header from "Connecting…" to "Calling…".
     var callSignaled = false
 
+    /// The connection dropped mid-call and is being recovered (an ICE
+    /// restart), rather than the call being hung up on the spot.
+    var reconnecting = false
+
     private(set) var engine: WebRTCEngine?
 
     // MARK: - Private state
@@ -67,6 +71,31 @@ final class CallManager {
     private var ringWatchdog: Task<Void, Never>?
     private var activeCallId: String?
     private var activePeerId: String?
+
+    /// Bumped whenever a call is torn down, so work started for an earlier
+    /// call (a connection still being prepared) knows to stop.
+    private var callGeneration = 0
+    /// This side sent the offer (it placed the call).
+    private var isCaller = false
+    /// The caller's outgoing offer and ICE, held while the call is still
+    /// ringing: the connection is prepared during the ring, and everything it
+    /// produced goes out the moment the other side answers. Nil means send
+    /// straight away.
+    private var heldSignals: [CallSignal]?
+    /// The connection being prepared while ringing.
+    private var prepareTask: Task<Void, Never>?
+    /// Re-sends the offer until an answer lands (broadcasts aren't stored, so
+    /// one sent before the other side had joined is simply lost).
+    private var offerRetryTask: Task<Void, Never>?
+    /// Recovering a dropped connection.
+    private var recoveryTask: Task<Void, Never>?
+    /// Signals that arrived before the peer connection existed.
+    private var earlySignals: [CallSignal] = []
+    /// The last offer applied (without its candidates) and the answer given
+    /// to it, so a repeated offer gets the same answer instead of a second
+    /// negotiation.
+    private var lastRemoteOffer: String?
+    private var lastAnswer: CallSdp?
     private var listenSubscribed = false
     private var listeningUserId: String?
 
@@ -299,8 +328,25 @@ final class CallManager {
     }
 
     private func sendOnSignalChannel(_ signal: CallSignal) {
+        if heldSignals != nil {
+            heldSignals?.append(signal)
+            return
+        }
         guard let signalChannel else { return }
         Task { try? await signalChannel.broadcast(event: "call", message: signal) }
+    }
+
+    /// Sends what was prepared during the ring, offer first, in order.
+    private func releaseHeldSignals() {
+        guard let held = heldSignals else { return }
+        heldSignals = nil
+        guard let signalChannel else { return }
+        let ordered = held.filter { $0.type == "offer" } + held.filter { $0.type != "offer" }
+        Task {
+            for signal in ordered {
+                try? await signalChannel.broadcast(event: "call", message: signal)
+            }
+        }
     }
 
     // MARK: - Call actions
@@ -319,6 +365,21 @@ final class CallManager {
         CallKitProvider.shared.startActiveCall(id: callId, title: peer.name)
         armRingWatchdog()
         startCallingTone()
+        // Build the connection while it rings: relay lookup, signalling
+        // channel, offer and candidate gathering all happen now, and the
+        // answer only has to release them. This used to start after the
+        // answer, which is most of the wait between "accepted" and hearing
+        // each other.
+        heldSignals = []
+        prepareTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.setupRtc(callId: callId, peerId: peer.id, asCaller: true, prewarm: true)
+            } catch {
+                // The answer path builds it again from scratch if this failed.
+                if self.activeCallId == callId, self.phase == .outgoing { await self.teardownRtc() }
+            }
+        }
         await send(to: peer.id,
                    CallSignal(type: "ring", from: uid, to: peer.id, callId: callId,
                               callerName: profile.name))
@@ -484,8 +545,10 @@ final class CallManager {
             try? await Task.sleep(for: Self.ringTimeout)
             guard !Task.isCancelled, let self else { return }
             guard self.phase == .outgoing || self.phase == .incoming else { return }
-            self.callNotice = self.phase == .outgoing ? "No answer" : nil
+            let unanswered = self.phase == .outgoing
             await self.reset()
+            // After the reset, which clears notices.
+            if unanswered { self.showNotice("No answer") }
         }
     }
 
@@ -504,6 +567,8 @@ final class CallManager {
         phase = .incoming
         armRingWatchdog()
         startRingtone()
+        // Relay credentials ready before the answer, so answering doesn't wait on them.
+        Task { await TurnService.shared.prewarm() }
         if UIApplication.shared.applicationState != .active {
             PushDiag.log("callkit.present", "callId=\(call.callId) state=\(UIApplication.shared.applicationState.rawValue)")
             CallKitProvider.shared.presentIncomingCall(call)
@@ -574,25 +639,31 @@ final class CallManager {
             cancelRingWatchdog()
             rtcConnected = false
             connectedAt = nil
-            do {
-                try await setupRtc(callId: p.callId!, peerId: p.from, asCaller: true)
-            } catch {
-                self.error = error.localizedDescription
-                await self.reset()
+            CallAudioSession.activate()
+            // Usually finished long before the answer; if not, it is closer
+            // to done than a fresh start would be.
+            await prepareTask?.value
+            prepareTask = nil
+            guard phase == .active, activeCallId == p.callId else { return }
+            if engine != nil, signalChannel != nil {
+                releaseHeldSignals()
+                startOfferRetry()
+            } else {
+                heldSignals = nil
+                do {
+                    try await setupRtc(callId: p.callId!, peerId: p.from, asCaller: true)
+                } catch {
+                    self.error = error.localizedDescription
+                    await self.reset()
+                }
             }
 
         case "reject":
-            if phase == .outgoing {
-                let name = p.rejecterName ?? "They"
-                callNotice = "\(name) declined your call"
-                noticeTask?.cancel()
-                noticeTask = Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: 5_000_000_000)
-                    self?.callNotice = nil
-                }
-            }
+            let declined = phase == .outgoing
             CallSounds.shared.playEnd()
             await reset()
+            // After the reset, which clears notices.
+            if declined { showNotice("\(p.rejecterName ?? "They") declined your call") }
 
         // Both mean "the other side is gone". They cross in practice: if our
         // `accept` is lost the caller still thinks it is ringing and sends
@@ -667,19 +738,48 @@ final class CallManager {
 
     // MARK: - WebRTC setup / teardown
 
-    private func setupRtc(callId: String, peerId: String, asCaller: Bool) async throws {
+    /// Builds the peer connection and joins `call:<callId>`.
+    ///
+    /// `prewarm` is the caller preparing during the ring: the audio unit is
+    /// left alone (the calling tone owns the speaker) and the offer is held
+    /// until the answer, instead of being sent and re-sent into a channel
+    /// nobody has joined yet.
+    private func setupRtc(callId: String, peerId: String, asCaller: Bool, prewarm: Bool = false) async throws {
         guard let uid = app.currentUserId else { return }
-        rtcConnected = false
-        connectedAt = nil
-        // Hands the session to WebRTC's own wrapper and starts its audio
-        // unit; the previous raw AVAudioSession calls left the two disagreeing
-        // and the unit never ran, so both sides heard silence.
-        CallAudioSession.activate()
+        let generation = callGeneration
+        isCaller = asCaller
+        if !prewarm {
+            rtcConnected = false
+            connectedAt = nil
+            // Hands the session to WebRTC's own wrapper and starts its audio
+            // unit; the previous raw AVAudioSession calls left the two
+            // disagreeing and the unit never ran, so both sides heard silence.
+            CallAudioSession.activate()
+        }
+
+        // Join the signalling channel first and alongside everything else:
+        // the subscribe round trip was the slowest step and needs neither the
+        // relay nor the peer connection. Anything that arrives before the
+        // connection exists waits in `earlySignals`.
+        let channel = client.channel("call:\(callId)")
+        signalChannel = channel
+        signalSubscription = channel.onBroadcast(event: "call") { [weak self] json in
+            guard let payload = json["payload"],
+                  let p = try? payload.decode(as: CallSignal.self) else { return }
+            Task { @MainActor [weak self] in
+                self?.handleCallSignal(p)
+            }
+        }
+        async let subscribed: Void = channel.subscribeWithError()
 
         // Resolved before the peer connection exists: ICE servers cannot be
         // added after gathering starts, so a call created without the relay
-        // stays without it for its whole life.
+        // stays without it for its whole life. Usually cached already.
         let ice = await TurnService.shared.iceServers()
+        guard callGeneration == generation else {
+            if signalChannel !== channel { Task { await channel.unsubscribe() } }
+            throw CancellationError()
+        }
 
         let engine = WebRTCEngine(callId: callId, peerId: peerId, senderId: uid,
                                   iceServers: ice,
@@ -698,19 +798,7 @@ final class CallManager {
                                       }
                                   })
         engine.onConnectionStateChange = { [weak self] state in
-            guard let self, self.phase == .active else { return }
-            switch state {
-            case .connected:
-                self.rtcConnected = true
-                if self.connectedAt == nil {
-                    self.connectedAt = Date()
-                    CallSounds.shared.playConnected()
-                }
-            case .disconnected, .failed, .closed:
-                self.rtcConnected = false
-            default:
-                break
-            }
+            self?.connectionStateChanged(state)
         }
         engine.setMicEnabled(!micMuted)
         engine.setRemoteAudioEnabled(!deafened)
@@ -722,52 +810,206 @@ final class CallManager {
             engine.setCameraEnabled(true) { _ in }
         }
 
-        let channel = client.channel("call:\(callId)")
-        signalChannel = channel
-        signalSubscription = channel.onBroadcast(event: "call") { [weak self] json in
-            guard let payload = json["payload"],
-                  let p = try? payload.decode(as: CallSignal.self) else { return }
-            Task { @MainActor [weak self] in
-                self?.handleCallSignal(p)
-            }
+        try await subscribed
+        guard callGeneration == generation, self.engine === engine else {
+            engine.dispose()
+            if signalChannel !== channel { Task { await channel.unsubscribe() } }
+            throw CancellationError()
         }
-        try await channel.subscribeWithError()
+
+        // What came in while the connection was being built.
+        let early = earlySignals
+        earlySignals = []
+        for signal in early { handleCallSignal(signal) }
 
         if asCaller {
             let offer = try await engine.makeOffer()
+            guard callGeneration == generation else { throw CancellationError() }
             sendOnSignalChannel(CallSignal(type: "offer", from: uid, to: peerId,
                                            callId: callId,
                                            sdp: CallSdp(type: offer.type.wireType, sdp: offer.sdp)))
+            if !prewarm { startOfferRetry() }
+        }
+    }
+
+    /// Re-sends the current offer until the answer lands. Broadcasts aren't
+    /// stored, so an offer sent a moment before the other side joined the
+    /// channel is gone; the desktop app does the same. The re-sent offer
+    /// carries every candidate gathered so far.
+    private func startOfferRetry() {
+        offerRetryTask?.cancel()
+        let generation = callGeneration
+        offerRetryTask = Task { [weak self] in
+            for delay in [0.7, 1.0, 1.0, 1.5, 2.0] {
+                try? await Task.sleep(for: .seconds(delay))
+                guard let self, !Task.isCancelled, self.callGeneration == generation,
+                      let engine = self.engine, engine.awaitingAnswer,
+                      let offer = engine.localDescription,
+                      let uid = self.app.currentUserId, let peerId = self.activePeerId else { return }
+                self.sendOnSignalChannel(CallSignal(type: "offer", from: uid, to: peerId,
+                                                    callId: self.activeCallId,
+                                                    sdp: CallSdp(type: "offer", sdp: offer.sdp)))
+            }
         }
     }
 
     private func handleCallSignal(_ p: CallSignal) {
         guard let uid = app.currentUserId, p.from != uid else { return }
         if let to = p.to, to != uid { return }
-        guard let engine else { return }
-        Task {
-            do {
-                if p.type == "offer", let sdp = p.sdp {
+        guard let engine else {
+            // The connection is still being built. Keep only the newest offer.
+            if p.type == "offer" { earlySignals.removeAll { $0.type == "offer" } }
+            earlySignals.append(p)
+            return
+        }
+
+        if p.type == "offer", let sdp = p.sdp {
+            // The same offer again (the other side re-sends until it hears
+            // back): answer it the same way, and pick up any candidates it
+            // now lists, instead of renegotiating the call.
+            let key = Self.withoutCandidates(sdp.sdp)
+            if key == lastRemoteOffer {
+                if let lastAnswer {
+                    sendOnSignalChannel(CallSignal(type: "answer", from: uid, to: p.from,
+                                                   callId: activeCallId, sdp: lastAnswer))
+                }
+                Task { await Self.addCandidates(in: sdp.sdp, to: engine) }
+                return
+            }
+            lastRemoteOffer = key
+            Task {
+                do {
                     let remote = RTCSessionDescription(type: .offer, sdp: sdp.sdp)
                     try await engine.setRemote(sdp: remote)
                     let answer = try await engine.makeAnswer()
+                    let wire = CallSdp(type: answer.type.wireType, sdp: answer.sdp)
+                    lastAnswer = wire
                     sendOnSignalChannel(CallSignal(type: "answer", from: uid, to: p.from,
-                                                   callId: activeCallId,
-                                                   sdp: CallSdp(type: answer.type.wireType, sdp: answer.sdp)))
-                } else if p.type == "answer", let sdp = p.sdp {
-                    let remote = RTCSessionDescription(type: .answer, sdp: sdp.sdp)
-                    try await engine.setRemote(sdp: remote)
-                } else if p.type == "ice", let candidate = p.candidate {
-                    let ice = RTCIceCandidate(sdp: candidate.candidate,
-                                              sdpMLineIndex: candidate.sdpMLineIndex,
-                                              sdpMid: candidate.sdpMid)
-                    try await engine.addIceCandidate(ice)
-                } else if p.type == "leave" {
-                    await reset()
+                                                   callId: activeCallId, sdp: wire))
+                } catch {
+                    self.error = error.localizedDescription
                 }
-            } catch {
-                self.error = error.localizedDescription
             }
+        } else if p.type == "answer", let sdp = p.sdp {
+            // A repeat of an answer already applied: nothing to do.
+            guard engine.awaitingAnswer else { return }
+            Task {
+                // An answer racing a duplicate of itself fails harmlessly; it
+                // is not worth an error on the call screen.
+                try? await engine.setRemote(sdp: RTCSessionDescription(type: .answer, sdp: sdp.sdp))
+                if !engine.awaitingAnswer { offerRetryTask?.cancel() }
+            }
+        } else if p.type == "ice", let candidate = p.candidate {
+            let ice = RTCIceCandidate(sdp: candidate.candidate,
+                                      sdpMLineIndex: candidate.sdpMLineIndex,
+                                      sdpMid: candidate.sdpMid)
+            Task { try? await engine.addIceCandidate(ice) }
+        } else if p.type == "leave" {
+            Task { await reset() }
+        }
+    }
+
+    /// An SDP without its candidate lines: two copies of one offer, sent
+    /// moments apart, differ only in how many candidates had been gathered.
+    private static func withoutCandidates(_ sdp: String) -> String {
+        sdp.split(whereSeparator: \.isNewline)
+            .filter { !$0.hasPrefix("a=candidate:") && !$0.hasPrefix("a=end-of-candidates") }
+            .joined(separator: "\n")
+    }
+
+    /// Adds the candidates an SDP lists (by media section).
+    private static func addCandidates(in sdp: String, to engine: WebRTCEngine) async {
+        var index: Int32 = -1
+        var mid: String?
+        for line in sdp.split(whereSeparator: \.isNewline) {
+            if line.hasPrefix("m=") {
+                index += 1
+                mid = nil
+            } else if line.hasPrefix("a=mid:") {
+                mid = String(line.dropFirst("a=mid:".count))
+            } else if line.hasPrefix("a=candidate:"), index >= 0 {
+                let candidate = RTCIceCandidate(sdp: String(line.dropFirst(2)), sdpMLineIndex: index, sdpMid: mid)
+                try? await engine.addIceCandidate(candidate)
+            }
+        }
+    }
+
+    // MARK: - Keeping the call up
+
+    private func connectionStateChanged(_ state: RTCPeerConnectionState) {
+        guard phase == .active else { return }
+        switch state {
+        case .connected:
+            rtcConnected = true
+            recoveryTask?.cancel()
+            recoveryTask = nil
+            if reconnecting {
+                reconnecting = false
+                CallSounds.shared.playConnected()
+            }
+            if connectedAt == nil {
+                connectedAt = Date()
+                CallSounds.shared.playConnected()
+            }
+        case .disconnected:
+            rtcConnected = false
+            beginRecovery(failed: false)
+        case .failed:
+            rtcConnected = false
+            beginRecovery(failed: true)
+        default:
+            break
+        }
+    }
+
+    /// The connection dropped. Before, any drop ended the call on the spot,
+    /// so a lift, a tunnel or Wi-Fi handing over to mobile data hung up on
+    /// you. Now a blip gets a moment to heal by itself, then the caller
+    /// restarts ICE to find a new route, and the call only ends if nothing
+    /// works for a while.
+    private func beginRecovery(failed: Bool) {
+        if connectedAt != nil { reconnecting = true }
+        // A drop already being handled; a hard failure skips the wait.
+        if recoveryTask != nil, !failed { return }
+        recoveryTask?.cancel()
+        let generation = callGeneration
+        recoveryTask = Task { [weak self] in
+            if !failed { try? await Task.sleep(for: .seconds(2)) }
+            guard let self, !Task.isCancelled, self.callGeneration == generation,
+                  self.phase == .active, !self.rtcConnected else { return }
+            if self.isCaller { await self.restartIce() }
+            try? await Task.sleep(for: .seconds(14))
+            guard !Task.isCancelled, self.callGeneration == generation,
+                  self.phase == .active, !self.rtcConnected else { return }
+            if let peerId = self.activePeerId {
+                await self.notifyPeerLeave(peerId, callId: self.activeCallId)
+            }
+            CallSounds.shared.playEnd()
+            await self.reset()
+            self.showNotice("Call dropped. The connection was lost.")
+        }
+    }
+
+    private func restartIce() async {
+        guard let engine, phase == .active,
+              let peerId = activePeerId, let uid = app.currentUserId else { return }
+        do {
+            let offer = try await engine.makeOffer(iceRestart: true)
+            sendOnSignalChannel(CallSignal(type: "offer", from: uid, to: peerId,
+                                           callId: activeCallId,
+                                           sdp: CallSdp(type: offer.type.wireType, sdp: offer.sdp)))
+            startOfferRetry()
+        } catch {
+            // The deadline in beginRecovery ends the call if this can't recover.
+        }
+    }
+
+    private func showNotice(_ text: String) {
+        callNotice = text
+        noticeTask?.cancel()
+        noticeTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            self?.callNotice = nil
         }
     }
 
@@ -786,24 +1028,42 @@ final class CallManager {
             sendOnSignalChannel(CallSignal(type: "offer", from: uid, to: peerId,
                                            callId: activeCallId,
                                            sdp: CallSdp(type: offer.type.wireType, sdp: offer.sdp)))
+            startOfferRetry()
         } catch {
             self.error = error.localizedDescription
         }
     }
 
-    private func reset() async {
-        stopRingtone()
+    /// The peer connection, its channel and everything held for them.
+    private func teardownRtc() async {
+        offerRetryTask?.cancel()
+        offerRetryTask = nil
+        recoveryTask?.cancel()
+        recoveryTask = nil
         engine?.onConnectionFailed = {}
         engine?.onConnectionStateChange = { _ in }
         engine?.dispose()
         engine = nil
         remoteHasVideo = false
         rtcConnected = false
+        reconnecting = false
+        heldSignals = nil
+        earlySignals = []
+        lastRemoteOffer = nil
+        lastAnswer = nil
         signalSubscription = nil
         if let signalChannel {
             await signalChannel.unsubscribe()
         }
         signalChannel = nil
+    }
+
+    private func reset() async {
+        callGeneration += 1
+        prepareTask?.cancel()
+        prepareTask = nil
+        stopRingtone()
+        await teardownRtc()
         phase = .idle
         cancelRingWatchdog()
         // Every way a call ends comes through here — including the far side
@@ -822,6 +1082,7 @@ final class CallManager {
         error = nil
         activeCallId = nil
         activePeerId = nil
+        isCaller = false
         noticeTask?.cancel()
         callNotice = nil
         CallAudioSession.deactivate()

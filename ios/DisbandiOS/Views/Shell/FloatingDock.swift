@@ -14,6 +14,8 @@ import SwiftUI
 struct FloatingDock: View {
     @Binding var selection: ShellDestination
     var badges: [ShellDestination: Int] = [:]
+    /// The tab you're already on was tapped again: go back to its start.
+    var onReselect: (ShellDestination) -> Void = { _ in }
 
     @Environment(AppState.self) private var app
     @Environment(PresenceService.self) private var presence
@@ -70,7 +72,11 @@ struct FloatingDock: View {
     private func item(_ destination: ShellDestination) -> some View {
         let active = destination == current
         return Button {
-            guard destination != selection else { return }
+            guard destination != selection else {
+                Haptics.soft()
+                onReselect(destination)
+                return
+            }
             Haptics.select()
             withAnimation(.spring(response: 0.36, dampingFraction: 0.78)) { highlighted = destination }
             // Instant, like the system tab bar: animating the switch made
