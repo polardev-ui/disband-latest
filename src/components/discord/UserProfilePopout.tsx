@@ -25,7 +25,7 @@ import { safeImageUrl } from "@/lib/safe-url";
 import { getAccentBackground, getProfileCardTheme, usesCustomAccent } from "@/lib/profileColor";
 import { activeStatusNote, listeningFor, presenceStatusFor } from "@/lib/presence";
 import { OVERLAY_Z } from "@/lib/overlay";
-import { ArtPanel, ProfileOverlay, SkinFloor } from "@/components/shop/ProfileOverlay";
+import { ArtPanel, ProfileOverlay, SkinFloor, usesRoomAbove } from "@/components/shop/ProfileOverlay";
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import { useI18n } from "@/contexts/I18nContext";
@@ -208,21 +208,9 @@ export function UserProfilePopout({
     onClose();
   }
 
-  return createPortal(
-    <div className="fixed inset-0" style={{ zIndex: OVERLAY_Z.contextMenu - 1 }}>
-      <button type="button" aria-label={t("Close profile")} className="absolute inset-0 cursor-default" onClick={onClose} />
-      <div
-        ref={ref}
-        role="dialog"
-        aria-label={t("{name}'s profile", { name: displayName(p) })}
-        data-side={pos?.side ?? "right"}
-        className={`profile-popout${exiting ? " profile-popout-out" : ""} fx-overlay-host absolute isolate flex max-h-[calc(100dvh-80px)] w-[340px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-2xl border ${theme ? "border-white/10" : "border-border-subtle bg-bg-floating"} text-text-normal shadow-[var(--elevation-high)]`}
-        style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? "visible" : "hidden", ...theme?.style }}
-      >
-        {/* The equipped profile effect: over the banner, under the profile,
-            and holding still while the card scrolls beneath it. */}
-        <ProfileOverlay itemId={p.equipped_overlay_effect} />
-        <div className="absolute right-3 top-3 z-30 flex items-center gap-2">
+  const roomAbove = usesRoomAbove(p.equipped_overlay_effect);
+  const actions = (
+    <>
           {canAddFriend && (
             <button
               type="button"
@@ -254,7 +242,24 @@ export function UserProfilePopout({
               ]}
             />
           )}
-        </div>
+    </>
+  );
+
+  return createPortal(
+    <div className="fixed inset-0" style={{ zIndex: OVERLAY_Z.contextMenu - 1 }}>
+      <button type="button" aria-label={t("Close profile")} className="absolute inset-0 cursor-default" onClick={onClose} />
+      <div
+        ref={ref}
+        role="dialog"
+        aria-label={t("{name}'s profile", { name: displayName(p) })}
+        data-side={pos?.side ?? "right"}
+        className={`profile-popout${exiting ? " profile-popout-out" : ""} fx-overlay-host absolute isolate flex max-h-[calc(100dvh-80px)] w-[340px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-2xl border ${theme ? "border-white/10" : "border-border-subtle bg-bg-floating"} text-text-normal shadow-[var(--elevation-high)]`}
+        style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? "visible" : "hidden", ...theme?.style }}
+      >
+        {/* The equipped profile effect: over the banner, under the profile,
+            and holding still while the card scrolls beneath it. */}
+        <ProfileOverlay itemId={p.equipped_overlay_effect} />
+        {!roomAbove && <div className="absolute right-3 top-3 z-30 flex items-center gap-2">{actions}</div>}
         <div className="relative min-h-0 overflow-y-auto">
           {/* Banner */}
           <div className={`relative overflow-hidden ${banner ? "h-[120px]" : "h-[60px]"}`} style={{ background: bannerBg }}>
@@ -312,6 +317,9 @@ export function UserProfilePopout({
               </h2>
               <GuildTag userId={p.id} size="sm" />
               <BotTag profile={p} size="sm" />
+              {/* With a skin standing over the top of the card, the buttons
+                  move here, out from among the artwork. */}
+              {roomAbove && <div className="relative z-30 ml-auto flex shrink-0 items-center gap-2">{actions}</div>}
             </div>
             <p className="text-[14px] leading-[18px] text-header-primary">
               {p.username ?? ""}

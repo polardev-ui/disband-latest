@@ -5,7 +5,7 @@ import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { usePresence } from "@/hooks/usePresence";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ProfileOverlay, SkinFloor } from "@/components/shop/ProfileOverlay";
+import { ProfileOverlay, SkinFloor, usesRoomAbove } from "@/components/shop/ProfileOverlay";
 import { useApp } from "@/contexts/AppContext";
 import { IconClose, IconMessage, IconMore, IconPhone, IconSettings } from "@/components/icons";
 import { Avatar } from "@/components/ui/Avatar";
@@ -452,6 +452,8 @@ export function UserProfileModal({
           onClick={onClose}
           className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-md bg-black/60 text-white transition-colors hover:bg-black/75"
           aria-label={t("Close profile")}
+          // Below the artwork when a skin stands over the top of the card.
+          style={usesRoomAbove(profile?.equipped_overlay_effect) ? { top: "calc(58px + 12px)" } : undefined}
         >
           <IconClose size={16} />
         </button>

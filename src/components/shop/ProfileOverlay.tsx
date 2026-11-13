@@ -55,6 +55,15 @@ export function ProfileOverlay({ itemId, playing = true }: { itemId: string | nu
 }
 
 /**
+ * Skins that stand out above the card (Cat Ears): the card makes room over
+ * itself for them, so anything pinned to its top corner would sit among the
+ * artwork. Cards move those controls elsewhere when this is true.
+ */
+export function usesRoomAbove(itemId: string | null | undefined): boolean {
+  return !!itemId && shopItem(itemId)?.skin === "cat-ears";
+}
+
+/**
  * A panel with a background of its own inside a profile card (the inner card
  * on a popout, the mutuals box). With an effect equipped, the background goes
  * under the artwork and the content over it, so the art reads across the whole
