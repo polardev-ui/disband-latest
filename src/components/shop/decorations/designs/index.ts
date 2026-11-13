@@ -1,5 +1,6 @@
 import type { DesignSpec } from "../Decoration";
 import { angelic } from "./angelic";
+import { catEars } from "./catEars";
 import { devilsDemise } from "./devilsDemise";
 import { graphite } from "./graphite";
 import { loveYouForever } from "./loveYouForever";
@@ -26,7 +27,8 @@ export type DecorationDesign =
   | "spellbound"
   | "tangled-up"
   | "slurp"
-  | "sunseeker";
+  | "sunseeker"
+  | "cat-ears";
 
 export const DESIGNS: Record<DecorationDesign, DesignSpec> = {
   graphite,
@@ -42,4 +44,5 @@ export const DESIGNS: Record<DecorationDesign, DesignSpec> = {
   "tangled-up": tangledUp,
   slurp,
   sunseeker,
+  "cat-ears": catEars,
 };

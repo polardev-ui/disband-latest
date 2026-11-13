@@ -219,6 +219,7 @@ const DECORATION_ITEMS: ShopItem[] = ([
   { id: "ring-spellbound", name: "Spellbound", description: "A patched, starry wizard's hat. Hover and it hops, flinging stars round your picture.", priceCents: 499, decoration: "spellbound" },
   { id: "ring-tangled-up", name: "Tangled Up", description: "A coral octopus hugging your head. Hover and it squeezes, twice.", priceCents: 549, decoration: "tangled-up" },
   { id: "ring-slurp", name: "Slurp!", description: "Your picture in a steaming bowl of ramen. Hover and the chopsticks go in for noodles.", priceCents: 449, decoration: "slurp" },
+  { id: "ring-cat-ears", name: "Cat Ears", description: "Fluffy black cat ears on your head. Hover and they shake, and you blush. :3", priceCents: 399, decoration: "cat-ears" },
   { id: "ring-sunseeker", name: "Sunseeker", description: "Your face in a sunflower, with a bumblebee close by. Hover and the bee takes a lap.", priceCents: 399, decoration: "sunseeker" },
 ] satisfies Omit<ShopItem, "category" | "className">[]).map((item) => ({ ...item, category: "ring" as const, className: "fx-ring-art", overAvatar: true }));
 

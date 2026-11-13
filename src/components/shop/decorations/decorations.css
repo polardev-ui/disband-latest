@@ -610,3 +610,39 @@
 @media (prefers-reduced-motion: reduce) {
   .deco, .deco * { animation: none !important; transition: none !important; }
 }
+
+/* ---------------------------------------------------------------- cat ears */
+
+/* Each ear pivots at its root on the rim (left root about 70,68). At rest one
+   flicks now and then; on hover both shake and the cheeks blush. */
+.cte-ear, .cte-twitch { transform-origin: 70px 68px; }
+.cte-twitch { animation: cte-flick calc(5200ms * var(--deco-slow, 1)) ease-in-out infinite; }
+.cte-twitch-r { animation-delay: calc(-2600ms * var(--deco-slow, 1)); }
+@keyframes cte-flick {
+  0%, 82%, 100% { transform: rotate(0deg); }
+  85% { transform: rotate(-12deg) scaleY(.93); }
+  88% { transform: rotate(4deg); }
+  91% { transform: rotate(0deg); }
+}
+.cte-play .cte-ear { animation: cte-shake calc(1400ms * var(--deco-slow, 1)) both; }
+.cte-play .cte-ear-r { animation-delay: calc(60ms * var(--deco-slow, 1)); }
+@keyframes cte-shake {
+  0% { transform: rotate(0deg); }
+  10% { transform: rotate(-14deg) scaleY(.92); }
+  20% { transform: rotate(10deg); }
+  30% { transform: rotate(-10deg); }
+  40% { transform: rotate(7deg); }
+  50% { transform: rotate(-5deg); }
+  60% { transform: rotate(3deg); }
+  72%, 100% { transform: rotate(0deg); }
+}
+.deco-cat-ears[data-hover="true"] .cte-twitch { animation: none; }
+
+.cte-cheeks { opacity: 0; transition: opacity calc(350ms * var(--deco-slow, 1)); }
+.deco-cat-ears[data-hover="true"] .cte-cheeks { opacity: 1; }
+.cte-blush { transform-box: fill-box; transform-origin: center; }
+.deco-cat-ears[data-hover="true"] .cte-blush { animation: cte-blush calc(1100ms * var(--deco-slow, 1)) ease-in-out infinite alternate; }
+@keyframes cte-blush { from { transform: scale(.9); opacity: .7; } to { transform: scale(1.08); opacity: 1; } }
+.cte-mark { transform-box: fill-box; transform-origin: center; }
+.deco-cat-ears[data-hover="true"] .cte-mark { animation: cte-mark calc(900ms * var(--deco-slow, 1)) ease-in-out infinite; }
+@keyframes cte-mark { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(-10deg); } 65% { transform: rotate(8deg); } }
