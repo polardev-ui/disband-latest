@@ -80,6 +80,8 @@ fn play_notification_sound() -> Result<(), String> {
 
 #[cfg(desktop)]
 mod activity;
+#[cfg(desktop)]
+mod splash;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -110,8 +112,12 @@ pub fn run() {
         builder = builder
             .on_window_event(|window, event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window.hide();
+                    // The main window hides to the tray. Anything else (the
+                    // startup window) closes as normal.
+                    if window.label() == "main" {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
                 }
             })
             .setup(|app| {
@@ -130,6 +136,9 @@ pub fn run() {
                         }
                     }
                 }
+                // The main window starts hidden; the startup window checks for
+                // an update, then shows it.
+                splash::start(app.handle());
                 Ok(())
             });
     }

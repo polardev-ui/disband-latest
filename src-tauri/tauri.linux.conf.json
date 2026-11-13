@@ -5,6 +5,7 @@
       {
         "title": "Disband",
         "label": "main",
+        "visible": false,
         "width": 1280,
         "height": 820,
         "minWidth": 880,

@@ -491,6 +491,41 @@ html[data-desktop-os="macos"] .desktop-titlebar {
   opacity: 0.55;
   pointer-events: none;
 }
+/* Back and forward, beside the window buttons (after the traffic lights on
+   macOS, at the left edge elsewhere), as on Discord. */
+.desktop-titlebar-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  padding-left: 8px;
+}
+html[data-desktop-os="macos"] .desktop-titlebar-nav {
+  padding-left: 78px;
+}
+.desktop-titlebar-nav button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-normal);
+  transition: background-color 120ms ease, color 120ms ease, opacity 120ms ease;
+}
+.desktop-titlebar-nav button:hover:not(:disabled) {
+  background-color: var(--interactive-hover);
+}
+.desktop-titlebar-nav button:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.desktop-titlebar-nav button:disabled {
+  color: var(--text-muted);
+  opacity: 0.4;
+  cursor: default;
+}
 .desktop-titlebar-actions {
   display: flex;
   align-items: center;
@@ -531,6 +566,60 @@ html[data-desktop-os="linux"] .desktop-titlebar-controls {
 .desktop-titlebar-controls button[data-close]:hover {
   background-color: #e81123;
   color: #ffffff;
+}
+
+/* The desktop "please restart" bar (UpdateBanner): across the top, under the
+   title bar, in the brand colour, as Discord does it. It can't be dismissed. */
+.update-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 6px 16px;
+  overflow: hidden;
+  background-color: var(--brand, #4641d9);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  animation: update-banner-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.update-banner-progress {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background-color: rgba(255, 255, 255, 0.16);
+  transition: width 200ms ease;
+  pointer-events: none;
+}
+.update-banner-text { position: relative; }
+.update-banner-version { font-weight: 500; opacity: 0.75; }
+.update-banner-button {
+  position: relative;
+  flex-shrink: 0;
+  padding: 3px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 6px;
+  background: transparent;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.update-banner-button:hover {
+  background-color: #ffffff;
+  color: var(--brand, #4641d9);
+}
+@keyframes update-banner-in {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-banner { animation: none; }
 }
 
 ::-webkit-scrollbar {

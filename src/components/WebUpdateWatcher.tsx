@@ -12,7 +12,7 @@ import { isTauri } from "@/lib/platform";
  * like a Realtime subscription never reaches tabs that were left open. This
  * polls /api/version and, once the deployment has moved on, reloads the tab
  * after two minutes without any input. Until then a small notice offers a
- * reload. Desktop has its own updater (UpdateToast) and is skipped.
+ * reload. Desktop has its own updater (UpdateBanner) and is skipped.
  *
  * A reload never interrupts a voice call or a focused iframe (Stripe's card
  * fields), and composer drafts are kept in sessionStorage, so they survive.

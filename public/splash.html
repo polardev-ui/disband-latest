@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Disband</title>
+  <!--
+    The desktop app's startup window (src-tauri/src/splash.rs). It checks for
+    an update before Disband opens and installs one if there is. The Rust side
+    reports progress by calling window.__disbandSplash({ text, progress }).
+  -->
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111114;
+      --text: #f4f4f6;
+      --muted: #9d97aa;
+      --brand: #4641d9;
+      --brand-soft: #7b77f0;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+      cursor: default;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 26px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .glow {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 38%, rgba(70, 65, 217, 0.32), transparent 62%);
+      pointer-events: none;
+    }
+    .logo {
+      position: relative;
+      width: 92px;
+      height: 92px;
+      animation: bob 2.6s ease-in-out infinite;
+    }
+    .logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      filter: drop-shadow(0 10px 24px rgba(70, 65, 217, 0.45));
+    }
+    .status {
+      position: relative;
+      min-height: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    #text {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      transition: opacity 160ms ease;
+    }
+    .bar {
+      width: 150px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity 200ms ease;
+    }
+    .bar.shown { opacity: 1; }
+    #fill {
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--brand), var(--brand-soft));
+      transition: width 220ms ease;
+    }
+    /* No percentage yet: a sliver that sweeps across. */
+    .bar.busy #fill {
+      width: 36%;
+      animation: sweep 1.1s ease-in-out infinite;
+    }
+    @keyframes bob {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-6px) scale(1.03); }
+    }
+    @keyframes sweep {
+      0% { transform: translateX(-110%); }
+      100% { transform: translateX(310%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .logo, .bar.busy #fill { animation: none; }
+    }
+  </style>
+</head>
+<body data-tauri-drag-region>
+  <div class="glow" data-tauri-drag-region></div>
+  <div class="logo" data-tauri-drag-region>
+    <img src="/logo-white.png" alt="" draggable="false" data-tauri-drag-region />
+  </div>
+  <div class="status" data-tauri-drag-region>
+    <div id="text" role="status" aria-live="polite">Checking for updates&hellip;</div>
+    <div class="bar" id="bar"><div id="fill"></div></div>
+  </div>
+  <script>
+    (function () {
+      var text = document.getElementById("text");
+      var bar = document.getElementById("bar");
+      var fill = document.getElementById("fill");
+      window.__disbandSplash = function (update) {
+        if (!update) return;
+        if (typeof update.text === "string") text.textContent = update.text;
+        var downloading = /Downloading|Installing|Restarting/.test(update.text || "");
+        bar.classList.toggle("shown", downloading);
+        if (typeof update.progress === "number") {
+          bar.classList.remove("busy");
+          fill.style.width = Math.max(4, Math.min(100, update.progress)) + "%";
+        } else {
+          bar.classList.toggle("busy", downloading);
+        }
+      };
+    })();
+  </script>
+</body>
+</html>

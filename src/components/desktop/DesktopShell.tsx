@@ -5,6 +5,7 @@ import type { Window } from "@tauri-apps/api/window";
 import { isTauri } from "@/lib/platform";
 import { useApp } from "@/contexts/AppContext";
 import { NotificationBell } from "@/components/discord/NotificationBell";
+import { useNavigationHistory } from "@/hooks/useNavigationHistory";
 
 /**
  * The Tauri shell's native-feel layer.
@@ -131,9 +132,65 @@ async function installAppMenu(): Promise<void> {
   }
 }
 
+/** True when the key went to something you type into. */
+function isEditable(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  return el.isContentEditable || el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT";
+}
+
 export function DesktopShell() {
   const [maximized, setMaximized] = useState(false);
   const { session } = useApp();
+  const nav = useNavigationHistory();
+  const [os, setOs] = useState("other");
+  useEffect(() => {
+    setOs(detectOs());
+  }, []);
+  const mac = os === "macos";
+
+  // Back and forward from the keyboard and the mouse's side buttons:
+  // Cmd+[ / Cmd+] on macOS, Alt+Left / Alt+Right elsewhere (the same keys
+  // Discord and browsers use). Desktop only: on the web those keys already
+  // belong to the browser.
+  const { back, forward } = nav;
+  useEffect(() => {
+    if (!isTauri() || !session) return;
+    const isMac = detectOs() === "macos";
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      if (isMac && e.metaKey && !e.altKey && !e.ctrlKey && !e.shiftKey && (e.key === "[" || e.key === "]")) {
+        e.preventDefault();
+        if (e.key === "[") back();
+        else forward();
+        return;
+      }
+      if (!isMac && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey
+          && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        // In a text box Alt+arrow moves the caret; leave it alone there.
+        if (isEditable(e.target)) return;
+        e.preventDefault();
+        if (e.key === "ArrowLeft") back();
+        else forward();
+      }
+    };
+    // Mouse buttons 4 and 5.
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button === 3) {
+        e.preventDefault();
+        back();
+      } else if (e.button === 4) {
+        e.preventDefault();
+        forward();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [session, back, forward]);
 
   // Mark the document and let CSS reveal the title-bar strip. The attribute is
   // normally already set by the pre-paint script; this is a backstop.
@@ -311,6 +368,34 @@ export function DesktopShell() {
       className="desktop-titlebar"
       onDoubleClick={() => void withWindow((win) => win.toggleMaximize())}
     >
+      {session && (
+        <div className="desktop-titlebar-nav" onDoubleClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            aria-label="Back"
+            title={mac ? "Back (\u2318[)" : "Back (Alt+\u2190)"}
+            disabled={!nav.canGoBack}
+            onClick={nav.back}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M19 12H5" />
+              <path d="m12 19-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            aria-label="Forward"
+            title={mac ? "Forward (\u2318])" : "Forward (Alt+\u2192)"}
+            disabled={!nav.canGoForward}
+            onClick={nav.forward}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 12h14" />
+              <path d="m12 5 7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      )}
       <span data-tauri-drag-region className="desktop-titlebar-title">
         Disband
       </span>

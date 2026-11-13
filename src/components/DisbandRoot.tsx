@@ -10,7 +10,7 @@ import { MfaChallengeScreen } from "@/components/auth/MfaChallengeScreen";
 import { PlatformBanScreen } from "@/components/auth/PlatformBanScreen";
 import { DiscordApp } from "@/components/discord/DiscordApp";
 import { VoiceSessionProvider } from "@/contexts/VoiceSessionContext";
-import { UpdateToast } from "@/components/desktop/UpdateToast";
+import { UpdateBanner } from "@/components/desktop/UpdateBanner";
 import { WebUpdateWatcher } from "@/components/WebUpdateWatcher";
 import { DesktopShell } from "@/components/desktop/DesktopShell";
 import { SelfXssWarning } from "@/components/SelfXssWarning";
@@ -102,7 +102,6 @@ export function DisbandRoot() {
         {}
         <SkinBoundary>
         <ContextMenuProvider>
-          <UpdateToast />
           <WebUpdateWatcher />
           <SelfXssWarning />
           {}
@@ -110,6 +109,7 @@ export function DisbandRoot() {
           {}
           <div className="flex h-screen flex-col">
             <DesktopShell />
+            <UpdateBanner />
             <AgePrompt />
             <div className="min-h-0 flex-1">
               <AppShell />
