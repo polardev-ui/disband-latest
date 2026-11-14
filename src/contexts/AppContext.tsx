@@ -603,7 +603,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       `data fresh at ${Math.round(t.freshAt)}ms; the data load took ${Math.round(t.freshAt - t.startedAt)}ms`,
     );
   };
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSessionState] = useState<Session | null>(null);
+  /*
+   Only swap the session when it is a different one: a new access token or
+   another account. Auth events can repeat the same session over and over
+   (one account's browser re-announced it several times a second for hours),
+   and each fresh copy re-ran every effect keyed on the session, so the app
+   re-fetched its restrictions, platform access and conversations on a loop
+   until requests started failing ("Failed to fetch") and the UI flickered.
+  */
+  const setSession = useCallback((next: Session | null) => {
+    setSessionState((prev) =>
+      prev && next && prev.access_token === next.access_token && prev.user?.id === next.user?.id ? prev : next,
+    );
+  }, []);
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>(() => getSavedSessions());
   const [profile, setProfile] = useState<Profile | null>(null);
   // Do Not Disturb is what you chose (preferred_status). The live status can
@@ -3331,8 +3344,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [restrictions],
   );
 
+  const signedIn = !!session;
   useEffect(() => {
-    if (!session) {
+    if (!signedIn) {
       setMfaRequired(false);
       setPlatformBan(null);
       setRestrictions([]);
@@ -3343,7 +3357,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void refreshRestrictions();
     const interval = setInterval(() => { void refreshPlatformAccess(); }, 60_000);
     return () => clearInterval(interval);
-  }, [session, refreshMfaStatus, refreshPlatformAccess, refreshRestrictions]);
+  // Keyed on the account, not the session object: a refreshed token is the
+  // same person and needs none of these again.
+  }, [session?.user?.id, refreshMfaStatus, refreshPlatformAccess, refreshRestrictions]);
 
   useEffect(() => {
     if (!userId || !configured) return;
