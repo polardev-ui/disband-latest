@@ -87,8 +87,8 @@ export default function EuUkPage() {
             diligent, non-arbitrary, and objective manner.
           </p>
           <p>
-            Reports are first assessed by our automated systems, including Tether, our AI reviewer,
-            which can decide on a report without a person reviewing it. If automated means were used,
+            Reports are first assessed by our automated systems, which can decide on
+            a report without a person reviewing it. If automated means were used,
             our decision will say so. You can ask for a person to review any decision on your report
             (see Section 6).
           </p>

@@ -44,7 +44,8 @@ enum class ThemeId(val raw: String) {
     Parchment("parchment"),
     Porcelain("porcelain"),
     Orchid("orchid"),
-    Copper("copper");
+    Copper("copper"),
+    Dusk("dusk");
 
     companion object {
         fun from(raw: String?): ThemeId? = entries.firstOrNull { it.raw == raw }
@@ -259,9 +260,23 @@ object Themes {
                 textMuted = color(0xB0C1CA), divider = color(0x435762), isDark = true,
             ),
         ),
+        ThemeDefinition(
+            ThemeId.Dusk, "Dusk", "Dark cream and warm brown, like evening light",
+            Palette(
+                background = color(0x3D2801), surface = color(0x593202),
+                surfaceRaised = color(0x66420E), elevated = color(0x7A5420),
+                accent = color(0xD9B36C), accentSoft = color(0xB8924E),
+                textPrimary = color(0xF5E6C8), textSecondary = color(0xD9C6A0),
+                textMuted = color(0xC9B07A), divider = color(0x7A5320), isDark = true,
+            ),
+        ),
     )
 
-    val freeThemeIds: Set<ThemeId> = setOf(ThemeId.Dark, ThemeId.Midnight, ThemeId.Light, ThemeId.Sunset)
+    val freeThemeIds: Set<ThemeId> = setOf(
+        ThemeId.Dark, ThemeId.Midnight, ThemeId.Light, ThemeId.Sunset,
+        ThemeId.Graphite, ThemeId.Forest, ThemeId.Cobalt, ThemeId.Ember,
+        ThemeId.Parchment, ThemeId.Porcelain, ThemeId.Orchid, ThemeId.Copper, ThemeId.Dusk,
+    )
 
     fun definition(id: ThemeId): ThemeDefinition = all.firstOrNull { it.id == id } ?: all[0]
 }

@@ -9,6 +9,7 @@ enum ThemeId: String, CaseIterable, Codable, Sendable {
     case dark, midnight, light, sunset, ocean
     case roseGold = "rose-gold"
     case plasma, nord
+    case dusk
 }
 
 struct Palette: Sendable {
@@ -128,6 +129,17 @@ enum Themes {
                 textMuted: Color(hex: 0xA5ABB6), divider: Color(hex: 0x4C566A),
                 colorScheme: .dark),
             requiredPlan: .aero),
+
+        ThemeDefinition(
+            id: .dusk, label: "Dusk", detail: "Dark cream and warm brown, like evening light",
+            palette: Palette(
+                background: Color(hex: 0x3D2801), surface: Color(hex: 0x593202),
+                surfaceRaised: Color(hex: 0x66420E), elevated: Color(hex: 0x7A5420),
+                accent: Color(hex: 0xD9B36C), accentSoft: Color(hex: 0xB8924E),
+                textPrimary: Color(hex: 0xF5E6C8), textSecondary: Color(hex: 0xD9C6A0),
+                textMuted: Color(hex: 0xC9B07A), divider: Color(hex: 0x7A5320),
+                colorScheme: .dark),
+            requiredPlan: nil),
     ]
 
     static func definition(_ id: ThemeId) -> ThemeDefinition {

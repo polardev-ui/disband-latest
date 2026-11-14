@@ -272,12 +272,12 @@ export default function PrivacyPage() {
           <p>
             These systems compare media with digital fingerprints (hashes) of known prohibited media,
             use automated image classification provided by Hive, and use AI language models provided
-            by DeepSeek, including Tether, our AI reviewer, which reviews flagged and reported content.
+            by DeepSeek for content moderation.
           </p>
           <p>
             When these systems find a likely violation, they can remove content, add a strike to an
             account, limit features, or hold or suspend an account without a person reviewing the
-            decision first. Tether also decides on reports. Decisions are based on what the content
+            decision first. Decisions are based on what the content
             shows or says compared with our rules, and an account’s history, such as earlier strikes,
             affects how serious the consequence is. These decisions can significantly affect you, for
             example by limiting your access to the Service.

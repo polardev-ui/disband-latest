@@ -1,5 +1,5 @@
 
-export type ThemeId = "light" | "dark" | "midnight" | "sunset" | "ocean" | "rose-gold" | "plasma" | "nord" | "graphite" | "forest" | "cobalt" | "ember" | "parchment" | "porcelain" | "orchid" | "copper";
+export type ThemeId = "light" | "dark" | "midnight" | "sunset" | "ocean" | "rose-gold" | "plasma" | "nord" | "graphite" | "forest" | "cobalt" | "ember" | "parchment" | "porcelain" | "orchid" | "copper" | "dusk";
 
 export interface ThemeDefinition {
   id: ThemeId;
@@ -74,6 +74,7 @@ export const THEMES: ThemeDefinition[] = [
   {id:"porcelain",label:"Porcelain",description:"Cool white surfaces with a precise blue accent.",mode:"light",swatch:["#dce5ed","#ecf1f7","#fafcfe","#295e9e"]},
   {id:"orchid",label:"Orchid",description:"Muted plum with lavender highlights.",mode:"dark",swatch:["#1c1421","#2a1e32","#36263f","#d4afe9"]},
   {id:"copper",label:"Copper",description:"Slate blue with burnished copper details.",mode:"dark",swatch:["#11191d","#1d2a31","#26363f","#e6b28b"]},
+  {id:"dusk",label:"Dusk",description:"Dark cream and warm brown, like evening light.",mode:"dark",swatch:["#3d2801","#593202","#66420e","#d9b36c"]},
 ];
 
 export const DEFAULT_THEME: ThemeId = "dark";
