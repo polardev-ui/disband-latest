@@ -191,9 +191,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             // restarts playback and stacks volume against per-view elements.
             if (el.srcObject === stream) return;
             el.srcObject = stream;
-            el.muted = deafened;
             audioRefs.current.set(uid, el);
             applyParticipantAudioControls(el, uid);
+            // After the per-person settings, which set their own mute: someone
+            // joining while you're deafened stays silent.
+            if (deafened) el.muted = true;
             void el.play().catch(() => {});
           }}
           autoPlay

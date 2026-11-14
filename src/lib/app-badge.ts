@@ -95,11 +95,20 @@ async function applyTauriBadge(state: BadgeState): Promise<void> {
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
     const win = getCurrentWindow();
 
-    // macOS and Linux: a real dock badge. `undefined` removes it. A dot has no
-    // count, so it is drawn as a 1 — the dock has no dot-only form, and a
-    // silent no-op would lose the signal entirely.
-    const count = state.mentions > 0 ? state.mentions : state.unread ? 1 : undefined;
-    await win.setBadgeCount(count).catch(() => {});
+    // macOS: a number only when you were pinged; anything else unread is a
+    // "•", as Discord does. The dock takes a text label for that. It used to
+    // show "1" for plain unread messages, which read as a ping that wasn't.
+    if (isMac()) {
+      const label = state.mentions > 0 ? formatBadgeCount(state.mentions) : state.unread ? "\u2022" : undefined;
+      await win.setBadgeLabel(label).catch(async () => {
+        // An older shell without the label permission: fall back to a count.
+        await win.setBadgeCount(state.mentions > 0 ? state.mentions : undefined).catch(() => {});
+      });
+    } else if (!isWindows()) {
+      // Linux: the count only. A plain unread has no dot form there, and a
+      // made-up "1" is worse than no badge.
+      await win.setBadgeCount(state.mentions > 0 ? state.mentions : undefined).catch(() => {});
+    }
 
     // Windows ignores the count and wants a 16px overlay on the taskbar icon.
     // Passing `undefined` clears it.
@@ -110,6 +119,14 @@ async function applyTauriBadge(state: BadgeState): Promise<void> {
   } catch {
     // Old shell, or the window closed mid-update.
   }
+}
+
+function isMac(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const platform =
+    (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
+    navigator.userAgent;
+  return /mac/i.test(platform);
 }
 
 function isWindows(): boolean {

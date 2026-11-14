@@ -10,6 +10,7 @@ struct InboxPanel: View {
     @Environment(VoiceSession.self) private var voice
     @Environment(ShellChrome.self) private var chrome
 
+    @State private var pins = PinnedConversationStore.shared
     @State private var filter: Filter = .all
     /// Typed into the search box: narrows the list to matching names.
     @State private var query = ""
@@ -59,6 +60,7 @@ struct InboxPanel: View {
         .animation(Motion.settle, value: showsActiveNow)
         .refreshable { await vm.start(currentUserId: app.currentUserId, unread: unreadStore, closed: closedDms) }
         .task { await vm.start(currentUserId: app.currentUserId, unread: unreadStore, closed: closedDms) }
+        .task(id: app.currentUserId) { await pins.load(currentUserId: app.currentUserId) }
     }
 
     private var header: some View {
@@ -248,8 +250,24 @@ struct InboxPanel: View {
                 }
             }
         }
+        // Pinned first (most recently pinned on top), then unread, then the
+        // rest by latest activity.
+        func pinDate(_ item: Item) -> Date? {
+            switch item {
+            case .dm(let t): return pins.pinnedAt(.dm, t.id)
+            case .group(let g): return pins.pinnedAt(.group, g.id)
+            }
+        }
         return result
-            .sorted { lhs, rhs in lhs.2 != rhs.2 ? lhs.2 : lhs.1 > rhs.1 }
+            .sorted { lhs, rhs in
+                let lp = pinDate(lhs.0), rp = pinDate(rhs.0)
+                if lp != nil || rp != nil {
+                    guard let lp else { return false }
+                    guard let rp else { return true }
+                    return lp > rp
+                }
+                return lhs.2 != rhs.2 ? lhs.2 : lhs.1 > rhs.1
+            }
             .map(\.0)
     }
 
@@ -268,13 +286,15 @@ struct InboxPanel: View {
                     preview: DirectMessagesViewModel.preview(for: thread),
                     time: RelativeTime.compact(thread.lastMessageAt ?? thread.createdAt),
                     unread: unreadStore.count(for: thread.id),
-                                    nameStyle: thread.friend.map { NameStyle($0) }
+                    nameStyle: thread.friend.map { NameStyle($0) },
+                    pinned: pins.pinnedAt(.dm, thread.id) != nil
                 )
                 .padding(.horizontal, 8)
                 .contentShape(RoundedRectangle(cornerRadius: 14))
             }
             .buttonStyle(ChannelRowStyle())
             .contextMenu {
+                pinButton(.dm, thread.id)
                 if let friendId = thread.friend?.id {
                     Button(role: .destructive) {
                         closedDms.close(friendId)
@@ -290,19 +310,31 @@ struct InboxPanel: View {
                     iconUrl: group.iconUrl,
                     name: group.name,
                     subtitle: voice.isIn(group.id) ? "In a call" : "\(group.members?.count ?? 0) members",
-                    unread: unreadStore.countGroup(for: group.id)
+                    unread: unreadStore.countGroup(for: group.id),
+                    pinned: pins.pinnedAt(.group, group.id) != nil
                 )
                 .padding(.horizontal, 8)
                 .contentShape(RoundedRectangle(cornerRadius: 14))
             }
             .buttonStyle(ChannelRowStyle(highlighted: voice.isIn(group.id)))
             .contextMenu {
+                pinButton(.group, group.id)
                 Button(role: .destructive) {
                     Task { await vm.leaveGroup(group.id) }
                 } label: {
                     Label("Leave Group", systemImage: "rectangle.portrait.and.arrow.right")
                 }
             }
+        }
+    }
+
+    @ViewBuilder private func pinButton(_ kind: PinnedConversationStore.Kind, _ id: String) -> some View {
+        let pinned = pins.pinnedAt(kind, id) != nil
+        Button {
+            Haptics.select()
+            withAnimation(Motion.settle) { pins.toggle(kind, id) }
+        } label: {
+            Label(pinned ? "Unpin" : "Pin to Top", systemImage: pinned ? "pin.slash" : "pin")
         }
     }
 }

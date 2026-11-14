@@ -16,6 +16,8 @@ struct ConversationRow: View {
     var unread: Int = 0
     /// The person's name style, for one-to-one DMs.
     var nameStyle: NameStyle? = nil
+    /// Pinned to the top of the list.
+    var pinned: Bool = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -45,6 +47,13 @@ struct ConversationRow: View {
                     .lineLimit(1)
                     GuildTagView(userId: userId, size: .small)
                     Spacer(minLength: 6)
+                    if pinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Brand.textMuted)
+                            .rotationEffect(.degrees(45))
+                            .accessibilityLabel("Pinned")
+                    }
                     if let time, !time.isEmpty {
                         Text(time)
                             .font(.caption)

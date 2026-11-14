@@ -1,5 +1,6 @@
 "use client";
 
+import { websiteHref } from "@/lib/platform";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useI18n } from "@/contexts/I18nContext";
@@ -284,7 +285,7 @@ export function HeaderToolbar({
       </div>
 
       <Tooltip label={t("Help")} side="bottom">
-        <a href="/support" target="_blank" rel="noreferrer" aria-label={t("Help")} className={iconBtn(false)}>
+        <a href={websiteHref("/support")} target="_blank" rel="noreferrer" aria-label={t("Help")} className={iconBtn(false)}>
           <IconHelp size={24} />
         </a>
       </Tooltip>

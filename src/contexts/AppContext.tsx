@@ -1792,6 +1792,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // still shows up within a few minutes, or on the next reload).
     let disconnected = false;
     let lastTickAt = 0;
+    let lastPublishedAt = 0;
     const supabase = getSupabaseClient();
 
     const publish = (listening: Listening | null) => {
@@ -1873,8 +1874,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const drift = next && lastPublished && key === trackKey(lastPublished)
           ? Math.abs(Date.parse(next.started_at) - Date.parse(lastPublished.started_at))
           : 0;
-        const changed = key !== lastKey || drift > 2_000;
+        // Every so often say it again even when nothing changed: another
+        // device (the phone) may have cleared or replaced it in the meantime.
+        const stale = next !== null && Date.now() - lastPublishedAt > 60_000;
+        const changed = key !== lastKey || drift > 2_000 || stale;
         if (changed) {
+          lastPublishedAt = Date.now();
           lastKey = key;
           lastPublished = next;
           publish(next);
@@ -1890,7 +1895,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       timer = window.setTimeout(async () => {
         await tick();
         schedule();
-      }, disconnected ? 300_000 : hidden ? 30_000 : 5_000);
+      }, disconnected ? 300_000 : hidden ? 15_000 : 2_000);
     };
 
     const wake = () => {

@@ -93,20 +93,33 @@ function ensureGainNode(element: HTMLAudioElement): GainNode | null {
   }
 }
 
+/*
+ Up to 100% the element's own volume does it. Only a boost past 100% needs
+ the audio graph, and only then is one built for the element.
+
+ Every voice element used to be routed through a graph on arrival, even at
+ 100%. A live call stream played that way is unreliable across browsers (the
+ gain could stop applying, or a suspended context left it silent), the
+ output device chosen in settings no longer applied (that's set on the
+ element, the graph plays to the default device), and in practice the
+ volume slider did nothing in voice channels. An element that already has a
+ graph (it was boosted earlier) keeps using it, since that can't be undone.
+*/
 export function applyParticipantAudioControls(element: HTMLAudioElement | null, userId: string) {
   if (!element) return;
   const controls = getParticipantControls(userId);
-  const gain = ensureGainNode(element);
+  const level = Math.max(0, controls.volume / 100);
+  const existing = gainNodes.get(element);
+  const gain = existing ?? (level > 1 ? ensureGainNode(element) : null);
   if (gain) {
     const ctx = getAudioContext();
     if (ctx && ctx.state === "suspended") void ctx.resume();
-    gain.gain.value = Math.max(0, controls.volume / 100);
-    element.muted = controls.micMuted;
+    gain.gain.value = level;
+    element.volume = 1;
   } else {
-    // Fallback when Web Audio isn't available.
-    element.volume = Math.min(1, Math.max(0, controls.volume / 100));
-    element.muted = controls.micMuted;
+    element.volume = Math.min(1, level);
   }
+  element.muted = controls.micMuted;
   element.dataset.callUser = userId;
 }
 

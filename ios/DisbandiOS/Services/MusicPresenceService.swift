@@ -25,6 +25,7 @@ final class MusicPresenceService {
 
     private var loop: Task<Void, Never>?
     private var lastPublished: Listening?
+    private var lastPublishedAt = Date.distantPast
     private var userId: String?
     private weak var presence: PresenceService?
 
@@ -66,8 +67,11 @@ final class MusicPresenceService {
             return 300
         }
         current = result.listening
-        if changed(result.listening) { await publish(result.listening) }
-        return 8
+        // Also say it again now and then: another device may have cleared
+        // or replaced it in the meantime.
+        let stale = result.listening != nil && Date().timeIntervalSince(lastPublishedAt) > 60
+        if changed(result.listening) || stale { await publish(result.listening) }
+        return 2
     }
 
     /// Republish when the track changes, or when the same track restarted or
@@ -81,6 +85,7 @@ final class MusicPresenceService {
 
     private func publish(_ listening: Listening?) async {
         lastPublished = listening
+        lastPublishedAt = Date()
         await presence?.updateListening(listening)
         guard let userId else { return }
         _ = try? await SupabaseManager.client

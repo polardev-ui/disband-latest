@@ -3,6 +3,7 @@
 import type { AeroCheckoutRequest } from "@/components/subscription/AeroPage";
 import { AppearanceEffect } from "./AppearanceEffect";
 import { favoritesAvailable, isFavorite, toggleFavorite, useFavorites, type FavoriteKind } from "@/lib/favorites";
+import { pinnedAt, pinsAvailable, togglePin } from "@/lib/pinned-conversations";
 import { ReminderDialog, type ReminderTarget } from "./SavedMessages";
 import { findSaved, saveMessage, savedAvailable, unsaveMessage, useSavedMessages } from "@/lib/saved-messages";
 import { appearanceEntitled } from "@/lib/appearance";
@@ -1353,7 +1354,17 @@ export function DiscordApp() {
   const handleGroupContext = useCallback(
     (group: NonNullable<typeof activeGroup>, x: number, y: number) => {
       const isOwner = group.owner_id === app.user?.id;
+      const userId = app.user?.id;
+      const pinned = !!pinnedAt("group", group.id);
       openMenu(x, y, [
+        ...(userId && pinsAvailable()
+          ? [{
+              id: "pin",
+              label: pinned ? t("Unpin") : t("Pin to top"),
+              icon: pinned ? <IconPinOff size={16} /> : <IconPin size={16} />,
+              onClick: () => void togglePin(userId, "group", group.id),
+            }]
+          : []),
         ...favoriteMenuItem("group", group.id),
         {
           id: "call",

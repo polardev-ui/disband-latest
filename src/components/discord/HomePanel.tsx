@@ -18,7 +18,8 @@ import { GroupAvatar } from "@/components/ui/GroupAvatar";
 import { IconChevronLeft, IconClose, IconFriends, IconGroup, IconInbox, IconPlus, IconCrown, IconSparkle } from "@/components/icons";
 import { CreateGroupChatModal } from "@/components/modals/CreateGroupChatModal";
 import { favoritesAvailable, isFavorite, toggleFavorite } from "@/lib/favorites";
-import { IconStar } from "@/components/icons";
+import { IconPin, IconPinOff, IconStar } from "@/components/icons";
+import { pinnedAt, pinsAvailable, togglePin, usePinnedConversations } from "@/lib/pinned-conversations";
 import type { GroupChatWithMembers } from "@/lib/supabase/types";
 
 const STATUS_BG = {
@@ -150,6 +151,7 @@ export function HomePanel({
   } = useApp();
   const { t } = useI18n();
   const { openMenu } = useContextMenu();
+  const pins = usePinnedConversations(user?.id);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   // The DM list swaps for the Message Requests list while this is on.
   const [showRequests, setShowRequests] = useState(false);
@@ -202,14 +204,16 @@ export function HomePanel({
   const showTetherRow = subscriptionPlan === "aero" && tetherProfile && !tetherThreadId;
 
   // DMs and group chats share one list so a DM with fresh activity can sit
-  // above an older group chat instead of being trapped beneath it. Unread
-  // conversations stay pinned to the top.
+  // above an older group chat instead of being trapped beneath it. Pinned
+  // conversations come first (most recently pinned on top), then unread
+  // ones, then the rest by latest activity.
   const mixedConversations = useMemo(() => {
     const items: {
       kind: "group" | "dm";
       id: string;
       unread: number;
       sortAt: string;
+      pinnedAt: string | null;
       group?: GroupChatWithMembers;
       entry?: (typeof dmListEntries)[number];
     }[] = [];
@@ -221,6 +225,7 @@ export function HomePanel({
         kind: "group",
         id: `group:${g.id}`,
         unread: getGroupUnreadCount(g.id),
+        pinnedAt: pinnedAt("group", g.id),
         sortAt: g.last_message_at ?? lastMsg?.created_at ?? g.created_at,
         group: g,
       });
@@ -231,16 +236,23 @@ export function HomePanel({
         id: entry.key,
         unread: entry.unreadCount,
         sortAt: entry.sortAt,
+        pinnedAt: entry.threadId ? pinnedAt("dm", entry.threadId) : null,
         entry,
       });
     }
     return items.sort((a, b) => {
+      if (a.pinnedAt || b.pinnedAt) {
+        if (!a.pinnedAt) return 1;
+        if (!b.pinnedAt) return -1;
+        return b.pinnedAt.localeCompare(a.pinnedAt);
+      }
       const aUnread = a.unread > 0 ? 1 : 0;
       const bUnread = b.unread > 0 ? 1 : 0;
       if (aUnread !== bUnread) return bUnread - aUnread;
       return b.sortAt.localeCompare(a.sortAt);
     });
-  }, [groupChats, groupMessages, dmListEntries, getGroupUnreadCount]);
+    // pins.items: re-sort when something is pinned or unpinned.
+  }, [groupChats, groupMessages, dmListEntries, getGroupUnreadCount, pins.items]);
 
   async function openDmEntry(entry: (typeof dmListEntries)[number]) {
     if (entry.threadId) {
@@ -263,6 +275,14 @@ export function HomePanel({
             label: isFavorite("dm", threadId) ? t("Remove from Favorites") : t("Add to Favorites"),
             icon: <IconStar size={16} />,
             onClick: () => void toggleFavorite(userId, "dm", threadId),
+          }]
+        : []),
+      ...(threadId && userId && pinsAvailable()
+        ? [{
+            id: "pin",
+            label: pinnedAt("dm", threadId) ? t("Unpin") : t("Pin to top"),
+            icon: pinnedAt("dm", threadId) ? <IconPinOff size={16} /> : <IconPin size={16} />,
+            onClick: () => void togglePin(userId, "dm", threadId),
           }]
         : []),
       {
@@ -442,7 +462,7 @@ export function HomePanel({
                         </span>
                       )}
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <span className="block truncate text-[16px] font-medium leading-5">{g.name}</span>
                       <span className="block truncate text-[12px] leading-4 text-text-muted">
                         {t("{count} members", { count: g.members.length })}
@@ -450,6 +470,7 @@ export function HomePanel({
                         {inCallCount > 0 ? ` · ${t("{count} in voice", { count: inCallCount })}` : ""}
                       </span>
                     </div>
+                    {item.pinnedAt && <IconPin size={16} className="shrink-0 text-interactive-normal" />}
                   </button>
                 );
               }
@@ -522,8 +543,9 @@ export function HomePanel({
                   >
                     <IconClose size={16} />
                   </span>
-                  <span className="group-hover/dmrow:hidden">
+                  <span className="flex items-center gap-1.5 group-hover/dmrow:hidden">
                     <DmRowBadge count={entry.unreadCount} />
+                    {item.pinnedAt && <IconPin size={16} className="shrink-0 text-interactive-normal" />}
                   </span>
                 </button>
               );

@@ -63,7 +63,7 @@ enum BotCommandService {
             let name = (t.hasPrefix("#") ? String(t.dropFirst()) : t).lowercased()
             struct Row: Decodable { let id: String }
             let rows: [Row] = (try? await client.from("channels").select("id")
-                .eq("server_id", value: serverId).ilike("name", pattern: name).limit(1).execute().value) ?? []
+                .eq("server_id", value: serverId).ilike("name", pattern: DatabaseService.likeExact(name)).limit(1).execute().value) ?? []
             guard let id = rows.first?.id else { throw CommandInputError("No channel called #\(name).") }
             return .string(id)
         default:

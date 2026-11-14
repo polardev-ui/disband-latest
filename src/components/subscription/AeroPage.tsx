@@ -10,6 +10,7 @@
  and activation), started at the chosen plan and interval via `onCheckout`.
 */
 
+import { websiteHref } from "@/lib/platform";
 import { useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useI18n } from "@/contexts/I18nContext";
@@ -228,7 +229,7 @@ export function AeroPage({ onCheckout }: { onCheckout: (request: AeroCheckoutReq
             </div>
             <p className="mt-5 text-[14px] text-white/80">
               {t("Just want to support Disband?")}{" "}
-              <a href="/donate" target="_blank" rel="noreferrer" className="font-semibold text-white underline decoration-white/40 underline-offset-4 hover:decoration-white">
+              <a href={websiteHref("/donate")} target="_blank" rel="noreferrer" className="font-semibold text-white underline decoration-white/40 underline-offset-4 hover:decoration-white">
                 {t("Donate instead.")}
               </a>
             </p>

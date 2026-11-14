@@ -562,13 +562,23 @@ enum DatabaseService {
     /// Look a profile up by its @username, for tapping a mention in chat.
     /// Case-insensitive, because a mention is typed by hand.
     static func profile(username: String) async throws -> Profile? {
+        // `_` and `%` are wildcards to ilike: "x_t" matched "xzt", so tapping
+        // @x_t opened someone else's profile. Escape them so it's exact.
         let rows: [Profile] = try await client
             .from("profiles")
             .select("*")
-            .ilike("username", pattern: username)
+            .ilike("username", pattern: likeExact(username))
             .limit(1)
             .execute().value
         return rows.first
+    }
+
+    /// A value for `ilike` that matches itself exactly (ignoring case):
+    /// `%`, `_` and `\\` are escaped so they aren't treated as wildcards.
+    static func likeExact(_ value: String) -> String {
+        value.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "%", with: "\\%")
+            .replacingOccurrences(of: "_", with: "\\_")
     }
 
     /// Profiles are fetched in batches: every id lands in a single `in(...)`

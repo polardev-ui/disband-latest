@@ -19,7 +19,7 @@ const RESTRICTIONS = [
 ] as const;
 
 async function userIdFor(username: string): Promise<string | null> {
-  const { data } = await getSupabaseClient().from("profiles").select("id").ilike("username", username.trim().replace(/^@/, "")).maybeSingle();
+  const { data } = await getSupabaseClient().from("profiles").select("id").ilike("username", username.trim().replace(/^@/, "").replace(/[\\%_]/g, (c) => `\\${c}`)).maybeSingle();
   return (data as { id: string } | null)?.id ?? null;
 }
 

@@ -23,10 +23,29 @@ async function requestPlayer(accessToken: string): Promise<Response> {
   });
 }
 
+/*
+ Refresh, tolerating a refresh that lost a race.
+
+ Spotify can hand back a new refresh token and retire the old one. The phone,
+ the desktop app and a browser tab all poll this route, so two of them often
+ refresh at the same moment: one wins and saves the new token, and the other
+ presents the token that was just retired and is refused. That refusal used
+ to delete the whole connection, which is why a phone's Spotify connection
+ dropped a minute or two after connecting. If the saved token has changed
+ since this request read it, another request refreshed it, and that's used.
+*/
 async function refresh(userId: string, refreshToken: string): Promise<StoredSpotifyTokens> {
-  const tokens = await refreshSpotifyTokens(refreshToken);
-  await saveSpotifyConnection(userId, tokens);
-  return tokens;
+  try {
+    const tokens = await refreshSpotifyTokens(refreshToken);
+    await saveSpotifyConnection(userId, tokens);
+    return tokens;
+  } catch (error) {
+    if (error instanceof SpotifyTokenError) {
+      const latest = await loadSpotifyConnection(userId);
+      if (latest && latest.refresh_token && latest.refresh_token !== refreshToken) return latest;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -82,8 +101,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 503 });
     }
     if (error instanceof SpotifyTokenError) {
-      await deleteSpotifyConnection(user.id).catch(() => {});
-      return NextResponse.json({ connected: false, listening: null });
+      // Only Spotify saying the grant itself is gone ("invalid_grant") ends
+      // the connection. A rate limit, an outage or a dropped request used to
+      // delete it too, so a connection could vanish minutes after linking.
+      if (error.message === "invalid_grant") {
+        await deleteSpotifyConnection(user.id).catch(() => {});
+        return NextResponse.json({ connected: false, listening: null });
+      }
+      return NextResponse.json({ error: "Spotify is unavailable right now." }, { status: 502 });
     }
     return NextResponse.json({ error: "Could not reach Spotify." }, { status: 502 });
   }

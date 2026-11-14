@@ -92,7 +92,7 @@ enum StaffAPI {
         let name = raw.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "@", with: "")
         guard !name.isEmpty else { return nil }
         let rows: [Row] = (try? await SupabaseManager.client.from("profiles").select("id")
-            .ilike("username", pattern: name).limit(1).execute().value) ?? []
+            .ilike("username", pattern: DatabaseService.likeExact(name)).limit(1).execute().value) ?? []
         return rows.first?.id
     }
 }

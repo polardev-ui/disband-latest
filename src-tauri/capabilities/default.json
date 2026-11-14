@@ -18,6 +18,7 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
     "core:window:allow-set-badge-count",
+    "core:window:allow-set-badge-label",
     "core:window:allow-set-overlay-icon"
   ]
 }

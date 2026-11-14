@@ -190,9 +190,10 @@ export function GroupCallStage({
               // double-volume against the context-level element).
               if (el && el.srcObject !== stream) {
                 el.srcObject = stream;
-                el.muted = deafened;
                 void applyAudioOutputToElement(el, getPreferredAudioOutputId());
                 applyParticipantAudioControls(el, uid);
+                // After the per-person settings, which set their own mute.
+                if (deafened) el.muted = true;
                 void el.play().catch(() => {});
               }
             }}
