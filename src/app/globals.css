@@ -1947,7 +1947,7 @@ img.twemoji {
  --interactive-hover:color-mix(in srgb,#282519 85%,#c4b46a); --interactive-selected:color-mix(in srgb,#282519 75%,#c4b46a);
  --brand:#c4b46a; --brand-hover:color-mix(in srgb,#c4b46a 85%,#f3ecd2); --brand-foreground:#121518;
  --text-normal:#f3ecd2; --text-muted:#a89b7a; --text-link:#c4b46a; --divider:#3a3627;
- --status-online:#70cf93; --status-idle:#eac365; --status-dnd:#ff8795; --status-offline:#a89b7a;
+ --status-online:#23a55a; --status-idle:#f0b232; --status-dnd:#f23f43; --status-offline:#a89b7a;
 }
 
 [data-theme="dark"],[data-theme="midnight"],[data-theme="light"] { --brand-foreground:#fff; }
