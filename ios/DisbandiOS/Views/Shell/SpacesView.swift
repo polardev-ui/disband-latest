@@ -27,6 +27,17 @@ struct SpacesView: View {
             if sizeClass == .regular { splitLayout } else { stackLayout }
         }
         .task { await loadServers() }
+        // A space joined from an invite in chat: add it to the rail and open it.
+        .onReceive(NotificationCenter.default.publisher(for: .disbandJoinedSpace)) { note in
+            guard let serverId = note.object as? String else { return }
+            Task {
+                await loadServers()
+                withAnimation(Motion.settle) {
+                    path = NavigationPath()
+                    selection = .server(serverId)
+                }
+            }
+        }
         // Tapping Home while already on it: close the open conversation,
         // or from a space's channels go back to your messages.
         .onChange(of: chrome.reselected[.home]) { _, _ in

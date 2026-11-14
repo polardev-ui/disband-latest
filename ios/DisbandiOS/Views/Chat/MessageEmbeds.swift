@@ -28,6 +28,21 @@ struct MessageEmbeds: View {
 /*  Server invite                                                      */
 /* ------------------------------------------------------------------ */
 
+/// Invite lookups already made this session. The database allows 15 a
+/// minute per person, and every card looked itself up again whenever it
+/// scrolled back into view, so a channel full of invites (#self-promo) ran
+/// out and its cards claimed the invites were invalid.
+@MainActor
+private enum InviteCache {
+    static var previews: [String: DatabaseService.InvitePreview] = [:]
+    static var invalid: Set<String> = []
+}
+
+extension Notification.Name {
+    /// A space was just joined from an invite card; Home opens it.
+    static let disbandJoinedSpace = Notification.Name("disband.joinedSpace")
+}
+
 struct ServerInviteCard: View {
     let code: String
 
@@ -37,6 +52,9 @@ struct ServerInviteCard: View {
     @State private var joining = false
     @State private var joined = false
     @State private var error: String?
+    /// The lookup failed (offline, rate limited), as opposed to the invite
+    /// not existing. Offers a retry instead of calling it invalid.
+    @State private var failed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -86,6 +104,16 @@ struct ServerInviteCard: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(joining || joined)
+            } else if failed {
+                HStack {
+                    Text("Couldn't load this invite.")
+                        .font(.subheadline)
+                        .foregroundStyle(Brand.textMuted)
+                    Spacer()
+                    Button("Retry") { Task { await load(force: true) } }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Brand.accent)
+                }
             } else {
                 Text(error ?? "This invite is invalid or has expired.")
                     .font(.subheadline)
@@ -102,10 +130,23 @@ struct ServerInviteCard: View {
         .task(id: code) { await load() }
     }
 
-    private func load() async {
+    private func load(force: Bool = false) async {
+        let key = code.lowercased()
+        if !force {
+            if let cached = InviteCache.previews[key] { server = cached; loading = false; return }
+            if InviteCache.invalid.contains(key) { server = nil; loading = false; return }
+        }
         loading = true
+        failed = false
         defer { loading = false }
-        server = try? await DatabaseService.serverByInvite(code: code)
+        do {
+            let found = try await DatabaseService.serverByInvite(code: code)
+            server = found
+            if let found { InviteCache.previews[key] = found } else { InviteCache.invalid.insert(key) }
+        } catch {
+            server = nil
+            failed = true
+        }
     }
 
     private func join() async {
@@ -113,8 +154,12 @@ struct ServerInviteCard: View {
         joining = true
         defer { joining = false }
         do {
-            try await DatabaseService.joinServer(invite: code)
+            let serverId = try await DatabaseService.joinServer(invite: code)
             joined = true
+            Haptics.success()
+            // Open it: the card used to say "Joined" and leave you where you
+            // were, with the new space nowhere in the rail until a restart.
+            NotificationCenter.default.post(name: .disbandJoinedSpace, object: serverId)
         } catch {
             self.error = "Couldn't join that space."
         }

@@ -8,8 +8,14 @@ struct ServerMembersView: View {
     let server: Server
     @Environment(AppState.self) private var app
     @Environment(PresenceService.self) private var presence
+    /// Already in display order (role, then name). Sorted when the list
+    /// changes, not on every render: a big space has thousands of members
+    /// and presence updates re-render this screen constantly, so sorting
+    /// here each time froze the whole screen.
     @State private var members: [ServerMember] = []
     @State private var loading = true
+    /// More pages are still coming in behind the first.
+    @State private var loadingMore = false
     @State private var openProfile: Profile?
     @State private var query = ""
 
@@ -60,11 +66,11 @@ struct ServerMembersView: View {
     }
 
     private var onlineMembers: [ServerMember] {
-        ordered(filtered.filter { liveStatus(for: $0) != .offline })
+        filtered.filter { liveStatus(for: $0) != .offline }
     }
 
     private var offlineMembers: [ServerMember] {
-        ordered(filtered.filter { liveStatus(for: $0) == .offline })
+        filtered.filter { liveStatus(for: $0) == .offline }
     }
 
     var body: some View {
@@ -82,6 +88,15 @@ struct ServerMembersView: View {
                         Section("Offline — \(offlineMembers.count)") {
                             ForEach(offlineMembers) { memberRow($0).opacity(0.6) }
                         }
+                    }
+                    if loadingMore {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Loading more members\u{2026}")
+                                .font(.footnote).foregroundStyle(Brand.textMuted)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .listRowBackground(Color.clear)
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -128,11 +143,28 @@ struct ServerMembersView: View {
         }
     }
 
+    /// The first page shows as soon as it arrives; the rest load behind it.
+    /// Big spaces used to wait for every page (thirty round trips for the
+    /// Disband space) behind a spinner that looked frozen.
     private func load() async {
         if members.isEmpty { loading = true }
-        let loaded = try? await DatabaseService.members(serverId: server.id)
-        if let loaded { members = loaded }
+        let pageSize = 500
+        var all: [ServerMember] = []
+        var seen = Set<String>()
+        var page = 1
+        while page <= 30, !Task.isCancelled {
+            guard let rows = try? await DatabaseService.membersPage(serverId: server.id, page: page, pageSize: pageSize) else { break }
+            for row in rows where seen.insert(row.userId).inserted { all.append(row) }
+            members = ordered(all)
+            if page == 1 {
+                loading = false
+                loadingMore = rows.count >= pageSize
+            }
+            if rows.count < pageSize { break }
+            page += 1
+        }
         loading = false
+        loadingMore = false
     }
 
     private func kick(_ userId: String) {

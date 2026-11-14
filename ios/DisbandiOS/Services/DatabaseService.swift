@@ -98,6 +98,19 @@ enum DatabaseService {
         return all
     }
 
+    /// One page of `members(serverId:)`, for screens that show the first
+    /// page straight away and fetch the rest behind it.
+    static func membersPage(serverId: String, page: Int, pageSize: Int = 500) async throws -> [ServerMember] {
+        struct Params: Encodable {
+            let p_server_id: String
+            let p_page: Int
+            let p_page_size: Int
+        }
+        return try await client
+            .rpc("get_server_members", params: Params(p_server_id: serverId, p_page: page, p_page_size: pageSize))
+            .execute().value
+    }
+
     @discardableResult
     static func createServer(name: String) async throws -> String {
         try await client.rpc("create_server", params: ["p_name": name])

@@ -320,7 +320,22 @@ final class ChatViewModel {
             // Bring the newest pictures in before painting, so the page
             // arrives at its final height instead of growing under the reader.
             await MediaSize.prefetch(Self.imageUrls(in: loaded.suffix(30)))
-            messages = olderPages + loaded + stillPending
+            /*
+             Messages that arrived after this page was read. A reload that
+             starts just before your send is saved and finishes just after
+             comes back without it, and the send has already promoted its row
+             (no longer pending), so the merge used to drop it: a message you
+             had sent vanished until the next reload. Anything on screen that
+             is newer than the newest loaded row stays.
+             */
+            let newestFresh = RelativeTime.date(from: loaded.last?.createdAt)
+            let cutoff = newestFresh ?? Date().addingTimeInterval(-120)
+            let arrivedSince = messages.filter { m in
+                guard !m.pending, !loadedIds.contains(m.id),
+                      let when = RelativeTime.date(from: m.createdAt) else { return false }
+                return when >= cutoff
+            }
+            messages = olderPages + loaded + arrivedSince + stillPending
             // If the newest page was full there is probably another one
             // above it. A cached older page also means more may exist above
             // that, so keep the sentinel available until a short page proves
