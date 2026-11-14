@@ -8,7 +8,7 @@ import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui
 import { IconPlus, IconCompass } from "@/components/icons";
 import { Star, Download, CircleHelp, House } from "lucide-react";
 import { displayName, serverInitials } from "@/lib/utils";
-import { safeImageUrl } from "@/lib/safe-url";
+import { safeImageUrl, thumbImageUrl, mayBeAnimated } from "@/lib/safe-url";
 import { GroupAvatar } from "@/components/ui/GroupAvatar";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useLiveOnlineCount } from "@/hooks/useLiveOnlineCount";
@@ -219,6 +219,7 @@ function ServerButton({
   // Online comes from live presence, not the stored status the counts RPC
   // reads (that lags badly). It starts on first hover and then stays live.
   const [hovered, setHovered] = useState(false);
+  const [pointerOver, setPointerOver] = useState(false);
   const liveOnline = useLiveOnlineCount(server.id, hovered);
   const ensureCounts = () => {
     if (serverCountCache.has(server.id)) {
@@ -247,7 +248,11 @@ function ServerButton({
         },
       );
   };
-  const icon = safeImageUrl(server.icon_url);
+  // A small copy, and for an animated icon only its first frame until it's
+  // hovered or the space is open: a rail full of GIFs was most of the wait.
+  const animated = mayBeAnimated(server.icon_url);
+  const icon = thumbImageUrl(server.icon_url, 44, { still: animated });
+  const moving = animated && (pointerOver || active) ? thumbImageUrl(server.icon_url, 44) : null;
   const badgeKind = serverBadgeFor({ verified: server.verified, partner: server.partner, catalystCount });
   return (
     <div
@@ -256,7 +261,9 @@ function ServerButton({
       onMouseEnter={() => {
         ensureCounts();
         setHovered(true);
+        setPointerOver(true);
       }}
+      onMouseLeave={() => setPointerOver(false)}
       className="rail-item group relative flex w-full justify-center"
     >
       <RailPill state={active ? "active" : hasUnread ? "unread" : "none"} />
@@ -304,7 +311,14 @@ function ServerButton({
         >
           {icon ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={icon} alt="" draggable={false} data-active={active || undefined} className="rail-icon h-11 w-11 object-cover" />
+            <>
+              <img src={icon} alt="" draggable={false} data-active={active || undefined} className="rail-icon h-11 w-11 object-cover" />
+              {moving && (
+                // Over the still frame, which shows until this has loaded.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={moving} alt="" draggable={false} data-active={active || undefined} className="rail-icon pointer-events-none absolute inset-0 h-11 w-11 object-cover" />
+              )}
+            </>
           ) : (
             <span data-active={active || undefined} className="rail-icon rail-icon-fill h-11 w-11 text-[14px] font-semibold">
               {serverInitials(server.name)}
@@ -667,7 +681,7 @@ export function ServerList({
                     ) : (
                       <span className="grid h-11 w-11 grid-cols-2 gap-[3px] rounded-[14px] p-[6px]" style={{ backgroundColor: `${folder.color}45` }}>
                         {members.slice(0, 4).map((m) => {
-                          const mi = safeImageUrl(m.icon_url);
+                          const mi = thumbImageUrl(m.icon_url, 14, { still: mayBeAnimated(m.icon_url) });
                           return mi ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img key={m.id} src={mi} alt="" className="h-[14px] w-[14px] rounded-full object-cover" />

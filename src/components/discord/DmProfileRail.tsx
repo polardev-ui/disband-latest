@@ -12,7 +12,7 @@ import { IconChevron } from "@/components/icons";
 import { displayName, serverInitials } from "@/lib/utils";
 import { activeStatusNote, listeningFor, presenceStatusFor } from "@/lib/presence";
 import { getAccentBackground, getProfileCardTheme, usesCustomAccent } from "@/lib/profileColor";
-import { safeImageUrl } from "@/lib/safe-url";
+import { safeImageUrl, thumbImageUrl } from "@/lib/safe-url";
 import { ArtPanel, ProfileOverlay, SkinFloor } from "@/components/shop/ProfileOverlay";
 import type { Profile } from "@/lib/supabase/types";
 import { useI18n } from "@/contexts/I18nContext";
@@ -166,9 +166,9 @@ export function DmProfileRail({ friend, onOpenFullProfile }: DmProfileRailProps)
                 onClick={() => void selectServer(s.id)}
                 className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[14px] text-text-normal hover:bg-interactive-hover"
               >
-                {safeImageUrl(s.icon_url) ? (
+                {thumbImageUrl(s.icon_url, 24, { still: true }) ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={safeImageUrl(s.icon_url)!} alt="" className="h-6 w-6 rounded-full object-cover" />
+                  <img src={thumbImageUrl(s.icon_url, 24, { still: true })!} alt="" className="h-6 w-6 rounded-full object-cover" />
                 ) : (
                   <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-semibold ${theme ? "bg-white/10" : "bg-bg-primary"}`}>{serverInitials(s.name)}</span>
                 )}

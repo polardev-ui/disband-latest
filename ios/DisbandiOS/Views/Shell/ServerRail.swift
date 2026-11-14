@@ -81,7 +81,7 @@ struct ServerRail: View {
                                label: unreadServerIds.contains(server.id) ? "\(server.name), unread messages" : server.name) {
                         selection = .server(server.id)
                     } icon: {
-                        RemoteImage(url: server.iconUrl, contentMode: .fill) {
+                        RemoteImage(url: AppConfig.iconThumb(server.iconUrl), contentMode: .fill) {
                             ZStack {
                                 Color(seed: server.id)
                                 Text(Self.initials(server.name))

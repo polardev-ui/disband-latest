@@ -7,7 +7,7 @@ import { useApp } from "@/contexts/AppContext";
 import { ClassicModal, classicBtn } from "@/components/ui/ClassicModal";
 import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui/ServerBadge";
 import { IconLock } from "@/components/icons";
-import { safeImageUrl } from "@/lib/safe-url";
+import { safeImageUrl, thumbImageUrl } from "@/lib/safe-url";
 import { serverInitials } from "@/lib/utils";
 import {
   fetchGuildTagSpace,
@@ -142,9 +142,9 @@ export function GuildTagSpaceModal() {
               <img src={safeImageUrl(space.banner_url) || undefined} alt="" className="h-full w-full object-cover" />
             )}
             <span className="absolute -bottom-6 left-4 rounded-[15px] bg-bg-secondary p-1">
-              {safeImageUrl(space.icon_url) ? (
+              {thumbImageUrl(space.icon_url, 48) ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={safeImageUrl(space.icon_url) || undefined} alt="" className="h-12 w-12 rounded-[12px] object-cover" />
+                <img src={thumbImageUrl(space.icon_url, 48) || undefined} alt="" className="h-12 w-12 rounded-[12px] object-cover" />
               ) : (
                 <span className="flex h-12 w-12 items-center justify-center rounded-[12px] bg-brand text-[15px] font-semibold text-white">
                   {serverInitials(space.name)}

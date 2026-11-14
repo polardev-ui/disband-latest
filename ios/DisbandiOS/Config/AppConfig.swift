@@ -80,3 +80,18 @@ enum SupabaseManager {
         )
     }()
 }
+
+extension AppConfig {
+    /// A small square copy of an image on cdn.disband.dev (the CDN makes and
+    /// caches it), for icons drawn far smaller than they were uploaded. The
+    /// first frame only, so an animated icon isn't downloaded whole. Other
+    /// hosts are returned unchanged.
+    static func iconThumb(_ url: String?, size: Int = 128) -> String? {
+        guard let url, var parts = URLComponents(string: url),
+              parts.host == "cdn.disband.dev", parts.path.hasPrefix("/v1/images/"),
+              parts.path.range(of: #"\.(png|jpe?g|gif|webp|avif)$"#, options: [.regularExpression, .caseInsensitive]) != nil
+        else { return url }
+        parts.queryItems = [URLQueryItem(name: "w", value: String(size)), URLQueryItem(name: "still", value: "1")]
+        return parts.string
+    }
+}

@@ -9,7 +9,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { IconCheck, IconClose, IconSearch, IconCompass, IconSparkle } from "@/components/icons";
 import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui/ServerBadge";
 import { serverInitials } from "@/lib/utils";
-import { safeImageUrl } from "@/lib/safe-url";
+import { safeImageUrl, thumbImageUrl } from "@/lib/safe-url";
 import { Tooltip } from "./Tooltip";
 import { useI18n } from "@/contexts/I18nContext";
 
@@ -107,7 +107,7 @@ const BANNER_FALLBACK =
   "var(--brand)";
 
 function SpaceIcon({ server, className }: { server: DiscoverableServer; className: string }) {
-  const icon = safeImageUrl(server.icon_url);
+  const icon = thumbImageUrl(server.icon_url, 64);
   return icon ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={icon} alt="" className={`object-cover ${className}`} />

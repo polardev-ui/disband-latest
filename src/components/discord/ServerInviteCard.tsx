@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { apiFetch } from "@/lib/api";
 import { getInviteUrl } from "@/lib/utils";
-import { safeImageUrl } from "@/lib/safe-url";
+import { safeImageUrl, thumbImageUrl } from "@/lib/safe-url";
 import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui/ServerBadge";
 import { Tooltip } from "./Tooltip";
 import { useI18n } from "@/contexts/I18nContext";
@@ -153,7 +153,7 @@ export function ServerInviteCard({ code, onLoad }: ServerInviteCardProps) {
       <div className="flex gap-3 p-3">
         {info.icon_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={safeImageUrl(info.icon_url) || undefined} alt="" className="h-12 w-12 rounded-[30%] object-cover" onLoad={onLoad} />
+          <img src={thumbImageUrl(info.icon_url, 48) || undefined} alt="" className="h-12 w-12 rounded-[30%] object-cover" onLoad={onLoad} />
         ) : (
           <div className="flex h-12 w-12 items-center justify-center rounded-[30%] bg-brand text-lg font-bold text-white">
             {info.name.charAt(0)}

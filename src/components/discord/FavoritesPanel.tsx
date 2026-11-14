@@ -20,7 +20,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { GroupAvatar } from "@/components/ui/GroupAvatar";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { displayName, serverInitials } from "@/lib/utils";
-import { safeImageUrl } from "@/lib/safe-url";
+import { safeImageUrl, thumbImageUrl, mayBeAnimated } from "@/lib/safe-url";
 import { IconClose, IconForum, IconHash, IconMegaphone, IconSpeaker, IconStar } from "@/components/icons";
 import type { Channel } from "@/lib/supabase/types";
 
@@ -149,7 +149,7 @@ export function FavoritesPanel() {
           <>
             {channelGroups.map(([serverId, items]) => {
               const server = app.servers.find((s) => s.id === serverId);
-              const icon = safeImageUrl(server?.icon_url);
+              const icon = thumbImageUrl(server?.icon_url, 32, { still: mayBeAnimated(server?.icon_url) });
               return (
                 <div key={serverId} className="pt-4">
                   <p className="flex items-center gap-1.5 px-2 pb-1.5 text-[13px] font-semibold text-channels-default">

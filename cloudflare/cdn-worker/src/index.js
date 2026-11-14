@@ -784,6 +784,15 @@ async function serve(request, env, key, ctx) {
   // not a valid answer to a plain GET.
   const wantsRange = request.headers.has("range");
 
+  if (request.method === "GET" && !wantsRange && env.IMAGES && RESIZABLE.test(key)) {
+    const params = new URL(request.url).searchParams;
+    const size = Number(params.get("w"));
+    if (THUMB_SIZES.has(size)) {
+      const thumb = await serveThumbnail(request, env, key, size, params.get("still") === "1", ctx);
+      if (thumb) return thumb;
+    }
+  }
+
   if (request.method === "GET" && !wantsRange && env.IMAGES
       && HEIC_CANDIDATE.test(key) && !new URL(request.url).searchParams.has("original")) {
     const converted = await serveHeicAsJpeg(request, env, key, ctx);
@@ -817,6 +826,49 @@ async function serve(request, env, key, ctx) {
 
   const status = wantsRange && object.range ? 206 : 200;
   return new Response(request.method === "HEAD" ? null : object.body, { status, headers });
+}
+
+/* ------------------------------------------------------------ thumbnails */
+
+/**
+ * `?w=<size>` serves a small square copy instead of the full upload: space
+ * icons are drawn at 48px but were often uploaded as multi-megabyte photos
+ * or GIFs, which is what made the space list slow to fill in. `&still=1`
+ * gives just the first frame of an animated image, so a GIF icon costs a
+ * few KB until someone hovers it. Made by the Images binding once per edge
+ * location and cached there, so nothing extra is stored and every existing
+ * upload gets it without being uploaded again. Only a few sizes are allowed,
+ * so the cache can't be filled with every possible width.
+ */
+const THUMB_SIZES = new Set([64, 96, 128, 256]);
+const RESIZABLE = /\.(png|jpe?g|gif|webp|avif)$/i;
+
+async function serveThumbnail(request, env, key, size, still, ctx) {
+  const cache = caches.default;
+  const cacheUrl = new URL(request.url);
+  cacheUrl.search = `?w=${size}${still ? "&still=1" : ""}`;
+  const cacheKey = new Request(cacheUrl.toString(), { method: "GET" });
+  const hit = await cache.match(cacheKey);
+  if (hit) return hit;
+
+  const object = await env.MEDIA.get(key);
+  if (object === null) return null;
+  try {
+    const result = await env.IMAGES.input(object.body)
+      .transform({ width: size, height: size, fit: "cover" })
+      .output({ format: "image/webp", quality: 85, anim: !still });
+    const made = result.response();
+    const tag = `${object.httpEtag.replace(/"$/, "")}-w${size}${still ? "s" : ""}"`;
+    const response = new Response(made.body, { status: 200, headers: imageHeaders("image/webp", tag) });
+    const toCache = response.clone();
+    if (ctx) ctx.waitUntil(cache.put(cacheKey, toCache));
+    else await cache.put(cacheKey, toCache);
+    return response;
+  } catch (err) {
+    // Couldn't make one (an unusual file, Images unavailable): the original.
+    console.error("thumbnail failed", key, size, err);
+    return null;
+  }
 }
 
 /* ------------------------------------------------------------ HEIC → JPEG */

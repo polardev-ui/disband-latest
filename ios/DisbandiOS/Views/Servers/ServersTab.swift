@@ -77,7 +77,7 @@ private struct ServerRow: View {
     let server: Server
     var body: some View {
         HStack(spacing: 12) {
-            AvatarView(url: server.iconUrl, name: server.name, size: 44)
+            AvatarView(url: AppConfig.iconThumb(server.iconUrl), name: server.name, size: 44)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text(server.name).font(.headline).foregroundStyle(Brand.textPrimary)

@@ -16,7 +16,7 @@ import { RolePicker } from "@/components/ui/RolePicker";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { getAccentBackground, getProfileCardTheme, roleIsGradientAnimated, usesCustomAccent } from "@/lib/profileColor";
 import { displayName, serverInitials } from "@/lib/utils";
-import { safeImageUrl } from "@/lib/safe-url";
+import { safeImageUrl, thumbImageUrl } from "@/lib/safe-url";
 import { presenceStatusFor, activeStatusNote, statusExpiryLabel, listeningFor } from "@/lib/presence";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -684,7 +684,7 @@ export function UserProfileModal({
                 ) : (
                   <ul className="-mx-2 space-y-0.5">
                     {mutualServers.map((s) => {
-                      const icon = safeImageUrl(s.icon_url);
+                      const icon = thumbImageUrl(s.icon_url, 32, { still: true });
                       return (
                         <li key={s.id} className="flex items-center gap-3 rounded-lg px-2 py-2">
                           {icon ? (
