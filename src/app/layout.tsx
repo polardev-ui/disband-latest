@@ -123,6 +123,10 @@ export default function RootLayout({
       <head>
         <meta name="referrer" content="no-referrer" />
         <link rel="preload" as="image" href="/logo.png" />
+        {/* Space icons and avatars come from here: open the connection while
+            the app is still starting, not when the first icon is asked for. */}
+        <link rel="preconnect" href="https://cdn.disband.dev" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://cdn.disband.dev" />
         <Script id="theme-init" strategy="beforeInteractive">
           {`
 (function () {

@@ -24,6 +24,7 @@ import { requestUnreadJump } from "@/lib/notification-jump";
 import { syncUserSettings } from "@/lib/user-settings";
 import { getAuthRedirectUrl } from "@/lib/auth-redirect";
 import { preloadImages } from "@/lib/preload-images";
+import { mayBeAnimated, thumbImageUrl } from "@/lib/safe-url";
 import { mapProfileError, mapGroupChatError, mapMessageError } from "@/lib/profileErrors";
 import { messageCharLimitError, bioLengthError } from "@/lib/word-limit";
 import { getMfaAssurance } from "@/lib/mfa";
@@ -3491,7 +3492,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Your picture and the space icons are what the first screen shows. Give
     // them a moment to land, but never hold the app for them; every other
     // avatar loads as it scrolls into view.
-    const urls: (string | null | undefined)[] = [profile?.avatar_url, ...servers.map((s) => s.icon_url)];
+    // The same small copies the space list draws (a still frame for GIFs),
+    // not the originals: warming full-size uploads, some of them megabytes,
+    // held up the very icons it was meant to speed up.
+    const urls: (string | null | undefined)[] = [
+      profile?.avatar_url,
+      ...servers.map((s) => thumbImageUrl(s.icon_url, 44, { still: mayBeAnimated(s.icon_url) })),
+    ];
     void Promise.race([preloadImages(urls), new Promise((r) => setTimeout(r, 250))]).finally(() => setHydrated(true));
   }, [dataLoaded, hydrated, profile, servers]);
 

@@ -312,7 +312,7 @@ function ServerButton({
           {icon ? (
             // eslint-disable-next-line @next/next/no-img-element
             <>
-              <img src={icon} alt="" draggable={false} data-active={active || undefined} className="rail-icon h-11 w-11 object-cover" />
+              <img src={icon} alt="" draggable={false} fetchPriority="high" decoding="async" data-active={active || undefined} className="rail-icon h-11 w-11 object-cover" />
               {moving && (
                 // Over the still frame, which shows until this has loaded.
                 // eslint-disable-next-line @next/next/no-img-element
