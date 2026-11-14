@@ -131,13 +131,13 @@ enum Themes {
             requiredPlan: .aero),
 
         ThemeDefinition(
-            id: .dusk, label: "Dusk", detail: "Dark cream and warm brown, like evening light",
+            id: .dusk, label: "Dusk", detail: "Dark charcoal with warm cream accents, like a late-evening Monokai",
             palette: Palette(
-                background: Color(hex: 0x3D2801), surface: Color(hex: 0x593202),
-                surfaceRaised: Color(hex: 0x66420E), elevated: Color(hex: 0x7A5420),
-                accent: Color(hex: 0xD9B36C), accentSoft: Color(hex: 0xB8924E),
-                textPrimary: Color(hex: 0xF5E6C8), textSecondary: Color(hex: 0xD9C6A0),
-                textMuted: Color(hex: 0xC9B07A), divider: Color(hex: 0x7A5320),
+                background: Color(hex: 0x16140D), surface: Color(hex: 0x1E1C13),
+                surfaceRaised: Color(hex: 0x282519), elevated: Color(hex: 0x333021),
+                accent: Color(hex: 0xC4B46A), accentSoft: Color(hex: 0x9C8E52),
+                textPrimary: Color(hex: 0xF3ECD2), textSecondary: Color(hex: 0xCFC3A3),
+                textMuted: Color(hex: 0xA89B7A), divider: Color(hex: 0x3A3627),
                 colorScheme: .dark),
             requiredPlan: nil),
     ]

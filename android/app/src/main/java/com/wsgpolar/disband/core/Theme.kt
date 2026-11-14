@@ -261,13 +261,13 @@ object Themes {
             ),
         ),
         ThemeDefinition(
-            ThemeId.Dusk, "Dusk", "Dark cream and warm brown, like evening light",
+            ThemeId.Dusk, "Dusk", "Dark charcoal with warm cream accents, like a late-evening Monokai",
             Palette(
-                background = color(0x3D2801), surface = color(0x593202),
-                surfaceRaised = color(0x66420E), elevated = color(0x7A5420),
-                accent = color(0xD9B36C), accentSoft = color(0xB8924E),
-                textPrimary = color(0xF5E6C8), textSecondary = color(0xD9C6A0),
-                textMuted = color(0xC9B07A), divider = color(0x7A5320), isDark = true,
+                background = color(0x16140D), surface = color(0x1E1C13),
+                surfaceRaised = color(0x282519), elevated = color(0x333021),
+                accent = color(0xC4B46A), accentSoft = color(0x9C8E52),
+                textPrimary = color(0xF3ECD2), textSecondary = color(0xCFC3A3),
+                textMuted = color(0xA89B7A), divider = color(0x3A3627), isDark = true,
             ),
         ),
     )
