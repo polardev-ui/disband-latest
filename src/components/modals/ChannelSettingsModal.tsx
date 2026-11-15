@@ -72,12 +72,31 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
   const [tagInput, setTagInput] = useState("");
   const [rows, setRows] = useState<RolePermRow[] | null>(null);
   const [memberRows, setMemberRows] = useState<MemberPermRow[]>([]);
+  const [selectedMemberId, setSelectedMemberId] = useState("");
   const [draft, setDraft] = useState<Draft>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [section, setSection] = useState<"overview" | "permissions" | "delete">("overview");
+
+  const addSelectedMember = () => {
+    const member = app.members.find((m) => m.user_id === selectedMemberId);
+    if (!member || memberRows.some((m) => m.user_id === member.user_id)) return;
+
+    setMemberRows((prev) => [
+      ...prev,
+      {
+        user_id: member.user_id,
+        username: member.profile?.username ?? member.user_id,
+        can_view: null,
+        can_post: null,
+        can_react: null,
+        can_attach: null,
+      },
+    ]);
+    setSelectedMemberId("");
+  };
 
   const loadRows = useCallback(async (channelId: string) => {
     const supabase = getSupabaseClient();
@@ -108,6 +127,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     setTagInput("");
     setRows(null);
     setMemberRows([]);
+    setSelectedMemberId("");
     setDraft({});
     setSaved(false);
     setError(null);
@@ -528,6 +548,29 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
   <p className="mt-1 text-[13px] text-text-muted">
     {t("Allow specific members to access this channel without requiring a role.")}
   </p>
+  <div className="mt-3 flex gap-2">
+    <select
+      value={selectedMemberId}
+      onChange={(e) => setSelectedMemberId(e.target.value)}
+      aria-label={t("Select a member")}
+      className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-bg-tertiary p-2 text-sm"
+    >
+      <option value="" disabled>{t("Select a member")}</option>
+      {app.members.map((member) => (
+        <option key={member.user_id} value={member.user_id}>
+          {member.profile?.username ?? member.user_id}
+        </option>
+      ))}
+    </select>
+    <button
+      type="button"
+      onClick={addSelectedMember}
+      disabled={!selectedMemberId}
+      className="rounded-lg bg-button-secondary px-3 text-sm font-semibold text-header-primary disabled:opacity-50"
+    >
+      {t("Add Member")}
+    </button>
+  </div>
   <div className="mt-3 space-y-2">
     {memberRows.length === 0 ? (
       <p className="text-[13px] text-text-muted">
