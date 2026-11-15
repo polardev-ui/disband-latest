@@ -572,6 +572,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     </button>
   </div>
   <div className="mt-3 space-y-2">
+    <p className="text-xs text-text-muted">{t("Preview only — member overrides are not saved or enforced yet.")}</p>
     {memberRows.length === 0 ? (
       <p className="text-[13px] text-text-muted">
         {t("No individual member permissions configured.")}
@@ -579,23 +580,36 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     ) : (
       memberRows.map((member) => (
         <div key={member.user_id} className="rounded-lg bg-bg-secondary p-3">
-          <span className="text-sm font-medium">{member.username}</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium">{member.username}</span>
+            <button
+              type="button"
+              onClick={() => setMemberRows((prev) => prev.filter((m) => m.user_id !== member.user_id))}
+              className="text-xs text-text-muted hover:text-status-dnd"
+              aria-label={t("Remove member")}
+            >
+              {t("Remove")}
+            </button>
+          </div>
           <div className="mt-2 grid grid-cols-4 gap-2">
-  {(["can_view", "can_post", "can_react", "can_attach"] as const).map((key) => (
-    <div key={key} className="text-center">
-      <span className="block text-xs text-text-muted">
-        {key.replace("can_", "")}
-      </span>
-      <span className="text-xs font-semibold">
-        {member[key] === true
-          ? "Allow"
-          : member[key] === false
-            ? "Deny"
-            : "Default"}
-      </span>
-    </div>
-  ))}
-</div>
+            {ACTIONS.map((action) => (
+              <div key={action.key} className="text-center">
+                <span className="block text-xs text-text-muted">{t(action.label)}</span>
+                <button
+                  type="button"
+                  aria-label={`${member.username} ${action.label}: ${cellStateLabel(member[action.key])}`}
+                  onClick={() => setMemberRows((prev) => prev.map((m) =>
+                    m.user_id === member.user_id
+                      ? { ...m, [action.key]: cycle(m[action.key]) }
+                      : m
+                  ))}
+                  className={`mt-1 rounded px-2 py-1 text-xs font-semibold ${cellTone(member[action.key])}`}
+                >
+                  {cellStateLabel(member[action.key])}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       ))
     )}
