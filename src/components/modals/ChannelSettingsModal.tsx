@@ -28,6 +28,15 @@ interface RolePermRow {
   can_attach: boolean | null;
 }
 
+interface MemberPermRow {
+  user_id: string;
+  username: string;
+  can_view: boolean | null;
+  can_post: boolean | null;
+  can_react: boolean | null;
+  can_attach: boolean | null;
+}
+
 type Draft = Record<string, Record<ActionKey, TriState>>;
 
 const ACTIONS: { key: ActionKey; label: string }[] = [
@@ -62,6 +71,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [rows, setRows] = useState<RolePermRow[] | null>(null);
+  const [memberRows, setMemberRows] = useState<MemberPermRow[]>([]);
   const [draft, setDraft] = useState<Draft>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -97,6 +107,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     setTags(channel.available_tags ?? []);
     setTagInput("");
     setRows(null);
+    setMemberRows([]);
     setDraft({});
     setSaved(false);
     setError(null);
@@ -510,6 +521,43 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                 ))
               )}
             </div>
+            <div className="mt-6 border-t border-border-subtle pt-4">
+  <h3 className="text-[16px] font-semibold text-header-primary">
+    {t("Member Permissions")}
+  </h3>
+  <p className="mt-1 text-[13px] text-text-muted">
+    {t("Allow specific members to access this channel without requiring a role.")}
+  </p>
+  <div className="mt-3 space-y-2">
+    {memberRows.length === 0 ? (
+      <p className="text-[13px] text-text-muted">
+        {t("No individual member permissions configured.")}
+      </p>
+    ) : (
+      memberRows.map((member) => (
+        <div key={member.user_id} className="rounded-lg bg-bg-secondary p-3">
+          <span className="text-sm font-medium">{member.username}</span>
+          <div className="mt-2 grid grid-cols-4 gap-2">
+  {(["can_view", "can_post", "can_react", "can_attach"] as const).map((key) => (
+    <div key={key} className="text-center">
+      <span className="block text-xs text-text-muted">
+        {key.replace("can_", "")}
+      </span>
+      <span className="text-xs font-semibold">
+        {member[key] === true
+          ? "Allow"
+          : member[key] === false
+            ? "Deny"
+            : "Default"}
+      </span>
+    </div>
+  ))}
+</div>
+        </div>
+      ))
+    )}
+  </div>
+</div>
           </section>
 
       )}
