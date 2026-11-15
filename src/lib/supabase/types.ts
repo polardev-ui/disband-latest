@@ -796,6 +796,32 @@ export interface Database {
           can_attach: boolean | null;
         }[];
       };
+      get_channel_member_permissions: {
+        Args: { p_channel_id: string };
+        Returns: {
+          user_id: string;
+          username: string;
+          can_view: boolean | null;
+          can_post: boolean | null;
+          can_react: boolean | null;
+          can_attach: boolean | null;
+        }[];
+      };
+      set_channel_member_permission: {
+        Args: {
+          p_channel_id: string;
+          p_user_id: string;
+          p_can_view?: boolean | null;
+          p_can_post?: boolean | null;
+          p_can_react?: boolean | null;
+          p_can_attach?: boolean | null;
+        };
+        Returns: undefined;
+      };
+      remove_channel_member_permission: {
+        Args: { p_channel_id: string; p_user_id: string };
+        Returns: undefined;
+      };
       my_channel_effects: {
         Args: { p_server_id: string };
         Returns: {
