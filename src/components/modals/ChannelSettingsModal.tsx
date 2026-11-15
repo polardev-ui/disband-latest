@@ -74,6 +74,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
   const [memberRows, setMemberRows] = useState<MemberPermRow[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const savedMemberRowsRef = useRef<MemberPermRow[]>([]);
+  const [memberLoadError, setMemberLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -97,6 +98,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
       },
     ]);
     setSelectedMemberId("");
+    setSaved(false);
   };
 
   const loadRows = useCallback(async (channelId: string) => {
@@ -117,7 +119,10 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     const { data: memberData, error: memberError } = await supabase.rpc("get_channel_member_permissions", {
       p_channel_id: channelId,
     });
-    if (!memberError) {
+    if (memberError) {
+      setMemberLoadError(memberError.message);
+    } else {
+      setMemberLoadError(null);
       const memberList = (memberData ?? []) as MemberPermRow[];
       savedMemberRowsRef.current = memberList;
       setMemberRows(memberList);
@@ -136,6 +141,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     setTagInput("");
     setRows(null);
     setMemberRows([]);
+    setMemberLoadError(null);
     savedMemberRowsRef.current = [];
     setSelectedMemberId("");
     setDraft({});
@@ -211,10 +217,19 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     topic.trim() !== (channel.topic ?? "") ||
     slowMode !== (channel.slow_mode_seconds ?? 0) ||
     tags.join("\u0000") !== (channel.available_tags ?? []).join("\u0000") ||
-    (rows ?? []).some((r) => ACTIONS.some((a) => (draft[r.role_id]?.[a.key] ?? null) !== r[a.key]));
+    (rows ?? []).some((r) => ACTIONS.some((a) => (draft[r.role_id]?.[a.key] ?? null) !== r[a.key])) ||
+    memberRows.length !== savedMemberRowsRef.current.length ||
+    memberRows.some((member) => {
+      const original = savedMemberRowsRef.current.find((row) => row.user_id === member.user_id);
+      return !original || ACTIONS.some(({ key }) => member[key] !== original[key]);
+    });
 
   const save = async () => {
     if (!channel) return;
+    if (memberLoadError) {
+      setError(t("Member permissions could not be loaded. Reload before saving."));
+      return;
+    }
     setSaving(true);
     setError(null);
     const supabase = getSupabaseClient();
@@ -291,8 +306,8 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
         });
         if (memberError) throw new Error(memberError.message);
       }
-      setSaved(true);
       await loadRows(channel.id);
+      setSaved(true);
       void app.refreshAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : t("Failed to save channel settings."));
@@ -617,6 +632,11 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     </button>
   </div>
   <div className="mt-3 space-y-2">
+    {memberLoadError && (
+      <p role="alert" className="text-xs text-status-dnd">
+        {t("Member permissions unavailable:")} {memberLoadError}
+      </p>
+    )}
     <p className="text-xs text-text-muted">{t("Member overrides require backend RPCs and access enforcement to be deployed before they work.")}</p>
     {memberRows.length === 0 ? (
       <p className="text-[13px] text-text-muted">
@@ -629,7 +649,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
             <span className="text-sm font-medium">{member.username}</span>
             <button
               type="button"
-              onClick={() => setMemberRows((prev) => prev.filter((m) => m.user_id !== member.user_id))}
+              onClick={() => { setMemberRows((prev) => prev.filter((m) => m.user_id !== member.user_id)); setSaved(false); }}
               className="text-xs text-text-muted hover:text-status-dnd"
               aria-label={t("Remove member")}
             >
@@ -643,11 +663,14 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                 <button
                   type="button"
                   aria-label={`${member.username} ${action.label}: ${cellStateLabel(member[action.key])}`}
-                  onClick={() => setMemberRows((prev) => prev.map((m) =>
-                    m.user_id === member.user_id
-                      ? { ...m, [action.key]: cycle(m[action.key]) }
-                      : m
-                  ))}
+                  onClick={() => {
+                    setMemberRows((prev) => prev.map((m) =>
+                      m.user_id === member.user_id
+                        ? { ...m, [action.key]: cycle(m[action.key]) }
+                        : m
+                    ));
+                    setSaved(false);
+                  }}
                   className={`mt-1 rounded px-2 py-1 text-xs font-semibold ${cellTone(member[action.key])}`}
                 >
                   {cellStateLabel(member[action.key])}
