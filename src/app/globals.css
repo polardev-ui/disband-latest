@@ -2218,3 +2218,14 @@ html[data-chat-wallpaper] .chat-wallpaper-host {
 .legal-body h2 { margin-top: 2rem; font-size: 1.25rem; letter-spacing: -0.01em; }
 .legal-body h2:first-child { margin-top: 0; }
 .legal-body a { color: var(--text-link); }
+
+/* Text that doesn't fit fades out on the right instead of being cut off
+   mid-letter (see FadeText). Only applied while it actually overflows. */
+.fade-text {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.fade-text[data-overflow] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+}

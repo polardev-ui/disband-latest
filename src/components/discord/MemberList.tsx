@@ -1,5 +1,6 @@
 "use client";
 
+import { FadeText } from "@/components/ui/FadeText";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { BotTag } from "@/components/ui/BotTag";
@@ -442,11 +443,13 @@ function Row({
       </div>
       <span className="flex min-w-0 flex-1 flex-col items-start">
       <span
-        className={`flex w-full min-w-0 items-center gap-1 truncate text-[15px] font-medium leading-5 ${live === "offline" ? "text-channels-default" : "text-channels-default group-hover:text-interactive-active"}`}
+        className={`flex w-full min-w-0 items-center gap-1 overflow-hidden text-[15px] font-medium leading-5 ${live === "offline" ? "text-channels-default" : "text-channels-default group-hover:text-interactive-active"}`}
         style={color ? { color } : undefined}
       >
-        <span
-          className={`truncate ${gradStyle && roleIsGradientAnimated(gradRole) ? "animate-role-gradient" : ""} ${nameFontClass}`}
+        {/* The name keeps its room: the badges after it give way first, then
+            whatever still doesn't fit fades out instead of being cut off. */}
+        <FadeText
+          className={`min-w-0 ${gradStyle && roleIsGradientAnimated(gradRole) ? "animate-role-gradient" : ""} ${nameFontClass}`}
           style={
             (p.name_color || p.name_color_2)
               ? p.name_color_2
@@ -461,7 +464,8 @@ function Row({
           }
         >
           {displayName(p)}
-        </span>
+        </FadeText>
+        <FadeText className="flex min-w-0 shrink-[1000] items-center gap-1">
         <GuildTag userId={p.id} size="sm" />
         {iconRole && <RoleIcon icon={iconRole.icon} name={iconRole.name} size={15} />}
         <BotTag profile={p} size="sm" />
@@ -485,6 +489,7 @@ function Row({
             </span>
           </Tooltip>
         )}
+        </FadeText>
       </span>
       {activity ? (
         <ActivityLine activity={activity} className="w-full !leading-[16px]" />

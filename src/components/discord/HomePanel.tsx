@@ -5,6 +5,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { useContextMenu } from "@/components/ui/ContextMenu";
 import { Avatar } from "@/components/ui/Avatar";
+import { FadeText } from "@/components/ui/FadeText";
 import { GuildTag } from "@/components/ui/GuildTag";
 import { displayName, formatMessageTime } from "@/lib/utils";
 import { listeningFor } from "@/lib/presence";
@@ -463,7 +464,7 @@ export function HomePanel({
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <span className="block truncate text-[16px] font-medium leading-5">{g.name}</span>
+                      <FadeText className="block text-[16px] font-medium leading-5">{g.name}</FadeText>
                       <span className="block truncate text-[12px] leading-4 text-text-muted">
                         {t("{count} members", { count: g.members.length })}
                         {item.sortAt && item.sortAt !== g.created_at ? ` · ${formatMessageTime(item.sortAt)}` : ""}
@@ -516,8 +517,8 @@ export function HomePanel({
                     return (
                       <span className="flex min-w-0 flex-1 flex-col">
                         <span className="flex min-w-0 items-center gap-1.5">
-                          <span className="truncate text-[16px] font-medium leading-5">{displayName(entry.friend)}</span>
-                          <GuildTag userId={entry.friend.id} size="sm" />
+                          <FadeText className="min-w-0 text-[16px] font-medium leading-5">{displayName(entry.friend)}</FadeText>
+                          <FadeText className="flex min-w-0 shrink-[1000]"><GuildTag userId={entry.friend.id} size="sm" /></FadeText>
                         </span>
                         {listening && <ListeningLine listening={listening} />}
                       </span>
