@@ -73,6 +73,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
   const [rows, setRows] = useState<RolePermRow[] | null>(null);
   const [memberRows, setMemberRows] = useState<MemberPermRow[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState("");
+  const savedMemberRowsRef = useRef<MemberPermRow[]>([]);
   const [draft, setDraft] = useState<Draft>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -113,6 +114,14 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
       };
     }
     setDraft(d);
+    const { data: memberData, error: memberError } = await supabase.rpc("get_channel_member_permissions", {
+      p_channel_id: channelId,
+    });
+    if (!memberError) {
+      const memberList = (memberData ?? []) as MemberPermRow[];
+      savedMemberRowsRef.current = memberList;
+      setMemberRows(memberList);
+    }
   }, []);
 
   useEffect(() => {
@@ -127,6 +136,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     setTagInput("");
     setRows(null);
     setMemberRows([]);
+    savedMemberRowsRef.current = [];
     setSelectedMemberId("");
     setDraft({});
     setSaved(false);
@@ -245,6 +255,41 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
           p_can_attach: cell.can_attach,
         });
         if (rpcErr) throw new Error(rpcErr.message);
+      }
+      const before = savedMemberRowsRef.current;
+      const currentById = new Map(memberRows.map((member) => [member.user_id, member]));
+      for (const previous of before) {
+        if (!currentById.has(previous.user_id)) {
+          const { error: removeError } = await supabase.rpc("remove_channel_member_permission", {
+            p_channel_id: channel.id,
+            p_user_id: previous.user_id,
+          });
+          if (removeError) throw new Error(removeError.message);
+        }
+      }
+      for (const member of memberRows) {
+        const previous = before.find((row) => row.user_id === member.user_id);
+        const changed = !previous || ACTIONS.some(({ key }) => previous[key] !== member[key]);
+        if (!changed) continue;
+        if (ACTIONS.every(({ key }) => member[key] === null)) {
+          // A new row with no overrides has nothing to persist.
+          if (!previous) continue;
+          const { error: removeError } = await supabase.rpc("remove_channel_member_permission", {
+            p_channel_id: channel.id,
+            p_user_id: member.user_id,
+          });
+          if (removeError) throw new Error(removeError.message);
+          continue;
+        }
+        const { error: memberError } = await supabase.rpc("set_channel_member_permission", {
+          p_channel_id: channel.id,
+          p_user_id: member.user_id,
+          p_can_view: member.can_view,
+          p_can_post: member.can_post,
+          p_can_react: member.can_react,
+          p_can_attach: member.can_attach,
+        });
+        if (memberError) throw new Error(memberError.message);
       }
       setSaved(true);
       await loadRows(channel.id);
@@ -572,7 +617,7 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     </button>
   </div>
   <div className="mt-3 space-y-2">
-    <p className="text-xs text-text-muted">{t("Preview only — member overrides are not saved or enforced yet.")}</p>
+    <p className="text-xs text-text-muted">{t("Member overrides require backend RPCs and access enforcement to be deployed before they work.")}</p>
     {memberRows.length === 0 ? (
       <p className="text-[13px] text-text-muted">
         {t("No individual member permissions configured.")}
