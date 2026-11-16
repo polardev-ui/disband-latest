@@ -385,7 +385,7 @@ export function ChannelList({
           onPointerUp={releaseDrag}
           onPointerCancel={cancelDrag}
           style={canManageChannels ? { touchAction: "none" } : undefined}
-          className={`group/chan relative flex h-[34px] w-full items-center gap-2 rounded-lg px-2 text-[15px] font-medium leading-5 transition-colors duration-75 ${
+          className={`group/chan relative flex h-[34px] w-full items-center gap-2 rounded-lg px-2 text-[15px] font-medium leading-5 ${
             active
               ? "bg-interactive-selected text-interactive-active"
               : unread
