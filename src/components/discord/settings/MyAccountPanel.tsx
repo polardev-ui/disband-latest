@@ -82,6 +82,11 @@ export function MyAccountPanel({
   const email = user?.email ?? null;
   const isAnonymous = profile.account_type === "anonymous";
   const pendingDeletion = Boolean(profile.deletion_requested_at);
+  const canCancelDeletion = Boolean(
+    profile.deletion_requested_at &&
+      profile.deletion_cancel_until &&
+      Date.parse(profile.deletion_cancel_until) > Date.now(),
+  );
 
   async function signOutOthers() {
     setSigningOut(true);
@@ -343,20 +348,26 @@ export function MyAccountPanel({
               . You can cancel until{" "}
               {profile.deletion_cancel_until ? new Date(profile.deletion_cancel_until).toLocaleString() : "—"}.
             </p>
-            <button
-              type="button"
-              disabled={cancelling}
-              onClick={async () => {
-                setCancelling(true);
-                setError(null);
-                const res = await cancelAccountDeletion();
-                setCancelling(false);
-                if (res.error) setError(res.error);
-              }}
-              className={`${classicBtn.brand} ${classicBtn.sm}`}
-            >
-              {cancelling ? <LoadingDots size={6} className="mx-auto" /> : t("Cancel Deletion")}
-            </button>
+            {canCancelDeletion ? (
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={async () => {
+                  setCancelling(true);
+                  setError(null);
+                  const res = await cancelAccountDeletion();
+                  setCancelling(false);
+                  if (res.error) setError(res.error);
+                }}
+                className={`${classicBtn.brand} ${classicBtn.sm}`}
+              >
+                {cancelling ? <LoadingDots size={6} className="mx-auto" /> : t("Cancel Deletion")}
+              </button>
+            ) : (
+              <p className="text-[14px] leading-[18px] text-header-secondary">
+                {t("The 24-hour cancellation window has passed. Contact support if you need help.")}
+              </p>
+            )}
           </>
         ) : (
           <>

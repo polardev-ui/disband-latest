@@ -4759,11 +4759,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
       if (!res.ok) return { error: (json?.error as string) ?? "Could not cancel deletion." };
+      // Reload so the pending-deletion state clears everywhere immediately.
+      await refreshProfile();
       return { ok: true };
     } catch {
       return { error: "We couldn't reach Disband. Check your connection and try again." };
     }
-  }, []);
+  }, [refreshProfile]);
 
   // Auto-cancel a pending deletion if the owner logs back in within the
   // 24-hour window (see migration 0126).
