@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
-    <LegalShell title="Terms of Service" updated="November 6, 2026" path="/terms">
+    <LegalShell title="Terms of Service" updated="November 16, 2026" path="/terms">
 
         <div className="mt-8 space-y-6 text-[15px] leading-relaxed text-interactive-normal">
           <p>
@@ -61,6 +61,12 @@ export default function TermsPage() {
             <li>Notify us if you believe your account is compromised; and</li>
             <li>Provide accurate account information.</li>
           </ul>
+          <p>
+            To protect accounts, we may ask you to confirm a sign-in before it is completed, for example
+            by opening a link we email you when you sign in from an IP address your account has not used
+            before. Keep the email address on your account up to date and secure, because access to it
+            can be needed to sign in. See our Privacy Policy for the information this uses.
+          </p>
           <p>
             You may operate more than one account only if each account is legitimate and is not used to
             evade a ban, restriction, or moderation action.

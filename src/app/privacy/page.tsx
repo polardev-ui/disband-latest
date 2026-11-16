@@ -13,7 +13,7 @@ const link = "text-brand hover:underline";
 
 export default function PrivacyPage() {
   return (
-    <LegalShell title="Privacy Policy" updated="November 6, 2026" path="/privacy">
+    <LegalShell title="Privacy Policy" updated="November 16, 2026" path="/privacy">
 
         <div className="prose-disband mt-8 space-y-6 text-[15px] leading-relaxed text-interactive-normal">
           <p>
@@ -78,6 +78,10 @@ export default function PrivacyPage() {
               (user agent) used to sign in, and when each session was created and last used;
             </li>
             <li>Hashed IP addresses used for signup-abuse prevention;</li>
+            <li>
+              Hashed IP addresses you have signed in from or authorized, used for the new-IP sign-in
+              check described below;
+            </li>
             <li>Temporary rate-limit counters;</li>
             <li>
               Push notification tokens for the devices where you allow notifications, with the device
@@ -89,6 +93,21 @@ export default function PrivacyPage() {
             <li>Account and session information; and</li>
             <li>Information required to maintain security and prevent abuse.</li>
           </ul>
+          <p>
+            <strong>New-IP sign-in check.</strong> When you sign in with your email and password, we
+            check whether the IP address you are signing in from is one your account already uses or
+            has authorized. To do this, our server checks your password and compares a hashed
+            (one-way scrambled) version of the IP address with the hashed addresses on your account,
+            and with the IP addresses of your account&rsquo;s current sign-in sessions. If the address
+            is new, we do not complete the sign-in. Instead, we email the address on your account a
+            single-use link, valid for 30 minutes, to authorize it. The email shows the IP address and
+            an approximate location (city, region, and country) estimated from it by our hosting
+            provider. That location is used only for the email and is not stored. Once you authorize
+            an address, we keep its hash on your account so later sign-ins from it go through. We do
+            this to protect your account if someone else learns your password, which is a legitimate
+            interest in keeping the Service and its users secure (see Section 3). Sign-ins with a
+            passkey are not checked this way.
+          </p>
           <p>
             Hashed IP addresses used for signup blocking are not intended to be stored permanently.
             Service providers may independently create or retain technical logs, including raw IP
@@ -184,7 +203,7 @@ export default function PrivacyPage() {
           <p>We use information to:</p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>Create and manage accounts;</li>
-            <li>Authenticate users;</li>
+            <li>Authenticate users, including confirming sign-ins from new IP addresses;</li>
             <li>Deliver messages, media, spaces, notifications, and calls;</li>
             <li>Process subscriptions and purchases;</li>
             <li>Provide customer support;</li>
@@ -435,6 +454,11 @@ export default function PrivacyPage() {
               back in within the first 24 hours.
             </li>
             <li>
+              We keep the hashed IP addresses used for the new-IP sign-in check for as long as your
+              account exists, and delete them with it. Unused authorization links expire after 30
+              minutes; the records of them are deleted when your account is deleted.
+            </li>
+            <li>
               We keep moderation records, such as strikes, reports, and appeals, for as long as needed
               to enforce our rules and prevent ban evasion, even after a strike expires.
             </li>
@@ -519,8 +543,9 @@ export default function PrivacyPage() {
           <h2 className="text-lg font-semibold text-header-primary">10. Security</h2>
           <p>
             We use reasonable technical and organizational safeguards designed to protect information.
-            These may include access controls, encryption in transit, authentication safeguards,
-            security monitoring, and provider security controls.
+            These may include access controls, encryption in transit, authentication safeguards (such
+            as email confirmation of sign-ins from new IP addresses), security monitoring, and provider
+            security controls.
           </p>
           <p>
             No online service is completely secure. We cannot guarantee that information will never be
