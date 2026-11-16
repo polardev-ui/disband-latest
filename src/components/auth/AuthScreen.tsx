@@ -573,7 +573,7 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
               )}
 
               {}
-              {needsConfirmation && <ResendConfirmation defaultEmail={email} lockEmail />}
+              {needsConfirmation && <ResendConfirmation key={email} defaultEmail={email} lockEmail embedded />}
 
               {/* The token gates nothing locally — the server decides, and it
                   only asks on signup or on flagged egress. The button stays
