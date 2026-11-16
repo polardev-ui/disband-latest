@@ -198,6 +198,12 @@ final class AppState {
     func signIn(email: String, password: String) async {
         authError = nil
         authNotice = nil
+        // From a new IP address the right password waits for the owner to
+        // authorise it from an email (the same check the web app runs).
+        if let refusal = await newIpCheck(email: normalise(email), password: password) {
+            authError = refusal
+            return
+        }
         do {
             _ = try await client.auth.signIn(email: normalise(email), password: password)
         } catch {
@@ -262,6 +268,22 @@ final class AppState {
     }
 
     /// Runs the web's sign-up gate. Returns a message to show, or nil to go on.
+    /// nil to go ahead; otherwise what to show. Network trouble goes ahead,
+    /// as the web app does.
+    private func newIpCheck(email: String, password: String) async -> String? {
+        struct Body: Encodable { let email: String; let password: String }
+        struct Reply: Decodable { let ok: Bool?; let error: String? }
+        var req = URLRequest(url: AppConfig.webAppURL.appendingPathComponent("api/auth/ip-check"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONEncoder().encode(Body(email: email, password: password))
+        guard let (data, response) = try? await URLSession.shared.data(for: req) else { return nil }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if (200..<300).contains(status) { return nil }
+        return (try? JSONDecoder().decode(Reply.self, from: data))?.error
+            ?? "Sign-in is temporarily blocked. Try again later."
+    }
+
     private func signupCheck(email: String, username: String) async -> String? {
         struct Body: Encodable { let email: String; let username: String; let platform = "ios" }
         struct Reply: Decodable { let allowed: Bool?; let error: String? }

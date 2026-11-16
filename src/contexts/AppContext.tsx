@@ -4510,6 +4510,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // out of the account you were already using. A wrong password now has
     // zero side effects; on success signInWithPassword swaps the session
     // and the userId effect reloads the profile for the new user.
+    // New IP address: the right password from somewhere this account hasn't
+    // signed in from waits for the owner to authorise it from an email
+    // (api/auth/ip-check). A wrong password passes this and fails below.
+    try {
+      const ipGate = await apiFetch("/api/auth/ip-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      if (!ipGate.ok) {
+        const json = (await ipGate.json().catch(() => null)) as { error?: string } | null;
+        return json?.error ?? "Sign-in is temporarily blocked. Try again later.";
+      }
+    } catch {
+      // Couldn't reach it: as with the gate above, don't strand the person.
+    }
     const { data, error } = await getSupabaseClient().auth.signInWithPassword({
       email: email.trim(),
       password,
