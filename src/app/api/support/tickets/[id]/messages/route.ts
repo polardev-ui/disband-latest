@@ -20,8 +20,8 @@ export const dynamic = "force-dynamic";
 export function offersHumanReview(content: string): boolean {
   const text = content.toLowerCase();
   return (
-    /(human review|human reviewer|send (it|this) up|pass (it|this) (up|along)|escalate)/.test(text) &&
-    /(does that sound good|should i|want me to|sound good|go ahead)/.test(text)
+    /(human review|human reviewer|send (it|this) up|pass (it|this) (up|along|to)|escalate|hand (it|this) (over|to))/.test(text) &&
+    /(does that sound good|should i|want me to|would you like|shall i|sound good|go ahead)/.test(text)
   );
 }
 export function isSupportEscalationApproval(content: string): boolean {
@@ -37,11 +37,15 @@ export function isSupportEscalationApproval(content: string): boolean {
     value === "please" ||
     value === "go ahead" ||
     value === "do it" ||
+    value === "go for it" ||
+    value === "please do" ||
+    value === "yes please" ||
     value === "sounds good" ||
     value === "that sounds good" ||
+    value === "that works" ||
     value === "escalate it" ||
     value === "escalate";
-  return affirms || /^(yes|yeah|yep|sure|ok(?:ay)?|please),?\s+(please|go ahead|escalate|do it)$/i.test(content.trim());
+  return affirms || /^(yes|yeah|yep|sure|ok(?:ay)?|please),?\s+(please|please do|go ahead|escalate|do it|go for it|that works)$/i.test(content.trim());
 }
 
 async function ownTicket(supabase: NonNullable<ReturnType<typeof getServiceSupabase>>, ticketId: string, userId: string) {

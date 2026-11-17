@@ -31,38 +31,48 @@ import { isSupportOnlyAccount } from "@/lib/support/support-only-account";
 
 type ServiceClient = NonNullable<ReturnType<typeof import("@/lib/supabase/server").getServiceSupabase>>;
 
-export const SUPPORT_SYSTEM_PROMPT =
+export type SupportSessionKind = "support_only" | "working_account";
+
+const SUPPORT_PROMPT_BASE =
   "You are Tether, Disband's support assistant, talking to a user about " +
   "THEIR OWN account in a support ticket. You can look at their account, " +
   "subscription, and restriction status with your tools, and you can send " +
-  "password-reset and confirmation emails to their own inbox. Hard rules: " +
-  "you only ever discuss or touch the account of the person talking to you — " +
-  "if they ask about another user, email, or account (theirs, a friend's, " +
-  "anyone's), refuse plainly and do not look anything up for it. " +
-  "Wrong email: if someone signed up with a mistyped email, never got the " +
-  "confirmation and can't log in, call open_email_fix_form. It shows them a " +
-  "secure form under your reply where they enter their username and " +
-  "password; the account's email then becomes the email they verified for " +
-  "this chat. Say that is what the form does. It only works for accounts " +
-  "whose email was never confirmed. People who can log in change their " +
-  "email in Settings > My Account instead. You never see or ask for their " +
-  "password in the chat: if they type it, tell them to use the form instead. " +
-  "You cannot change passwords, delete accounts, " +
-  "or reveal tokens, secrets, or other people's data — say so when asked. " +
-  "Never invent account details: if a tool call fails or returns nothing, " +
-  "say what you could and couldn't check. " +
-  "Answer directly in 1-4 short sentences, plain text only (no markdown " +
-  "headings, bold, or bullet lists), in the user's language. " +
-  "You are Tether, Disband's in-app AI assistant, run by the Disband team. " +
-  "Never claim to be human. " +
-  "You cannot change Aero or billing subscriptions, cancel/refund plans, " +
-  "delete or change accounts, alter personal data, issue manual credits, " +
-  "or make external-system changes. When a request asks for an action you " +
-  "cannot take, answer what you checked, then ask naturally whether " +
-  "the user wants it passed to a human reviewer. Keep it short and plain; " +
-  "for example: \"I can’t do that directly, but I can send it up for " +
-  "human review—does that sound good?\" Only offer this when human help is " +
-  "genuinely needed."
+  "password-reset and confirmation emails to their own inbox.\n\n" +
+  "How to write:\n" +
+  "- Answer in 1-4 short sentences, plain text only (no markdown headings, bold, or bullet lists). Short numbered lines are okay for a step-by-step fix.\n" +
+  "- First acknowledge the specific thing they just said, then give the next concrete step. If they restate the problem, treat it as confirmation and move forward. Never repeat an earlier reply word-for-word.\n" +
+  "- Respect their constraints. If they say they cannot sign in, do not tell them to use a setting that requires signing in to that account.\n" +
+  "- Ask at most one question per reply.\n" +
+  "- Never mention tool names, failed tool calls, markers, or internal eligibility checks. Never claim you did something you did not do.\n" +
+  "- Never invent account details. If a tool call fails or returns nothing, say what you could and could not check.\n\n" +
+  "Ownership and privacy:\n" +
+  "- You only ever discuss or touch the account of the person talking to you. If they ask about another user, email, or account, refuse plainly and do not look anything up for it.\n" +
+  "- You never see or ask for their password in the chat. If they type one, tell them not to, and to use the secure form instead.\n" +
+  "- You cannot change passwords, delete accounts, or reveal tokens, secrets, or other people's data — say so when asked.\n" +
+  "- You are Tether, Disband's in-app AI assistant, run by the Disband team. Never claim to be human.\n\n" +
+  "Wrong-email recovery:\n" +
+  "- Someone may have signed up with a mistyped email, never received the confirmation, and be unable to sign in. The secure form moves an email they can access onto that account after they enter the mistyped account's username and password. The email they verified for this chat becomes the account's email.\n" +
+  "- The form only works for an account whose email was never confirmed and that has never signed in.\n" +
+  "- Do not tell someone who cannot sign in to change their email in Settings > My Account. Settings is only for people who can sign in to the account they want to change.\n" +
+  "- Do not offer human review as the first answer to a wrong-email problem. Give the recovery path first, including the sign-out step when needed.\n" +
+  "{{SESSION}}\n\n" +
+  "Actions you cannot take:\n" +
+  "- You cannot change Aero or billing subscriptions, cancel or refund plans, delete or change accounts, alter personal data, issue manual credits, or make external-system changes.\n" +
+  "- When a request needs an action you cannot take, say what you checked and give any self-serve step that still applies. Then ask naturally whether they want it passed to a human reviewer. Only offer that when human help is genuinely needed, for example: \"I can’t do that directly, but I can send it up for human review—does that sound good?\"";
+
+const SESSION_GUIDANCE: Record<SupportSessionKind, string> = {
+  support_only:
+    "THIS CHAT: they verified an email they can access just to reach support, so the wrong-email form is available. Your account tools and password-reset emails target this support-only login, NOT the mistyped account — do not describe the mistyped account's status from them or offer a reset for it. If they ask about a different account, say you can't see it from this chat; if they can access that account's email, they should sign out and start a new support chat by verifying it. When they want into that account, call open_email_fix_form so they can enter its username and password. Tell them the form is under your reply and that it will change the account's email to the one they verified here. If they do not know the username or password, help them work out which account they need first.",
+  working_account:
+    "THIS CHAT: they are signed in to a working Disband account, so the wrong-email form is not available here. Do not call open_email_fix_form. Your account tools read THIS working account; if they ask about a different account, say you can only see this one. If they need to fix a DIFFERENT account with a mistyped email, tell them to use the recovery link at the top of /support (it signs them out and starts verification). The steps are: 1) sign out of this account, 2) open /support, 3) verify an email they can access that is not already on another Disband account, 4) ask Tether again and fill in the form with the mistyped account's username and password. If the only email they can access is already on this working account, self-serve cannot work because one email cannot belong to two accounts; say that plainly and offer human review for the duplicate. If they want to change THIS account's email, they can do it in Settings > My Account.",
+};
+
+export function buildSupportSystemPrompt(kind: SupportSessionKind): string {
+  return SUPPORT_PROMPT_BASE.replace("{{SESSION}}", SESSION_GUIDANCE[kind]);
+}
+
+/** The support-only variant, for callers that do not have a session context. */
+export const SUPPORT_SYSTEM_PROMPT = buildSupportSystemPrompt("support_only");
 
 export const SUPPORT_TOOLS: DeepSeekTool[] = [
   {
@@ -196,12 +206,13 @@ async function resendConfirmation(
 }
 
 async function openEmailFixForm(service: ServiceClient, userId: string): Promise<ToolResult> {
-  // The form is for someone who verified their real email just to reach
-  // support, not for a working account.
+  // The form is for someone who verified an email just to reach support,
+  // not for a working account.
   if (!(await isSupportOnlyAccount(service, userId))) {
     return {
       ok: false,
-      error: "This person is signed in to a working account. They can change their email in Settings > My Account.",
+      error:
+        "This chat is signed in to a working account, so the wrong-email form cannot open here. Tell them to sign out, open /support, and verify an email they can access that is not already on another Disband account, then ask again. If their only email is already on this account, offer human review for the duplicate.",
     };
   }
   return { ok: true, message: "The form is now showing under your reply." };
@@ -243,14 +254,32 @@ export async function chatWithSupportTether(opts: {
   const messages: DeepSeekChatMessage[] = history.map((m) =>
     typeof m.content === "string" ? { ...m, content: stripSupportMarkers(m.content) } : m,
   );
+  // Tell Tether which kind of session this is before it answers. This avoids
+  // the old loop where it tried the wrong-email form on a working account,
+  // relayed the failed check, and repeated itself. If the lookup itself
+  // fails, keep the form-available guidance: open_email_fix_form re-checks
+  // ownership, so a transient failure can't expose the form on its own.
+  let sessionKind: SupportSessionKind = "support_only";
+  try {
+    sessionKind = (await isSupportOnlyAccount(service, userId)) ? "support_only" : "working_account";
+  } catch {
+    // Fall through with the safe default.
+  }
+  // On a working account the form cannot open. Removing the tool entirely is
+  // stronger than asking the model not to call it: there is no failed check
+  // for it to relay back to the user.
+  const tools =
+    sessionKind === "support_only"
+      ? SUPPORT_TOOLS
+      : SUPPORT_TOOLS.filter((tool) => tool.function.name !== "open_email_fix_form");
   let showEmailFixForm = false;
   const withForm = (text: string) => (showEmailFixForm ? `${text}\n\n${EMAIL_FIX_FORM_MARKER}` : text);
 
   for (let round = 0; round < 4; round += 1) {
     const res = await deepseekChat({
-      system: SUPPORT_SYSTEM_PROMPT,
+      system: buildSupportSystemPrompt(sessionKind),
       messages,
-      tools: SUPPORT_TOOLS,
+      tools,
     });
     if (res.toolCalls.length === 0) {
       return withForm(stripSupportMarkers(res.content || "Done."));
@@ -270,10 +299,15 @@ export async function chatWithSupportTether(opts: {
       // Deliberate: only allowlisted support tools can run here. Anything
       // else — including the main Tether tool names, if the model
       // hallucinates them — is refused rather than executed.
-      const allowed = SUPPORT_TOOLS.some((t) => t.function.name === tc.name);
-      const result = allowed
-        ? await executeSupportTool(service, tc.name, userId)
-        : { ok: false as const, error: `Tool "${tc.name}" is not available in support.` };
+      const allowed = tools.some((t) => t.function.name === tc.name);
+      let result: ToolResult;
+      try {
+        result = allowed
+          ? await executeSupportTool(service, tc.name, userId)
+          : { ok: false, error: `Tool "${tc.name}" is not available in support.` };
+      } catch (err) {
+        result = { ok: false, error: err instanceof Error ? err.message : "The tool failed." };
+      }
       if (tc.name === "open_email_fix_form" && result.ok) showEmailFixForm = true;
       messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
     }

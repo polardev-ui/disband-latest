@@ -4,6 +4,7 @@ import { LoadingDots } from "@/components/ui/LoadingDots";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import type { Session } from "@supabase/supabase-js";
 import { ArrowUpRight, LockKeyhole } from "lucide-react";
 import { SupportConversation, type SupportMessage } from "@/components/support/SupportConversation";
 import styles from "@/components/support/support.module.css";
@@ -92,8 +93,18 @@ function ThemeSwitcher() {
 }
 
 /** Logged-out: prove the inbox with a one-time code. Support-only sign-in —
- *  never touches the Disband password; the code only goes to the typed inbox. */
-function VerifyEmail({ onVerified }: { onVerified: () => void }) {
+ *  never touches the Disband password; the code only goes to the typed inbox.
+ *  Recovery mode is for someone whose sign-up email was mistyped: they verify
+ *  an email they can access, then Tether moves it onto the stuck account. */
+function VerifyEmail({
+  onVerified,
+  recovery = false,
+  onCancel,
+}: {
+  onVerified: (session: Session | null) => void;
+  recovery?: boolean;
+  onCancel?: () => void;
+}) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
@@ -103,7 +114,7 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
   async function send() {
     const clean = email.trim().toLowerCase();
     if (!clean.includes("@")) {
-      setError("Enter the email address on your Disband account.");
+      setError(recovery ? "Enter an email address you can access." : "Enter the email address on your Disband account.");
       return;
     }
     setBusy(true);
@@ -157,13 +168,13 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const { error: err } = await getSupabaseClient().auth.verifyOtp({
+      const { data: verified, error: err } = await getSupabaseClient().auth.verifyOtp({
         email: email.trim().toLowerCase(),
         token: code.trim(),
         type: "email",
       });
       if (err) throw err;
-      onVerified();
+      onVerified(verified.session ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "That code didn't work.");
     } finally {
@@ -173,12 +184,32 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
 
   return (
     <div className="w-full rounded-[28px] border border-divider bg-bg-secondary p-6 text-left shadow-[0_24px_70px_-30px_rgba(0,0,0,0.5)] sm:p-8">
-      <h2 className="text-[20px] font-extrabold tracking-tight text-text-normal">Verify it&apos;s you</h2>
+      <h2 className="text-[20px] font-extrabold tracking-tight text-text-normal">
+        {recovery ? "Fix a mistyped email" : "Verify it’s you"}
+      </h2>
       <p className="mt-1.5 text-[14px] leading-relaxed text-text-muted">
-        Support needs your Disband account email — not your password. We send
-        a one-time code to that inbox; entering it proves the account is
-        yours, and Tether will only ever discuss that account.
+        {recovery ? (
+          <>
+            First, verify an email you can access that isn’t already on another
+            Disband account. Tether will then move it onto the account whose
+            email you mistyped. You’ll need that account’s username and password.
+          </>
+        ) : (
+          <>
+            Support needs an email you can access — usually the one on your
+            Disband account. We send a one-time code to that inbox; entering it
+            proves the inbox is yours, and Tether will only discuss the account
+            tied to this chat.
+          </>
+        )}
       </p>
+      {!recovery && (
+        <p className="mt-3 rounded-lg bg-bg-tertiary px-3 py-2 text-[12px] leading-relaxed text-text-muted">
+          Signed up with a mistyped email? Verify an email you can access here
+          (not one already on another Disband account), then ask Tether to move
+          it onto that account. You’ll need the account’s username and password.
+        </p>
+      )}
       {!sent ? (
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <input
@@ -232,10 +263,18 @@ function VerifyEmail({ onVerified }: { onVerified: () => void }) {
       )}
       {error && <p className="mt-3 text-[13px] text-status-dnd">{error}</p>}
       <p className="mt-4 text-center text-[13px] text-text-muted">
-        Have the app?{" "}
-        <Link href="/login?next=/support" className="font-semibold text-brand hover:underline">
-          Sign in
-        </Link>
+        {onCancel ? (
+          <button type="button" onClick={onCancel} className="font-semibold text-text-muted hover:text-text-normal hover:underline">
+            Cancel and go back
+          </button>
+        ) : (
+          <>
+            Have the app?{" "}
+            <Link href="/login?next=/support" className="font-semibold text-brand hover:underline">
+              Sign in
+            </Link>
+          </>
+        )}
       </p>
     </div>
   );
@@ -361,7 +400,7 @@ function HeroChat({
 }
 
 function SupportHome() {
-  const { ready, session, user, profile } = useApp();
+  const { ready, session, profile } = useApp();
   const authedFetch = useAuthedFetch();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [active, setActive] = useState<Ticket | null>(null);
@@ -374,6 +413,14 @@ function SupportHome() {
   const [openingDraft, setOpeningDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [noAccount, setNoAccount] = useState(false);
+  const [recovery, setRecovery] = useState(false);
+  // AppContext deliberately ignores a sign-out it did not start, so switching
+  // accounts from /support needs its own session override. undefined = follow
+  // AppContext; null = signed out here; a Session = freshly OTP-verified.
+  const [localSession, setLocalSession] = useState<Session | null | undefined>(undefined);
+  const activeSession = localSession === undefined ? session : localSession;
+  const activeUser = activeSession?.user ?? null;
+  const activeProfile = profile && profile.id === activeUser?.id ? profile : null;
 
   const load = useCallback(async () => {
     try {
@@ -385,15 +432,15 @@ function SupportHome() {
   }, [authedFetch]);
 
   useEffect(() => {
-    if (!ready || !session) return;
+    if (!ready || !activeSession) return;
     void load();
     void getSupabaseClient()
       .from("profiles")
       .select("id")
-      .eq("id", user?.id ?? "")
+      .eq("id", activeUser?.id ?? "")
       .maybeSingle()
       .then(({ data }) => setNoAccount(!data));
-  }, [ready, session, user?.id, load]);
+  }, [ready, activeSession, activeUser?.id, load]);
 
   // White by default: only visitors who never chose a theme get light.
   // (ThemeProvider inits dark; stored choices are respected untouched.)
@@ -412,7 +459,7 @@ function SupportHome() {
 
   async function startFromText(text: string) {
     if (startingRef.current) return;
-    if (!session) {
+    if (!activeSession) {
       // Hold the message across verification, then send it automatically.
       setPendingText(text);
       setNeedsVerify(true);
@@ -447,17 +494,18 @@ function SupportHome() {
 
   // After verification, the held message sends itself.
   useEffect(() => {
-    if (session && pendingText && !starting && !active) {
+    if (activeSession && pendingText && !starting && !active) {
       const text = pendingText;
       setPendingText("");
       setNeedsVerify(false);
+      setRecovery(false);
       void startFromText(text);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, pendingText]);
+  }, [activeSession, pendingText]);
 
   function pickTopic(subject: string) {
-    if (!session) {
+    if (!activeSession) {
       setPendingText(subject);
       setNeedsVerify(true);
       return;
@@ -465,15 +513,43 @@ function SupportHome() {
     void startFromText(subject);
   }
 
-  async function signOut() {
-    await getSupabaseClient().auth.signOut();
+  async function signOut(): Promise<boolean> {
+    const { error: signOutError } = await getSupabaseClient().auth.signOut();
+    if (signOutError) return false;
+    setLocalSession(null);
     setTickets([]);
     setActive(null);
+    setNeedsVerify(false);
+    return true;
+  }
+
+  /** Wrong-email recovery needs a support-only session, so leave any working
+   *  account first, then verify an email the person can actually access. The
+   *  held message starts the Tether chat as soon as verification succeeds. */
+  async function startRecovery() {
+    if (startingRef.current) return;
+    setError(null);
+    setOpening(null);
+    setOpeningDraft("");
+    if (activeSession && !(await signOut())) {
+      setError("Could not sign out. Try again.");
+      return;
+    }
+    setTickets([]);
+    setActive(null);
+    setRecovery(true);
+    setPendingText("I signed up with the wrong email and can’t log in to that account.");
+    setNeedsVerify(true);
+  }
+
+  function cancelRecovery() {
+    setRecovery(false);
+    setPendingText("");
     setNeedsVerify(false);
   }
 
   const displayName =
-    profile?.display_name || profile?.username || user?.email?.split("@")[0] || "You";
+    activeProfile?.display_name || activeProfile?.username || activeUser?.email?.split("@")[0] || "You";
 
   return (
     <div className="min-h-screen bg-bg-primary text-text-normal">
@@ -488,12 +564,16 @@ function SupportHome() {
           </Link>
           <div className="ml-auto flex items-center gap-1.5">
             <ThemeSwitcher />
-            {ready && session ? (
+            {ready && activeSession ? (
               <div className="flex items-center gap-2 rounded-full py-1 pl-1 pr-1">
-                <Avatar profile={profile ?? { display_name: displayName }} size="sm" />
+                <Avatar profile={activeProfile ?? { display_name: displayName }} size="sm" />
                 <button
                   type="button"
-                  onClick={() => void signOut()}
+                  onClick={() => {
+                    void signOut().then((ok) => {
+                      if (!ok) setError("Could not sign out. Try again.");
+                    });
+                  }}
                   title="Sign out"
                   className="rounded-full px-2 py-1 text-[12px] font-medium text-text-muted transition-colors hover:bg-interactive-hover hover:text-text-normal"
                 >
@@ -521,20 +601,35 @@ function SupportHome() {
           Ask Tether anything about your account — login trouble, billing,
           safety. It reads your account, never anyone else&apos;s.
         </p>
+        {ready && !needsVerify && (
+          <button
+            type="button"
+            onClick={() => void startRecovery()}
+            className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-brand hover:underline"
+          >
+            {activeSession
+              ? "Fixing a different account? Sign out and verify an email you can access"
+              : "Signed up with the wrong email? Start recovery"}
+          </button>
+        )}
         <div className="mt-7 text-left">
           {!ready ? (
             <div aria-label="Loading" className="animate-pulse rounded-[28px] border border-divider bg-bg-secondary p-6">
               <div className="h-5 w-2/3 rounded bg-bg-accent" />
               <div className="mt-3 h-12 w-full rounded-lg bg-bg-accent" />
             </div>
-          ) : needsVerify && !session ? (
-            <VerifyEmail onVerified={() => undefined} />
+          ) : needsVerify && !activeSession ? (
+            <VerifyEmail
+              onVerified={(verified) => setLocalSession(verified)}
+              recovery={recovery}
+              onCancel={recovery ? cancelRecovery : undefined}
+            />
           ) : (
             <HeroChat onStart={(t) => void startFromText(t)} starting={starting} />
           )}
         </div>
         {error && <p className="mt-3 text-[13px] text-status-dnd">{error}</p>}
-        {noAccount && session && (
+        {noAccount && activeSession && (
           <p className="mx-auto mt-3 max-w-md rounded-lg bg-bg-secondary px-4 py-2.5 text-[13px] leading-relaxed text-text-muted">
             This email isn&apos;t attached to a Disband account yet — Tether
             can still answer general questions here.
@@ -542,14 +637,14 @@ function SupportHome() {
         )}
 
         {/* Open immediately while the create request generates the first reply. */}
-        {opening && session && (
+        {opening && activeSession && (
           <SupportConversation subject={opening.subject} messages={[opening.message]}
             draft={openingDraft} onDraftChange={setOpeningDraft} sending loading={false}
             error={null} onSend={() => undefined} onRetry={() => undefined}
             onBack={() => { showNewChatRef.current = false; setOpening(null); }} />
         )}
         {/* Active thread takes over fullscreen. */}
-        {active && session && (
+        {active && activeSession && (
           <Thread
             key={active.id}
             ticketId={active.id}
@@ -569,7 +664,7 @@ function SupportHome() {
         <h2 className="px-1 text-[15px] font-bold text-text-muted">Popular topics</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { subject: "I can't log in", hint: "Passwords, codes & locked accounts", icon: "🔑" },
+            { subject: "I can't log in", hint: "Passwords, codes & mistyped emails", icon: "🔑" },
             { subject: "Billing question", hint: "Aero, Lite, renewals & refunds", icon: "💳" },
             { subject: "Someone is harassing me", hint: "Blocks, reports & safety", icon: "🛡️" },
             { subject: "Something is broken", hint: "Bugs, loading & calls", icon: "🐞" },
@@ -589,7 +684,7 @@ function SupportHome() {
       </section>
 
       {/* Your requests */}
-      {ready && session && tickets.length > 0 && !active && (
+      {ready && activeSession && tickets.length > 0 && !active && (
         <>
           {tickets.some((t) => t.status !== "closed") && (
             <section className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
@@ -662,10 +757,11 @@ function SupportHome() {
         <h2 className="px-1 text-[15px] font-bold text-text-muted">Quick answers</h2>
         <div className="mt-3 flex flex-col gap-2.5">
           {[
+            ["I signed up with the wrong email. Can you fix it?", "Only if that account's email was never confirmed and you never signed in to it. If you're already verified here, ask Tether for the secure form. If you're signed in to a different account, use the recovery link at the top of this page, verify an email you can access, then ask Tether for the form. You'll need that account's username and password."],
             ["I forgot my password. What now?", "Open a request above and ask Tether for a reset link — it emails one to your inbox on the spot."],
             ["How do I get my subscription back?", "In the app: profile → Subscription → Restore purchases, with the same Apple ID."],
             ["Can Tether look at someone else's account for me?", "No — ever. Tether only sees the account you're signed in (or verified) as."],
-            ["How do I delete my account?", "Ask Tether here and it will walk you through it, or email support from your account address."],
+            ["How do I delete my account?", "In the app: Settings > My Account > Delete Account, or email support from your account address."],
           ].map(([q, a]) => (
             <details
               key={q}
