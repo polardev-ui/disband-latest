@@ -600,9 +600,12 @@ export function DiscordApp() {
     return app.channels.filter((c) => app.channelEffects[c.id]?.can_view ?? true);
   }, [app.channels, app.channelEffects, canManageChannels]);
   const activeChannelEffect = activeChannel ? app.channelEffects[activeChannel.id] : undefined;
-  const loadedProfileMember = profileTarget
-    ? app.members.find((m) => m.user_id === profileTarget.id)
-    : undefined;
+  // Space roles only exist in space view. Group profiles use the same modal,
+  // so the last-viewed space's roster must not leak into them.
+  const loadedProfileMember =
+    profileTarget && app.viewMode === "space"
+      ? app.members.find((m) => m.user_id === profileTarget.id)
+      : undefined;
   // Bumped after a role edit so a fetched membership row re-reads its roles.
   const [profileMemberRefresh, setProfileMemberRefresh] = useState(0);
   const { row: fetchedProfileMember, pending: profileMemberPending } = useProfileMember(
@@ -627,8 +630,11 @@ export function DiscordApp() {
     // Only the owner can change the owner's roles (0228).
     && (profileIsSelf || profileTarget.id !== app.activeServer?.owner_id);
   const assignableServerRoles = useMemo(
-    () => app.serverRoles.filter((role) => !role.is_default && (isServerOwner || role.position < app.myTopRolePosition)),
-    [app.serverRoles, app.myTopRolePosition, isServerOwner],
+    () =>
+      app.viewMode === "space"
+        ? app.serverRoles.filter((role) => !role.is_default && (isServerOwner || role.position < app.myTopRolePosition))
+        : [],
+    [app.viewMode, app.serverRoles, app.myTopRolePosition, isServerOwner],
   );
 
   const getAuthorColor = useCallback(
@@ -1180,27 +1186,33 @@ export function DiscordApp() {
         : [];
       const canPin = app.activeServer?.owner_id === app.user?.id || !!app.serverPermissions.pin_messages;
 
+      const timedOutHere = context === "channel" && !!myServerTimeout;
+      const contextItems: ContextMenuItem[] = timedOutHere
+        ? []
+        : [
+            {
+              id: "reply",
+              label: t("Reply"),
+              icon: <IconFriends size={16} />,
+              onClick: () => {
+                chatRef.current?.setReplyTo({
+                  id: message.id,
+                  author_id: message.author_id,
+                  content: message.content,
+                  attachment_type: message.attachment_type,
+                  author: toReplyAuthor(message.author),
+                });
+              },
+            },
+            {
+              id: "react",
+              label: t("Add Reaction"),
+              icon: <IconCopy size={16} />,
+              onClick: () => chatRef.current?.openReactionPicker(message.id, x, y),
+            },
+          ];
       openMenu(x, y, [
-        {
-          id: "reply",
-          label: t("Reply"),
-          icon: <IconFriends size={16} />,
-          onClick: () => {
-            chatRef.current?.setReplyTo({
-              id: message.id,
-              author_id: message.author_id,
-              content: message.content,
-              attachment_type: message.attachment_type,
-              author: toReplyAuthor(message.author),
-            });
-          },
-        },
-        {
-          id: "react",
-          label: t("Add Reaction"),
-          icon: <IconCopy size={16} />,
-          onClick: () => chatRef.current?.openReactionPicker(message.id, x, y),
-        },
+        ...contextItems,
         ...saveItems,
         ...(context === "dm" && app.activeDmThreadId
           ? [
@@ -1299,7 +1311,7 @@ export function DiscordApp() {
           : []),
       ]);
     },
-    [app, openMenu],
+    [app, myServerTimeout, openMenu],
   );
 
   const handleGroupMemberContext = useCallback(
@@ -2666,7 +2678,9 @@ export function DiscordApp() {
           currentUserName={app.profile ? displayName(app.profile) : undefined}
           messageContext="channel"
           reactions={app.messageReactions}
-          reactionsEnabled={canManageChannels ? true : (activeChannelEffect?.can_react ?? true)}
+          reactionsEnabled={
+            !myServerTimeout && (canManageChannels ? true : (activeChannelEffect?.can_react ?? true))
+          }
           typingScope={{ kind: "channel", id: activeChannel.id, serverId: activeChannel.server_id }}
           readCursorScope={{ kind: "channel", id: activeChannel.id }}
           getAuthorColor={getAuthorColor}
@@ -2789,9 +2803,9 @@ export function DiscordApp() {
         isServerMember={!!profileServerMember}
         rolesPending={app.viewMode === "space" && !profileServerMember && profileMemberPending}
         memberJoinedAt={profileServerMember?.joined_at ?? null}
-        serverName={app.activeServer?.name ?? null}
-        serverIcon={app.activeServer?.icon_url ?? null}
-        serverRoles={app.serverRoles}
+        serverName={app.viewMode === "space" ? app.activeServer?.name ?? null : null}
+        serverIcon={app.viewMode === "space" ? app.activeServer?.icon_url ?? null : null}
+        serverRoles={app.viewMode === "space" ? app.serverRoles : []}
         assignableRoles={assignableServerRoles}
         canManageRoles={profileCanManageRoles}
         memberRoleIds={
@@ -2811,7 +2825,11 @@ export function DiscordApp() {
               }
             : undefined
         }
-        selfAssignableRoles={app.serverRoles.filter((role) => !role.is_default && role.self_assignable)}
+        selfAssignableRoles={
+          app.viewMode === "space"
+            ? app.serverRoles.filter((role) => !role.is_default && role.self_assignable)
+            : []
+        }
         onSetSelfRoles={
           profileTarget?.id === app.user?.id
             ? (roleIds) => {
@@ -2922,7 +2940,7 @@ export function DiscordApp() {
         }
         isServerMember={!!profileServerMember}
         rolesPending={app.viewMode === "space" && !profileServerMember && profileMemberPending}
-        serverRoles={app.serverRoles}
+        serverRoles={app.viewMode === "space" ? app.serverRoles : []}
         assignableRoles={assignableServerRoles}
         canManageRoles={profileCanManageRoles}
         memberRoleIds={
@@ -2943,7 +2961,11 @@ export function DiscordApp() {
               }
             : undefined
         }
-        selfAssignableRoles={app.serverRoles.filter((role) => !role.is_default && role.self_assignable)}
+        selfAssignableRoles={
+          app.viewMode === "space"
+            ? app.serverRoles.filter((role) => !role.is_default && role.self_assignable)
+            : []
+        }
         onSetSelfRoles={
           profileTarget?.id === app.user?.id
             ? (roleIds) => {

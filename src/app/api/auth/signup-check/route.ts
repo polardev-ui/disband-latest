@@ -243,10 +243,15 @@ export async function POST(request: Request) {
   // require_signup_ticket trigger, migration 0258), so calling Supabase's
   // /auth/v1/signup directly, skipping this route and its captcha, fails.
   if (email) {
-    const { error: ticketError } = await service.from("signup_tickets").upsert({
+    // Carry the network that passed every check onto the ticket. The trigger
+    // on auth.users trusts it for the new account, so the first sign-in from
+    // the same place doesn't look like a new address.
+    const ticket: { email: string; expires_at: string; ip_hash?: string } = {
       email,
       expires_at: new Date(Date.now() + 15 * 60_000).toISOString(),
-    });
+    };
+    if (ipHash) ticket.ip_hash = ipHash;
+    const { error: ticketError } = await service.from("signup_tickets").upsert(ticket);
     // Fatal now: the database refuses any account without a ticket
     // (migration 0258), so saying "allowed" here would only lead to a
     // confusing failure at the next step.

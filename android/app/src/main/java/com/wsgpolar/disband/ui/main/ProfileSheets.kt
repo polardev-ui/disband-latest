@@ -72,6 +72,7 @@ import com.wsgpolar.disband.data.ProfilePatch
 import com.wsgpolar.disband.data.UserStatus
 import com.wsgpolar.disband.state.AppState
 import com.wsgpolar.disband.ui.collectAsStateValue
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Downscales an image to maxDim on its long edge, returning JPEG bytes. */
@@ -96,6 +97,22 @@ private fun downscale(bytes: ByteArray, maxDim: Int = 1024): ByteArray {
     return out.toByteArray()
 }
 
+/** Turns the rename RPC's failures into the messages the web and iOS show. */
+private fun friendlyUsernameError(message: String?): String {
+    val text = message?.takeIf { it.isNotBlank() } ?: return "Couldn't save your username. Try again."
+    return when {
+        text.contains("already taken", ignoreCase = true) ||
+            text.contains("is taken", ignoreCase = true) -> "That username is already taken."
+        text.contains("not allowed", ignoreCase = true) -> "That username isn't allowed."
+        text.contains("2–25", ignoreCase = true) || text.contains("2-25", ignoreCase = true) ->
+            "Usernames must be 2–25 characters: letters, numbers and underscores."
+        text.contains("limit", ignoreCase = true) ||
+            text.contains("times per day", ignoreCase = true) ->
+            "You've changed your username too many times today. Try again tomorrow."
+        else -> text
+    }
+}
+
 /**
  * The sheets behind the You tab's settings rows.
  */
@@ -110,11 +127,26 @@ fun AccountSheet(app: AppState, onDismiss: () -> Unit) {
     val maxBio = app.subscriptions.entitlements.maxBioLength
 
     var displayName by remember(profile?.id) { mutableStateOf(profile?.displayName ?: "") }
+    var username by remember(profile?.id) { mutableStateOf(profile?.username ?: "") }
     var pronouns by remember(profile?.id) { mutableStateOf(profile?.pronouns ?: "") }
     var bio by remember(profile?.id) { mutableStateOf(profile?.bio ?: "") }
+    var usernameProblem by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var uploading by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    val originalUsername = profile?.username.orEmpty()
+    val usernameChanged = username.trim().lowercase() != originalUsername.lowercase()
+
+    // Debounced availability check while typing, like iOS and the web.
+    LaunchedEffect(username, profile?.id) {
+        usernameProblem = null
+        if (!usernameChanged) return@LaunchedEffect
+        val candidate = username.trim().lowercase()
+        if (candidate.length !in 2..25) return@LaunchedEffect
+        delay(450)
+        usernameProblem = Database.usernameUnavailableReason(candidate)
+    }
 
     fun uploadUri(uri: android.net.Uri, kind: String) {
         uploading = kind
@@ -221,6 +253,26 @@ fun AccountSheet(app: AppState, onDismiss: () -> Unit) {
             )
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
+                value = username,
+                onValueChange = { raw ->
+                    username = raw.lowercase()
+                        .filter { it.isLetterOrDigit() || it == '_' }
+                        .take(25)
+                },
+                label = { Text("Username") },
+                singleLine = true,
+                isError = usernameProblem != null,
+                supportingText = {
+                    Text(
+                        usernameProblem
+                            ?: "2–25 characters: letters, numbers and underscores.",
+                    )
+                },
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
                 value = pronouns,
                 onValueChange = { pronouns = it.take(24) },
                 label = { Text("Pronouns (optional)") },
@@ -252,6 +304,24 @@ fun AccountSheet(app: AppState, onDismiss: () -> Unit) {
                     saving = true
                     error = null
                     scope.launch {
+                        val nextUsername = username.trim().lowercase()
+                        val changed = nextUsername != originalUsername.lowercase()
+                        if (changed) {
+                            if (nextUsername.length !in 2..25) {
+                                error = "Usernames must be 2–25 characters: letters, numbers and underscores."
+                                saving = false
+                                return@launch
+                            }
+                            // Rename first: if the server rejects it, don't save
+                            // half the form and dismiss as though it worked.
+                            try {
+                                Database.updateUsername(nextUsername)
+                            } catch (e: Exception) {
+                                error = friendlyUsernameError(e.message)
+                                saving = false
+                                return@launch
+                            }
+                        }
                         error = app.saveProfile(
                             ProfilePatch(
                                 displayName = displayName.trim().ifBlank { null },

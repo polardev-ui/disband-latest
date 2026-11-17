@@ -64,6 +64,8 @@ export function MessageActionBar({
     <div
       className="absolute -top-4 right-3.5 z-10 flex items-center overflow-hidden rounded-lg border border-border-subtle bg-bg-floating opacity-0 shadow-[var(--elevation-high)] group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 [@media(any-hover:none)]:opacity-100 [@media(any-hover:none)]:[&>:not(:last-child)]:hidden"
       onClick={(e) => e.stopPropagation()}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       {QUICK_EMOJIS.map((emoji) => (
         <button
@@ -132,6 +134,7 @@ export function MessageActionBar({
       )}
 
       <button
+        ref={moreRef}
         type="button"
         onClick={onMoreActions}
         className="flex h-8 w-8 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 items-center justify-center text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"

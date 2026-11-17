@@ -320,6 +320,10 @@ export function ReactionPicker({
   const q = search.trim().toLowerCase();
   const searched = useMemo(() => (q ? searchEmojis(q, 60) : []), [q]);
 
+  useEffect(() => {
+    if (!open) setSearch("");
+  }, [open]);
+
   // Stack-routed Escape + scroll lock + focus back (was: no Escape handling).
   useOverlayDismiss(onClose, open);
   const { mounted, exiting } = usePresence(open);
