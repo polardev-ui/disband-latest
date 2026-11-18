@@ -96,10 +96,17 @@ export function buildScreenConstraints(plan: SubscriptionPlan): MediaStreamConst
     video: videoConstraints(q),
     // Share the tab/system sound too. Processing is off: echo cancellation
     // and noise suppression are tuned for voice and mangle music and games.
-    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    //
+    // restrictOwnAudio leaves Disband's own sound out of the share. Sharing a
+    // window or the whole screen captures everything the computer plays,
+    // which included the call itself, so everyone heard themselves (and each
+    // other twice) through the stream.
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, restrictOwnAudio: true } as MediaTrackConstraints,
     // Chromium extensions to the spec: offer "share system audio" in the
-    // picker, and keep the sharer hearing their own tab.
-    ...({ systemAudio: "include", suppressLocalAudioPlayback: false } as object),
+    // picker, keep the sharer hearing their own tab, and where the browser
+    // can (newer Chrome and Edge on Windows), take only the shared window's
+    // sound rather than the whole computer's.
+    ...({ systemAudio: "include", suppressLocalAudioPlayback: false, windowAudio: "window" } as object),
   };
 }
 

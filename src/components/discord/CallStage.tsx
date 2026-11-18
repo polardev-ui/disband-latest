@@ -425,6 +425,16 @@ function ScreenTile({
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [soundOff, setSoundOff] = useState(false);
+  // Each stream's own volume, remembered per streamer for this browser.
+  const volumeKey = `disband:stream-volume:${screen.profile?.id ?? screen.id}`;
+  const [streamVolume, setStreamVolume] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem(volumeKey));
+      return Number.isFinite(saved) && saved > 0 && saved <= 100 ? saved : 100;
+    } catch {
+      return 100;
+    }
+  });
   const hasAudio = !screen.local && !!screen.audio?.getAudioTracks().length;
   const boxRef = useRef<HTMLDivElement>(null);
   const toggleFullscreen = async () => {
@@ -452,8 +462,9 @@ function ScreenTile({
       void applyAudioOutputToElement(el, getPreferredAudioOutputId());
     }
     el.muted = !watching || soundOff || deafened;
+    el.volume = Math.max(0, Math.min(1, streamVolume / 100));
     if (!el.muted) void el.play().catch(() => {});
-  }, [screen.audio, watching, soundOff, deafened]);
+  }, [screen.audio, watching, soundOff, deafened, streamVolume]);
 
   return (
     <div
@@ -500,14 +511,35 @@ function ScreenTile({
           className="absolute right-2 top-2 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
         >
           {hasAudio && (
-            <button
-              type="button"
-              onClick={() => setSoundOff((v) => !v)}
-              title={soundOff ? t("Unmute stream") : t("Mute stream")}
-              className="flex h-8 w-8 items-center justify-center rounded-md bg-black/70 text-white hover:bg-black/90"
-            >
-              {soundOff ? <IconSpeakerOff size={16} /> : <IconSpeaker size={16} />}
-            </button>
+            <div className="flex h-8 items-center gap-1.5 rounded-md bg-black/70 pr-2 text-white">
+              <button
+                type="button"
+                onClick={() => setSoundOff((v) => !v)}
+                title={soundOff ? t("Unmute stream") : t("Mute stream")}
+                className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-black/40"
+              >
+                {soundOff ? <IconSpeakerOff size={16} /> : <IconSpeaker size={16} />}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={soundOff ? 0 : streamVolume}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setStreamVolume(v || 1);
+                  setSoundOff(v === 0);
+                  try {
+                    localStorage.setItem(volumeKey, String(v || 1));
+                  } catch {
+                    // Not saved; still applies now.
+                  }
+                }}
+                aria-label={t("Stream volume")}
+                title={t("Stream volume")}
+                className="h-1 w-20 cursor-pointer accent-white"
+              />
+            </div>
           )}
           <button
             type="button"

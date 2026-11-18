@@ -1,5 +1,6 @@
 package com.wsgpolar.disband.ui.main
 
+import androidx.compose.ui.input.pointer.pointerInput
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -449,6 +450,15 @@ fun MainScreen(
             label = "conversationNavigation",
         ) { destination ->
             if (destination != null && currentUserId != null) {
+                // The conversation is drawn over the space's channel list.
+                // Taps on any part of it with nothing tappable (around the
+                // message box, the reply banner) used to fall through to the
+                // channel underneath and open it. This layer now catches them.
+                androidx.compose.foundation.layout.Box(
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
+                ) {
                 chatStates.SaveableStateProvider(destination.id) {
                     val close = { shellChrome.selectedChannelId = null }
                     when {
@@ -480,6 +490,7 @@ fun MainScreen(
                             }
                         }
                     }
+                }
                 }
             } else Box(Modifier.fillMaxSize())
         }

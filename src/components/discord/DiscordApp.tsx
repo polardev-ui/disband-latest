@@ -5,6 +5,7 @@ import { AppearanceEffect } from "./AppearanceEffect";
 import { favoritesAvailable, isFavorite, toggleFavorite, useFavorites, type FavoriteKind } from "@/lib/favorites";
 import { pinnedAt, pinsAvailable, togglePin } from "@/lib/pinned-conversations";
 import { MessageQuickActionsContext } from "./message-quick-actions";
+import { PickUsernamePrompt } from "./PickUsernamePrompt";
 import { ReminderDialog, type ReminderTarget } from "./SavedMessages";
 import { findSaved, saveMessage, savedAvailable, unsaveMessage, useSavedMessages } from "@/lib/saved-messages";
 import { appearanceEntitled } from "@/lib/appearance";
@@ -3123,6 +3124,7 @@ export function DiscordApp() {
         }}
       />
 
+      <PickUsernamePrompt />
       <ForwardModal
         open={!!forwardMessage}
         onClose={() => setForwardMessage(null)}
