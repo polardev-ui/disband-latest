@@ -17,7 +17,7 @@ import { MessageSkeleton } from "./MessageSkeleton";
 import { ChatInput } from "./ChatInput";
 import { ActivityModal } from "./activities/ActivityModal";
 import { ReactionPicker } from "./MessageReactions";
-import { IconHash, IconShield } from "@/components/icons";
+import { IconArrowDown, IconHash, IconShield } from "@/components/icons";
 import { useTypingPresence } from "@/hooks/useTypingPresence";
 import { TypingIndicator } from "./TypingIndicator";
 import { useApp } from "@/contexts/AppContext";
@@ -534,6 +534,19 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   const [showNewMessages, setShowNewMessages] = useState(false);
   const [showScrollDown, setShowScrollDown] = useState(false);
   const prevLenRef = useRef(messages.length);
+  const prevLastIdRef = useRef<string | null>(messages[messages.length - 1]?.id ?? null);
+  // The composer's height, so the jump buttons sit just above it however
+  // tall it has grown.
+  const composerWrapRef = useRef<HTMLDivElement>(null);
+  const [composerHeight, setComposerHeight] = useState(0);
+  useEffect(() => {
+    const el = composerWrapRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setComposerHeight(el.offsetHeight));
+    observer.observe(el);
+    setComposerHeight(el.offsetHeight);
+    return () => observer.disconnect();
+  }, []);
   const [composerFocus, setComposerFocus] = useState(0);
   const readScopeRef = useRef<ReadCursorScope | null>(null);
   const messagesRef = useRef(messages);
@@ -808,14 +821,24 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   }, [messages, readCursorScope]);
 
   useEffect(() => {
-    if (messages.length > prevLenRef.current) {
+    // Only something new at the bottom counts. Older history loading in at
+    // the top also makes the list longer, and used to light this up.
+    const lastId = messages[messages.length - 1]?.id ?? null;
+    const last = messages[messages.length - 1];
+    if (
+      messages.length > prevLenRef.current &&
+      lastId !== prevLastIdRef.current &&
+      last?.author_id !== currentUserId
+    ) {
       if (!stickToBottomRef.current) setShowNewMessages(true);
     }
+    prevLastIdRef.current = lastId;
     if (stickToBottomRef.current) {
       setShowNewMessages(false);
       setShowScrollDown(false);
     }
     prevLenRef.current = messages.length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length]);
 
   useEffect(() => {
@@ -1192,7 +1215,9 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
       />
 
       {(showNewMessages || showScrollDown) && (
-        <div className="pointer-events-none absolute bottom-20 left-1/2 z-[200] flex -translate-x-1/2 flex-col items-center gap-2 md:left-auto md:right-4 md:translate-x-0">
+        <div
+          style={{ bottom: composerHeight + 12 }}
+          className="pointer-events-none absolute left-1/2 z-[200] flex -translate-x-1/2 flex-col items-center gap-2 md:left-auto md:right-4 md:translate-x-0">
           {showNewMessages && (
             <button
               type="button"
@@ -1209,13 +1234,13 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
               className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-bg-floating text-text-normal shadow-[var(--elevation-high)] transition-transform hover:scale-105"
               aria-label={t("Scroll to bottom")}
             >
-              ↓
+              <IconArrowDown size={18} strokeWidth={2.25} />
             </button>
           )}
         </div>
       )}
 
-      <div className="relative shrink-0 pb-3">
+      <div ref={composerWrapRef} className="relative shrink-0 pb-3">
         {composerNotice}
         {composerLockedReason ? (
           <div className="mx-4 flex min-h-[52px] items-center gap-2 rounded-xl border border-border-subtle bg-bg-composer px-4 py-2">

@@ -16,6 +16,9 @@ final class AppState {
     var session: Session?
     var profile: Profile?
     var authError: String?
+    /// Set while the Turnstile sheet should be showing ("login" or "signup").
+    var captchaAction: String?
+    @ObservationIgnored private var captchaContinuation: CheckedContinuation<String?, Never>?
     var authNotice: String?
     var profileError: String?
 
@@ -198,6 +201,12 @@ final class AppState {
     func signIn(email: String, password: String) async {
         authError = nil
         authNotice = nil
+        // The sign-in gate the web app runs first: rate limits, bans, network
+        // restrictions held on this device, and Cloudflare Turnstile.
+        if let refusal = await loginCheck(email: normalise(email)) {
+            authError = refusal
+            return
+        }
         // From a new IP address the right password waits for the owner to
         // authorise it from an email (the same check the web app runs).
         if let refusal = await newIpCheck(email: normalise(email), password: password) {
@@ -284,17 +293,71 @@ final class AppState {
             ?? "Sign-in is temporarily blocked. Try again later."
     }
 
-    private func signupCheck(email: String, username: String) async -> String? {
-        struct Body: Encodable { let email: String; let username: String; let platform = "ios" }
-        struct Reply: Decodable { let allowed: Bool?; let error: String? }
-        var req = URLRequest(url: AppConfig.webAppURL.appendingPathComponent("api/auth/signup-check"))
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try? JSONEncoder().encode(Body(email: email, username: username))
-        do {
-            let (data, response) = try await URLSession.shared.data(for: req)
+    // MARK: Turnstile
+
+    /// Shows the Turnstile sheet and waits for it: the token, or nil if it
+    /// was cancelled.
+    func requestCaptcha(_ action: String) async -> String? {
+        captchaContinuation?.resume(returning: nil)
+        return await withCheckedContinuation { continuation in
+            captchaContinuation = continuation
+            captchaAction = action
+        }
+    }
+
+    func finishCaptcha(_ token: String?) {
+        captchaAction = nil
+        let continuation = captchaContinuation
+        captchaContinuation = nil
+        continuation?.resume(returning: token)
+    }
+
+    private struct GateReply: Decodable { let allowed: Bool?; let error: String?; let code: String? }
+
+    /// Posts to a gate (login-check or signup-check) with this device's
+    /// restriction marker, keeps any new marker, and when the gate asks for
+    /// Turnstile shows it and asks again. Returns the final status and reply.
+    private func gate(_ path: String, action: String, body: [String: String]) async -> (Int, GateReply?)? {
+        var token: String?
+        for _ in 0..<3 {
+            var payload = body
+            if let held = NetworkRestriction.current() { payload["nr"] = held }
+            if let token { payload["turnstileToken"] = token }
+            var req = URLRequest(url: AppConfig.webAppURL.appendingPathComponent(path))
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try? JSONEncoder().encode(payload)
+            guard let (data, response) = try? await URLSession.shared.data(for: req) else { return nil }
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let reply = try? JSONDecoder().decode(Reply.self, from: data)
+            NetworkRestriction.remember(from: data)
+            let reply = try? JSONDecoder().decode(GateReply.self, from: data)
+            if reply?.code == "TURNSTILE_REQUIRED" || reply?.code == "TURNSTILE_INVALID" {
+                guard let solved = await requestCaptcha(action) else {
+                    return (status, GateReply(allowed: false, error: "Complete the check to continue.", code: reply?.code))
+                }
+                token = solved
+                continue
+            }
+            return (status, reply)
+        }
+        return nil
+    }
+
+    /// nil to go ahead; otherwise what to show.
+    private func loginCheck(email: String) async -> String? {
+        guard let (status, reply) = await gate("api/auth/login-check", action: "login", body: ["email": email]) else {
+            return "We couldn't reach Disband. Check your connection and try again."
+        }
+        if (200..<300).contains(status), reply?.allowed != false { return nil }
+        return reply?.error ?? "Sign-in is temporarily blocked. Try again later."
+    }
+
+    private func signupCheck(email: String, username: String) async -> String? {
+        do {
+            guard let (status, reply) = await gate(
+                "api/auth/signup-check", action: "signup",
+                body: ["email": email, "username": username, "platform": "ios"]
+            ) else { throw URLError(.cannotConnectToHost) }
             if (200..<300).contains(status), reply?.allowed != false { return nil }
             if let message = reply?.error { return message }
             if status == 429 { return "Too many sign-up attempts from your network. Try again later." }

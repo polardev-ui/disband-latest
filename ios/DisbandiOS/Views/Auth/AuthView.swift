@@ -29,6 +29,17 @@ struct AuthView: View {
     }
 
     var body: some View {
+        content
+            // Cloudflare Turnstile, when the sign-in or sign-up gate asks.
+            .sheet(isPresented: Binding(
+                get: { app.captchaAction != nil },
+                set: { if !$0 { app.finishCaptcha(nil) } }
+            )) {
+                TurnstileSheet(action: app.captchaAction ?? "login") { app.finishCaptcha($0) }
+            }
+    }
+
+    private var content: some View {
         GeometryReader { screen in
             ScrollView {
                 VStack(spacing: 22) {

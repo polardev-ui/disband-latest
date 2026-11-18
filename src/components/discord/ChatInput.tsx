@@ -271,6 +271,11 @@ export function ChatInput({
     const saved = draftKey ? readDraft(draftKey) : null;
     setText(saved?.text ?? "");
     setSpans(saved?.spans ?? []);
+    // Files picked here belong to this conversation. The composer stays
+    // mounted when you switch DMs, so they used to ride along and be sent in
+    // whichever conversation you were in when you pressed Enter.
+    clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
   useEffect(() => {
     const key = draftKeyRef.current;
@@ -1306,6 +1311,10 @@ export function ChatInput({
                 {renderMentionChips(text, spans)}
               </div>
             )}
+          {/* No scrollbar of its own: once the text reached the box's
+              maximum height one appeared, narrowing where the textarea wraps
+              but not the styled layer behind it, so the caret ended up lines
+              away from the text it belonged to. It still scrolls. */}
           <textarea
             ref={textareaRef}
             value={text}
@@ -1344,7 +1353,7 @@ export function ChatInput({
             placeholder={editingMessageId ? t("Edit your message…") : placeholder}
             rows={1}
             enterKeyHint="send"
-            className="relative z-[1] block min-h-0 w-full resize-none bg-transparent py-px text-[16px] leading-[22px] text-transparent caret-text-normal placeholder:text-text-muted focus:outline-none"
+            className="relative z-[1] block min-h-0 w-full resize-none bg-transparent py-px text-[16px] leading-[22px] text-transparent caret-text-normal [scrollbar-width:none] placeholder:text-text-muted focus:outline-none [&::-webkit-scrollbar]:hidden"
             onScroll={(e) => {
               // Keep the styled layer pinned to the textarea once the text is
               // long enough to scroll, or the two drift apart.

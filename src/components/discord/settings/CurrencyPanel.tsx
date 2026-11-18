@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api";
+import { announcePlanChanged } from "@/hooks/useSubscription";
 import { CURRENCY, EARN_RULES, LEDGER_LABELS, REWARDS, AD_DAILY_CAP, AD_REWARD, formatCurrency } from "@/lib/currency";
 import { decorationItems } from "@/lib/shop";
 import { isTauri } from "@/lib/platform";
@@ -86,6 +87,8 @@ export function CurrencyPanel() {
         setNote({ tone: "ok", text: friend ? `Sent! ${friend.display_name || friend.username} has it now.` : rewardId === "aero_week" ? "Aero is yours for the next seven days." : "Decoration added. Wear it from Profiles." });
         setPick("");
         void load();
+        // Aero for Glimmers is a gift entitlement: tell every plan check.
+        if (rewardId === "aero_week") announcePlanChanged();
       }
     };
     const ok = await confirmDialog({

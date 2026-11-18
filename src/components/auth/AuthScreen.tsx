@@ -230,11 +230,12 @@ export function AuthScreen({ overlay = false, onClose }: AuthScreenProps = {}) {
   const submitLabel =
     mode === "login" ? "Log In" : mode === "reset" ? "Send reset link" : "Create account";
 
-  // The Turnstile widget is offered on signup always; on login only once the
-  // server has asked for a step-up (flagged egress). Hidden entirely if the
-  // widget script is blocked and the member hasn't been challenged.
+  // The server now asks for Turnstile on every sign-in and sign-up, so the
+  // widget is there from the start for both, rather than appearing after a
+  // first refused attempt. (challengeRequired still covers a token that
+  // expired between solving it and pressing the button.)
   const showTurnstile =
-    !turnstileFailed && (mode === "signup" || (mode === "login" && challengeRequired));
+    !turnstileFailed && (mode === "signup" || mode === "login" || challengeRequired);
 
   return (
     <div

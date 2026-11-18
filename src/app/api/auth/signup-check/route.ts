@@ -3,27 +3,37 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import { getClientIp, hashIp, hashValue } from "@/lib/request-ip";
 import { checkVpnStrict } from "@/lib/vpn-check";
 import { usernameContainsBlockedWord, usernameFormatError } from "@/lib/username-policy";
-import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import { rateLimit } from "@/lib/rate-limit";
 import { persistentRateLimitCheck, logGateEvent } from "@/lib/auth-guard";
 import { requireTurnstile } from "@/lib/turnstile";
 import { checkEmailDomain } from "@/lib/email-domain-check";
+import { activeRestriction, restrictedResponse, withRestriction } from "@/lib/network-restriction.server";
 
 // Agreed limits: 3/hr + 5/day per IP, 3/hr per email, plus existing 15/min burst guard.
 export async function POST(request: Request) {
   const checkIp = getClientIp(request) || "unknown";
   const checkLimit = rateLimit(`signup-check:${checkIp}`, 15, 60_000);
-  if (!checkLimit.allowed) return tooManyRequests(checkLimit.retryAfterSeconds);
+  if (!checkLimit.allowed) {
+    return withRestriction(
+      { allowed: false, error: "Too many attempts. Try again later." },
+      429, "rate_limited", Math.max(60, checkLimit.retryAfterSeconds),
+      { "Retry-After": String(checkLimit.retryAfterSeconds) },
+    );
+  }
 
-  let body: { email?: string; username?: string; turnstileToken?: string; platform?: string; purpose?: string };
+  let body: { email?: string; username?: string; turnstileToken?: string; platform?: string; purpose?: string; nr?: string };
   try {
     body = (await request.json()) as typeof body;
   } catch {
     return NextResponse.json({ allowed: false, error: "Invalid request." }, { status: 400 });
   }
 
+  // A device still restricted from an earlier refusal stays refused until
+  // the time runs out, whatever network it's on now.
+  const held = activeRestriction(request, body.nr);
+  if (held) return restrictedResponse(held);
+
   const email = body.email?.trim().toLowerCase() ?? "";
-  // The iOS and Android apps have no captcha widget; they still go through
-  // every other check here, and still need the ticket issued at the end.
   const isMobile = body.platform === "ios" || body.platform === "android";
   const username = body.username?.trim().toLowerCase() ?? "";
   // The Support page signs people in with a one-time code, which makes a login
@@ -65,39 +75,33 @@ export async function POST(request: Request) {
   );
   if (persistentHit) {
     await logGateEvent(service, "signup_rate_limited", ipHash, emailHash);
-    return NextResponse.json(
+    return withRestriction(
       { allowed: false, error: "Too many accounts created from your network. Try again later." },
-      { status: 429, headers: { "Retry-After": "3600" } },
+      429, "rate_limited", 3600, { "Retry-After": "3600" },
     );
   }
 
-  // Turnstile. A token that is sent must verify. Without one (the widget
-  // failed to load or run for this browser, which making it mandatory showed
-  // happens to a lot of real people: Cloudflare error 300010, tracking
-  // prevention, blockers) sign-up still works, but under a much tighter
-  // per-network limit than verified sign-ups, so skipping the check doesn't
-  // buy an attacker volume.
-  if (!isMobile) {
+  // Cloudflare Turnstile on every sign-up, on every platform: the iOS and
+  // Android apps show the check when this answers TURNSTILE_REQUIRED. It
+  // used to be optional (and skipped entirely for anything that said it was
+  // a phone), which is the gap VPN sign-up waves were using.
+  {
     const token = typeof body.turnstileToken === "string" ? body.turnstileToken : "";
+    // The Support page's one-time-code sign-in has no widget; it keeps its
+    // own rate limits.
+    if (!token && process.env.TURNSTILE_SECRET_KEY && !forSupport) {
+      return NextResponse.json(
+        { allowed: false, code: "TURNSTILE_REQUIRED", challengeRequired: true, error: "Please complete the verification to continue." },
+        { status: 403 },
+      );
+    }
     if (token) {
       const turnstileFail = await requireTurnstile(token, {
         ip: checkIp === "unknown" ? undefined : checkIp,
       });
       if (turnstileFail) {
         const json = (await turnstileFail.json()) as { error?: string; code?: string };
-        return NextResponse.json({ allowed: false, ...json }, { status: turnstileFail.status });
-      }
-    } else if (checkIp !== "unknown") {
-      const unverifiedHit = await persistentRateLimitCheck(service, [
-        { key: `signup:nocaptcha:${ipHash}:hr`, max: 2, windowSeconds: 3600 },
-        { key: `signup:nocaptcha:${ipHash}:day`, max: 4, windowSeconds: 86400 },
-      ]);
-      if (unverifiedHit) {
-        await logGateEvent(service, "signup_rate_limited", ipHash, emailHash);
-        return NextResponse.json(
-          { allowed: false, code: "TURNSTILE_REQUIRED", error: "Complete the verification check to create another account from this network." },
-          { status: 429, headers: { "Retry-After": "3600" } },
-        );
+        return NextResponse.json({ allowed: false, challengeRequired: true, ...json }, { status: turnstileFail.status });
       }
     }
   }
@@ -105,11 +109,11 @@ export async function POST(request: Request) {
   if (ipHash) {
     const { data: blocked } = await service.rpc("is_signup_ip_blocked", { p_ip_hash: ipHash });
     if (blocked) {
-      return NextResponse.json({
+      return withRestriction({
         allowed: false,
         blocked: true,
         error: "Account creation is temporarily blocked from your network. Try again in 6 hours.",
-      }, { status: 403 });
+      }, 403, "network_blocked", 6 * 3600);
     }
   }
 
@@ -226,11 +230,11 @@ export async function POST(request: Request) {
     ]);
     if (vpn.blocked) {
       await logGateEvent(service, "signup_vpn_blocked", ipHash, emailHash);
-      return NextResponse.json({
+      return withRestriction({
         allowed: false,
         code: "VPN_BLOCKED",
         error: "Sign up from VPN or proxy connections is not allowed.",
-      }, { status: 403 });
+      }, 403, "network_blocked", 6 * 3600);
     }
     if (vpn.unavailable) {
       // Logged, not enforced — see the fail-open note above.

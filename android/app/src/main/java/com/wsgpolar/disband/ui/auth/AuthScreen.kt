@@ -56,6 +56,11 @@ fun AuthScreen(app: AppState) {
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val authError by app.authError.collectAsState()
+    // Cloudflare Turnstile, when the sign-in or sign-up gate asks.
+    val captchaAction by app.captchaAction.collectAsState()
+    captchaAction?.let { action ->
+        com.wsgpolar.disband.core.TurnstileDialog(action = action) { app.finishCaptcha(it) }
+    }
     val authNotice by app.authNotice.collectAsState()
 
     Column(

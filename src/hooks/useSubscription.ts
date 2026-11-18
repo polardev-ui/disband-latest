@@ -18,6 +18,12 @@ let idCounter = 0;
 
 let redirectPolled = false;
 
+/** Fire after anything that changes the plan (a purchase, a gift, a grant). */
+export const PLAN_CHANGED_EVENT = "disband:plan-changed";
+export function announcePlanChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(PLAN_CHANGED_EVENT));
+}
+
 export function useSubscription(userId: string | undefined) {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [gifts, setGifts] = useState<GiftEntitlement[]>([]);
@@ -87,6 +93,37 @@ export function useSubscription(userId: string | undefined) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Neither subscriptions nor gift_entitlements is published to Realtime, so
+  // the listener below never fires: Aero bought with Glimmers (a gift
+  // entitlement) showed as the current plan on the page that loaded it while
+  // the rest of the app, loaded at sign-in, still treated the account as
+  // free. Re-read when the window comes back (from checkout, the shop or
+  // another tab) and whenever any part of the app says the plan changed.
+  useEffect(() => {
+    if (!userId) return;
+    let last = 0;
+    const refresh = () => {
+      if (Date.now() - last < 5_000) return;
+      last = Date.now();
+      void load();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const onChanged = () => {
+      last = 0;
+      refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener(PLAN_CHANGED_EVENT, onChanged);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener(PLAN_CHANGED_EVENT, onChanged);
+    };
+  }, [userId, load]);
 
   const syncFromStripe = useCallback(async (): Promise<SubscriptionPlan | null> => {
     try {

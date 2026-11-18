@@ -468,7 +468,14 @@ export async function arcadeMove(
   return unwrap<ActivitySession>(
     await apiJson<ActivitySession>(
       `/api/activities/${encodeURIComponent(id)}/action`,
-      jsonInit("POST", { ...move, action: "arcade_move" }),
+      // The game's own "action" (Minesweeper's "flag" or "reveal") travels as
+      // "move_action": "action" is taken by the request type, and sharing it
+      // turned every flag into a reveal.
+      jsonInit("POST", {
+        ...move,
+        ...(typeof move.action === "string" ? { move_action: move.action } : {}),
+        action: "arcade_move",
+      }),
     ),
   );
 }

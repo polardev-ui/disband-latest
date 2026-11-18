@@ -4,6 +4,8 @@ import { useI18n } from "@/contexts/I18nContext";
 import { useMemo, useRef, useState, useEffect } from "react";
 import type { ChatMessageData } from "./ChatMessage";
 import { toReplyAuthor, type ReplyPreview } from "@/lib/messages";
+import { useMessageQuickActions } from "./message-quick-actions";
+import { IconBookmark, IconPin, IconPinOff, IconTrash } from "@/components/icons";
 
 const QUICK_EMOJIS = ["\u{1f44d}", "\u{2764}\u{fe0f}", "\u{1f602}", "\u{1f62e}", "\u{1f622}"];
 
@@ -29,19 +31,58 @@ export function MessageActionBar({
   onMoreActions,
 }: MessageActionBarProps) {
   const { t } = useI18n();
-  const moreRef = useRef<HTMLButtonElement>(null);
-  const [hovered, setHovered] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
+  const [rowHovered, setRowHovered] = useState(false);
+  const [shift, setShift] = useState(false);
+  const quickActions = useMessageQuickActions();
 
+  // Hovering anywhere on the message counts, not just the bar: the bar sits
+  // inside the message row (the nearest .group).
   useEffect(() => {
-    if (!hovered || !onMoreActions) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Shift" && !e.repeat) {
-        moreRef.current?.click();
-      }
+    const row = barRef.current?.parentElement?.closest(".group") ?? barRef.current?.parentElement;
+    if (!row) return;
+    const enter = () => setRowHovered(true);
+    const leave = () => setRowHovered(false);
+    row.addEventListener("mouseenter", enter);
+    row.addEventListener("mouseleave", leave);
+    return () => {
+      row.removeEventListener("mouseenter", enter);
+      row.removeEventListener("mouseleave", leave);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [hovered, onMoreActions]);
+  }, []);
+
+  // Holding Shift over a message shows its quick actions in the bar, as in
+  // Discord. Only the hovered message listens for the key.
+  useEffect(() => {
+    if (!rowHovered) {
+      setShift(false);
+      return;
+    }
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Shift") setShift(e.type === "keydown");
+    };
+    // Shift may already be down when the pointer arrives.
+    const move = (e: MouseEvent) => setShift(e.shiftKey);
+    const reset = () => setShift(false);
+    window.addEventListener("keydown", key);
+    window.addEventListener("keyup", key);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("blur", reset);
+    return () => {
+      window.removeEventListener("keydown", key);
+      window.removeEventListener("keyup", key);
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("blur", reset);
+    };
+  }, [rowHovered]);
+
+  const expanded = shift && rowHovered && !!quickActions;
+  const extra = useMemo(() => {
+    if (!expanded || !quickActions) return null;
+    const items = quickActions(message);
+    const pick = (id: string) => items.find((i) => i.id === id && !i.disabled && i.onClick);
+    return { copyId: pick("copy-id"), save: pick("save"), pin: pick("pin"), del: pick("delete") };
+  }, [expanded, quickActions, message]);
 
   const replyPreview: ReplyPreview | null = useMemo(() => {
     if (!message.id) return null;
@@ -63,11 +104,30 @@ export function MessageActionBar({
   return (
     <div
       className="absolute -top-4 right-3.5 z-10 flex items-center overflow-hidden rounded-lg border border-border-subtle bg-bg-floating opacity-0 shadow-[var(--elevation-high)] group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 [@media(any-hover:none)]:opacity-100 [@media(any-hover:none)]:[&>:not(:last-child)]:hidden"
+      ref={barRef}
       onClick={(e) => e.stopPropagation()}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
-      {QUICK_EMOJIS.map((emoji) => (
+      {extra && (
+        <>
+          {extra.copyId && (
+            <QuickButton title={t("Copy Message ID")} onClick={extra.copyId.onClick!}>
+              <span className="rounded-[4px] border-[1.5px] border-current px-[2px] text-[9px] font-extrabold leading-[12px]">ID</span>
+            </QuickButton>
+          )}
+          {extra.save && (
+            <QuickButton title={extra.save.label} onClick={extra.save.onClick!}>
+              <IconBookmark size={16} />
+            </QuickButton>
+          )}
+          {extra.pin && (
+            <QuickButton title={extra.pin.label} onClick={extra.pin.onClick!}>
+              {/^unpin/i.test(extra.pin.label) ? <IconPinOff size={16} /> : <IconPin size={16} />}
+            </QuickButton>
+          )}
+          <div className="h-6 w-px bg-divider/70" />
+        </>
+      )}
+      {!extra && QUICK_EMOJIS.map((emoji) => (
         <button
           key={emoji}
           type="button"
@@ -79,7 +139,7 @@ export function MessageActionBar({
         </button>
       ))}
 
-      <div className="h-6 w-px bg-divider/70" />
+      {!extra && <div className="h-6 w-px bg-divider/70" />}
 
       <button
         type="button"
@@ -133,8 +193,13 @@ export function MessageActionBar({
         </button>
       )}
 
+      {extra?.del ? (
+        // Shift-delete skips the menu, as in Discord.
+        <QuickButton title={extra.del.label} onClick={extra.del.onClick!} danger>
+          <IconTrash size={16} />
+        </QuickButton>
+      ) : (
       <button
-        ref={moreRef}
         type="button"
         onClick={onMoreActions}
         className="flex h-8 w-8 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 items-center justify-center text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
@@ -146,6 +211,33 @@ export function MessageActionBar({
           <circle cx="12" cy="19" r="1" />
         </svg>
       </button>
+      )}
     </div>
+  );
+}
+
+function QuickButton({
+  title,
+  onClick,
+  danger,
+  children,
+}: {
+  title: string;
+  onClick: () => void;
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      className={`flex h-8 w-8 items-center justify-center transition-colors hover:bg-interactive-hover ${
+        danger ? "text-status-dnd hover:text-status-dnd" : "text-interactive-normal hover:text-interactive-active"
+      }`}
+    >
+      {children}
+    </button>
   );
 }

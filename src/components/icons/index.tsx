@@ -89,6 +89,7 @@ import {
   BookmarkCheck,
   AlarmClock,
   Gauge,
+  ArrowDown,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -236,3 +237,4 @@ export const IconBookmarkCheck = icon(BookmarkCheck);
 export const IconAlarm = icon(AlarmClock);
 /** Slow mode. */
 export const IconGauge = icon(Gauge);
+export const IconArrowDown = icon(ArrowDown);

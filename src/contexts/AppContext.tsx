@@ -24,6 +24,7 @@ import { requestUnreadJump } from "@/lib/notification-jump";
 import { syncUserSettings } from "@/lib/user-settings";
 import { getAuthRedirectUrl } from "@/lib/auth-redirect";
 import { preloadImages } from "@/lib/preload-images";
+import { readRestriction, rememberRestriction } from "@/lib/network-restriction-client";
 import { mayBeAnimated, thumbImageUrl } from "@/lib/safe-url";
 import { mapProfileError, mapGroupChatError, mapMessageError } from "@/lib/profileErrors";
 import { messageCharLimitError, bioLengthError } from "@/lib/word-limit";
@@ -4481,16 +4482,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // saved sessions and active sessions are never re-checked). Flagged egress
     // answers TURNSTILE_REQUIRED and the caller re-runs us with a token.
     try {
+      // A restriction this device is still serving travels with the attempt.
+      const held = await readRestriction();
       const gate = await apiFetch("/api/auth/login-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email.trim(),
           ...(turnstileToken ? { turnstileToken } : {}),
+          ...(held ? { nr: held.token } : {}),
         }),
       });
       if (!gate.ok) {
         const json = (await gate.json().catch(() => null)) as { error?: string; code?: string } | null;
+        await rememberRestriction(json);
         // Control-flow sentinel: the auth screen reveals the Turnstile widget
         // and resubmits. Never shown to the user.
         if (json?.code === "TURNSTILE_REQUIRED") return TURNSTILE_REQUIRED;
@@ -4543,10 +4548,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/` : undefined;
 
     try {
+      const held = await readRestriction();
       const checkRes = await apiFetch("/api/auth/signup-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), username: normalized, ...(turnstileToken ? { turnstileToken } : {}) }),
+        body: JSON.stringify({
+          email: email.trim(),
+          username: normalized,
+          ...(turnstileToken ? { turnstileToken } : {}),
+          ...(held ? { nr: held.token } : {}),
+        }),
       });
       if (!checkRes.ok) {
         // Parsed defensively. The gate answers JSON, but the things in front
@@ -4556,6 +4567,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // connection was fine. The status is what we actually know, so say
         // something true from it when there is no message to quote.
         const json = (await checkRes.json().catch(() => null)) as { error?: string } | null;
+        await rememberRestriction(json);
         if (json?.error) return { error: json.error };
         if (checkRes.status === 429) {
           return { error: "Too many sign-up attempts from your network. Try again later." };

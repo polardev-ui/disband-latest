@@ -4,6 +4,7 @@ import type { AeroCheckoutRequest } from "@/components/subscription/AeroPage";
 import { AppearanceEffect } from "./AppearanceEffect";
 import { favoritesAvailable, isFavorite, toggleFavorite, useFavorites, type FavoriteKind } from "@/lib/favorites";
 import { pinnedAt, pinsAvailable, togglePin } from "@/lib/pinned-conversations";
+import { MessageQuickActionsContext } from "./message-quick-actions";
 import { ReminderDialog, type ReminderTarget } from "./SavedMessages";
 import { findSaved, saveMessage, savedAvailable, unsaveMessage, useSavedMessages } from "@/lib/saved-messages";
 import { appearanceEntitled } from "@/lib/appearance";
@@ -1044,6 +1045,10 @@ export function DiscordApp() {
     void groupCall.startGroupCall(activeGroup.id, activeGroup.name, memberIds);
   }, [activeGroup, app.user, groupCall]);
 
+  // The latest app state, for work that finishes after a navigation.
+  const latestAppRef = useRef(app);
+  latestAppRef.current = app;
+
   const handleForward = useCallback(
     (dest: ForwardDestination) => {
       const msg = forwardMessage;
@@ -1053,15 +1058,19 @@ export function DiscordApp() {
         : "[Forwarded]\n";
       const content = prefix + (msg.content || "(attachment)");
       if (dest.kind === "dm") {
+        // Send through the state as it is once the conversation is open:
+        // `app` here still points at wherever the message was forwarded
+        // from, which is why forwards to a group chat never arrived.
         void app.openDmWithFriend(dest.id).then(() => {
           setTimeout(() => {
-            void app.sendDmMessage(content);
+            void latestAppRef.current.sendDmMessage(content);
           }, 200);
         });
       } else if (dest.kind === "group") {
         void app.selectGroupChat(dest.id).then(() => {
           setTimeout(() => {
-            void app.sendGroupMessage(content);
+            const latest = latestAppRef.current;
+            if (latest.activeGroupChatId === dest.id) void latest.sendGroupMessage(content);
           }, 200);
         });
       }
@@ -1134,8 +1143,9 @@ export function DiscordApp() {
     [app, openMenu],
   );
 
-  const handleMessageContext = useCallback(
-    (message: ChatMessageData, x: number, y: number, context: MessageContext) => {
+  // The right-click menu's items, also used by the hover bar's Shift view.
+  const buildMessageMenu = useCallback(
+    (message: ChatMessageData, x: number, y: number, context: MessageContext): ContextMenuItem[] => {
       const isOwn = message.author_id === app.user?.id;
       const canModerateMessages =
         app.viewMode === "space"
@@ -1211,7 +1221,7 @@ export function DiscordApp() {
               onClick: () => chatRef.current?.openReactionPicker(message.id, x, y),
             },
           ];
-      openMenu(x, y, [
+      return [
         ...contextItems,
         ...saveItems,
         ...(context === "dm" && app.activeDmThreadId
@@ -1309,9 +1319,25 @@ export function DiscordApp() {
               },
             ]
           : []),
-      ]);
+      ];
     },
-    [app, myServerTimeout, openMenu],
+    [app, myServerTimeout],
+  );
+
+  const quickActions = useMemo(
+    () => ({
+      channel: (m: ChatMessageData) => buildMessageMenu(m, 0, 0, "channel"),
+      dm: (m: ChatMessageData) => buildMessageMenu(m, 0, 0, "dm"),
+      group: (m: ChatMessageData) => buildMessageMenu(m, 0, 0, "group"),
+    }),
+    [buildMessageMenu],
+  );
+
+  const handleMessageContext = useCallback(
+    (message: ChatMessageData, x: number, y: number, context: MessageContext) => {
+      openMenu(x, y, buildMessageMenu(message, x, y, context));
+    },
+    [buildMessageMenu, openMenu],
   );
 
   const handleGroupMemberContext = useCallback(
@@ -2267,6 +2293,7 @@ export function DiscordApp() {
       {app.viewMode === "dm" && dmFriend && (
         <>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <MessageQuickActionsContext.Provider value={quickActions.dm}>
           <ChatCanvas
             key={app.activeDmThreadId}
             ref={dmChatRef}
@@ -2327,6 +2354,7 @@ export function DiscordApp() {
             hasMore={app.dmHasMore}
             onLoadMore={app.loadMoreDmMessages}
           />
+          </MessageQuickActionsContext.Provider>
           </div>
           {searchOpen && (
             <div className="fixed inset-y-0 right-0 z-40 flex min-h-0 w-full max-w-[360px] flex-col overflow-hidden bg-bg-secondary shadow-[var(--elevation-high)] lg:static lg:z-auto lg:w-[360px] lg:max-w-none lg:shrink-0 lg:shadow-none">
@@ -2402,6 +2430,7 @@ export function DiscordApp() {
                 onToggleMic={toggleMic}
               />
             ) : (
+              <MessageQuickActionsContext.Provider value={quickActions.group}>
               <ChatCanvas
                 key={app.activeGroupChatId}
                 ref={groupChatRef}
@@ -2467,6 +2496,7 @@ export function DiscordApp() {
                 hasMore={app.groupHasMore}
                 onLoadMore={app.loadMoreGroupMessages}
               />
+              </MessageQuickActionsContext.Provider>
             )}
           </div>
           {searchOpen ? (
@@ -2609,6 +2639,7 @@ export function DiscordApp() {
       )}
 
       {!catalystPage && app.viewMode === "space" && activeChannel && !isVoice && activeChannel.type !== "forum" && (
+        <MessageQuickActionsContext.Provider value={quickActions.channel}>
         <ChatCanvas
           key={app.activeChannelId}
           ref={channelChatRef}
@@ -2725,6 +2756,7 @@ export function DiscordApp() {
           hasMore={app.channelHasMore}
           onLoadMore={app.loadMoreChannelMessages}
         />
+        </MessageQuickActionsContext.Provider>
       )}
 
       {app.viewMode === "space" && !activeChannel && (

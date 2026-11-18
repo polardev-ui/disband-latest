@@ -215,7 +215,10 @@ export function arcadeMove(kind: ArcadeKind, session: State, mine: State, body: 
       const cell = Number(body.cell);
       if (!Number.isInteger(cell) || cell < 0 || cell >= total) throw new ArcadeError("Pick a square.");
       let boom = false;
-      if (body.action === "flag") {
+      // The client sends the game's action as "move_action" ("action" names
+      // the request type). Older clients can't flag at all; for them a
+      // request is a reveal, as before.
+      if (body.move_action === "flag") {
         if (revealed.has(cell)) throw new ArcadeError("That square is already open.");
         if (flags.has(cell)) flags.delete(cell); else flags.add(cell);
       } else {

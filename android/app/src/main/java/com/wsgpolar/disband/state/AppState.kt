@@ -82,6 +82,67 @@ class AppState(
     private val _profile = MutableStateFlow<Profile?>(null)
     val profile = _profile.asStateFlow()
 
+    /** Set while the Turnstile dialog should show ("login" or "signup"). */
+    private val _captchaAction = MutableStateFlow<String?>(null)
+    val captchaAction: StateFlow<String?> = _captchaAction.asStateFlow()
+    private var captchaResult: kotlinx.coroutines.CompletableDeferred<String?>? = null
+
+    /** Called by the dialog with the token, or null if it was cancelled. */
+    fun finishCaptcha(token: String?) {
+        _captchaAction.value = null
+        captchaResult?.complete(token)
+        captchaResult = null
+    }
+
+    private suspend fun requestCaptcha(action: String): String? {
+        captchaResult?.complete(null)
+        val pending = kotlinx.coroutines.CompletableDeferred<String?>()
+        captchaResult = pending
+        _captchaAction.value = action
+        return pending.await()
+    }
+
+    /**
+     * Posts to a web gate with this device's restriction marker, keeps any new
+     * marker, and when the gate asks for Turnstile shows it and asks again.
+     * Returns (status, reply), or null when the server couldn't be reached.
+     */
+    private suspend fun gate(
+        path: String,
+        action: String,
+        fields: Map<String, String>,
+    ): Pair<Int, kotlinx.serialization.json.JsonObject?>? {
+        var token: String? = null
+        repeat(3) {
+            val res = try {
+                ApiHttp.client.post("${AppConfig.WEB_APP_URL}/$path") {
+                    contentType(ContentType.Application.Json)
+                    setBody(buildJsonObject {
+                        fields.forEach { (k, v) -> put(k, v) }
+                        com.wsgpolar.disband.core.NetworkRestriction.current(context)?.let { put("nr", it) }
+                        token?.let { put("turnstileToken", it) }
+                    }.toString())
+                }
+            } catch (e: Exception) {
+                return null
+            }
+            val text = res.bodyAsText()
+            com.wsgpolar.disband.core.NetworkRestriction.remember(context, text)
+            val reply = runCatching { ApiHttp.json.parseToJsonElement(text).jsonObject }.getOrNull()
+            val code = reply?.get("code")?.jsonPrimitive?.contentOrNull
+            if (code == "TURNSTILE_REQUIRED" || code == "TURNSTILE_INVALID") {
+                val solved = requestCaptcha(action)
+                    ?: return res.status.value to buildJsonObject {
+                        put("allowed", false); put("error", "Complete the check to continue.")
+                    }
+                token = solved
+            } else {
+                return res.status.value to reply
+            }
+        }
+        return null
+    }
+
     private val _authError = MutableStateFlow<String?>(null)
     val authError: StateFlow<String?> = _authError.asStateFlow()
 
@@ -326,6 +387,25 @@ class AppState(
     suspend fun signIn(email: String, password: String) {
         _authError.value = null
         _authNotice.value = null
+        // The web's sign-in gate (rate limits, bans, network restrictions,
+        // Turnstile), then the new-IP check, as on web, desktop and iOS.
+        val login = gate("api/auth/login-check", "login", mapOf("email" to normalise(email)))
+        if (login == null) {
+            _authError.value = "We couldn't reach Disband. Check your connection and try again."
+            return
+        }
+        val (loginStatus, loginReply) = login
+        if (loginStatus !in 200..299 || loginReply?.get("allowed")?.jsonPrimitive?.booleanOrNull == false) {
+            _authError.value = loginReply?.get("error")?.jsonPrimitive?.contentOrNull
+                ?: "Sign-in is temporarily blocked. Try again later."
+            return
+        }
+        val ipCheck = gate("api/auth/ip-check", "login", mapOf("email" to normalise(email), "password" to password))
+        if (ipCheck != null && ipCheck.first !in 200..299) {
+            _authError.value = ipCheck.second?.get("error")?.jsonPrimitive?.contentOrNull
+                ?: "Sign-in is temporarily blocked. Try again later."
+            return
+        }
         try {
             client.auth.signInWith(Email) {
                 this.email = normalise(email)
@@ -361,22 +441,18 @@ class AppState(
     }
 
     /** Runs the web's sign-up gate. Returns a message to show, or null to go on. */
-    private suspend fun signupCheck(email: String): String? = try {
-        val res = ApiHttp.client.post("${AppConfig.WEB_APP_URL}/api/auth/signup-check") {
-            contentType(ContentType.Application.Json)
-            setBody(buildJsonObject { put("email", email); put("platform", "android") }.toString())
-        }
-        val reply = runCatching { ApiHttp.json.parseToJsonElement(res.bodyAsText()).jsonObject }.getOrNull()
+    private suspend fun signupCheck(email: String): String? {
+        val result = gate("api/auth/signup-check", "signup", mapOf("email" to email, "platform" to "android"))
+            ?: return "We couldn't reach Disband to check this sign-up. Check your connection and try again."
+        val (status, reply) = result
         val allowed = reply?.get("allowed")?.jsonPrimitive?.booleanOrNull
         val error = reply?.get("error")?.jsonPrimitive?.contentOrNull
-        when {
-            res.status.isSuccess() && allowed != false -> null
+        return when {
+            status in 200..299 && allowed != false -> null
             error != null -> error
-            res.status.value == 429 -> "Too many sign-up attempts from your network. Try again later."
+            status == 429 -> "Too many sign-up attempts from your network. Try again later."
             else -> "Sign-up is temporarily unavailable. Please try again in a few minutes."
         }
-    } catch (e: Exception) {
-        "We couldn't reach Disband to check this sign-up. Check your connection and try again."
     }
 
     suspend fun sendPasswordReset(email: String) {

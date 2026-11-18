@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { getClientIp, hashIp, hashValue } from "@/lib/request-ip";
 import { checkVpnStrict } from "@/lib/vpn-check";
-import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import { rateLimit } from "@/lib/rate-limit";
 import { persistentRateLimitCheck, logGateEvent } from "@/lib/auth-guard";
 import { isLoginAllowlisted } from "@/lib/login-allowlist";
 import { verifyTurnstileToken } from "@/lib/turnstile";
+import { activeRestriction, restrictedResponse, withRestriction } from "@/lib/network-restriction.server";
 
 // Agreed limits: 5/min + 20/hr per IP and per email.
 const MIN_MAX = 5;
@@ -14,9 +15,9 @@ const HOUR_MAX = 20;
 export async function POST(request: Request) {
   const ip = getClientIp(request) || "unknown";
 
-  let body: { email?: string; turnstileToken?: string };
+  let body: { email?: string; turnstileToken?: string; nr?: string };
   try {
-    body = (await request.json()) as { email?: string; turnstileToken?: string };
+    body = (await request.json()) as { email?: string; turnstileToken?: string; nr?: string };
   } catch {
     return NextResponse.json({ allowed: false, error: "Invalid request." }, { status: 400 });
   }
@@ -30,10 +31,23 @@ export async function POST(request: Request) {
   // check and is still logged.
   const allowlisted = isLoginAllowlisted(email);
 
+  // A device still restricted from an earlier refusal stays refused until
+  // the time runs out, whatever network it's on now.
+  if (!allowlisted) {
+    const held = activeRestriction(request, body.nr);
+    if (held) return restrictedResponse(held);
+  }
+
   // Layer 1: in-memory burst guard (per isolate).
   if (!allowlisted) {
     const burst = rateLimit(`login-check:${ip}`, MIN_MAX, 60_000);
-    if (!burst.allowed) return tooManyRequests(burst.retryAfterSeconds);
+    if (!burst.allowed) {
+      return withRestriction(
+        { allowed: false, error: "Too many sign-in attempts. Try again later." },
+        429, "rate_limited", Math.max(60, burst.retryAfterSeconds),
+        { "Retry-After": String(burst.retryAfterSeconds) },
+      );
+    }
   }
 
   const service = getServiceSupabase();
@@ -57,9 +71,11 @@ export async function POST(request: Request) {
     );
     if (hit) {
       await logGateEvent(service, "login_rate_limited", ipHash === "unknown" ? null : ipHash, emailHash);
-      return NextResponse.json(
+      // Held on the device for an hour, so a fresh VPN address doesn't
+      // start the count again.
+      return withRestriction(
         { allowed: false, error: "Too many sign-in attempts. Try again later." },
-        { status: 429, headers: { "Retry-After": "60" } },
+        429, "rate_limited", 3600, { "Retry-After": "3600" },
       );
     }
   }
@@ -106,54 +122,53 @@ export async function POST(request: Request) {
     const vpn = await checkVpnStrict(ip);
     if (vpn.blocked) {
       await logGateEvent(service, "login_vpn_blocked", ipHash === "unknown" ? null : ipHash, emailHash);
-      return NextResponse.json(
+      return withRestriction(
         {
           allowed: false,
           code: "VPN_BLOCKED",
           error: "Signing in from a VPN or proxy is not allowed.",
         },
-        { status: 403 },
+        403, "network_blocked", 6 * 3600,
       );
     }
     if (vpn.flagged) {
-      // Only enforce when we can actually verify. With no secret configured the
-      // step-up cannot run, so we fail open rather than dead-ending the login.
-      if (!process.env.TURNSTILE_SECRET_KEY) {
-        await logGateEvent(service, "login_vpn_detection_unavailable", ipHash === "unknown" ? null : ipHash, emailHash);
-      } else if (!body.turnstileToken) {
-        await logGateEvent(service, "login_vpn_challenge_required", ipHash === "unknown" ? null : ipHash, emailHash);
-        return NextResponse.json(
-          {
-            allowed: false,
-            code: "TURNSTILE_REQUIRED",
-            challengeRequired: true,
-            error: "Please complete the verification to continue.",
-          },
-          { status: 403 },
-        );
-      } else {
-        const ok = await verifyTurnstileToken(
-          body.turnstileToken,
-          ip === "unknown" ? undefined : ip,
-        );
-        if (!ok) {
-          await logGateEvent(service, "login_vpn_challenge_failed", ipHash === "unknown" ? null : ipHash, emailHash);
-          return NextResponse.json(
-            {
-              allowed: false,
-              code: "TURNSTILE_INVALID",
-              challengeRequired: true,
-              error: "That verification didn't work. Please try the check again.",
-            },
-            { status: 403 },
-          );
-        }
-        await logGateEvent(service, "login_vpn_challenge_passed", ipHash === "unknown" ? null : ipHash, emailHash);
-      }
+      // Flagged networks used to be the only ones asked for the check; now
+      // everyone is (below). Logged so the volume stays visible.
+      await logGateEvent(service, "login_vpn_challenge_required", ipHash === "unknown" ? null : ipHash, emailHash);
     }
     if (vpn.unavailable) {
       // Loud but harmless: this is how we notice if provider health degrades.
       await logGateEvent(service, "login_vpn_detection_unavailable", ipHash === "unknown" ? null : ipHash, emailHash);
+    }
+  }
+
+  // Cloudflare Turnstile on every sign-in, on every platform (the apps show
+  // it when this answers TURNSTILE_REQUIRED). Only App Review's account is
+  // exempt, and a server with no secret configured (local development).
+  if (!allowlisted && process.env.TURNSTILE_SECRET_KEY) {
+    if (!body.turnstileToken) {
+      return NextResponse.json(
+        {
+          allowed: false,
+          code: "TURNSTILE_REQUIRED",
+          challengeRequired: true,
+          error: "Please complete the verification to continue.",
+        },
+        { status: 403 },
+      );
+    }
+    const verified = await verifyTurnstileToken(body.turnstileToken, ip === "unknown" ? undefined : ip);
+    if (!verified) {
+      await logGateEvent(service, "login_vpn_challenge_failed", ipHash === "unknown" ? null : ipHash, emailHash);
+      return NextResponse.json(
+        {
+          allowed: false,
+          code: "TURNSTILE_INVALID",
+          challengeRequired: true,
+          error: "That verification didn't work. Please try the check again.",
+        },
+        { status: 403 },
+      );
     }
   }
 
