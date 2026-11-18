@@ -28,6 +28,15 @@ interface RolePermRow {
   can_attach: boolean | null;
 }
 
+interface MemberPermRow {
+  user_id: string;
+  username: string;
+  can_view: boolean | null;
+  can_post: boolean | null;
+  can_react: boolean | null;
+  can_attach: boolean | null;
+}
+
 type Draft = Record<string, Record<ActionKey, TriState>>;
 
 const ACTIONS: { key: ActionKey; label: string }[] = [
@@ -62,12 +71,35 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [rows, setRows] = useState<RolePermRow[] | null>(null);
+  const [memberRows, setMemberRows] = useState<MemberPermRow[]>([]);
+  const [selectedMemberId, setSelectedMemberId] = useState("");
+  const savedMemberRowsRef = useRef<MemberPermRow[]>([]);
+  const [memberLoadError, setMemberLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [section, setSection] = useState<"overview" | "permissions" | "delete">("overview");
+
+  const addSelectedMember = () => {
+    const member = app.members.find((m) => m.user_id === selectedMemberId);
+    if (!member || memberRows.some((m) => m.user_id === member.user_id)) return;
+
+    setMemberRows((prev) => [
+      ...prev,
+      {
+        user_id: member.user_id,
+        username: member.profile?.username ?? member.user_id,
+        can_view: null,
+        can_post: null,
+        can_react: null,
+        can_attach: null,
+      },
+    ]);
+    setSelectedMemberId("");
+    setSaved(false);
+  };
 
   const loadRows = useCallback(async (channelId: string) => {
     const supabase = getSupabaseClient();
@@ -84,6 +116,17 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
       };
     }
     setDraft(d);
+    const { data: memberData, error: memberError } = await supabase.rpc("get_channel_member_permissions", {
+      p_channel_id: channelId,
+    });
+    if (memberError) {
+      setMemberLoadError(memberError.message);
+    } else {
+      setMemberLoadError(null);
+      const memberList = (memberData ?? []) as MemberPermRow[];
+      savedMemberRowsRef.current = memberList;
+      setMemberRows(memberList);
+    }
   }, []);
 
   useEffect(() => {
@@ -97,6 +140,10 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     setTags(channel.available_tags ?? []);
     setTagInput("");
     setRows(null);
+    setMemberRows([]);
+    setMemberLoadError(null);
+    savedMemberRowsRef.current = [];
+    setSelectedMemberId("");
     setDraft({});
     setSaved(false);
     setError(null);
@@ -170,10 +217,19 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
     topic.trim() !== (channel.topic ?? "") ||
     slowMode !== (channel.slow_mode_seconds ?? 0) ||
     tags.join("\u0000") !== (channel.available_tags ?? []).join("\u0000") ||
-    (rows ?? []).some((r) => ACTIONS.some((a) => (draft[r.role_id]?.[a.key] ?? null) !== r[a.key]));
+    (rows ?? []).some((r) => ACTIONS.some((a) => (draft[r.role_id]?.[a.key] ?? null) !== r[a.key])) ||
+    memberRows.length !== savedMemberRowsRef.current.length ||
+    memberRows.some((member) => {
+      const original = savedMemberRowsRef.current.find((row) => row.user_id === member.user_id);
+      return !original || ACTIONS.some(({ key }) => member[key] !== original[key]);
+    });
 
   const save = async () => {
     if (!channel) return;
+    if (memberLoadError) {
+      setError(t("Member permissions could not be loaded. Reload before saving."));
+      return;
+    }
     setSaving(true);
     setError(null);
     const supabase = getSupabaseClient();
@@ -215,8 +271,43 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
         });
         if (rpcErr) throw new Error(rpcErr.message);
       }
-      setSaved(true);
+      const before = savedMemberRowsRef.current;
+      const currentById = new Map(memberRows.map((member) => [member.user_id, member]));
+      for (const previous of before) {
+        if (!currentById.has(previous.user_id)) {
+          const { error: removeError } = await supabase.rpc("remove_channel_member_permission", {
+            p_channel_id: channel.id,
+            p_user_id: previous.user_id,
+          });
+          if (removeError) throw new Error(removeError.message);
+        }
+      }
+      for (const member of memberRows) {
+        const previous = before.find((row) => row.user_id === member.user_id);
+        const changed = !previous || ACTIONS.some(({ key }) => previous[key] !== member[key]);
+        if (!changed) continue;
+        if (ACTIONS.every(({ key }) => member[key] === null)) {
+          // A new row with no overrides has nothing to persist.
+          if (!previous) continue;
+          const { error: removeError } = await supabase.rpc("remove_channel_member_permission", {
+            p_channel_id: channel.id,
+            p_user_id: member.user_id,
+          });
+          if (removeError) throw new Error(removeError.message);
+          continue;
+        }
+        const { error: memberError } = await supabase.rpc("set_channel_member_permission", {
+          p_channel_id: channel.id,
+          p_user_id: member.user_id,
+          p_can_view: member.can_view,
+          p_can_post: member.can_post,
+          p_can_react: member.can_react,
+          p_can_attach: member.can_attach,
+        });
+        if (memberError) throw new Error(memberError.message);
+      }
       await loadRows(channel.id);
+      setSaved(true);
       void app.refreshAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : t("Failed to save channel settings."));
@@ -510,6 +601,88 @@ export function ChannelSettingsModal({ channel: channelProp, onClose }: ChannelS
                 ))
               )}
             </div>
+            <div className="mt-6 border-t border-border-subtle pt-4">
+  <h3 className="text-[16px] font-semibold text-header-primary">
+    {t("Member Permissions")}
+  </h3>
+  <p className="mt-1 text-[13px] text-text-muted">
+    {t("Allow specific members to access this channel without requiring a role.")}
+  </p>
+  <div className="mt-3 flex gap-2">
+    <select
+      value={selectedMemberId}
+      onChange={(e) => setSelectedMemberId(e.target.value)}
+      aria-label={t("Select a member")}
+      className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-bg-tertiary p-2 text-sm"
+    >
+      <option value="" disabled>{t("Select a member")}</option>
+      {app.members.map((member) => (
+        <option key={member.user_id} value={member.user_id}>
+          {member.profile?.username ?? member.user_id}
+        </option>
+      ))}
+    </select>
+    <button
+      type="button"
+      onClick={addSelectedMember}
+      disabled={!selectedMemberId}
+      className="rounded-lg bg-button-secondary px-3 text-sm font-semibold text-header-primary disabled:opacity-50"
+    >
+      {t("Add Member")}
+    </button>
+  </div>
+  <div className="mt-3 space-y-2">
+    {memberLoadError && (
+      <p role="alert" className="text-xs text-status-dnd">
+        {t("Member permissions unavailable:")} {memberLoadError}
+      </p>
+    )}
+    <p className="text-xs text-text-muted">{t("Member overrides require backend RPCs and access enforcement to be deployed before they work.")}</p>
+    {memberRows.length === 0 ? (
+      <p className="text-[13px] text-text-muted">
+        {t("No individual member permissions configured.")}
+      </p>
+    ) : (
+      memberRows.map((member) => (
+        <div key={member.user_id} className="rounded-lg bg-bg-secondary p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium">{member.username}</span>
+            <button
+              type="button"
+              onClick={() => { setMemberRows((prev) => prev.filter((m) => m.user_id !== member.user_id)); setSaved(false); }}
+              className="text-xs text-text-muted hover:text-status-dnd"
+              aria-label={t("Remove member")}
+            >
+              {t("Remove")}
+            </button>
+          </div>
+          <div className="mt-2 grid grid-cols-4 gap-2">
+            {ACTIONS.map((action) => (
+              <div key={action.key} className="text-center">
+                <span className="block text-xs text-text-muted">{t(action.label)}</span>
+                <button
+                  type="button"
+                  aria-label={`${member.username} ${action.label}: ${cellStateLabel(member[action.key])}`}
+                  onClick={() => {
+                    setMemberRows((prev) => prev.map((m) =>
+                      m.user_id === member.user_id
+                        ? { ...m, [action.key]: cycle(m[action.key]) }
+                        : m
+                    ));
+                    setSaved(false);
+                  }}
+                  className={`mt-1 rounded px-2 py-1 text-xs font-semibold ${cellTone(member[action.key])}`}
+                >
+                  {cellStateLabel(member[action.key])}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+</div>
           </section>
 
       )}
