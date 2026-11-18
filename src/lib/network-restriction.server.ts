@@ -18,8 +18,12 @@ import { NextResponse } from "next/server";
 */
 
 const HEADER = "x-disband-nr";
-/** Longest a restriction is held on a device, whatever the trigger said. */
-const MAX_MS = 24 * 3600_000;
+/**
+ * Sanity bound on a marker's length. Each marker lasts exactly as long as
+ * the block that issued it (a rate-limit window, the 6-hour network block);
+ * this only stops a marker from claiming something longer than any of them.
+ */
+const MAX_MS = 6 * 3600_000;
 
 export type RestrictionReason = "rate_limited" | "network_blocked";
 
@@ -27,6 +31,9 @@ interface Payload {
   /** Restricted until (ms since epoch). */
   u: number;
   r: RestrictionReason;
+  /** The refusal the device was given, so it sees the same thing again. */
+  m?: string;
+  c?: string;
 }
 
 function secret(): string {
@@ -37,9 +44,16 @@ function sign(body: string): string {
   return createHmac("sha256", secret()).update(body).digest("base64url");
 }
 
-export function issueRestriction(reason: RestrictionReason, seconds: number): { token: string; until: string } {
-  const until = Date.now() + Math.min(MAX_MS, Math.max(60_000, seconds * 1000));
-  const body = Buffer.from(JSON.stringify({ u: until, r: reason } satisfies Payload)).toString("base64url");
+export function issueRestriction(
+  reason: RestrictionReason,
+  seconds: number,
+  message?: string,
+  code?: string,
+): { token: string; until: string } {
+  // Exactly the block's own length (never stretched to a minimum).
+  const until = Date.now() + Math.min(MAX_MS, Math.max(1_000, seconds * 1000));
+  const payload: Payload = { u: until, r: reason, ...(message ? { m: message.slice(0, 200) } : {}), ...(code ? { c: code } : {}) };
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
   return { token: `${body}.${sign(body)}`, until: new Date(until).toISOString() };
 }
 
@@ -51,7 +65,7 @@ export function activeRestriction(request: Request, bodyToken?: unknown): Payloa
   let best: Payload | null = null;
   for (const token of raw.split(/\s+/).slice(0, 5)) {
     const [body, sig] = token.split(".");
-    if (!body || !sig || body.length > 200) continue;
+    if (!body || !sig || body.length > 600) continue;
     const expected = Buffer.from(sign(body));
     const given = Buffer.from(sig);
     if (expected.length !== given.length || !timingSafeEqual(expected, given)) continue;
@@ -72,11 +86,13 @@ export function restrictedResponse(p: Payload): NextResponse {
     {
       allowed: false,
       ok: false,
-      code: p.r === "network_blocked" ? "NETWORK_RESTRICTED" : "RATE_LIMITED",
+      // The same refusal the device got the first time.
+      code: p.c ?? (p.r === "network_blocked" ? "NETWORK_RESTRICTED" : "RATE_LIMITED"),
       error:
-        p.r === "network_blocked"
+        p.m ??
+        (p.r === "network_blocked"
           ? "This device can't sign in or sign up right now because of a network block. Try again later."
-          : "Too many attempts from this device. Try again later.",
+          : "Too many attempts from this device. Try again later."),
       restrictedUntil: new Date(p.u).toISOString(),
     },
     { status: 429, headers: { "Retry-After": String(seconds) } },
@@ -94,6 +110,11 @@ export function withRestriction(
   seconds: number,
   headers: Record<string, string> = {},
 ): NextResponse {
-  const { token, until } = issueRestriction(reason, seconds);
+  const { token, until } = issueRestriction(
+    reason,
+    seconds,
+    typeof json.error === "string" ? json.error : undefined,
+    typeof json.code === "string" ? json.code : undefined,
+  );
   return NextResponse.json({ ...json, restriction: token, restrictedUntil: until }, { status, headers });
 }

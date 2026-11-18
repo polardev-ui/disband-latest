@@ -75,6 +75,7 @@ export async function POST(request: Request) {
   );
   if (persistentHit) {
     await logGateEvent(service, "signup_rate_limited", ipHash, emailHash);
+    // Held for the hour this refusal has always given (its Retry-After).
     return withRestriction(
       { allowed: false, error: "Too many accounts created from your network. Try again later." },
       429, "rate_limited", 3600, { "Retry-After": "3600" },

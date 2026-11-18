@@ -24,7 +24,13 @@ export type Category =
   | "Social"
   | "Text"
   | "Utility"
-  | "Tags";
+  | "Tags"
+  | "Convert"
+  | "Maths"
+  | "Random"
+  | "Meters"
+  | "Actions"
+  | "Time";
 
 /** Server permissions as user_has_server_permission() names them. */
 export type Perm = "kick" | "ban" | "timeout_members" | "manage_messages" | "manage_server" | "manage_channels" | "manage_roles";

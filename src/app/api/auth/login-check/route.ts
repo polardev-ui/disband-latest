@@ -71,11 +71,12 @@ export async function POST(request: Request) {
     );
     if (hit) {
       await logGateEvent(service, "login_rate_limited", ipHash === "unknown" ? null : ipHash, emailHash);
-      // Held on the device for an hour, so a fresh VPN address doesn't
-      // start the count again.
+      // Held on the device for the same 60 seconds this refusal has always
+      // given (its Retry-After), so a fresh VPN address doesn't start the
+      // count again.
       return withRestriction(
         { allowed: false, error: "Too many sign-in attempts. Try again later." },
-        429, "rate_limited", 3600, { "Retry-After": "3600" },
+        429, "rate_limited", 60, { "Retry-After": "60" },
       );
     }
   }
@@ -128,6 +129,7 @@ export async function POST(request: Request) {
           code: "VPN_BLOCKED",
           error: "Signing in from a VPN or proxy is not allowed.",
         },
+        // As long as the existing network block lasts (6 hours).
         403, "network_blocked", 6 * 3600,
       );
     }

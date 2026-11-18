@@ -14,11 +14,18 @@ import { moderationCommands } from "./commands/moderation";
 import { ticketCommands, openTicket, closeTicket, claimTicket } from "./commands/tickets";
 import { communityCommands, onMessage } from "./commands/community";
 import { funCommands } from "./commands/fun";
+import { numberCommands } from "./commands/more/numbers";
+import { textCommands } from "./commands/more/text";
+import { socialCommands } from "./commands/more/social";
+import { timeCommands } from "./commands/more/time";
+import { funMoreCommands } from "./commands/more/fun";
 
 const CATEGORY_ICON: Record<string, string> = {
   Info: "ℹ️", Moderation: "🛡️", Tickets: "🎫", Config: "⚙️", Levels: "📈", Economy: "🪙",
   Fun: "🎉", Social: "🤗", Text: "🔤", Utility: "🧰", Tags: "🏷️",
+  Convert: "🔁", Maths: "🧮", Random: "🎲", Meters: "📊", Actions: "🫶", Time: "🕰️",
 };
+const PAGE = 40;
 
 const helpCommands: Command[] = [
   {
@@ -44,20 +51,32 @@ const helpCommands: Command[] = [
             ],
           });
         }
-        const cat = Object.keys(CATEGORY_ICON).find((c) => c.toLowerCase() === want);
+        // "help maths" or "help maths 2": a category, a page at a time.
+        const [catWord, pageWord] = want.split(/\s+/);
+        const cat = Object.keys(CATEGORY_ICON).find((c) => c.toLowerCase() === catWord);
         if (cat) {
           const list = COMMANDS.filter((c) => c.category === cat);
-          return embed({ title: `${CATEGORY_ICON[cat]} ${cat} (${list.length})`, description: list.map((c) => `\`${c.name}\` · ${c.description}`).join("\n").slice(0, 3900) });
+          const pages = Math.max(1, Math.ceil(list.length / PAGE));
+          const page = Math.min(pages, Math.max(1, Number(pageWord) || 1));
+          const slice = list.slice((page - 1) * PAGE, page * PAGE);
+          return embed({
+            title: `${CATEGORY_ICON[cat]} ${cat} (${list.length})${pages > 1 ? ` · page ${page}/${pages}` : ""}`,
+            description: slice.map((c) => `\`${c.name}\` · ${c.description}`).join("\n").slice(0, 3900),
+            ...(pages > 1 && page < pages ? { footer: { text: `More: ${p}help ${cat.toLowerCase()} ${page + 1}` } } : {}),
+          });
         }
         return fail(`No command or category called "${want}".`);
       }
       const groups = Object.keys(CATEGORY_ICON).map((cat) => {
         const list = COMMANDS.filter((c) => c.category === cat);
-        return { name: `${CATEGORY_ICON[cat]} ${cat} (${list.length})`, value: list.map((c) => `\`${c.name}\``).join(" ").slice(0, 1000), inline: false };
+        const names = list.map((c) => `\`${c.name}\``);
+        let value = "";
+        for (const n of names) { if ((value + " " + n).length > 900) { value += " …"; break; } value += (value ? " " : "") + n; }
+        return { name: `${CATEGORY_ICON[cat]} ${cat} (${list.length})`, value: value || "—", inline: true };
       });
       return embed({
         title: "🐶 Bruce's commands",
-        description: `**${COMMANDS.length}** commands. Prefix here: \`${p}\` (slash commands work too).\n\`${p}help <command>\` for details, \`${p}help <category>\` for a list.`,
+        description: `**${COMMANDS.length}** commands. Prefix here: \`${p}\` (slash commands work too).\n\`${p}help <command>\` for details, \`${p}help <category> [page]\` for the full list.`,
         fields: groups,
         thumbnail: { url: "https://www.disband.dev/bruce.webp" },
       });
@@ -65,13 +84,25 @@ const helpCommands: Command[] = [
   },
 ];
 
-export const COMMANDS: Command[] = [
+const BASE: Command[] = [
   ...helpCommands,
   ...infoCommands,
   ...moderationCommands,
   ...ticketCommands,
   ...communityCommands,
   ...funCommands,
+];
+const TAKEN = new Set(BASE.flatMap((c) => [c.name, ...(c.aliases ?? [])]));
+/** Bruce's commands. The newer packs skip any name an older command already uses. */
+export const COMMANDS: Command[] = [
+  ...BASE,
+  ...[
+  ...numberCommands,
+  ...textCommands,
+  ...socialCommands,
+  ...timeCommands,
+  ...funMoreCommands,
+  ].filter((c) => !TAKEN.has(c.name)).map((c) => ({ ...c, aliases: c.aliases?.filter((a) => !TAKEN.has(a)) })),
 ];
 
 const BY_NAME = new Map<string, Command>();
