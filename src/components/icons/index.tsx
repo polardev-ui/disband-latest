@@ -90,6 +90,7 @@ import {
   AlarmClock,
   Gauge,
   ArrowDown,
+  Forward,
 } from "lucide-react";
 
 export type IconProps = { size?: number; className?: string; strokeWidth?: number };
@@ -238,3 +239,4 @@ export const IconAlarm = icon(AlarmClock);
 /** Slow mode. */
 export const IconGauge = icon(Gauge);
 export const IconArrowDown = icon(ArrowDown);
+export const IconForward = icon(Forward);
