@@ -1,0 +1,5 @@
+What's new in Disband 1.22
+
+• Signing in and signing up now include a quick security check to keep spam and bot accounts out.
+• Sign-in is better protected against repeated attempts.
+• Bug fixes and performance improvements.
