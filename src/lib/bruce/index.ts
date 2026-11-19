@@ -19,6 +19,7 @@ import { textCommands } from "./commands/more/text";
 import { socialCommands } from "./commands/more/social";
 import { timeCommands } from "./commands/more/time";
 import { funMoreCommands } from "./commands/more/fun";
+import { extraCommands } from "./commands/more/extra";
 
 const CATEGORY_ICON: Record<string, string> = {
   Info: "ℹ️", Moderation: "🛡️", Tickets: "🎫", Config: "⚙️", Levels: "📈", Economy: "🪙",
@@ -102,6 +103,7 @@ export const COMMANDS: Command[] = [
   ...socialCommands,
   ...timeCommands,
   ...funMoreCommands,
+  ...extraCommands,
   ].filter((c) => !TAKEN.has(c.name)).map((c) => ({ ...c, aliases: c.aliases?.filter((a) => !TAKEN.has(a)) })),
 ];
 
