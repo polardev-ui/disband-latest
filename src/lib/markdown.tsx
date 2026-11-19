@@ -461,6 +461,20 @@ export function renderMarkdown(
         continue;
       }
 
+      // "-# text": subtext, a small muted line (Discord's syntax). The
+      // composer already styled it; messages printed the "-#" literally.
+      const sub = line.match(/^-#\s+(.*)$/);
+      if (sub) {
+        flush();
+        renderedLines.push(
+          <span key={k++} className="block text-[12px] leading-4 text-text-muted">
+            {renderInlineTokens(sub[1]!, members, k * 100, onMentionClick, channels, onChannelClick, roles)}
+          </span>,
+        );
+        i += 1;
+        continue;
+      }
+
       const hl = headerLevel(line);
       if (hl > 0) {
         flush();

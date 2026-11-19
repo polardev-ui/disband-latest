@@ -3,7 +3,7 @@ import UIKit
 
 /// Renders Discord-style markdown to an `AttributedString`: `#`..`###`
 /// headers, fenced code blocks, inline code, **bold**, *italic* / _italic_,
-/// __underline__, ~~strikethrough~~, ||spoilers||, links and @mentions. Mirrors the web
+/// __underline__, ~~strikethrough~~, ||spoilers||, `-# ` small text, links and @mentions. Mirrors the web
 /// renderer (`src/lib/markdown.tsx`).
 ///
 /// This is a small parser rather than a set of regexes. The regex version
@@ -278,6 +278,15 @@ enum ChatMarkdown {
                 out.append(NSAttributedString(string: "\n", attributes: [.font: context.baseFont]))
             }
             let ns = line as NSString
+            // "-# text": subtext, small and muted (as on the web and Android).
+            if line.hasPrefix("-# ") {
+                let start = out.length
+                appendInline(String(line.dropFirst(3)), to: out,
+                             base: context.baseFont.withSize(context.baseFont.pointSize * 0.8), style: [], context: context)
+                out.addAttribute(.foregroundColor, value: context.color.withAlphaComponent(0.6),
+                                 range: NSRange(location: start, length: out.length - start))
+                continue
+            }
             if let match = headerPattern.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) {
                 let level = match.range(at: 1).length
                 appendInline(ns.substring(with: match.range(at: 2)), to: out,
