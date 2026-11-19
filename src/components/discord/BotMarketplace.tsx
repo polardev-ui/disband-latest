@@ -37,6 +37,28 @@ interface MarketBot {
   invite_code: string;
   invite_ok: boolean;
   approved_at: string | null;
+  tagline: string | null;
+  category: string | null;
+  support_url: string | null;
+  website_url: string | null;
+  privacy_url: string | null;
+  terms_url: string | null;
+  official: boolean;
+}
+
+const CATEGORIES: [string, string][] = [
+  ["moderation", "Moderation"], ["utility", "Utility"], ["fun", "Fun"], ["music", "Music"], ["games", "Games"],
+  ["economy", "Economy"], ["leveling", "Levels"], ["social", "Social"], ["tickets", "Tickets"], ["productivity", "Productivity"], ["other", "Other"],
+];
+
+/** The blue "made by Disband" tick. */
+function OfficialBadge({ size = 16 }: { size?: number }) {
+  return (
+    <span title="Official Disband app" className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand/15 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-brand">
+      <svg width={size - 4} height={size - 4} viewBox="0 0 24 24" aria-hidden><path fill="currentColor" d="M12 1l2.6 2.3 3.4-.5 1 3.3 3 1.7-1 3.3 1 3.3-3 1.7-1 3.3-3.4-.5L12 23l-2.6-2.3-3.4.5-1-3.3-3-1.7 1-3.3-1-3.3 3-1.7 1-3.3 3.4.5zM10.6 15.4l6.4-6.4-1.4-1.4-5 5-2.2-2.2-1.4 1.4z" /></svg>
+      Official
+    </span>
+  );
 }
 
 interface Review {
@@ -100,6 +122,7 @@ export function BotMarketplace({ onBackToSpaces }: { onBackToSpaces?: (tab: "pop
   const { profile } = useApp();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("popular");
+  const [category, setCategory] = useState<string | null>(null);
   const [bots, setBots] = useState<MarketBot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -108,14 +131,14 @@ export function BotMarketplace({ onBackToSpaces }: { onBackToSpaces?: (tab: "pop
 
   const load = useCallback(async () => {
     setError(null);
-    const { data, error: err } = await getSupabaseClient().rpc("marketplace_bots", { p_query: query.trim() || null, p_sort: sort, p_limit: 60, p_offset: 0 });
+    const { data, error: err } = await getSupabaseClient().rpc("marketplace_bots", { p_query: query.trim() || null, p_sort: sort, p_limit: 60, p_offset: 0, p_bot_id: null, p_category: category });
     if (err) {
       setError(err.message);
       setBots([]);
       return;
     }
     setBots((data as MarketBot[]) ?? []);
-  }, [query, sort]);
+  }, [query, sort, category]);
 
   useEffect(() => {
     const id = window.setTimeout(() => void load(), query ? 250 : 0);
@@ -173,6 +196,13 @@ export function BotMarketplace({ onBackToSpaces }: { onBackToSpaces?: (tab: "pop
           </button>
         </div>
 
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <button type="button" aria-pressed={!category} onClick={() => setCategory(null)} className={`h-7 rounded-full px-3 text-[13px] font-medium ${!category ? "bg-header-primary text-bg-primary" : "bg-bg-secondary text-text-muted hover:text-header-primary"}`}>{t("All")}</button>
+          {CATEGORIES.map(([id, label]) => (
+            <button key={id} type="button" aria-pressed={category === id} onClick={() => setCategory(category === id ? null : id)} className={`h-7 rounded-full px-3 text-[13px] font-medium ${category === id ? "bg-header-primary text-bg-primary" : "bg-bg-secondary text-text-muted hover:text-header-primary"}`}>{t(label)}</button>
+          ))}
+        </div>
+
         <h2 className="mb-3 mt-6 text-[20px] font-bold text-header-primary">
           {query.trim() ? t("Results for “{value}”", { value: query.trim() }) : sort === "new" ? t("New bots") : sort === "rating" ? t("Top rated bots") : t("Popular bots")}
         </h2>
@@ -195,11 +225,11 @@ export function BotMarketplace({ onBackToSpaces }: { onBackToSpaces?: (tab: "pop
                 <div className="flex items-center gap-3">
                   <BotAvatar bot={b} size={48} />
                   <div className="min-w-0">
-                    <p className="truncate text-[16px] font-bold text-header-primary">{b.name}</p>
+                    <p className="flex min-w-0 items-center gap-1.5"><span className="truncate text-[16px] font-bold text-header-primary">{b.name}</span>{b.official && <OfficialBadge />}</p>
                     <p className="truncate text-[13px] text-text-muted">{t("by {value}", { value: b.creator_name ?? "unknown" })}</p>
                   </div>
                 </div>
-                <p className="line-clamp-2 min-h-[40px] text-[14px] leading-5 text-text-normal">{b.description || t("No description yet.")}</p>
+                <p className="line-clamp-2 min-h-[40px] text-[14px] leading-5 text-text-normal">{b.tagline || b.description || t("No description yet.")}</p>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-text-muted">
                   {b.rating != null ? <span className="flex items-center gap-1"><Stars value={Number(b.rating)} size={12} /> {Number(b.rating).toFixed(1)} ({fmt(b.review_count)})</span> : <span>{t("No reviews yet")}</span>}
                   <span>{t("{count} spaces", { count: fmt(b.server_count) })}</span>
@@ -290,10 +320,13 @@ function BotPage({ botId, onBack }: { botId: string; onBack: () => void }) {
         <section className="flex flex-col gap-5 rounded-2xl border border-border-subtle bg-bg-secondary p-6 sm:flex-row sm:items-center">
           <BotAvatar bot={b} size={112} />
           <div className="min-w-0 flex-1">
-            <h1 className="text-[28px] font-extrabold leading-tight text-header-primary">{b.name}</h1>
+            <h1 className="flex flex-wrap items-center gap-2 text-[28px] font-extrabold leading-tight text-header-primary">{b.name}{b.official && <OfficialBadge size={18} />}</h1>
+            {b.tagline && <p className="mt-1 text-[15px] text-text-normal">{b.tagline}</p>}
             <p className="mt-1 text-[14px] text-text-muted">
+              {b.official ? <>{t("by")} <span className="font-semibold text-text-normal">Disband</span></> : <>
               {t("by")} <span className="font-semibold text-text-normal">{b.creator_name ?? "unknown"}</span>
-              {b.creator_username ? <span> @{b.creator_username}</span> : null}
+              {b.creator_username ? <span> @{b.creator_username}</span> : null}</>}
+              {b.category && <span> · {t(CATEGORIES.find(([id]) => id === b.category)?.[1] ?? b.category)}</span>}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-text-muted">
               <span className="flex items-center gap-1.5">{avg != null ? <><Stars value={avg} /> <b className="text-text-normal">{avg.toFixed(1)}</b></> : t("No ratings yet")}</span>
@@ -384,6 +417,19 @@ function BotPage({ botId, onBack }: { botId: string; onBack: () => void }) {
           </div>
 
           <aside className="space-y-6">
+            {(b.support_url || b.website_url || b.privacy_url || b.terms_url) && (
+              <section className="rounded-xl border border-border-subtle bg-bg-secondary p-4">
+                <h2 className="mb-3 text-[15px] font-bold text-header-primary">{t("Links")}</h2>
+                <ul className="space-y-1.5 text-[14px]">
+                  {([["support_url", "Support space"], ["website_url", "Website"], ["privacy_url", "Privacy policy"], ["terms_url", "Terms of service"]] as const).map(([key, label]) => {
+                    const url = b[key];
+                    return url ? (
+                      <li key={key}><button type="button" onClick={() => safeWindowOpen(url)} className="text-text-link hover:underline">{t(label)}</button></li>
+                    ) : null;
+                  })}
+                </ul>
+              </section>
+            )}
             <section className="rounded-xl border border-border-subtle bg-bg-secondary p-4">
               <h2 className="mb-3 text-[15px] font-bold text-header-primary">{t("Ratings")}</h2>
               {[5, 4, 3, 2, 1].map((s) => {
@@ -440,51 +486,122 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-interface MyListing { bot_id: string; status: string; review_note: string | null; submitted_at: string; bots: { name: string } | null }
+interface MyListing {
+  bot_id: string; status: string; review_note: string | null; submitted_at: string; invite_code: string | null;
+  display_name: string | null; tagline: string | null; description: string | null; category: string | null; tags: string[] | null;
+  support_url: string | null; website_url: string | null; privacy_url: string | null; terms_url: string | null; official: boolean;
+  bots: { name: string } | null;
+}
 
 function SubmitBotModal({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
-  const [link, setLink] = useState("");
-  const [description, setDescription] = useState("");
+  const [form, setForm] = useState({
+    link: "", name: "", tagline: "", description: "", category: "", tags: "",
+    support_url: "", website_url: "", privacy_url: "", terms_url: "",
+  });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [mine, setMine] = useState<MyListing[]>([]);
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const loadMine = useCallback(async () => {
-    const { data } = await getSupabaseClient().from("bot_listings").select("bot_id, status, review_note, submitted_at, bots(name)").order("submitted_at", { ascending: false });
+    const { data } = await getSupabaseClient()
+      .from("bot_listings")
+      .select("bot_id, status, review_note, submitted_at, invite_code, display_name, tagline, description, category, tags, support_url, website_url, privacy_url, terms_url, official, bots(name)")
+      .order("submitted_at", { ascending: false });
     setMine(((data as unknown as MyListing[]) ?? []));
   }, []);
   useEffect(() => { void loadMine(); }, [loadMine]);
 
+  /** Fix and resubmit: fill the form from an earlier submission. */
+  function edit(l: MyListing) {
+    setForm({
+      link: l.invite_code ?? "", name: l.display_name ?? "", tagline: l.tagline ?? "", description: l.description ?? "",
+      category: l.category ?? "", tags: (l.tags ?? []).join(", "), support_url: l.support_url ?? "", website_url: l.website_url ?? "",
+      privacy_url: l.privacy_url ?? "", terms_url: l.terms_url ?? "",
+    });
+    setMessage(null);
+  }
+
   async function submit() {
-    if (!link.trim()) return setMessage({ ok: false, text: t("Paste your bot's invite link.") });
+    if (!form.link.trim()) return setMessage({ ok: false, text: t("Paste your bot's invite link.") });
+    if (!form.tagline.trim()) return setMessage({ ok: false, text: t("Add a short tagline.") });
+    if (!form.category) return setMessage({ ok: false, text: t("Pick a category.") });
     setBusy(true);
     setMessage(null);
-    const { error } = await getSupabaseClient().rpc("submit_bot_listing", { p_invite_code: link.trim(), p_description: description.trim() || null });
+    const { error } = await getSupabaseClient().rpc("submit_bot_listing_details", {
+      p_invite_code: form.link.trim(),
+      p_details: {
+        name: form.name.trim() || null,
+        tagline: form.tagline.trim(),
+        description: form.description.trim() || null,
+        category: form.category,
+        tags: form.tags.split(",").map((x) => x.trim()).filter(Boolean),
+        support_url: form.support_url.trim() || null,
+        website_url: form.website_url.trim() || null,
+        privacy_url: form.privacy_url.trim() || null,
+        terms_url: form.terms_url.trim() || null,
+      },
+    });
     setBusy(false);
     if (error) return setMessage({ ok: false, text: error.message });
-    setMessage({ ok: true, text: t("Submitted! Tether reviews new bots once a day; you'll see the result here.") });
-    setLink("");
+    setMessage({ ok: true, text: t("Submitted! Tether reviews new bots once a day; the result shows below.") });
     void loadMine();
   }
 
   const label: Record<string, string> = { pending: "Waiting for review", approved: "Listed", rejected: "Not approved" };
+  const field = "h-10 w-full rounded-lg border border-border-subtle bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none focus:border-brand";
+  const cap = "mb-1 mt-3 block text-[12px] font-bold uppercase tracking-wide text-header-secondary";
 
   return (
     <Modal title={t("Submit your bot")} onClose={onClose}>
-      <p className="mb-4 text-[14px] text-text-muted">
-        {t("Paste your bot's public invite link. Its name, avatar, description and commands are checked before it's listed (once a day). Anyone who adds it from the marketplace or the link counts towards its total.")}
+      <p className="mb-2 text-[14px] text-text-muted">
+        {t("Tether reviews every submission once a day: the name, tagline, description, avatar, commands and any website you link, in any language. If something isn't allowed you'll see why here, and you can fix it and resubmit.")}
       </p>
-      <label className="mb-1 block text-[12px] font-bold uppercase tracking-wide text-header-secondary">{t("Invite link")}</label>
-      <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://disband.dev/bot-invite/…" className="mb-4 h-10 w-full rounded-lg border border-border-subtle bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none focus:border-brand" />
-      <label className="mb-1 block text-[12px] font-bold uppercase tracking-wide text-header-secondary">{t("Description (optional)")}</label>
-      <textarea value={description} onChange={(e) => setDescription(e.target.value.slice(0, 2000))} rows={4} placeholder={t("What does your bot do? Leave empty to use the bot's own description.")} className="mb-1 w-full resize-none rounded-lg border border-border-subtle bg-bg-tertiary px-3 py-2 text-[14px] text-text-normal outline-none focus:border-brand" />
-      <p className="mb-4 text-right text-[12px] text-text-muted">{description.length} / 2000</p>
-      {message && <p className={`mb-3 text-[13px] ${message.ok ? "text-status-online" : "text-status-dnd"}`}>{message.text}</p>}
-      <div className="flex justify-end gap-2">
+
+      <label className={cap}>{t("Bot invite link")} *</label>
+      <input value={form.link} onChange={set("link")} placeholder="https://disband.dev/bot-invite/…" className={field} />
+
+      <label className={cap}>{t("Name on the marketplace")}</label>
+      <input value={form.name} onChange={set("name")} maxLength={32} placeholder={t("Leave empty to use the bot's name")} className={field} />
+
+      <label className={cap}>{t("Tagline")} *</label>
+      <input value={form.tagline} onChange={set("tagline")} maxLength={120} placeholder={t("One line: what does it do?")} className={field} />
+
+      <label className={cap}>{t("Category")} *</label>
+      <select value={form.category} onChange={set("category")} className={field}>
+        <option value="">{t("Pick one")}</option>
+        {CATEGORIES.map(([id, l]) => <option key={id} value={id}>{t(l)}</option>)}
+      </select>
+
+      <label className={cap}>{t("Tags")}</label>
+      <input value={form.tags} onChange={set("tags")} placeholder={t("Up to 6, separated by commas")} className={field} />
+
+      <label className={cap}>{t("Description")}</label>
+      <textarea value={form.description} onChange={set("description")} rows={4} maxLength={2000} placeholder={t("Features, how to get started… (optional)")} className={`${field} h-auto resize-none py-2`} />
+      <p className="text-right text-[12px] text-text-muted">{form.description.length} / 2000</p>
+
+      <label className={cap}>{t("Support space")}</label>
+      <input value={form.support_url} onChange={set("support_url")} placeholder="https://disband.dev/…" className={field} />
+      <label className={cap}>{t("Website")}</label>
+      <input value={form.website_url} onChange={set("website_url")} placeholder="https://…" className={field} />
+      <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
+        <div>
+          <label className={cap}>{t("Privacy policy")}</label>
+          <input value={form.privacy_url} onChange={set("privacy_url")} placeholder="https://…" className={field} />
+        </div>
+        <div>
+          <label className={cap}>{t("Terms of service")}</label>
+          <input value={form.terms_url} onChange={set("terms_url")} placeholder="https://…" className={field} />
+        </div>
+      </div>
+
+      {message && <p className={`mt-4 text-[13px] ${message.ok ? "text-status-online" : "text-status-dnd"}`}>{message.text}</p>}
+      <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onClose} className="h-9 rounded-lg px-4 text-[14px] font-medium text-text-normal hover:bg-interactive-hover">{t("Close")}</button>
         <button type="button" disabled={busy} onClick={() => void submit()} className="h-9 rounded-lg bg-brand px-4 text-[14px] font-semibold text-white disabled:opacity-50">{t("Submit for review")}</button>
       </div>
+
       {mine.length > 0 && (
         <div className="mt-6 border-t border-border-subtle pt-4">
           <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-header-secondary">{t("Your bots")}</p>
@@ -492,10 +609,12 @@ function SubmitBotModal({ onClose }: { onClose: () => void }) {
             {mine.map((l) => (
               <li key={l.bot_id} className="rounded-lg bg-bg-tertiary px-3 py-2 text-[13px]">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-header-primary">{l.bots?.name ?? "Bot"}</span>
+                  <span className="font-semibold text-header-primary">{l.display_name ?? l.bots?.name ?? "Bot"}</span>
+                  {l.official && <OfficialBadge />}
                   <span className={`rounded px-1.5 py-px text-[11px] font-bold ${l.status === "approved" ? "bg-status-online/20 text-status-online" : l.status === "rejected" ? "bg-status-dnd/20 text-status-dnd" : "bg-bg-secondary text-text-muted"}`}>{t(label[l.status] ?? l.status)}</span>
                   <span className="flex-1" />
-                  <button type="button" onClick={() => void getSupabaseClient().rpc("withdraw_bot_listing", { p_bot_id: l.bot_id }).then(() => loadMine())} className="text-[12px] text-text-muted hover:text-status-dnd">{t("Remove")}</button>
+                  <button type="button" onClick={() => edit(l)} className="text-[12px] text-text-link hover:underline">{l.status === "rejected" ? t("Fix and resubmit") : t("Edit")}</button>
+                  {!l.official && <button type="button" onClick={() => void getSupabaseClient().rpc("withdraw_bot_listing", { p_bot_id: l.bot_id }).then(() => loadMine())} className="text-[12px] text-text-muted hover:text-status-dnd">{t("Remove")}</button>}
                 </div>
                 {l.review_note && <p className="mt-1 text-text-muted">{l.review_note}</p>}
               </li>
@@ -540,7 +659,7 @@ function ReportReviewModal({ review, onClose }: { review: Review; onClose: (sent
   );
 }
 
-interface QueueListing { bot_id: string; description: string | null; submitted_at: string; bots: { name: string; avatar_url: string | null } }
+interface QueueListing { bot_id: string; display_name: string | null; tagline: string | null; category: string | null; website_url: string | null; description: string | null; submitted_at: string; bots: { name: string; avatar_url: string | null } }
 interface QueueReport { id: string; reason: string; details: string | null; status: string; decision_note: string | null; bot_reviews: { rating: number; body: string | null; bots: { name: string } } }
 
 function StaffQueueModal({ onClose }: { onClose: () => void }) {
@@ -564,8 +683,10 @@ function StaffQueueModal({ onClose }: { onClose: () => void }) {
             <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-header-secondary">{t("Bots waiting")} ({queue.listings.length})</p>
             {queue.listings.length === 0 ? <p className="text-[13px] text-text-muted">{t("Nothing waiting.")}</p> : queue.listings.map((l) => (
               <div key={l.bot_id} className="mb-2 rounded-lg bg-bg-tertiary p-3">
-                <p className="font-semibold text-header-primary">{l.bots.name}</p>
-                {l.description && <p className="mt-1 text-[13px] text-text-normal">{l.description}</p>}
+                <p className="font-semibold text-header-primary">{l.display_name ?? l.bots.name}{l.category ? <span className="font-normal text-text-muted"> · {l.category}</span> : null}</p>
+                {l.tagline && <p className="mt-0.5 text-[13px] text-text-normal">{l.tagline}</p>}
+                {l.description && <p className="mt-1 text-[13px] text-text-muted">{l.description}</p>}
+                {l.website_url && <button type="button" onClick={() => safeWindowOpen(l.website_url!)} className="mt-1 text-[12px] text-text-link hover:underline">{l.website_url}</button>}
                 <div className="mt-2 flex gap-2">
                   <button type="button" onClick={() => void decide("listing", l.bot_id, "approve")} className={`${btn} bg-status-online text-white`}>{t("Approve")}</button>
                   <button type="button" onClick={() => void decide("listing", l.bot_id, "reject")} className={`${btn} bg-status-dnd text-white`}>{t("Reject")}</button>

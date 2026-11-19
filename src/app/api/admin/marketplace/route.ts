@@ -22,7 +22,7 @@ export async function GET(req: Request) {
   const { service } = gate;
   const { data: listings } = await service
     .from("bot_listings")
-    .select("bot_id, description, status, submitted_at, review_note, bots!inner(name, avatar_url, owner_id)")
+    .select("bot_id, display_name, tagline, category, description, website_url, support_url, status, submitted_at, review_note, bots!inner(name, avatar_url, owner_id)")
     .eq("status", "pending")
     .order("submitted_at")
     .limit(100);

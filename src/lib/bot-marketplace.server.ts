@@ -2,6 +2,29 @@ import "server-only";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { deepseekChat, type DeepSeekContentPart } from "@/lib/deepseek";
 import { usernameContainsBlockedWord } from "@/lib/username-policy";
+import { PUBLIC_ENV } from "@/lib/public-env";
+
+interface SitePreview { title?: string; description?: string; image?: string }
+
+/**
+ * What a submitted link shows: its title, description and preview image,
+ * read through the CDN's link-preview service (which refuses private and
+ * internal addresses), never fetched directly from here.
+ */
+async function previewSite(url: string): Promise<SitePreview | null> {
+  try {
+    const res = await fetch(`${PUBLIC_ENV.mediaApiUrl}/link/preview?url=${encodeURIComponent(url)}`, {
+      signal: AbortSignal.timeout(15_000),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as SitePreview & { error?: string };
+    if (data.error || (!data.title && !data.description)) return null;
+    return { title: data.title?.slice(0, 200), description: data.description?.slice(0, 500), image: data.image };
+  } catch {
+    return null;
+  }
+}
 
 /*
  Tether's daily marketplace review (run by /api/cron/bot-marketplace).
@@ -44,6 +67,8 @@ const LISTING_RULES =
   "graphic violence or gore, harassment, self-harm encouragement, illegal goods, scams, phishing or impersonation of Disband or its staff, or a name that is itself offensive. " +
   "Translate anything not in English first and judge the meaning, including leetspeak and deliberate misspellings. " +
   "Mild words, jokes, gaming terms and normal moderation commands (ban, kick, mute) are fine. Do not reject for quality or grammar. " +
+  "If a website is given, also reject when the site is adult, gambling, a scam or phishing page, malware or 'free nitro/currency' bait, hateful, or clearly unrelated to the bot. " +
+  "The tagline must describe the bot; reject a tagline or name that impersonates Disband or another well-known product. " +
   'Answer with JSON only: {"decision":"approve"|"reject","reason":"one short sentence the developer will see"}.';
 
 const REPORT_RULES =
@@ -54,7 +79,12 @@ const REPORT_RULES =
 
 async function reviewListing(service: Service, botId: string): Promise<"approved" | "rejected" | "skipped"> {
   const { data: bot } = await service.from("bots").select("id, name, avatar_url, description, revoked_at").eq("id", botId).maybeSingle();
-  const { data: listing } = await service.from("bot_listings").select("description").eq("bot_id", botId).maybeSingle();
+  const { data: listing } = await service
+    .from("bot_listings")
+    .select("description, display_name, tagline, category, tags, website_url, privacy_url, terms_url, support_url, official")
+    .eq("bot_id", botId)
+    .maybeSingle();
+  if (listing?.official) return "skipped";
   if (!bot || bot.revoked_at) {
     await service.from("bot_listings").delete().eq("bot_id", botId);
     return "skipped";
@@ -75,20 +105,45 @@ async function reviewListing(service: Service, botId: string): Promise<"approved
   };
 
   // The quick filter: a blocked word in the name, or in any description word.
-  const words = `${bot.name} ${description} ${(commands ?? []).map((c) => `${c.name} ${c.description ?? ""}`).join(" ")}`
+  const shownName = (listing?.display_name as string | null) ?? String(bot.name);
+  const tagline = (listing?.tagline as string | null) ?? "";
+  const tags = ((listing?.tags as string[] | null) ?? []).join(", ");
+  const words = `${shownName} ${bot.name} ${tagline} ${tags} ${description} ${(commands ?? []).map((c) => `${c.name} ${c.description ?? ""}`).join(" ")}`
     .split(/[^\p{L}\p{N}_]+/u)
     .filter((w) => w.length >= 3);
-  if (usernameContainsBlockedWord(String(bot.name)) || words.some((w) => usernameContainsBlockedWord(w))) {
+  if (usernameContainsBlockedWord(shownName) || usernameContainsBlockedWord(String(bot.name)) || words.some((w) => usernameContainsBlockedWord(w))) {
     return decide("rejected", "The name, description or commands contain words that aren't allowed.");
   }
 
+  // Every link given has to open. A dead or blocked site is a rejection the
+  // developer can fix and resubmit.
+  const links: [string, string | null][] = [
+    ["website", (listing?.website_url as string | null) ?? null],
+    ["privacy policy", (listing?.privacy_url as string | null) ?? null],
+    ["terms", (listing?.terms_url as string | null) ?? null],
+  ];
+  const previews: Record<string, SitePreview> = {};
+  for (const [label, url] of links) {
+    if (!url) continue;
+    const p = await previewSite(url);
+    if (!p) return decide("rejected", `We couldn't open your ${label} (${url}). Check the link works for everyone, then resubmit.`);
+    previews[label] = p;
+  }
+  const site = previews.website;
+
   const text =
-    `Bot name: ${bot.name}\n` +
+    `Bot name: ${shownName}${shownName !== bot.name ? ` (account name: ${bot.name})` : ""}\n` +
+    `Tagline: ${tagline || "(none)"}\n` +
+    `Category: ${listing?.category ?? "(none)"}; tags: ${tags || "(none)"}\n` +
     `Description: ${description || "(none)"}\n` +
+    (site ? `Website ${listing?.website_url}: title "${site.title ?? ""}", description "${site.description ?? ""}"\n` : "Website: (none)\n") +
     `Commands:\n${(commands ?? []).map((c) => `/${c.name}: ${c.description ?? ""}`).join("\n") || "(none)"}`;
   const content: DeepSeekContentPart[] = [{ type: "text", text }];
   if (bot.avatar_url && /^https:\/\//.test(String(bot.avatar_url))) {
     content.push({ type: "text", text: "The bot's avatar image:" }, { type: "image_url", image_url: { url: String(bot.avatar_url) } });
+  }
+  if (site?.image && /^https:\/\//.test(site.image)) {
+    content.push({ type: "text", text: "The website's preview image:" }, { type: "image_url", image_url: { url: site.image } });
   }
 
   let verdict: Verdict | null = null;
