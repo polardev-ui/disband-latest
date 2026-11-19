@@ -182,6 +182,12 @@ export default {
       return gifSearch(request, env, url.searchParams);
     }
 
+    // A small animated copy of a GIF for the picker's grid (favourites are
+    // saved as the full-size original, which can be several MB).
+    if (request.method === "GET" && pathname === "/v1/gif/thumb") {
+      return gifThumb(request, env, url.searchParams, ctx);
+    }
+
     if (pathname === "/health") return json({ ok: true }, 200, env);
 
     return json({ error: "Not found" }, 404, env);
@@ -868,6 +874,84 @@ async function serveThumbnail(request, env, key, size, still, ctx) {
     // Couldn't make one (an unusual file, Images unavailable): the original.
     console.error("thumbnail failed", key, size, err);
     return null;
+  }
+}
+
+/* ------------------------------------------------------------ GIF thumbnails */
+
+/**
+ * `/v1/gif/thumb?url=<gif>&w=240`: the GIF scaled down to that width, as
+ * animated WebP, for the picker grid.
+ *
+ * Favourite GIFs are stored as the full-size original (Klipy's smaller
+ * renditions have unrelated file names, so they can't be derived from it),
+ * and a grid of those was megabytes before anything moved. Only GIF hosts the
+ * app already uses are accepted (Klipy, Giphy, and this CDN's own uploads),
+ * so this can't be used to fetch arbitrary pages. Each thumbnail is made once
+ * per edge location and cached there. Anything the Images binding can't
+ * handle is sent to the original instead, so the picker never shows a hole.
+ */
+const GIF_THUMB_WIDTHS = new Set([160, 240, 320]);
+const GIF_THUMB_HOSTS = [
+  /^(?:[a-z0-9-]+\.)*klipy\.com$/i,
+  /^(?:[a-z0-9-]+\.)*klipy\.co$/i,
+  /^(?:[a-z0-9-]+\.)*giphy\.com$/i,
+];
+
+async function gifThumb(request, env, params, ctx) {
+  const width = Number(params.get("w"));
+  const raw = params.get("url") ?? "";
+  let source;
+  try {
+    source = new URL(raw);
+  } catch {
+    return json({ error: "Bad url" }, 400, env);
+  }
+  if (!GIF_THUMB_WIDTHS.has(width) || source.protocol !== "https:") {
+    return json({ error: "Bad request" }, 400, env);
+  }
+  const own = source.hostname === "cdn.disband.dev";
+  const ownKey = own ? source.pathname.replace(/^\/v1\/images\//, "") : null;
+  // Our own uploads: only the image keys serve() accepts (never the GIF
+  // search cache that shares the bucket).
+  const ownOk = own && /^[0-9a-f-]{36}(?:\/[0-9a-f-]{36})?\.(?:gif|webp|png|jpe?g)$/i.test(ownKey ?? "");
+  if (own ? !ownOk : !GIF_THUMB_HOSTS.some((re) => re.test(source.hostname))) {
+    return json({ error: "Host not allowed" }, 400, env);
+  }
+  if (!env.IMAGES) return Response.redirect(source.toString(), 302);
+
+  const cache = caches.default;
+  const cacheKey = new Request(
+    `https://cdn.disband.dev/v1/gif/thumb?w=${width}&url=${encodeURIComponent(source.toString())}`,
+    { method: "GET" },
+  );
+  const hit = await cache.match(cacheKey);
+  if (hit) return hit;
+
+  try {
+    let body;
+    if (own) {
+      const object = await env.MEDIA.get(ownKey);
+      if (!object) return json({ error: "Not found" }, 404, env);
+      body = object.body;
+    } else {
+      const upstream = await fetch(source.toString(), { redirect: "error", cf: { cacheTtl: 86400 } });
+      if (!upstream.ok || !upstream.body) return Response.redirect(source.toString(), 302);
+      const length = Number(upstream.headers.get("content-length") ?? 0);
+      // Very large originals would cost more to shrink than to show.
+      if (length > 40 * 1024 * 1024) return Response.redirect(source.toString(), 302);
+      body = upstream.body;
+    }
+    const result = await env.IMAGES.input(body)
+      .transform({ width, fit: "scale-down" })
+      .output({ format: "image/webp", quality: 80, anim: true });
+    const made = result.response();
+    const response = new Response(made.body, { status: 200, headers: imageHeaders("image/webp") });
+    ctx.waitUntil(cache.put(cacheKey, response.clone()));
+    return response;
+  } catch (err) {
+    console.error("gif thumb failed", source.hostname, err);
+    return Response.redirect(source.toString(), 302);
   }
 }
 

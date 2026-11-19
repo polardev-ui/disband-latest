@@ -110,3 +110,69 @@ export function giphyThumbUrl(previewUrl: string): string {
   }
   return previewUrl;
 }
+
+/**
+ * A small animated copy of a saved GIF, for the picker's grid.
+ *
+ * Favourites are stored as the full-size original, which can be several MB.
+ * Giphy publishes a 200px-wide WebP of every GIF under a fixed name, so that
+ * is used directly; anything else (Klipy, our own uploads) goes through the
+ * CDN's /gif/thumb, which makes and caches a scaled-down animated WebP.
+ */
+export function gifGridThumbUrl(url: string, width: 160 | 240 | 320 = 240): string {
+  if (!HTTPS_RE.test(url)) return url;
+  try {
+    const host = new URL(url).hostname;
+    if (/(?:^|\.)giphy\.com$/i.test(host) && /\/media\//i.test(url) && /\.(gif|webp)(\?|$)/i.test(url)) {
+      return url.replace(/[^/?]+(\?.*)?$/i, "200w.webp");
+    }
+    if (/(?:^|\.)klipy\.com$|(?:^|\.)klipy\.co$|^cdn\.disband\.dev$/i.test(host)) {
+      const base = PUBLIC_ENV.mediaApiUrl.replace(/\/$/, "");
+      return `${base}/gif/thumb?w=${width}&url=${encodeURIComponent(url)}`;
+    }
+  } catch {
+    // Not a URL we can shrink.
+  }
+  return url;
+}
+
+const searchCache = new Map<string, { at: number; results: GiphyImage[] }>();
+const searchInflight = new Map<string, Promise<GiphyImage[]>>();
+/** Results stay instant for a while within a session (the CDN caches them for hours too). */
+const SEARCH_CACHE_MS = 10 * 60 * 1000;
+
+function searchKey(query: string, limit: number): string {
+  return `${limit}:${query.trim().toLowerCase().replace(/\s+/g, " ")}`;
+}
+
+/** Already-fetched results for a query, if any (for showing them with no wait). */
+export function cachedGifs(query: string, limit = 20): GiphyImage[] | null {
+  const hit = searchCache.get(searchKey(query, limit));
+  return hit && Date.now() - hit.at < SEARCH_CACHE_MS ? hit.results : null;
+}
+
+/**
+ * searchGifs, remembered: the same query (Trending, a category, a word typed
+ * again) answers from memory, and two calls for one query share a request.
+ */
+export async function searchGifsCached(query: string, limit = 20): Promise<GiphyImage[]> {
+  const key = searchKey(query, limit);
+  const hit = cachedGifs(query, limit);
+  if (hit) return hit;
+  let pending = searchInflight.get(key);
+  if (!pending) {
+    pending = searchGifs(query, limit)
+      .then((results) => {
+        searchCache.set(key, { at: Date.now(), results });
+        return results;
+      })
+      .finally(() => searchInflight.delete(key));
+    searchInflight.set(key, pending);
+  }
+  return pending;
+}
+
+/** Fetch in the background so a later click is instant. Errors are ignored. */
+export function prefetchGifs(queries: string[], limit = 20): void {
+  for (const q of queries) void searchGifsCached(q, limit).catch(() => undefined);
+}

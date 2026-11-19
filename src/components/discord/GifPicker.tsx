@@ -5,11 +5,72 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useOverlayDismiss } from "@/hooks/useOverlayDismiss";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { createPortal } from "react-dom";
-import { gifThumb, gifUrl, searchGifs, type GiphyImage } from "@/lib/giphy";
+import { cachedGifs, gifGridThumbUrl, gifThumb, gifUrl, prefetchGifs, searchGifsCached, type GiphyImage } from "@/lib/giphy";
 import { IconClose, IconStar } from "@/components/icons";
 import { useGifFavorites, type FavGif } from "@/hooks/useGifFavorites";
 import { FavStarButton } from "./GifFavStar";
 import { useI18n } from "@/contexts/I18nContext";
+
+const CATEGORIES = ["Trending", "Favourites", "Happy", "Thanks", "Celebrate", "Hello"];
+/** The searches behind the category buttons ("" is Trending). */
+const CATEGORY_QUERIES = ["", "Happy", "Thanks", "Celebrate", "Hello"];
+
+/** Open connections to the GIF hosts early, once, so the first thumbnails don't wait on TLS. */
+let preconnected = false;
+function preconnectGifHosts() {
+  if (preconnected || typeof document === "undefined") return;
+  preconnected = true;
+  for (const href of ["https://static.klipy.com", "https://cdn.disband.dev"]) {
+    const link = document.createElement("link");
+    link.rel = "preconnect";
+    link.href = href;
+    link.crossOrigin = "anonymous";
+    document.head.appendChild(link);
+  }
+}
+
+/**
+ * A grid video that only starts downloading once it's near the visible part
+ * of the picker. Twenty autoplaying videos used to all start at once, and the
+ * ones on screen waited behind the ones you'd have to scroll to.
+ */
+function LazyVideo({ src, ratio }: { src: string; ratio?: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || near) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setNear(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setNear(true);
+          io.disconnect();
+        }
+      },
+      { root: el.closest("[data-gif-scroll]"), rootMargin: "240px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [near]);
+  return (
+    <video
+      ref={ref}
+      src={near ? src : undefined}
+      autoPlay
+      loop
+      muted
+      playsInline
+      preload={near ? "auto" : "none"}
+      webkit-playsinline=""
+      className="block h-auto w-full bg-bg-tertiary"
+      style={{ aspectRatio: ratio }}
+    />
+  );
+}
 
 interface GifPickerProps {
   onSelect: (url: string) => void;
@@ -43,22 +104,14 @@ function GifThumb({ gif, isFav, onSelect, onToggleFav }: {
         title={gif.title}
       >
         {thumb.isVideo ? (
-          <video
-            src={thumb.src}
-            autoPlay
-            loop
-            muted
-            playsInline
-            webkit-playsinline=""
-            className="block h-auto w-full bg-bg-tertiary"
-            style={{ aspectRatio: ratio }}
-          />
+          <LazyVideo src={thumb.src} ratio={ratio} />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={thumb.src}
             alt={gif.title ?? "GIF"}
             loading="lazy"
+            decoding="async"
             className="block h-auto w-full bg-bg-tertiary"
             style={{ aspectRatio: ratio }}
           />
@@ -80,6 +133,9 @@ function FavThumb({ fav, onSelect, onRemove }: {
   onRemove: (url: string) => void;
 }) {
   const { t } = useI18n();
+  // A small animated copy, not the full-size original (see gifGridThumbUrl);
+  // if that can't load, the original.
+  const [src, setSrc] = useState(() => gifGridThumbUrl(fav.url));
   return (
     <div className="relative overflow-hidden rounded-lg hover:ring-2 hover:ring-brand">
       <button
@@ -90,11 +146,15 @@ function FavThumb({ fav, onSelect, onRemove }: {
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={fav.url}
+          src={src}
           alt={fav.title ?? t("Favourite GIF")}
           loading="lazy"
+          decoding="async"
           className="block h-auto min-h-12 w-full bg-bg-tertiary"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          onError={(e) => {
+            if (src !== fav.url) setSrc(fav.url);
+            else (e.target as HTMLImageElement).style.display = "none";
+          }}
         />
       </button>
       <FavStarButton active onToggle={() => onRemove(fav.url)} />
@@ -140,10 +200,17 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
     // overwrite newer search results (or vice versa).
     const id = ++reqRef.current;
     lastQueryRef.current = q;
-    setLoading(true);
     setError(null);
+    // Seen this one already (Trending, a category, a word typed again): show it now.
+    const hit = cachedGifs(q);
+    if (hit) {
+      setGifs(hit);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
-      const res = await searchGifs(q);
+      const res = await searchGifsCached(q);
       if (reqRef.current === id) setGifs(res);
     } catch {
       if (reqRef.current === id) setError(t("Could not load GIFs"));
@@ -168,7 +235,10 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
   useEffect(() => {
     if (!open) return;
     lastQueryRef.current = null;
+    preconnectGifHosts();
     void load(query);
+    // The category buttons are one click away: have them ready.
+    prefetchGifs(CATEGORY_QUERIES);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, load]);
 
@@ -176,7 +246,8 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
     if (!open) return;
     if (lastQueryRef.current === query) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => void load(query), 350);
+    // A cached query needs no wait at all; a new one waits for a short pause in typing.
+    debounceRef.current = setTimeout(() => void load(query), cachedGifs(query) ? 0 : 220);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query, open, load]);
 
@@ -249,9 +320,9 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
             </div>
             <div className="flex min-h-0 flex-1">
             <nav aria-label={t("GIF categories")} className="channel-scroll flex w-[88px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-border-subtle bg-bg-secondary p-2">
-              {["Trending", "Favourites", "Happy", "Thanks", "Celebrate", "Hello"].map(c => <button key={c} type="button" aria-pressed={c === "Favourites" ? tab === "favorites" : tab === "search" && query === (c === "Trending" ? "" : c)} onClick={() => {setTab(c === "Favourites" ? "favorites" : "search"); if(c !== "Favourites") setQuery(c === "Trending" ? "" : c);}} className="rounded-lg px-2 py-2 text-left text-[12px] font-semibold text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active aria-pressed:bg-interactive-selected aria-pressed:text-interactive-active">{c}</button>)}
+              {CATEGORIES.map(c => <button key={c} type="button" aria-pressed={c === "Favourites" ? tab === "favorites" : tab === "search" && query === (c === "Trending" ? "" : c)} onClick={() => {setTab(c === "Favourites" ? "favorites" : "search"); if(c !== "Favourites") setQuery(c === "Trending" ? "" : c);}} className="rounded-lg px-2 py-2 text-left text-[12px] font-semibold text-interactive-normal hover:bg-interactive-hover hover:text-interactive-active aria-pressed:bg-interactive-selected aria-pressed:text-interactive-active">{c}</button>)}
             </nav>
-            <div className="channel-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-2" onMouseOver={e => {const title = (e.target as HTMLElement).closest("button[title]")?.getAttribute("title"); if(title) setPreview(title);}} onFocus={e => {const title = (e.target as HTMLElement).closest("button[title]")?.getAttribute("title"); if(title) setPreview(title);}}>
+            <div data-gif-scroll className="channel-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-2" onMouseOver={e => {const title = (e.target as HTMLElement).closest("button[title]")?.getAttribute("title"); if(title) setPreview(title);}} onFocus={e => {const title = (e.target as HTMLElement).closest("button[title]")?.getAttribute("title"); if(title) setPreview(title);}}>
               {tab === "favorites" ? (
                 !favsLoaded && favorites.length === 0 ? (
                   <p className="py-4 text-center text-sm text-text-muted">{t("Loading…")}</p>
@@ -284,8 +355,10 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
               {!loading && !error && gifs.length === 0 && query.trim() && (
                 <p className="py-4 text-center text-sm text-text-muted">{t("No GIFs found")}</p>
               )}
-              {!loading && !error && gifs.length > 0 && (
-                <div className="columns-2 gap-1.5 [&>*]:mb-1.5 [&>*]:break-inside-avoid">
+              {!error && gifs.length > 0 && (
+                // The last results stay up (dimmed) while new ones load,
+                // instead of the grid blanking on every keystroke.
+                <div className={`columns-2 gap-1.5 transition-opacity duration-150 [&>*]:mb-1.5 [&>*]:break-inside-avoid ${loading ? "opacity-60" : ""}`}>
                   {gifs.map((gif) => {
                     const full = gifUrl(gif);
                     return (
@@ -318,6 +391,10 @@ export function GifPicker({ onSelect, disabled }: GifPickerProps) {
         aria-label={t("Send GIF")}
         aria-expanded={open}
         disabled={disabled}
+        onMouseEnter={() => {
+          preconnectGifHosts();
+          prefetchGifs([""]);
+        }}
         title={disabled ? t("Finish editing before sending a GIF") : t("Send GIF")}
         onClick={() => {
           setOpen((v) => {
