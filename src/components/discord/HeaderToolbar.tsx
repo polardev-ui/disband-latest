@@ -1,5 +1,6 @@
 "use client";
 
+import { SearchChipInput } from "./SearchChipInput";
 import { websiteHref } from "@/lib/platform";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
@@ -202,12 +203,11 @@ export function HeaderToolbar({
       )}
       {showSearch && (
         <div className="relative hidden lg:block">
-          <input
+          <SearchChipInput
             id="header-search-input"
-            type="text"
             value={searchQuery ?? ""}
-            onChange={(e) => {
-              onSearchQueryChange?.(e.target.value);
+            onChange={(v) => {
+              onSearchQueryChange?.(v);
               if (!searchOpen) onOpenSearch();
             }}
             onFocus={() => { if (!searchOpen) onOpenSearch(); }}
@@ -219,10 +219,8 @@ export function HeaderToolbar({
               }
             }}
             placeholder={t("Search messages")}
-            aria-label={t("Search")}
-            autoComplete="off"
-            spellCheck={false}
-            className={`mx-1 h-8 rounded-lg border border-border-subtle bg-bg-secondary-alt pl-8 pr-7 text-[14px] text-text-normal outline-none transition-[width,border-color] duration-200 ease-out placeholder:text-text-muted focus:border-border-strong ${searchOpen || searchQuery ? "w-64" : "w-48 focus:w-64"}`}
+            ariaLabel={t("Search")}
+            className={`mx-1 h-8 rounded-lg border border-border-subtle bg-bg-secondary-alt pl-8 pr-7 transition-[width,border-color] duration-200 ease-out focus-within:border-border-strong ${searchOpen || searchQuery ? "w-80" : "w-48 focus-within:w-64"}`}
           />
           <IconSearch size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
           {searchOpen && onCloseSearch && (

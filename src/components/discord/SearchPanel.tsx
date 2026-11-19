@@ -7,6 +7,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { formatMessageTime } from "@/lib/utils";
 import { useI18n } from "@/contexts/I18nContext";
 import type { Profile } from "@/lib/supabase/types";
+import { SearchChipInput } from "./SearchChipInput";
 
 /*
  Message search, Discord-style.
@@ -392,24 +393,23 @@ export default function SearchPanel({ scopeKind, serverId, containerId, onJump, 
       <div className={`px-3 pt-3 ${controlled ? "lg:hidden" : ""}`}>
         <div className="relative">
           <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted"><Ico d={I.search} size={15} /></span>
-          <input
+          <SearchChipInput
             ref={inputRef}
-            type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(v) => setQuery(v)}
             onKeyDown={(e) => {
               if (e.key === "Enter") { e.preventDefault(); void runSearch(1); }
               if (e.key === "Escape") { e.preventDefault(); inputRef.current?.blur(); onClose(); }
             }}
-            aria-label={t("Search messages")}
+            ariaLabel={t("Search messages")}
             placeholder={t("Search")}
-            className="h-9 w-full rounded-lg border border-transparent bg-bg-tertiary pl-8 pr-2 text-[14px] text-text-normal outline-none placeholder:text-text-muted focus:border-brand"
+            className="h-9 w-full rounded-lg border border-transparent bg-bg-tertiary pl-8 pr-2 focus-within:border-brand"
           />
         </div>
       </div>
 
       {chips.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 px-3 pt-3">
+        <div className="hidden">
           {chips.map(([k, v]) => (
             <span key={k} className={`inline-flex h-7 items-center gap-1 rounded-md pl-2 pr-1 text-[12.5px] ${k === "in" && unknownChannel ? "bg-status-dnd/15 text-status-dnd" : "bg-bg-tertiary text-text-normal"}`}>
               <b className="font-semibold">{k}:</b>
