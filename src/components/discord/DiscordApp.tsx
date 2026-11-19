@@ -37,6 +37,7 @@ import { GuildTagSpaceModal } from "./GuildTagSpaceModal";
 import { ChannelList } from "./ChannelList";
 import { HomePanel } from "./HomePanel";
 import { DiscoverPanel, DiscoverSidebar, type DiscoverTab } from "./DiscoverPanel";
+import { BotMarketplace } from "./BotMarketplace";
 import { UserPanel } from "./UserPanel";
 import dynamic from "next/dynamic";
 import { ActiveNowPanel, FriendsPanel } from "./FriendsPanel";
@@ -2593,7 +2594,7 @@ export function DiscordApp() {
         </>
       )}
 
-      {app.viewMode === "discover" && <DiscoverPanel tab={discoverTab} onTabChange={setDiscoverTab} query={discoverQuery} onQueryChange={setDiscoverQuery} />}
+      {app.viewMode === "discover" && (discoverTab === "bots" ? <BotMarketplace onBackToSpaces={setDiscoverTab} /> : <DiscoverPanel tab={discoverTab} onTabChange={setDiscoverTab} query={discoverQuery} onQueryChange={setDiscoverQuery} />)}
 
       {catalystPage && (
         <CatalystModal

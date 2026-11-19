@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CommunityBackdrop } from "@/components/ui/CommunityBackdrop";
 import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { IconCheck, IconClose, IconSearch, IconCompass, IconSparkle } from "@/components/icons";
+import { IconBot, IconCheck, IconClose, IconSearch, IconCompass, IconSparkle } from "@/components/icons";
 import { ServerBadge, SERVER_BADGE_LABEL, serverBadgeFor } from "@/components/ui/ServerBadge";
 import { serverInitials } from "@/lib/utils";
 import { safeImageUrl, thumbImageUrl } from "@/lib/safe-url";
@@ -30,7 +30,7 @@ export interface DiscoverableServer {
   promoted_until?: string | null;
 }
 
-export type DiscoverTab = "popular" | "new";
+export type DiscoverTab = "popular" | "new" | "bots";
 
 function useDiscoverableServers() {
   const [items, setItems] = useState<DiscoverableServer[]>([]);
@@ -73,6 +73,7 @@ interface DiscoverSidebarProps {
 const SORTS: { id: DiscoverTab; label: string; icon: React.ReactNode; hint: string }[] = [
   { id: "popular", label: "Home", icon: <IconCompass size={22} />, hint: "Most members" },
   { id: "new", label: "New Spaces", icon: <IconSparkle size={22} />, hint: "Recently created" },
+  { id: "bots", label: "Bots", icon: <IconBot size={22} />, hint: "Bot marketplace" },
 ];
 
 export function DiscoverSidebar({ tab, onTabChange }: DiscoverSidebarProps) {
