@@ -103,7 +103,7 @@ function SpacePicker({ spaces, value, onChange }: { spaces: Space[] | null; valu
           {spaces === null ? (
             <div className="flex justify-center px-3 py-4"><LoadingDots size={7} className="text-text-muted" /></div>
           ) : spaces.length === 0 ? (
-            <p className="px-3 py-3 text-[13px] text-text-muted">You aren&apos;t in any spaces yet.</p>
+            <p className="px-3 py-3 text-[13px] text-text-muted">You don&apos;t manage any spaces yet. You need to own a space, or have Manage Space in it, to add a bot.</p>
           ) : spaces.map((s) => (
             <button
               key={s.id}
@@ -171,27 +171,12 @@ export function BotAuthorizeFlow({
       if (!live) return;
       setUserId(uid);
       if (!uid) return;
-      // Two plain lookups (memberships, then those spaces) rather than one
-      // embedded select, which came back empty.
-      const { data: rows } = await supabase
-        .from("server_members")
-        .select("server_id, role")
-        .eq("user_id", uid)
-        .limit(500);
-      const roles = new Map(((rows ?? []) as { server_id: string; role: string }[]).map((r) => [r.server_id, r.role]));
-      if (!live || roles.size === 0) {
-        if (live) setSpaces([]);
-        return;
-      }
-      const { data: servers } = await supabase
-        .from("servers")
-        .select("id, name, icon_url, owner_id")
-        .in("id", [...roles.keys()]);
+      // Only spaces you can add a bot to: ones you own or have Manage Space
+      // in (my_bot_install_spaces, migration 0282). Adding one anywhere else
+      // is refused anyway.
+      const { data: rows } = await supabase.rpc("my_bot_install_spaces");
       if (!live) return;
-      const canAdd = (s: Space) => s.owner_id === uid || roles.get(s.id) === "admin";
-      const list = ((servers ?? []) as Space[])
-        // Owners and admins first: they're the ones who can add bots.
-        .sort((a, b) => Number(canAdd(b)) - Number(canAdd(a)) || a.name.localeCompare(b.name));
+      const list = ((rows ?? []) as Space[]);
       setSpaces(list);
     })();
     return () => { live = false; };

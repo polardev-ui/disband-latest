@@ -31,8 +31,8 @@ export async function POST(
     });
 
     if (error) {
-      if (/Only the server owner|channel manager/.test(error.message)) {
-        return NextResponse.json({ error: "You need Manage Channels permission on that space to approve this bot." }, { status: 403 });
+      if (/Only the server owner|channel manager|Manage Space/.test(error.message)) {
+        return NextResponse.json({ error: "You need Manage Space on that space to add a bot to it." }, { status: 403 });
       }
       if (/not found|already been used|expired|revoked|A server must be chosen/.test(error.message)) {
         return NextResponse.json({ error: error.message }, { status: 400 });
