@@ -6,6 +6,7 @@ import { THEMES } from "@/lib/theme/themes";
 import { PUBLIC_ENV } from "@/lib/public-env";
 import { I18nProvider } from "@/contexts/I18nContext";
 import { DialogHost } from "@/components/ui/DialogHost";
+import { PopupMorph } from "@/components/ui/PopupMorph";
 
 // Geist (Vercel), served from our own origin with no runtime font CDN hit
 // (privacy-first). The variable woff2 lives in ./fonts rather than coming
@@ -176,6 +177,7 @@ export default function RootLayout({
           {/* Inside the provider: dialogs translate, and outside it any
               alert (a failed DM open, say) crashed the whole app. */}
           <DialogHost />
+          <PopupMorph />
         </I18nProvider>
       </body>
     </html>

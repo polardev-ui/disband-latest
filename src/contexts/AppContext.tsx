@@ -232,7 +232,7 @@ interface AppContextValue {
   blockedUserIds: Set<string>;
   isBlocked: (userId: string) => boolean;
   isBlockedEitherWay: (userId: string) => boolean;
-  createServer: (data: { name: string; iconUrl?: string; bannerUrl?: string; description?: string }) => Promise<string | null>;
+  createServer: (data: { name: string; iconUrl?: string; bannerUrl?: string; description?: string; template?: import("@/lib/discord-template").DisbandTemplate }) => Promise<string | null>;
   updateServer: (serverId: string, patch: Partial<Server>) => Promise<string | null>;
   deleteServer: (serverId: string) => Promise<string | null>;
   leaveServer: (serverId: string) => Promise<string | null>;
@@ -5576,16 +5576,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [userId, loadFriendships]);
 
-  const createServer = useCallback(async (data: { name: string; iconUrl?: string; bannerUrl?: string; description?: string }) => {
+  const createServer = useCallback(async (data: { name: string; iconUrl?: string; bannerUrl?: string; description?: string; template?: import("@/lib/discord-template").DisbandTemplate }) => {
     if (!userId) return "Not signed in";
     if (hasRestriction("join_servers")) return "Your account is restricted from creating or joining spaces.";
     await ensureProfile(userId, user?.email);
-    const { data: id, error } = await getSupabaseClient().rpc("create_server", {
-      p_name: data.name,
-      p_icon_url: data.iconUrl ?? null,
-      p_banner_url: data.bannerUrl ?? null,
-      p_description: data.description ?? null,
-    });
+    // A Discord template brings its own roles, categories and channels.
+    const { data: id, error } = data.template
+      ? await getSupabaseClient().rpc("create_server_from_template", {
+          p_name: data.name,
+          p_template: data.template,
+          p_icon_url: data.iconUrl ?? null,
+          p_banner_url: data.bannerUrl ?? null,
+          p_description: data.description ?? null,
+        })
+      : await getSupabaseClient().rpc("create_server", {
+          p_name: data.name,
+          p_icon_url: data.iconUrl ?? null,
+          p_banner_url: data.bannerUrl ?? null,
+          p_description: data.description ?? null,
+        });
     if (error) return error.message;
     await loadServers(userId);
     await selectServer(id as string);
