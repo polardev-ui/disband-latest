@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { apiFetch } from "@/lib/api";
 import { isTauri, websiteHref } from "@/lib/platform";
 import { safeWindowOpen, thumbImageUrl } from "@/lib/safe-url";
-import { IconBot, IconChevronLeft, IconSearch, IconShield, IconStar } from "@/components/icons";
+import { IconBot, IconChevronLeft, IconClose, IconSearch, IconShield, IconStar } from "@/components/icons";
+import { MarketplaceStaffQueue } from "./MarketplaceStaffQueue";
 import { LoadingDots } from "@/components/ui/LoadingDots";
 
 /*
@@ -467,24 +467,111 @@ function BotPage({ botId, onBack }: { botId: string; onBack: () => void }) {
   );
 }
 
-// --- Modals --------------------------------------------------------------------------
+// --- Windows ----------------------------------------------------------------------------
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+/** Lets anything inside a window close it with the exit animation. */
+const CloseContext = createContext<() => void>(() => {});
+const useClose = () => useContext(CloseContext);
+
+/**
+ * The marketplace's windows: fade and pop in, fade and shrink out (the
+ * app's modal-pop / overlay-fade pair), with an icon header, a close button
+ * and a footer that stays put while the body scrolls.
+ */
+function Modal({
+  title,
+  subtitle,
+  icon,
+  onClose,
+  children,
+  footer,
+  wide,
+}: {
+  title: string;
+  subtitle?: string;
+  icon: React.ReactNode;
+  onClose: () => void;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  wide?: boolean;
+}) {
+  const [closing, setClosing] = useState(false);
+  const close = useCallback(() => {
+    setClosing((was) => {
+      if (!was) window.setTimeout(onClose, 180);
+      return true;
+    });
+  }, [onClose]);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [close]);
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
-      <button type="button" aria-label="Close" className="absolute inset-0 bg-black/80" onClick={onClose} />
-      <div className="relative max-h-[90vh] w-full max-w-[520px] overflow-y-auto rounded-2xl border border-border-subtle bg-bg-secondary p-6 shadow-2xl">
-        <h2 className="mb-4 text-[20px] font-bold text-header-primary">{title}</h2>
-        {children}
+    <CloseContext.Provider value={close}>
+      <div className={`fixed inset-0 z-[90] flex items-center justify-center p-3 sm:p-6 ${closing ? "overlay-fade-out" : "overlay-fade"}`}>
+        <button type="button" aria-label="Close" className="absolute inset-0 cursor-default bg-black/75 backdrop-blur-[2px]" onClick={close} />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          className={`relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-bg-secondary shadow-[0_24px_80px_rgb(0_0_0/0.55)] ${wide ? "max-w-[980px]" : "max-w-[560px]"} ${closing ? "modal-pop-out" : "modal-pop"}`}
+        >
+          {/* A soft wash of the accent colour behind the header. */}
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-brand/20 to-transparent" />
+          <header className="relative flex items-start gap-3.5 px-6 pb-4 pt-6">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand text-white shadow-[0_6px_20px_rgb(0_0_0/0.3)]">{icon}</span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-[20px] font-bold leading-6 text-header-primary">{title}</h2>
+              {subtitle && <p className="mt-1 text-[13.5px] leading-[18px] text-text-muted">{subtitle}</p>}
+            </div>
+            <button type="button" onClick={close} aria-label="Close" className="-mr-1 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-interactive-hover hover:text-header-primary">
+              <IconClose size={18} />
+            </button>
+          </header>
+          <div className="relative min-h-0 flex-1 overflow-y-auto px-6 pb-6">{children}</div>
+          {footer && <footer className="relative flex items-center justify-end gap-2 border-t border-white/[0.06] bg-bg-secondary-alt/60 px-6 py-3.5">{footer}</footer>}
+        </div>
       </div>
-    </div>
+    </CloseContext.Provider>
   );
 }
+
+function CloseButton({ children }: { children: React.ReactNode }) {
+  const close = useClose();
+  return (
+    <button type="button" onClick={close} className="h-10 rounded-lg px-4 text-[14px] font-medium text-text-normal transition-colors hover:bg-interactive-hover">
+      {children}
+    </button>
+  );
+}
+
+/** A labelled block of form fields. */
+function FieldGroup({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <section className="mt-4 rounded-xl border border-white/[0.05] bg-bg-tertiary/50 p-4">
+      <p className="text-[13px] font-bold text-header-primary">{title}</p>
+      {hint && <p className="mt-0.5 text-[12.5px] text-text-muted">{hint}</p>}
+      <div className="mt-3 space-y-3">{children}</div>
+    </section>
+  );
+}
+
+function Field({ label, required, counter, children }: { label: string; required?: boolean; counter?: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 flex items-center gap-1 text-[12px] font-semibold uppercase tracking-[0.04em] text-header-secondary">
+        {label}
+        {required && <span className="text-status-dnd">*</span>}
+        {counter && <span className="ml-auto font-normal normal-case tracking-normal text-text-muted">{counter}</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+const inputCls =
+  "w-full rounded-lg border border-white/[0.07] bg-bg-primary/70 px-3 text-[14px] text-text-normal outline-none transition-[border-color,box-shadow] placeholder:text-text-muted/80 focus:border-brand focus:shadow-[0_0_0_3px_rgb(var(--brand-rgb,88_101_242)/0.18)]";
 
 interface MyListing {
   bot_id: string; status: string; review_note: string | null; submitted_at: string; invite_code: string | null;
@@ -550,77 +637,87 @@ function SubmitBotModal({ onClose }: { onClose: () => void }) {
   }
 
   const label: Record<string, string> = { pending: "Waiting for review", approved: "Listed", rejected: "Not approved" };
-  const field = "h-10 w-full rounded-lg border border-border-subtle bg-bg-tertiary px-3 text-[14px] text-text-normal outline-none focus:border-brand";
-  const cap = "mb-1 mt-3 block text-[12px] font-bold uppercase tracking-wide text-header-secondary";
 
   return (
-    <Modal title={t("Submit your bot")} onClose={onClose}>
-      <p className="mb-2 text-[14px] text-text-muted">
-        {t("Tether reviews every submission once a day: the name, tagline, description, avatar, commands and any website you link, in any language. If something isn't allowed you'll see why here, and you can fix it and resubmit.")}
-      </p>
-
-      <label className={cap}>{t("Bot invite link")} *</label>
-      <input value={form.link} onChange={set("link")} placeholder="https://disband.dev/bot-invite/…" className={field} />
-
-      <label className={cap}>{t("Name on the marketplace")}</label>
-      <input value={form.name} onChange={set("name")} maxLength={32} placeholder={t("Leave empty to use the bot's name")} className={field} />
-
-      <label className={cap}>{t("Tagline")} *</label>
-      <input value={form.tagline} onChange={set("tagline")} maxLength={120} placeholder={t("One line: what does it do?")} className={field} />
-
-      <label className={cap}>{t("Category")} *</label>
-      <select value={form.category} onChange={set("category")} className={field}>
-        <option value="">{t("Pick one")}</option>
-        {CATEGORIES.map(([id, l]) => <option key={id} value={id}>{t(l)}</option>)}
-      </select>
-
-      <label className={cap}>{t("Tags")}</label>
-      <input value={form.tags} onChange={set("tags")} placeholder={t("Up to 6, separated by commas")} className={field} />
-
-      <label className={cap}>{t("Description")}</label>
-      <textarea value={form.description} onChange={set("description")} rows={4} maxLength={2000} placeholder={t("Features, how to get started… (optional)")} className={`${field} h-auto resize-none py-2`} />
-      <p className="text-right text-[12px] text-text-muted">{form.description.length} / 2000</p>
-
-      <label className={cap}>{t("Support space")}</label>
-      <input value={form.support_url} onChange={set("support_url")} placeholder="https://disband.dev/…" className={field} />
-      <label className={cap}>{t("Website")}</label>
-      <input value={form.website_url} onChange={set("website_url")} placeholder="https://…" className={field} />
-      <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
-        <div>
-          <label className={cap}>{t("Privacy policy")}</label>
-          <input value={form.privacy_url} onChange={set("privacy_url")} placeholder="https://…" className={field} />
+    <Modal
+      title={t("Submit your bot")}
+      subtitle={t("Tether checks the name, tagline, description, avatar, commands and any website you link, in any language, once a day. If something isn't allowed you'll see why below, and you can fix it and resubmit.")}
+      icon={<IconBot size={22} />}
+      onClose={onClose}
+      footer={
+        <>
+          {message && <p className={`mr-auto text-[13px] ${message.ok ? "text-status-online" : "text-status-dnd"}`}>{message.text}</p>}
+          <CloseButton>{t("Close")}</CloseButton>
+          <button type="button" disabled={busy} onClick={() => void submit()} className="h-10 rounded-lg bg-brand px-5 text-[14px] font-semibold text-white shadow-[0_4px_14px_rgb(0_0_0/0.25)] transition-[transform,opacity] hover:-translate-y-px disabled:translate-y-0 disabled:opacity-50">
+            {busy ? t("Submitting…") : t("Submit for review")}
+          </button>
+        </>
+      }
+    >
+      <FieldGroup title={t("The bot")} hint={t("Use the public invite link from your bot's settings: one that works for any space.")}>
+        <Field label={t("Invite link")} required>
+          <input value={form.link} onChange={set("link")} placeholder="https://disband.dev/bot-invite/…" className={`${inputCls} h-10`} />
+        </Field>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label={t("Name on the marketplace")} counter={`${form.name.length}/32`}>
+            <input value={form.name} onChange={set("name")} maxLength={32} placeholder={t("The bot's own name")} className={`${inputCls} h-10`} />
+          </Field>
+          <Field label={t("Category")} required>
+            <select value={form.category} onChange={set("category")} className={`${inputCls} h-10`}>
+              <option value="">{t("Pick one")}</option>
+              {CATEGORIES.map(([id, l]) => <option key={id} value={id}>{t(l)}</option>)}
+            </select>
+          </Field>
         </div>
-        <div>
-          <label className={cap}>{t("Terms of service")}</label>
-          <input value={form.terms_url} onChange={set("terms_url")} placeholder="https://…" className={field} />
-        </div>
-      </div>
+      </FieldGroup>
 
-      {message && <p className={`mt-4 text-[13px] ${message.ok ? "text-status-online" : "text-status-dnd"}`}>{message.text}</p>}
-      <div className="mt-4 flex justify-end gap-2">
-        <button type="button" onClick={onClose} className="h-9 rounded-lg px-4 text-[14px] font-medium text-text-normal hover:bg-interactive-hover">{t("Close")}</button>
-        <button type="button" disabled={busy} onClick={() => void submit()} className="h-9 rounded-lg bg-brand px-4 text-[14px] font-semibold text-white disabled:opacity-50">{t("Submit for review")}</button>
-      </div>
+      <FieldGroup title={t("How it's described")}>
+        <Field label={t("Tagline")} required counter={`${form.tagline.length}/120`}>
+          <input value={form.tagline} onChange={set("tagline")} maxLength={120} placeholder={t("One line: what does it do?")} className={`${inputCls} h-10`} />
+        </Field>
+        <Field label={t("Description")} counter={`${form.description.length}/2000`}>
+          <textarea value={form.description} onChange={set("description")} rows={5} maxLength={2000} placeholder={t("Features, how to get started, anything people should know.")} className={`${inputCls} resize-none py-2.5 leading-5`} />
+        </Field>
+        <Field label={t("Tags")}>
+          <input value={form.tags} onChange={set("tags")} placeholder={t("Up to 6, separated by commas: music, games…")} className={`${inputCls} h-10`} />
+        </Field>
+      </FieldGroup>
+
+      <FieldGroup title={t("Links")} hint={t("Optional. Every link must open for everyone; Tether checks the website too.")}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label={t("Support space")}>
+            <input value={form.support_url} onChange={set("support_url")} placeholder="https://disband.dev/…" className={`${inputCls} h-10`} />
+          </Field>
+          <Field label={t("Website")}>
+            <input value={form.website_url} onChange={set("website_url")} placeholder="https://…" className={`${inputCls} h-10`} />
+          </Field>
+          <Field label={t("Privacy policy")}>
+            <input value={form.privacy_url} onChange={set("privacy_url")} placeholder="https://…" className={`${inputCls} h-10`} />
+          </Field>
+          <Field label={t("Terms of service")}>
+            <input value={form.terms_url} onChange={set("terms_url")} placeholder="https://…" className={`${inputCls} h-10`} />
+          </Field>
+        </div>
+      </FieldGroup>
 
       {mine.length > 0 && (
-        <div className="mt-6 border-t border-border-subtle pt-4">
-          <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-header-secondary">{t("Your bots")}</p>
+        <FieldGroup title={t("Your bots")}>
           <ul className="space-y-2">
             {mine.map((l) => (
-              <li key={l.bot_id} className="rounded-lg bg-bg-tertiary px-3 py-2 text-[13px]">
+              <li key={l.bot_id} className="rounded-lg border border-white/[0.05] bg-bg-primary/50 px-3 py-2.5 text-[13px]">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-header-primary">{l.display_name ?? l.bots?.name ?? "Bot"}</span>
                   {l.official && <OfficialBadge />}
-                  <span className={`rounded px-1.5 py-px text-[11px] font-bold ${l.status === "approved" ? "bg-status-online/20 text-status-online" : l.status === "rejected" ? "bg-status-dnd/20 text-status-dnd" : "bg-bg-secondary text-text-muted"}`}>{t(label[l.status] ?? l.status)}</span>
+                  <span className={`rounded-full px-2 py-px text-[11px] font-bold ${l.status === "approved" ? "bg-status-online/15 text-status-online" : l.status === "rejected" ? "bg-status-dnd/15 text-status-dnd" : "bg-amber-400/15 text-amber-300"}`}>{t(label[l.status] ?? l.status)}</span>
                   <span className="flex-1" />
-                  <button type="button" onClick={() => edit(l)} className="text-[12px] text-text-link hover:underline">{l.status === "rejected" ? t("Fix and resubmit") : t("Edit")}</button>
+                  <button type="button" onClick={() => edit(l)} className="text-[12px] font-medium text-text-link hover:underline">{l.status === "rejected" ? t("Fix and resubmit") : t("Edit")}</button>
                   {!l.official && <button type="button" onClick={() => void getSupabaseClient().rpc("withdraw_bot_listing", { p_bot_id: l.bot_id }).then(() => loadMine())} className="text-[12px] text-text-muted hover:text-status-dnd">{t("Remove")}</button>}
                 </div>
                 {l.review_note && <p className="mt-1 text-text-muted">{l.review_note}</p>}
               </li>
             ))}
           </ul>
-        </div>
+        </FieldGroup>
       )}
     </Modal>
   );
@@ -632,84 +729,62 @@ function ReportReviewModal({ review, onClose }: { review: Review; onClose: (sent
   const [details, setDetails] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  async function send() {
-    setBusy(true);
-    const { error: err } = await getSupabaseClient().rpc("report_bot_review", { p_review_id: review.id, p_reason: reason, p_details: details.trim() || null });
-    setBusy(false);
-    if (err) return setError(err.message);
-    onClose(true);
-  }
+  const [sent, setSent] = useState(false);
   return (
-    <Modal title={t("Report review")} onClose={() => onClose(false)}>
-      <p className="mb-3 text-[14px] text-text-muted">{t("Tether reviews reports once a day and passes anything unclear to staff. Honest negative reviews stay up.")}</p>
-      <div className="mb-3 space-y-1.5">
+    <Modal
+      title={t("Report review")}
+      subtitle={t("Tether reviews reports once a day and passes anything unclear to staff. Honest negative reviews stay up.")}
+      icon={<IconShield size={22} />}
+      onClose={() => onClose(sent)}
+      footer={<ReportFooter busy={busy} onSend={async (close) => {
+        setBusy(true);
+        const { error: err } = await getSupabaseClient().rpc("report_bot_review", { p_review_id: review.id, p_reason: reason, p_details: details.trim() || null });
+        setBusy(false);
+        if (err) return setError(err.message);
+        setSent(true);
+        close();
+      }} />}
+    >
+      <div className="rounded-xl border border-white/[0.05] bg-bg-tertiary/50 p-3 text-[13px]">
+        <div className="flex items-center gap-2"><span className="font-semibold text-header-primary">{review.name ?? "Someone"}</span><Stars value={review.rating} size={12} /></div>
+        {review.body && <p className="mt-1 line-clamp-3 text-text-normal">{review.body}</p>}
+      </div>
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
         {([["fake", "It's fake"], ["not_real", "Not a real user of the bot"], ["spam", "Spam or advertising"], ["abusive", "Abusive"], ["other", "Something else"]] as const).map(([id, label]) => (
-          <label key={id} className="flex cursor-pointer items-center gap-2 text-[14px] text-text-normal">
-            <input type="radio" name="reason" checked={reason === id} onChange={() => setReason(id)} /> {t(label)}
-          </label>
+          <button
+            key={id}
+            type="button"
+            aria-pressed={reason === id}
+            onClick={() => setReason(id)}
+            className={`flex h-11 items-center gap-2.5 rounded-lg border px-3 text-left text-[14px] transition-colors ${reason === id ? "border-brand bg-brand/10 text-header-primary" : "border-white/[0.06] bg-bg-tertiary/40 text-text-normal hover:bg-interactive-hover"}`}
+          >
+            <span className={`h-4 w-4 shrink-0 rounded-full border-2 ${reason === id ? "border-brand bg-brand shadow-[inset_0_0_0_2px_var(--bg-secondary)]" : "border-text-muted/60"}`} />
+            {t(label)}
+          </button>
         ))}
       </div>
-      <textarea value={details} onChange={(e) => setDetails(e.target.value.slice(0, 500))} rows={3} placeholder={t("Anything that helps (optional)")} className="mb-3 w-full resize-none rounded-lg border border-border-subtle bg-bg-tertiary px-3 py-2 text-[14px] text-text-normal outline-none focus:border-brand" />
-      {error && <p className="mb-3 text-[13px] text-status-dnd">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <button type="button" onClick={() => onClose(false)} className="h-9 rounded-lg px-4 text-[14px] font-medium text-text-normal hover:bg-interactive-hover">{t("Cancel")}</button>
-        <button type="button" disabled={busy} onClick={() => void send()} className="h-9 rounded-lg bg-status-dnd px-4 text-[14px] font-semibold text-white disabled:opacity-50">{t("Send report")}</button>
-      </div>
+      <textarea value={details} onChange={(e) => setDetails(e.target.value.slice(0, 500))} rows={3} placeholder={t("Anything that helps (optional)")} className={`${inputCls} mt-3 resize-none py-2.5`} />
+      {error && <p className="mt-2 text-[13px] text-status-dnd">{error}</p>}
     </Modal>
   );
 }
 
-interface QueueListing { bot_id: string; display_name: string | null; tagline: string | null; category: string | null; website_url: string | null; description: string | null; submitted_at: string; bots: { name: string; avatar_url: string | null } }
-interface QueueReport { id: string; reason: string; details: string | null; status: string; decision_note: string | null; bot_reviews: { rating: number; body: string | null; bots: { name: string } } }
+function ReportFooter({ busy, onSend }: { busy: boolean; onSend: (close: () => void) => void }) {
+  const { t } = useI18n();
+  const close = useClose();
+  return (
+    <>
+      <CloseButton>{t("Cancel")}</CloseButton>
+      <button type="button" disabled={busy} onClick={() => onSend(close)} className="h-10 rounded-lg bg-status-dnd px-5 text-[14px] font-semibold text-white disabled:opacity-50">{t("Send report")}</button>
+    </>
+  );
+}
 
 function StaffQueueModal({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
-  const [queue, setQueue] = useState<{ listings: QueueListing[]; reports: QueueReport[] } | null>(null);
-  const load = useCallback(async () => {
-    const res = await apiFetch("/api/admin/marketplace");
-    setQueue(res.ok ? await res.json() : { listings: [], reports: [] });
-  }, []);
-  useEffect(() => { void load(); }, [load]);
-  async function decide(kind: "listing" | "report", id: string, decision: string) {
-    await apiFetch("/api/admin/marketplace", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, id, decision }) });
-    void load();
-  }
-  const btn = "h-8 rounded-md px-3 text-[13px] font-semibold";
   return (
-    <Modal title={t("Marketplace staff queue")} onClose={onClose}>
-      {!queue ? <LoadingDots /> : (
-        <div className="space-y-5">
-          <section>
-            <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-header-secondary">{t("Bots waiting")} ({queue.listings.length})</p>
-            {queue.listings.length === 0 ? <p className="text-[13px] text-text-muted">{t("Nothing waiting.")}</p> : queue.listings.map((l) => (
-              <div key={l.bot_id} className="mb-2 rounded-lg bg-bg-tertiary p-3">
-                <p className="font-semibold text-header-primary">{l.display_name ?? l.bots.name}{l.category ? <span className="font-normal text-text-muted"> · {l.category}</span> : null}</p>
-                {l.tagline && <p className="mt-0.5 text-[13px] text-text-normal">{l.tagline}</p>}
-                {l.description && <p className="mt-1 text-[13px] text-text-muted">{l.description}</p>}
-                {l.website_url && <button type="button" onClick={() => safeWindowOpen(l.website_url!)} className="mt-1 text-[12px] text-text-link hover:underline">{l.website_url}</button>}
-                <div className="mt-2 flex gap-2">
-                  <button type="button" onClick={() => void decide("listing", l.bot_id, "approve")} className={`${btn} bg-status-online text-white`}>{t("Approve")}</button>
-                  <button type="button" onClick={() => void decide("listing", l.bot_id, "reject")} className={`${btn} bg-status-dnd text-white`}>{t("Reject")}</button>
-                </div>
-              </div>
-            ))}
-          </section>
-          <section>
-            <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-header-secondary">{t("Reported reviews")} ({queue.reports.length})</p>
-            {queue.reports.length === 0 ? <p className="text-[13px] text-text-muted">{t("Nothing reported.")}</p> : queue.reports.map((r) => (
-              <div key={r.id} className="mb-2 rounded-lg bg-bg-tertiary p-3 text-[13px]">
-                <p className="text-text-muted">{r.bot_reviews.bots.name} · {r.reason}{r.status === "needs_staff" ? ` · ${t("Tether passed this on")}` : ""}</p>
-                <p className="mt-1 text-text-normal">{"★".repeat(r.bot_reviews.rating)} {r.bot_reviews.body ?? ""}</p>
-                {r.details && <p className="mt-1 text-text-muted">“{r.details}”</p>}
-                <div className="mt-2 flex gap-2">
-                  <button type="button" onClick={() => void decide("report", r.id, "uphold")} className={`${btn} bg-status-dnd text-white`}>{t("Hide review")}</button>
-                  <button type="button" onClick={() => void decide("report", r.id, "dismiss")} className={`${btn} bg-bg-secondary text-text-normal`}>{t("Keep review")}</button>
-                </div>
-              </div>
-            ))}
-          </section>
-        </div>
-      )}
+    <Modal title={t("Marketplace staff queue")} subtitle={t("Bots waiting for review and reported reviews, with Tether's verdicts.")} icon={<IconShield size={22} />} onClose={onClose} wide>
+      <MarketplaceStaffQueue />
     </Modal>
   );
 }

@@ -93,15 +93,32 @@ async function reviewListing(service: Service, botId: string): Promise<"approved
   const description = (listing?.description as string | null) ?? (bot.description as string | null) ?? "";
 
   const decide = async (status: "approved" | "rejected", note: string) => {
+    const now = new Date().toISOString();
     await service.from("bot_listings").update({
       status,
       review_note: note,
       reviewed_by: "tether",
-      reviewed_at: new Date().toISOString(),
-      ...(status === "approved" ? { approved_at: new Date().toISOString() } : {}),
-      updated_at: new Date().toISOString(),
+      reviewed_at: now,
+      tether_decision: status === "approved" ? "approve" : "reject",
+      tether_reason: note,
+      tether_reviewed_at: now,
+      needs_human: false,
+      priority_requested_at: null,
+      ...(status === "approved" ? { approved_at: now } : {}),
+      updated_at: now,
     }).eq("bot_id", botId).eq("status", "pending");
     return status;
+  };
+  /** Tether couldn't decide: it stays waiting, flagged for a person, with why. */
+  const handOff = async (reason: string) => {
+    await service.from("bot_listings").update({
+      tether_decision: "unsure",
+      tether_reason: reason,
+      tether_reviewed_at: new Date().toISOString(),
+      needs_human: true,
+      priority_requested_at: null,
+    }).eq("bot_id", botId).eq("status", "pending");
+    return "skipped" as const;
   };
 
   // The quick filter: a blocked word in the name, or in any description word.
@@ -161,7 +178,8 @@ async function reviewListing(service: Service, botId: string): Promise<"approved
       }
     }
   }
-  if (!verdict || verdict.decision === "unsure") return "skipped";
+  if (!verdict) return handOff("Tether couldn't be reached or gave no clear answer. A person needs to check this one.");
+  if (verdict.decision === "unsure") return handOff(verdict.reason || "Tether wasn't sure. A person needs to check this one.");
   return decide(verdict.decision === "approve" ? "approved" : "rejected", verdict.reason || (verdict.decision === "approve" ? "Looks good." : "This bot doesn't meet the marketplace rules."));
 }
 
@@ -183,16 +201,20 @@ async function reviewReport(service: Service, report: { id: string; review_id: s
     verdict = null;
   }
   const now = new Date().toISOString();
+  const verdictFields = (d: "uphold" | "dismiss" | "unsure", reason: string) => ({
+    tether_decision: d, tether_reason: reason, tether_reviewed_at: now, priority_requested_at: null,
+  });
   if (!verdict || verdict.decision === "unsure") {
-    await service.from("bot_review_reports").update({ status: "needs_staff", decision_note: verdict?.reason ?? "Tether couldn't decide." }).eq("id", report.id);
+    const why = verdict?.reason || "Tether couldn't decide. A person needs to check this one.";
+    await service.from("bot_review_reports").update({ status: "needs_staff", decision_note: why, ...verdictFields("unsure", why) }).eq("id", report.id);
     return "needs_staff";
   }
   if (verdict.decision === "approve") {
     await service.from("bot_reviews").update({ hidden_at: now }).eq("id", review.id);
-    await service.from("bot_review_reports").update({ status: "upheld", decided_by: "tether", decision_note: verdict.reason, decided_at: now }).eq("id", report.id);
+    await service.from("bot_review_reports").update({ status: "upheld", decided_by: "tether", decision_note: verdict.reason, decided_at: now, ...verdictFields("uphold", verdict.reason) }).eq("id", report.id);
     return "upheld";
   }
-  await service.from("bot_review_reports").update({ status: "dismissed", decided_by: "tether", decision_note: verdict.reason, decided_at: now }).eq("id", report.id);
+  await service.from("bot_review_reports").update({ status: "dismissed", decided_by: "tether", decision_note: verdict.reason, decided_at: now, ...verdictFields("dismiss", verdict.reason) }).eq("id", report.id);
   return "dismissed";
 }
 
@@ -203,11 +225,43 @@ export async function runMarketplaceReview(): Promise<Record<string, number>> {
   const tally: Record<string, number> = {};
   const bump = (k: string) => (tally[k] = (tally[k] ?? 0) + 1);
 
-  const { data: pending } = await service.from("bot_listings").select("bot_id").eq("status", "pending").order("submitted_at").limit(100);
+  // Anything staff asked Tether to look at first, then oldest first.
+  const { data: pending } = await service
+    .from("bot_listings")
+    .select("bot_id")
+    .eq("status", "pending")
+    .order("priority_requested_at", { ascending: false, nullsFirst: false })
+    .order("submitted_at")
+    .limit(100);
   for (const row of pending ?? []) bump(`listing_${await reviewListing(service, row.bot_id as string)}`);
 
-  const { data: reports } = await service.from("bot_review_reports").select("id, review_id, reason, details").eq("status", "open").order("created_at").limit(200);
+  const { data: reports } = await service
+    .from("bot_review_reports")
+    .select("id, review_id, reason, details")
+    .eq("status", "open")
+    .order("priority_requested_at", { ascending: false, nullsFirst: false })
+    .order("created_at")
+    .limit(200);
   for (const r of (reports ?? []) as { id: string; review_id: string; reason: string; details: string | null }[]) bump(`report_${await reviewReport(service, r)}`);
 
   return tally;
+}
+
+/**
+ * "Review now" from the staff queue: move one item to the front of Tether's
+ * list and have Tether review it immediately. If Tether can't be reached it
+ * stays first in line for the next daily run.
+ */
+export async function reviewNow(kind: "listing" | "report", id: string): Promise<string> {
+  const service = getServiceSupabase();
+  if (!service) throw new Error("Service client unavailable.");
+  const now = new Date().toISOString();
+  if (kind === "listing") {
+    await service.from("bot_listings").update({ priority_requested_at: now }).eq("bot_id", id).eq("status", "pending");
+    return reviewListing(service, id);
+  }
+  await service.from("bot_review_reports").update({ priority_requested_at: now, status: "open" }).eq("id", id).in("status", ["open", "needs_staff"]);
+  const { data } = await service.from("bot_review_reports").select("id, review_id, reason, details").eq("id", id).maybeSingle();
+  if (!data) return "missing";
+  return reviewReport(service, data as { id: string; review_id: string; reason: string; details: string | null });
 }

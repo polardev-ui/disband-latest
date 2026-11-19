@@ -8,6 +8,7 @@ import { apiFetch } from "@/lib/api";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { isSupportStaffFromProfile } from "@/lib/support/staff";
 import { AccountViewerModal } from "@/components/modals/AccountViewerModal";
+import { MarketplaceStaffQueue } from "@/components/discord/MarketplaceStaffQueue";
 import { ClassicModal } from "@/components/ui/ClassicModal";
 import { confirmDialog } from "@/lib/dialogs";
 import { stripSupportMarkers } from "@/lib/support/markers";
@@ -84,6 +85,9 @@ function threadLabel(role: string) {
 export default function TeamSupportPage() {
   const router = useRouter();
   const [phase, setPhase] = useState<"checking" | "denied" | "ready">("checking");
+  // Bots and reported reviews waiting in the marketplace queue, for the badge.
+  const [marketplaceCount, setMarketplaceCount] = useState(0);
+
   const [tickets, setTickets] = useState<TeamTicket[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [ticket, setTicket] = useState<TeamTicket | null>(null);
@@ -98,6 +102,13 @@ export default function TeamSupportPage() {
   const [filter, setFilter] = useState<Filter>("awaiting");
   const [ticketQuery, setTicketQuery] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("tickets");
+  useEffect(() => {
+    if (phase !== "ready") return;
+    void apiFetch("/api/admin/marketplace")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((q: { listings?: unknown[]; reports?: unknown[] } | null) => setMarketplaceCount((q?.listings?.length ?? 0) + (q?.reports?.length ?? 0)))
+      .catch(() => {});
+  }, [phase, activeTab]);
   const [bugCounts, setBugCounts] = useState<Record<string, number>>({});
   const [bugsVersion, setBugsVersion] = useState(0);
   const messagesRef = useRef<HTMLDivElement | null>(null);
@@ -604,6 +615,7 @@ export default function TeamSupportPage() {
     { id: "appeals", label: "Appeals", icon: <IconMessage size={20} />, count: pendingAppeals, urgent: pendingAppeals > 0, blurb: "Requests to lift a platform ban" },
     { id: "bans", label: "Platform bans", icon: <IconShield size={20} />, count: bans.length, urgent: false, blurb: "Accounts banned from Disband" },
     { id: "servers", label: "Spaces", icon: <IconGroup size={20} />, count: 0, urgent: false, blurb: "Look up a space, its members and audit log" },
+    { id: "marketplace", label: "Marketplace", icon: <IconBot size={20} />, count: marketplaceCount, urgent: marketplaceCount > 0, blurb: "Bots waiting for review and reported reviews, with Tether's verdicts" },
   ];
   const current = nav.find((n) => n.id === activeTab)!;
   const refresh = () => {
@@ -1066,6 +1078,14 @@ export default function TeamSupportPage() {
               </Page>
             )}
 
+            {activeTab === "marketplace" && (
+              <div className="h-full overflow-y-auto">
+                <div className="mx-auto w-full max-w-[920px] p-4 sm:p-6">
+                  <MarketplaceStaffQueue />
+                </div>
+              </div>
+            )}
+
             {activeTab === "users" && (
               <Page>
                 <form
@@ -1382,7 +1402,7 @@ export default function TeamSupportPage() {
 
 /* ------------------------------------------------------------------------- */
 
-type TabId = "tickets" | "users" | "bans" | "appeals" | "flags" | "bugs" | "servers";
+type TabId = "tickets" | "users" | "bans" | "appeals" | "flags" | "bugs" | "servers" | "marketplace";
 type Tone = "neutral" | "brand" | "warn" | "good" | "danger" | "purple";
 
 const btnBase =
