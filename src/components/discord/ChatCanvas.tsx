@@ -1096,7 +1096,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
   }
 
   return (
-    <main className="chat-wallpaper-host view-enter relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
+    <main className="chat-wallpaper-host relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
       <header className="relative z-30 flex h-14 shrink-0 items-center gap-2 border-b border-column-border px-4">
         {headerLeading}
         <span className="flex shrink-0 items-center text-channels-default [&_svg]:h-[22px] [&_svg]:w-[22px]">
