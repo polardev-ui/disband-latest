@@ -2390,7 +2390,7 @@ export function DiscordApp() {
           </MessageQuickActionsContext.Provider>
           </div>
           {searchOpen && (
-            <div className="fixed inset-y-0 right-0 z-40 flex min-h-0 w-full max-w-[360px] flex-col overflow-hidden bg-bg-secondary shadow-[var(--elevation-high)] lg:static lg:z-auto lg:w-[360px] lg:max-w-none lg:shrink-0 lg:shadow-none">
+            <div className="fixed inset-y-0 right-0 z-40 flex min-h-0 w-full max-w-[420px] flex-col overflow-hidden bg-bg-secondary shadow-[var(--elevation-high)] lg:static lg:z-auto lg:w-[420px] lg:max-w-none lg:shrink-0 lg:shadow-none">
               <SearchPanel
                 scopeKind="dm"
                 serverId={null}
@@ -2533,7 +2533,7 @@ export function DiscordApp() {
             )}
           </div>
           {searchOpen ? (
-            <div className="fixed inset-y-0 right-0 z-40 flex min-h-0 w-full max-w-[360px] flex-col overflow-hidden bg-bg-secondary shadow-[var(--elevation-high)] lg:static lg:z-auto lg:w-[360px] lg:max-w-none lg:shrink-0 lg:shadow-none">
+            <div className="fixed inset-y-0 right-0 z-40 flex min-h-0 w-full max-w-[420px] flex-col overflow-hidden bg-bg-secondary shadow-[var(--elevation-high)] lg:static lg:z-auto lg:w-[420px] lg:max-w-none lg:shrink-0 lg:shadow-none">
               <SearchPanel
                 scopeKind="group"
                 serverId={null}
@@ -2801,7 +2801,7 @@ export function DiscordApp() {
       )}
 
       {app.viewMode === "space" && searchOpen && (
-        <div className="fixed inset-y-0 right-0 z-40 flex min-h-0 w-full max-w-[360px] flex-col overflow-hidden bg-bg-secondary shadow-[var(--elevation-high)] lg:static lg:z-auto lg:w-[360px] lg:max-w-none lg:shrink-0 lg:shadow-none">
+        <div className="fixed inset-y-0 right-0 z-40 flex min-h-0 w-full max-w-[420px] flex-col overflow-hidden bg-bg-secondary shadow-[var(--elevation-high)] lg:static lg:z-auto lg:w-[420px] lg:max-w-none lg:shrink-0 lg:shadow-none">
           <SearchPanel
             scopeKind="server"
             serverId={app.activeServerId}
