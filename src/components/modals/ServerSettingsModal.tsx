@@ -23,7 +23,11 @@ import {
   IconHand,
   IconTrash,
   IconStar,
+  IconBot,
+  IconCompass,
+  IconExternalLink,
 } from "@/components/icons";
+import { blockedByUnsavedChanges } from "@/lib/unsaved-changes";
 import { safeImageUrl } from "@/lib/safe-url";
 import { serverInitials } from "@/lib/utils";
 import { RoleManager } from "@/components/modals/RoleManager";
@@ -43,6 +47,8 @@ import { SoundboardSection } from "./server-settings/SoundboardSection";
 import { GuildTagSection } from "./server-settings/GuildTagSection";
 import { WelcomeSection } from "./server-settings/WelcomeSection";
 import { DangerSection } from "./server-settings/DangerSection";
+import { InsightsSection } from "./server-settings/InsightsSection";
+import { AppsSection } from "./server-settings/AppsSection";
 import { useI18n } from "@/contexts/I18nContext";
 
 interface ServerSettingsModalProps {
@@ -51,6 +57,8 @@ interface ServerSettingsModalProps {
   onEditChannel?: (channel: { id: string; name: string; type: string }) => void;
   /** Opens the Catalyst sheet for this space. */
   onOpenCatalysts?: () => void;
+  /** Opens Discover › Bots (the Bot Marketplace). */
+  onOpenBotMarketplace?: () => void;
 }
 
 type Section =
@@ -69,9 +77,11 @@ type Section =
   | "emoji"
   | "soundboard"
   | "audit"
+  | "insights"
+  | "apps"
   | "danger";
 
-type Group = "Space" | "People" | "Content" | "Moderation";
+type Group = "Space" | "People" | "Content" | "Apps" | "Moderation";
 
 interface NavItem {
   id: Section;
@@ -98,6 +108,8 @@ const NAV: NavItem[] = [
   { id: "channels", label: "Channels", group: "Content", icon: IconHash, permission: "manage_channels", description: "Create, rename and remove text and voice channels." },
   { id: "emoji", label: "Emoji", group: "Content", icon: IconEmoji, ownerOnly: true, description: "Custom emoji everyone here can use in chat." },
   { id: "soundboard", label: "Soundboard", group: "Content", icon: IconSpeaker, ownerOnly: true, description: "Short sounds members can play in voice channels and calls." },
+  { id: "insights", label: "Server insights", group: "Space", icon: IconCompass, permission: "manage_server", description: "How your space is doing: members, joins, messages and the busiest channels." },
+  { id: "apps", label: "Apps", group: "Apps", icon: IconBot, permission: "manage_server", description: "Bots in this space, and the Bot Marketplace for finding more." },
   { id: "audit", label: "Audit log", group: "Moderation", icon: IconNotes, permission: "view_audit_log", description: "Who kicked, banned, timed out or deleted what, most recent first." },
 ];
 
@@ -110,16 +122,26 @@ const DANGER: NavItem = {
   description: "Permanent actions that can't be undone.",
 };
 
-const GROUPS: Group[] = ["Space", "People", "Content", "Moderation"];
+const GROUPS: Group[] = ["Space", "People", "Content", "Apps", "Moderation"];
 
-export function ServerSettingsModal({ open, onClose, onEditChannel, onOpenCatalysts }: ServerSettingsModalProps) {
+export function ServerSettingsModal({ open, onClose: close, onEditChannel, onOpenCatalysts, onOpenBotMarketplace }: ServerSettingsModalProps) {
   const { t } = useI18n();
   const { activeServer, user, serverPermissions, catalystCounts } = useApp();
-  const [section, setSection] = useState<Section>("overview");
+  const [section, setSectionRaw] = useState<Section>("overview");
+  // With edits waiting for Save Changes, leaving the panel or closing is
+  // refused and the unsaved-changes bar shakes instead (as Discord does).
+  const setSection = (next: Section) => {
+    if (next === section || blockedByUnsavedChanges()) return;
+    setSectionRaw(next);
+  };
+  const onClose = () => {
+    if (blockedByUnsavedChanges()) return;
+    close();
+  };
 
   // Each opening starts at the top; switching spaces does too.
   useEffect(() => {
-    if (open) setSection("overview");
+    if (open) setSectionRaw("overview");
   }, [open, activeServer?.id]);
 
   useOverlayDismiss(onClose, open);
@@ -150,7 +172,15 @@ export function ServerSettingsModal({ open, onClose, onEditChannel, onOpenCataly
       }
     : undefined;
 
-  const shared = { server: activeServer, isOwner, catalystCount, onBoost: boost };
+  const openMarketplace = onOpenBotMarketplace
+    ? () => {
+        if (blockedByUnsavedChanges()) return;
+        close();
+        onOpenBotMarketplace();
+      }
+    : undefined;
+
+  const shared = { server: activeServer, isOwner, catalystCount, onBoost: boost, onOpenBotMarketplace: openMarketplace };
 
   return (
     <SettingsLayer
@@ -201,6 +231,11 @@ export function ServerSettingsModal({ open, onClose, onEditChannel, onOpenCataly
                     {t(n.label)}
                   </SettingsNavItem>
                 ))}
+                {group === "Apps" && openMarketplace && (
+                  <SettingsNavItem onClick={openMarketplace} trailing={<IconExternalLink size={16} />}>
+                    {t("Bot Marketplace")}
+                  </SettingsNavItem>
+                )}
               </div>
             );
           })}
@@ -232,6 +267,8 @@ export function ServerSettingsModal({ open, onClose, onEditChannel, onOpenCataly
       {current.id === "emoji" && <EmojiSection {...shared} />}
       {current.id === "soundboard" && <SoundboardSection {...shared} />}
       {current.id === "audit" && <AuditLogPanel serverId={activeServer.id} />}
+      {current.id === "insights" && <InsightsSection {...shared} />}
+      {current.id === "apps" && <AppsSection {...shared} />}
       {current.id === "danger" && <DangerSection {...shared} onDeleted={onClose} />}
     </SettingsLayer>
   );

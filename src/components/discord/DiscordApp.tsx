@@ -3129,6 +3129,11 @@ export function DiscordApp() {
         open={serverSettingsOpen}
         onClose={() => setServerSettingsOpen(false)}
         onOpenCatalysts={app.activeServer ? () => setCatalystServerId(app.activeServer!.id) : undefined}
+        onOpenBotMarketplace={() => {
+          setFavoritesView(false);
+          setDiscoverTab("bots");
+          app.setViewDiscover();
+        }}
         onEditChannel={(ch) => {
           setServerSettingsOpen(false);
           setChannelSettingsChannel(app.channels.find((c) => c.id === ch.id) ?? null);

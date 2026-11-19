@@ -7,4 +7,6 @@ export interface SectionProps {
   catalystCount: number;
   /** Opens the Catalyst sheet, when the host can. */
   onBoost?: () => void;
+  /** Closes settings and opens Discover › Bots. */
+  onOpenBotMarketplace?: () => void;
 }

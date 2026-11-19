@@ -28,6 +28,7 @@ import {
   iconBtnDanger,
 } from "@/components/modals/server-settings/ui";
 import { useI18n } from "@/contexts/I18nContext";
+import { UnsavedChangesBar } from "@/components/modals/server-settings/UnsavedChangesBar";
 
 export const PERM_GROUPS: { title: string; perms: { key: ServerPermissionKey; label: string; hint: string }[] }[] = [
   {
@@ -71,6 +72,11 @@ const ICON_TYPES = "image/png,image/webp,image/gif,image/jpeg";
 
 type Tab = "display" | "permissions";
 
+/** Edits held until Save Changes, per role. */
+type RolePatch = Partial<Pick<ServerRole, "name" | "color" | "gradient_to" | "gradient_animated" | "self_assignable" | "icon" | "permissions">>;
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
 export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
   const { t } = useI18n();
   const { serverRoles, members, createRole, updateRole, deleteRole, moveRole, catalystCounts, activeServer, loadAllMembers } = useApp();
@@ -81,12 +87,58 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ServerRole | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, RolePatch>>({});
+  const [saving, setSaving] = useState(false);
   const knownIds = useRef<Set<string>>(new Set(serverRoles.map((r) => r.id)));
   const awaitingNew = useRef(false);
 
   const catalystCount = activeServer ? (catalystCounts[activeServer.id] ?? 0) : 0;
   const level = catalystLevel(catalystCount).level;
-  const sorted = [...serverRoles].sort((a, b) => b.position - a.position);
+  // Roles as they'd be with the unsaved edits applied.
+  const withDraft = (r: ServerRole): ServerRole => (drafts[r.id] ? { ...r, ...drafts[r.id] } : r);
+  const sorted = [...serverRoles].sort((a, b) => b.position - a.position).map(withDraft);
+  const dirty = Object.keys(drafts).length > 0;
+
+  // Edits go into the draft instead of straight to the database; a change
+  // set back to what's saved drops out of it again.
+  const draft: Update = async (roleId, patch) => {
+    setDrafts((prev) => {
+      const base = serverRoles.find((r) => r.id === roleId);
+      if (!base) return prev;
+      const merged: Record<string, unknown> = { ...prev[roleId], ...patch };
+      for (const k of Object.keys(merged)) {
+        if (same(merged[k], (base as unknown as Record<string, unknown>)[k])) delete merged[k];
+      }
+      const next = { ...prev };
+      if (Object.keys(merged).length) next[roleId] = merged as RolePatch;
+      else delete next[roleId];
+      return next;
+    });
+    return null;
+  };
+
+  async function saveAll() {
+    setSaving(true);
+    setError(null);
+    const failed: Record<string, RolePatch> = {};
+    let firstError: string | null = null;
+    for (const [roleId, patch] of Object.entries(drafts)) {
+      const clean: RolePatch = { ...patch };
+      if (clean.name !== undefined) {
+        clean.name = clean.name.trim().slice(0, 32);
+        if (!clean.name) delete clean.name;
+      }
+      if (Object.keys(clean).length === 0) continue;
+      const err = await updateRole(roleId, clean);
+      if (err) {
+        failed[roleId] = patch;
+        firstError ??= err;
+      }
+    }
+    setDrafts(failed);
+    if (firstError) setError(firstError);
+    setSaving(false);
+  }
   const selected: ServerRole | undefined =
     sorted.find((r) => r.id === selectedId) ?? sorted.find((r) => !r.is_default) ?? sorted[0];
 
@@ -226,14 +278,16 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
                 />
               </div>
               {tab === "display" ? (
-                <DisplayTab role={selected} level={level} catalystCount={catalystCount} onBoost={onBoost} run={run} update={updateRole} />
+                <DisplayTab role={selected} level={level} catalystCount={catalystCount} onBoost={onBoost} run={run} update={draft} />
               ) : (
-                <PermissionsTab role={selected} run={run} update={updateRole} />
+                <PermissionsTab role={selected} run={run} update={draft} />
               )}
             </div>
           )}
         </div>
       </div>
+
+      <UnsavedChangesBar dirty={dirty} saving={saving} onReset={() => { setDrafts({}); setError(null); }} onSave={() => void saveAll()} />
 
       <ConfirmDialog
         open={!!deleting}
@@ -244,7 +298,10 @@ export function RoleManager({ onBoost }: { onBoost?: () => void } = {}) {
         onConfirm={async () => {
           if (!deleting) return;
           const err = await run(() => deleteRole(deleting.id));
-          if (!err) setSelectedId(null);
+          if (!err) {
+            setSelectedId(null);
+            setDrafts(({ [deleting.id]: _gone, ...rest }) => rest);
+          }
           setDeleting(null);
         }}
       />
@@ -361,9 +418,9 @@ function DisplayTab({
   useEffect(() => setColor(role.color), [role.color]);
   useEffect(() => setGradient(role.gradient_to ?? role.color), [role.gradient_to, role.color]);
 
-  useDebouncedCommit(color, role.color, (v) => void run(() => update(role.id, { color: v })));
+  useDebouncedCommit(color, role.color, (v) => void run(() => update(role.id, { color: v })), 60);
   // With no gradient set, "committed" equals the draft, so nothing is written.
-  useDebouncedCommit(gradient, role.gradient_to ?? gradient, (v) => void run(() => update(role.id, { gradient_to: v })));
+  useDebouncedCommit(gradient, role.gradient_to ?? gradient, (v) => void run(() => update(role.id, { gradient_to: v })), 60);
 
   const saveName = () => {
     const next = name.trim().slice(0, 32);
@@ -404,7 +461,11 @@ function DisplayTab({
           <div className="px-5 py-4">
             <input
               value={name}
-              onChange={(e) => setName(e.target.value.slice(0, 32))}
+              onChange={(e) => {
+                const next = e.target.value.slice(0, 32);
+                setName(next);
+                if (next.trim()) void update(role.id, { name: next });
+              }}
               onBlur={saveName}
               onKeyDown={(e) => {
                 if (e.key === "Enter") (e.target as HTMLInputElement).blur();

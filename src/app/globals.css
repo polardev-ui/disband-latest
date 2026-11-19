@@ -2229,3 +2229,56 @@ html[data-chat-wallpaper] .chat-wallpaper-host {
   -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
   mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
 }
+
+/* Settings: "Careful — you have unsaved changes!" bar (UnsavedChangesBar).
+   Fades in and slides up; shakes and flashes red when you try to leave. */
+@keyframes unsaved-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes unsaved-bar-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+@keyframes unsaved-bar-shake {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-10px); }
+  30% { transform: translateX(9px); }
+  45% { transform: translateX(-7px); }
+  60% { transform: translateX(5px); }
+  75% { transform: translateX(-3px); }
+  90% { transform: translateX(2px); }
+}
+.unsaved-bar-in {
+  animation: unsaved-bar-in 0.24s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+.unsaved-bar-out {
+  animation: unsaved-bar-out 0.18s cubic-bezier(0.4, 0, 1, 1) both;
+}
+.unsaved-bar-shake {
+  animation: unsaved-bar-shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+[data-motion="reduced"] .unsaved-bar-in,
+[data-motion="reduced"] .unsaved-bar-out,
+[data-motion="reduced"] .unsaved-bar-shake {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .unsaved-bar-in,
+  .unsaved-bar-out,
+  .unsaved-bar-shake {
+    animation: none;
+  }
+}
