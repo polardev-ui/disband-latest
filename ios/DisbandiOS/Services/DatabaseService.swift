@@ -683,6 +683,22 @@ enum DatabaseService {
         try await client.rpc("leave_group_chat", params: ["p_group_id": groupId]).execute()
     }
 
+    private struct GroupIconParams: Encodable {
+        let p_group_id: String
+        let p_icon_url: String?
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(p_group_id, forKey: .p_group_id)
+            try c.encode(p_icon_url, forKey: .p_icon_url)  // null clears it
+        }
+        enum CodingKeys: String, CodingKey { case p_group_id, p_icon_url }
+    }
+
+    /// Set or clear (nil) a group chat's picture.
+    static func setGroupIcon(groupId: String, iconUrl: String?) async throws {
+        try await client.rpc("set_group_chat_icon", params: GroupIconParams(p_group_id: groupId, p_icon_url: iconUrl)).execute()
+    }
+
     // MARK: - Guild tags
 
     /// Read the tags worn by a batch of profiles. Missing rows mean "no tag";

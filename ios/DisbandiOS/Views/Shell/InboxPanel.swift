@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 /// Direct messages and group chats, interleaved by recency.
@@ -11,6 +12,11 @@ struct InboxPanel: View {
     @Environment(ShellChrome.self) private var chrome
 
     @State private var pins = PinnedConversationStore.shared
+    /// The group whose picture is being changed, while the photo picker is up.
+    @State private var iconTarget: GroupChat?
+    @State private var showIconPicker = false
+    @State private var iconItem: PhotosPickerItem?
+    @State private var iconError: String?
     @State private var filter: Filter = .all
     /// Typed into the search box: narrows the list to matching names.
     @State private var query = ""
@@ -61,6 +67,19 @@ struct InboxPanel: View {
         .refreshable { await vm.start(currentUserId: app.currentUserId, unread: unreadStore, closed: closedDms) }
         .task { await vm.start(currentUserId: app.currentUserId, unread: unreadStore, closed: closedDms) }
         .task(id: app.currentUserId) { await pins.load(currentUserId: app.currentUserId) }
+        .photosPicker(isPresented: $showIconPicker, selection: $iconItem, matching: .images)
+        .onChange(of: iconItem) { _, item in
+            guard let item, let group = iconTarget else { return }
+            iconItem = nil
+            Task {
+                guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+                let jpeg = UIImage(data: data).flatMap { Self.squareIcon($0) } ?? data
+                iconError = await vm.setGroupIcon(group.id, imageData: jpeg)
+            }
+        }
+        .alert("Group picture", isPresented: Binding(get: { iconError != nil }, set: { if !$0 { iconError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(iconError ?? "") }
     }
 
     private var header: some View {
@@ -319,6 +338,19 @@ struct InboxPanel: View {
             .buttonStyle(ChannelRowStyle(highlighted: voice.isIn(group.id)))
             .contextMenu {
                 pinButton(.group, group.id)
+                Button {
+                    iconTarget = group
+                    showIconPicker = true
+                } label: {
+                    Label(group.iconUrl == nil ? "Add Icon" : "Change Icon", systemImage: "photo")
+                }
+                if group.iconUrl != nil {
+                    Button {
+                        Task { iconError = await vm.setGroupIcon(group.id, imageData: nil) }
+                    } label: {
+                        Label("Remove Icon", systemImage: "photo.badge.minus")
+                    }
+                }
                 Button(role: .destructive) {
                     Task { await vm.leaveGroup(group.id) }
                 } label: {
@@ -336,5 +368,20 @@ struct InboxPanel: View {
         } label: {
             Label(pinned ? "Unpin" : "Pin to Top", systemImage: pinned ? "pin.slash" : "pin")
         }
+    }
+
+    /// A centred square crop, 512px, as JPEG: group pictures are shown small
+    /// and round, so there's no point uploading a full photo.
+    static func squareIcon(_ image: UIImage) -> Data? {
+        let side = min(image.size.width, image.size.height)
+        guard side > 0 else { return nil }
+        let out: CGFloat = 512
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: out, height: out))
+        let scaled = renderer.image { _ in
+            let scale = out / side
+            let w = image.size.width * scale, h = image.size.height * scale
+            image.draw(in: CGRect(x: (out - w) / 2, y: (out - h) / 2, width: w, height: h))
+        }
+        return scaled.jpegData(compressionQuality: 0.85)
     }
 }

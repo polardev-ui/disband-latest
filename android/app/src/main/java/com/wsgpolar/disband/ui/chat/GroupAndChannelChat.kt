@@ -1,5 +1,6 @@
 package com.wsgpolar.disband.ui.chat
 
+import androidx.compose.material.icons.filled.MoreVert
 import android.content.Intent
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -58,6 +59,24 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
     val typing = remember(group.id) { TypingState("group", group.id, scope) }
     val attach = remember(group.id) { AttachmentSender("group", group.id) }
 
+    // The group's picture: change or remove it from the header's menu.
+    var groupIcon by remember(group.id) { mutableStateOf(group.iconUrl) }
+    var optionsOpen by remember(group.id) { mutableStateOf(false) }
+    val pickIcon = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            runCatching {
+                val bytes = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("unreadable")
+                val mime = ctx.contentResolver.getType(uri) ?: "image/jpeg"
+                val url = com.wsgpolar.disband.data.MediaService.uploadImage(bytes, filename = "group-icon", mimeType = mime).url
+                Database.setGroupIcon(group.id, url)
+                groupIcon = url
+            }.onFailure { sendError = "The group picture couldn't be changed. Try again." }
+        }
+    }
+
     LaunchedEffect(rows.map { it.id }) { reactions.load(rows.map { it.id }, uid) }
 
     fun openAttachment(url: String) {
@@ -86,8 +105,43 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
     ChatScaffold(
         title = group.name,
         subtitle = if (group.members.isNullOrEmpty()) "Group chat" else "${group.members!!.size} members",
-        avatarUrl = group.iconUrl,
+        avatarUrl = groupIcon,
         avatarName = group.name,
+        callAction = {
+            androidx.compose.foundation.layout.Box {
+                androidx.compose.material3.IconButton(onClick = { optionsOpen = true }) {
+                    androidx.compose.material3.Icon(
+                        androidx.compose.material.icons.Icons.Filled.MoreVert,
+                        contentDescription = "Group options",
+                    )
+                }
+                androidx.compose.material3.DropdownMenu(expanded = optionsOpen, onDismissRequest = { optionsOpen = false }) {
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { androidx.compose.material3.Text(if (groupIcon == null) "Add icon" else "Change icon") },
+                        onClick = {
+                            optionsOpen = false
+                            pickIcon.launch(
+                                androidx.activity.result.PickVisualMediaRequest(
+                                    androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                ),
+                            )
+                        },
+                    )
+                    if (groupIcon != null) {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { androidx.compose.material3.Text("Remove icon") },
+                            onClick = {
+                                optionsOpen = false
+                                scope.launch {
+                                    runCatching { Database.setGroupIcon(group.id, null); groupIcon = null }
+                                        .onFailure { sendError = "The group picture couldn't be removed. Try again." }
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+        },
         ownUserId = uid,
         rows = reactions.applyTo(rows),
         loading = timeline.loading,

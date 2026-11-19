@@ -213,6 +213,7 @@ export function PreviewApp() {
     leaveGroupChat: asyncNull,
     inviteToGroup: asyncNull,
     renameGroupChat: asyncNull,
+    setGroupChatIcon: asyncNull,
     deleteGroupMessage: asyncVoid,
     groupCallCounts: new Map(),
     openDmWithFriend: async (friendId) => {

@@ -469,6 +469,14 @@ object Database {
             .decodeSingleOrNull<InsertedId>()?.id
     }
 
+    /** Set (or clear, with null) a group chat's picture. */
+    suspend fun setGroupIcon(groupId: String, iconUrl: String?) {
+        postgrest.rpc("set_group_chat_icon", buildJsonObject {
+            put("p_group_id", groupId)
+            put("p_icon_url", iconUrl)
+        })
+    }
+
     suspend fun leaveGroup(groupId: String) {
         postgrest.rpc("leave_group_chat", buildJsonObject { put("p_group_id", groupId) })
     }

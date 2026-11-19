@@ -78,6 +78,7 @@ import {
   IconSettings,
   IconShield,
   IconTrash,
+  IconImage,
   IconFriends,
   IconGroup,
   IconPhone,
@@ -1445,6 +1446,36 @@ export function DiscordApp() {
                 },
               },
             ]
+          : []),
+        {
+          id: "icon",
+          label: group.icon_url ? t("Change icon") : t("Add icon"),
+          icon: <IconImage size={16} />,
+          onClick: () => {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = "image/png,image/jpeg,image/gif,image/webp";
+            input.onchange = () => {
+              const file = input.files?.[0];
+              if (!file) return;
+              void app.setGroupChatIcon(group.id, file).then((err) => {
+                if (err) void alertDialog(err, t("Group icon"));
+              });
+            };
+            input.click();
+          },
+        },
+        ...(group.icon_url
+          ? [{
+              id: "icon-remove",
+              label: t("Remove icon"),
+              icon: <IconTrash size={16} />,
+              onClick: () => {
+                void app.setGroupChatIcon(group.id, null).then((err) => {
+                  if (err) void alertDialog(err, t("Group icon"));
+                });
+              },
+            }]
           : []),
         {
           id: "leave",

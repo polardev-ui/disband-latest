@@ -98,6 +98,22 @@ final class DirectMessagesViewModel {
         }
     }
 
+    /// Upload a picture (or clear it with nil) for a group chat. Returns an
+    /// error message to show, or nil.
+    func setGroupIcon(_ groupId: String, imageData: Data?) async -> String? {
+        do {
+            var url: String?
+            if let imageData {
+                url = try await MediaService.uploadImage(imageData, filename: "group-icon.jpg").url
+            }
+            try await DatabaseService.setGroupIcon(groupId: groupId, iconUrl: url)
+            if let i = groups.firstIndex(where: { $0.id == groupId }) { groups[i].iconUrl = url }
+            return nil
+        } catch {
+            return "The group picture couldn't be changed. Try again."
+        }
+    }
+
     func leaveGroup(_ groupId: String) async {
         do {
             try await DatabaseService.leaveGroup(groupId: groupId)

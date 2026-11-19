@@ -210,6 +210,8 @@ interface AppContextValue {
   leaveGroupChat: (groupId: string) => Promise<string | null>;
   inviteToGroup: (groupId: string, memberIds: string[]) => Promise<string | null>;
   renameGroupChat: (groupId: string, name: string) => Promise<string | null>;
+  /** Set (a picked image) or clear (null) a group chat's picture. */
+  setGroupChatIcon: (groupId: string, file: File | null) => Promise<string | null>;
   deleteGroupMessage: (messageId: string) => Promise<void>;
   groupCallCounts: Map<string, number>;
   /** Opens (or starts) a DM. Returns an error message, or null on success. */
@@ -5320,6 +5322,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [userId, loadGroupChats]);
 
+  const setGroupChatIcon = useCallback(async (groupId: string, file: File | null) => {
+    if (!userId) return "Not signed in";
+    let url: string | null = null;
+    if (file) {
+      if (!file.type.startsWith("image/")) return "Pick an image.";
+      if (file.size > 8 * 1024 * 1024) return "Pick an image under 8 MB.";
+      try {
+        const { uploadMedia } = await import("@/lib/media/uploadMedia");
+        url = (await uploadMedia(file)).url;
+      } catch (err) {
+        return err instanceof Error ? err.message : "The picture couldn't be uploaded.";
+      }
+    }
+    // Show it straight away; the reload below confirms it.
+    setGroupChats((prev) => prev.map((g) => (g.id === groupId ? { ...g, icon_url: url } : g)));
+    const { error } = await getSupabaseClient().rpc("set_group_chat_icon", { p_group_id: groupId, p_icon_url: url });
+    await loadGroupChats(userId);
+    return error ? error.message : null;
+  }, [userId, loadGroupChats]);
+
   const deleteGroupMessage = useCallback(async (messageId: string) => {
     setGroupMessages((prev) => prev.filter((m) => m.id !== messageId));
     const { error } = await getSupabaseClient().from("group_messages").delete().eq("id", messageId);
@@ -7389,6 +7411,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     leaveGroupChat,
     inviteToGroup,
     renameGroupChat,
+    setGroupChatIcon,
     deleteGroupMessage,
     groupCallCounts,
     openDmWithFriend,
