@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { safeImageUrl } from "@/lib/safe-url";
 import { ACTIVITY_VERB, elapsed, type Activity } from "@/lib/activity";
+import { apiFetch } from "@/lib/api";
 
 const CONTROLLER = "M7 7h10a5 5 0 0 1 4.6 7l-1.5 3.5a2.6 2.6 0 0 1-4.3.7L13.6 16h-3.2l-2.2 2.2a2.6 2.6 0 0 1-4.3-.7L2.4 14A5 5 0 0 1 7 7Zm1 3v1.5H6.5V13H8v1.5h1.5V13H11v-1.5H9.5V10H8Zm7.5.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm2 2a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z";
 
@@ -20,7 +21,10 @@ function lookupArt(name: string, appId: string | null | undefined): Promise<stri
   if (!hit) {
     const qs = new URLSearchParams({ name });
     if (appId && /^\d{15,22}$/.test(appId)) qs.set("app", appId);
-    hit = fetch(`/api/game-art?${qs}`)
+    // apiFetch, not a relative fetch: the desktop app has no /api of its own,
+    // so the lookup never reached the server there and every game showed the
+    // placeholder controller.
+    hit = apiFetch(`/api/game-art?${qs}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j: { url?: string | null } | null) => j?.url ?? null)
       .catch(() => null);

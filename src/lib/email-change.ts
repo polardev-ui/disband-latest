@@ -1,6 +1,7 @@
 "use client";
 
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { apiFetch } from "@/lib/api";
 
 /**
  * Kick off an email change from settings. The server mails a confirmation
@@ -12,7 +13,8 @@ export async function requestEmailChange(newEmail: string): Promise<string | nul
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return "Not signed in.";
   try {
-    const res = await fetch("/api/account/email/change", {
+    // apiFetch so this reaches the server from the desktop app too.
+    const res = await apiFetch("/api/account/email/change", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
