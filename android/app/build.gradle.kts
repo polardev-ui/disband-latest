@@ -33,8 +33,8 @@ android {
         applicationId = "com.wsgpolar.disband"
         minSdk = 26
         targetSdk = 36
-        versionCode = 26
-        versionName = "1.21.0"
+        versionCode = 27
+        versionName = "1.23.0"
 
         vectorDrawables { useSupportLibrary = true }
 

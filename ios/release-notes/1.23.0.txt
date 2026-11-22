@@ -1,0 +1,5 @@
+What's new in Disband 1.23
+
+• Stickers: send stickers from your spaces in any chat, and see the ones your friends send.
+• Custom emoji from every space you're in now work everywhere: in DMs, group chats and other spaces.
+• Bug fixes and performance improvements.
