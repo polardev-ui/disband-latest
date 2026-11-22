@@ -16,13 +16,26 @@ import { ContextMenuProvider } from "@/components/ui/ContextMenu";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { VoiceSessionProvider } from "@/contexts/VoiceSessionContext";
 import { DiscordApp } from "@/components/discord/DiscordApp";
-import type { MessageReaction } from "@/lib/messages";
+import { legacyAttachment, type MessageReaction, type MessageSendOptions } from "@/lib/messages";
 import type { Message, Profile, ServerPermissionKey, UserStatus, ViewMode } from "@/lib/supabase/types";
 import * as M from "./mock";
 
 const noop = () => {};
 const asyncVoid = async () => {};
 const asyncNull = async () => null;
+
+/** A sent GIF or sticker, laid out as the row the database would return. */
+function previewAttachment(options?: MessageSendOptions) {
+  const a = options?.attachment;
+  if (!a || a.type === "poll" || a.type === "activity") return {};
+  const legacy = legacyAttachment(a);
+  return {
+    attachment_url: legacy?.url ?? null,
+    attachment_type: legacy?.type ?? null,
+    attachment_name: legacy?.name ?? null,
+    attachments: [{ url: a.url, type: a.type, name: a.name ?? null }],
+  };
+}
 
 const ALL_PERMISSIONS: Record<ServerPermissionKey, boolean> = {
   administrator: true,
@@ -84,13 +97,14 @@ export function PreviewApp() {
 
   const presenceMap = useMemo(() => new Map<string, UserStatus>(M.PEOPLE.map((p) => [p.id, p.status])), []);
 
-  const send = useCallback(async (content: string) => {
+  const send = useCallback(async (content: string, options?: MessageSendOptions) => {
     const row: Message & { author: Profile } = {
       ...M.MESSAGES[0],
       id: crypto.randomUUID(),
       author_id: M.ME.id,
       author: profile,
       content,
+      ...previewAttachment(options),
       created_at: new Date().toISOString(),
       display_id: Date.now(),
       mentions: [],
@@ -99,10 +113,10 @@ export function PreviewApp() {
     return null;
   }, [profile]);
 
-  const sendDm = useCallback(async (content: string) => {
+  const sendDm = useCallback(async (content: string, options?: MessageSendOptions) => {
     setDmMessages((rows) => [
       ...rows,
-      { ...M.DM_MESSAGES[0], id: crypto.randomUUID(), author_id: M.ME.id, author: profile, content, created_at: new Date().toISOString(), display_id: Date.now() },
+      { ...M.DM_MESSAGES[0], id: crypto.randomUUID(), author_id: M.ME.id, author: profile, content, ...previewAttachment(options), created_at: new Date().toISOString(), display_id: Date.now() },
     ]);
     return null;
   }, [profile]);

@@ -8,6 +8,8 @@ import { searchEmojis } from "@/lib/emoji-shortcodes";
 import { twemojiUrl } from "@/components/ui/Twemoji";
 import { safeImageUrl } from "@/lib/safe-url";
 import { useI18n } from "@/contexts/I18nContext";
+import { useApp } from "@/contexts/AppContext";
+import { emojiChoices, useExpressions, type EmojiChoice } from "@/lib/expressions";
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
@@ -36,7 +38,24 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
   useOverlayDismiss(() => setOpen(false), open);
   const [search, setSearch] = useState("");
   const [panelPos, setPanelPos] = useState({ left: 0, bottom: 0, width: 320 });
-  const [customEmoji, setCustomEmoji] = useState<{ id: number; name: string; url: string }[]>([]);
+  const { servers } = useApp();
+  const spaceIds = useMemo(() => servers.map((sv) => sv.id), [servers]);
+  const exprVersion = useExpressions(spaceIds);
+  // Every space's emoji, this space's first; names made unique (`wave~1`).
+  const choices = useMemo(() => emojiChoices(spaceIds, serverId), [spaceIds, serverId, exprVersion]);
+  const spaceGroups = useMemo(() => {
+    const groups: { id: string; name: string; icon: string | null; items: EmojiChoice[] }[] = [];
+    for (const c of choices) {
+      let g = groups.find((x) => x.id === c.emoji.serverId);
+      if (!g) {
+        const sv = servers.find((x) => x.id === c.emoji.serverId);
+        g = { id: c.emoji.serverId, name: sv?.name ?? "Space", icon: sv?.icon_url ?? null, items: [] };
+        groups.push(g);
+      }
+      g.items.push(c);
+    }
+    return groups;
+  }, [choices, servers]);
   const rootRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
@@ -49,17 +68,6 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
     if (!open) setSearch("");
   }, [open]);
 
-  useEffect(() => {
-    if (!serverId) { setCustomEmoji([]); return; }
-    import("@/lib/supabase/client").then((mod) => {
-      mod.getSupabaseClient()
-        .from("custom_emoji")
-        .select("id, name, url")
-        .eq("server_id", serverId)
-        .order("name")
-        .then(({ data }) => setCustomEmoji(data ?? []));
-    });
-  }, [serverId]);
 
   const updatePanelPos = useCallback(() => {
     const btn = btnRef.current;
@@ -129,16 +137,16 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
             </div>
             <div className="flex min-h-0 flex-1">
               <nav aria-label={t("Emoji categories")} className="channel-scroll flex w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-border-subtle bg-bg-secondary py-2">
-                {customEmoji.length > 0 && <button type="button" aria-label={t("Space Emoji")} aria-pressed={!q && category === "Space Emoji"} onClick={() => {setSearch("");setCategory("Space Emoji");}} className="h-9 w-9 shrink-0 rounded-lg text-interactive-normal hover:bg-interactive-hover">#</button>}
+                {spaceGroups.map((g) => <button key={g.id} type="button" aria-label={g.name} title={g.name} aria-pressed={!q && category === `space:${g.id}`} onClick={() => {setSearch("");setCategory(`space:${g.id}`);}} className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg text-[11px] font-semibold text-header-primary ${!q && category === `space:${g.id}` ? "bg-interactive-selected" : "hover:bg-interactive-hover"}`}>{safeImageUrl(g.icon) ? <img src={safeImageUrl(g.icon) ?? ""} alt="" className="h-7 w-7 rounded-md object-cover" /> : g.name.slice(0, 2)}</button>)}
                 {EMOJI_CATEGORIES.map((cat) => <button key={cat.name} type="button" aria-label={cat.name} aria-pressed={!q && category === cat.name} onClick={() => {setSearch("");setCategory(cat.name);}} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${!q && category === cat.name ? "bg-interactive-selected" : "grayscale hover:bg-interactive-hover hover:grayscale-0"}`}><EmojiImg emoji={cat.emojis[0]} /></button>)}
               </nav>
               <div className="channel-scroll min-w-0 flex-1 overflow-y-auto p-2">
-                <h3 className="mb-2 px-1 text-[11px] font-bold uppercase tracking-[0.06em] text-text-muted">{q ? t("Search Results") : category}</h3>
+                <h3 className="mb-2 px-1 text-[11px] font-bold uppercase tracking-[0.06em] text-text-muted">{q ? t("Search Results") : spaceGroups.find((g) => category === `space:${g.id}`)?.name ?? category}</h3>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(32px,1fr))] gap-0.5">
-                  {(q ? customEmoji.filter(e => e.name.toLowerCase().includes(q)) : category === "Space Emoji" ? customEmoji : []).map(e => <button key={e.id} type="button" aria-label={`:${e.name}:`} onMouseEnter={() => setPreview({label:`:${e.name}:`,url:e.url})} onFocus={() => setPreview({label:`:${e.name}:`,url:e.url})} onClick={() => {onSelect(`:${e.name}:`);setOpen(false);}} className="flex h-9 items-center justify-center rounded-lg hover:bg-interactive-selected"><img src={safeImageUrl(e.url) ?? ""} alt={e.name} className="h-7 w-7 object-contain" /></button>)}
+                  {(q ? choices.filter((c) => c.label.toLowerCase().includes(q)) : spaceGroups.find((g) => category === `space:${g.id}`)?.items ?? []).map((c) => <button key={c.emoji.id} type="button" aria-label={`:${c.label}:`} title={`:${c.label}:`} onMouseEnter={() => setPreview({label:`:${c.label}:`,url:c.emoji.url})} onFocus={() => setPreview({label:`:${c.label}:`,url:c.emoji.url})} onClick={() => {onSelect(`:${c.label}:`);setOpen(false);}} className="flex h-9 items-center justify-center rounded-lg hover:bg-interactive-selected"><img src={safeImageUrl(c.emoji.url) ?? ""} alt={c.label} loading="lazy" className="h-7 w-7 object-contain" /></button>)}
                   {(q ? searched.map(m => ({emoji:m.emoji,label:`:${m.shortcode}:`})) : (EMOJI_CATEGORIES.find(c => c.name === category)?.emojis ?? []).map(emoji => ({emoji,label:emoji}))).map((item,i) => <button key={`${item.label}-${i}`} type="button" aria-label={item.label} onMouseEnter={() => setPreview(item)} onFocus={() => setPreview(item)} onClick={() => {onSelect(item.emoji);setOpen(false);}} className="flex h-9 items-center justify-center rounded-lg hover:bg-interactive-selected"><EmojiImg emoji={item.emoji} size="28px" /></button>)}
                 </div>
-                {q && searched.length === 0 && !customEmoji.some(e => e.name.toLowerCase().includes(q)) && <p className="py-8 text-center text-[14px] text-text-muted">{t("No emoji found.")}</p>}
+                {q && searched.length === 0 && !choices.some((c) => c.label.toLowerCase().includes(q)) && <p className="py-8 text-center text-[14px] text-text-muted">{t("No emoji found.")}</p>}
               </div>
             </div>
             <footer className="flex h-14 shrink-0 items-center gap-3 border-t border-border-subtle bg-bg-secondary-alt px-4 text-[14px] text-header-secondary">

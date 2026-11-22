@@ -52,6 +52,32 @@ export function SolidGifIcon({ size = 24, className = "" }: Props) {
   );
 }
 
+/**
+ * A sticker: a rounded square with its corner peeling up and a face knocked
+ * out, for the composer's sticker button.
+ */
+export function SolidStickerIcon({ size = 24, className = "" }: Props) {
+  const id = useId();
+  const flap = "M21.5 15.5H17.5A2 2 0 0 0 15.5 17.5V21.5Z";
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden className={className}>
+      <mask id={id}>
+        <rect width="24" height="24" fill="#fff" />
+        <circle cx="8.9" cy="9.4" r="1.5" fill="#000" />
+        <circle cx="14.6" cy="9.4" r="1.5" fill="#000" />
+        <path d="M8.3 13.1c1.8 2 4.8 2 6.7 0" fill="none" stroke="#000" strokeWidth="1.8" strokeLinecap="round" />
+        <path d={flap} fill="none" stroke="#000" strokeWidth="1.8" strokeLinejoin="round" />
+      </mask>
+      <path
+        d="M5.5 2.5h13a3 3 0 0 1 3 3v10l-6 6h-10a3 3 0 0 1-3-3v-13a3 3 0 0 1 3-3Z"
+        fill="currentColor"
+        mask={`url(#${id})`}
+      />
+      <path d={flap} fill="currentColor" />
+    </svg>
+  );
+}
+
 export function SolidFriendsIcon({ size = 24, className = "" }: Props) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden className={className} fill="currentColor">

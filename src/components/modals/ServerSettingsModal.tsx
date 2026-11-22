@@ -43,6 +43,13 @@ import { ChannelsSection } from "./server-settings/ChannelsSection";
 import { MembersSection } from "./server-settings/MembersSection";
 import { BansSection } from "./server-settings/BansSection";
 import { EmojiSection } from "./server-settings/EmojiSection";
+import { StickerSection } from "./server-settings/StickerSection";
+import { SolidStickerIcon } from "@/components/icons/SolidIcons";
+
+/** The sticker glyph at the nav's icon size. */
+function SettingsStickerIcon({ size = 18, className }: { size?: number; className?: string }) {
+  return <SolidStickerIcon size={size} className={className} />;
+}
 import { SoundboardSection } from "./server-settings/SoundboardSection";
 import { GuildTagSection } from "./server-settings/GuildTagSection";
 import { WelcomeSection } from "./server-settings/WelcomeSection";
@@ -75,6 +82,7 @@ type Section =
   | "bans"
   | "channels"
   | "emoji"
+  | "stickers"
   | "soundboard"
   | "audit"
   | "insights"
@@ -107,6 +115,7 @@ const NAV: NavItem[] = [
   { id: "bans", label: "Bans", group: "People", icon: IconLock, permission: "ban", description: "People who can't rejoin until you lift their ban." },
   { id: "channels", label: "Channels", group: "Content", icon: IconHash, permission: "manage_channels", description: "Create, rename and remove text and voice channels." },
   { id: "emoji", label: "Emoji", group: "Content", icon: IconEmoji, ownerOnly: true, description: "Custom emoji everyone here can use in chat." },
+  { id: "stickers", label: "Stickers", group: "Content", icon: SettingsStickerIcon, ownerOnly: true, description: "Images members can send as stickers, in any chat." },
   { id: "soundboard", label: "Soundboard", group: "Content", icon: IconSpeaker, ownerOnly: true, description: "Short sounds members can play in voice channels and calls." },
   { id: "insights", label: "Server insights", group: "Space", icon: IconCompass, permission: "manage_server", description: "How your space is doing: members, joins, messages and the busiest channels." },
   { id: "apps", label: "Apps", group: "Apps", icon: IconBot, permission: "manage_server", description: "Bots in this space, and the Bot Marketplace for finding more." },
@@ -265,6 +274,7 @@ export function ServerSettingsModal({ open, onClose: close, onEditChannel, onOpe
       {current.id === "bans" && <BansSection {...shared} />}
       {current.id === "channels" && <ChannelsSection {...shared} onEditChannel={onEditChannel} />}
       {current.id === "emoji" && <EmojiSection {...shared} />}
+      {current.id === "stickers" && <StickerSection {...shared} />}
       {current.id === "soundboard" && <SoundboardSection {...shared} />}
       {current.id === "audit" && <AuditLogPanel serverId={activeServer.id} />}
       {current.id === "insights" && <InsightsSection {...shared} />}

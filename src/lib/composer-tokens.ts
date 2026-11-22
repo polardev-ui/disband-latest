@@ -64,6 +64,10 @@ export interface MentionSpan {
   end: number;
   label: string;
   username: string;
+  /** Sent instead of `@username`: a custom emoji's <:name:id>. */
+  raw?: string;
+  /** For a custom emoji: the image painted over its one-glyph slot. */
+  emojiUrl?: string;
 }
 
 /**
@@ -135,7 +139,7 @@ export function resolveMentionSpans(text: string, spans: MentionSpan[]): string 
   let out = text;
   for (const m of [...spans].sort((p, q) => q.start - p.start)) {
     if (out.slice(m.start, m.end) !== m.label) continue;
-    out = out.slice(0, m.start) + `@${m.username}` + out.slice(m.end);
+    out = out.slice(0, m.start) + (m.raw ?? `@${m.username}`) + out.slice(m.end);
   }
   return out;
 }

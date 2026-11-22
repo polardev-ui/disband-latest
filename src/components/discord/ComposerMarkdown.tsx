@@ -1,5 +1,6 @@
 "use client";
 
+import { TwemojiOverlay } from "@/components/ui/Twemoji";
 import { Fragment, type CSSProperties, type ReactNode } from "react";
 
 /**
@@ -269,5 +270,6 @@ export function ComposerMarkdown({ text }: { text: string }) {
   if (text.endsWith("\n")) out.push(<div key="tail">{"​"}</div>);
   void fenceLang;
 
-  return <>{out}</>;
+  // Emoji as Twemoji, like everywhere else in the app, without shifting glyphs.
+  return <TwemojiOverlay>{out}</TwemojiOverlay>;
 }

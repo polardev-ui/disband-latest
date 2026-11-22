@@ -1,10 +1,13 @@
 import { toWebSafeImage, uploadMedia } from "@/lib/media/uploadMedia";
 
-/** One attachment as it is stored in the `attachments` jsonb column. */
+/**
+ * One attachment as it is stored in the `attachments` jsonb column.
+ * For a sticker, `url` is the sticker's id and `name` its name.
+ */
 export interface StoredAttachment {
   url: string;
   key?: string | null;
-  type: "image" | "video" | "audio" | "file" | "gif";
+  type: "image" | "video" | "audio" | "file" | "gif" | "sticker";
   name?: string | null;
   size?: number | null;
 }
@@ -12,7 +15,7 @@ export interface StoredAttachment {
 /** The ceiling the composer enforces, matching the database constraint. */
 export const MAX_ATTACHMENTS = 10;
 
-export function attachmentKind(file: File): StoredAttachment["type"] {
+export function attachmentKind(file: File): "image" | "video" | "audio" | "file" {
   if (file.type.startsWith("video/")) return "video";
   if (file.type.startsWith("image/")) return "image";
   if (file.type.startsWith("audio/")) return "audio";
@@ -73,7 +76,10 @@ export async function uploadAttachments(
  * columns and they keep showing something rather than an empty message.
  */
 export function legacyColumns(attachments: StoredAttachment[]) {
-  const first = attachments[0];
+  // A sticker never goes in the old columns: their database check predates it.
+  const first = attachments[0]?.type === "sticker" ? undefined : (attachments[0] as
+    | (StoredAttachment & { type: Exclude<StoredAttachment["type"], "sticker"> })
+    | undefined);
   return {
     attachment_url: first?.url ?? null,
     attachment_type: first?.type ?? null,

@@ -36,6 +36,9 @@ import { BotInviteEmbed } from "@/components/bot/BotInviteEmbed";
 import { extractBotInviteCodes, stripBotInviteLinks, isBotInviteUrl } from "@/lib/bot-invite-links";
 import { GifLinkEmbed, LinkedMedia, classifyLinkUrl } from "./LinkMediaEmbed";
 import { MessageAttachment } from "./MessageAttachment";
+import { StickerMessage } from "./stickers/StickerMessage";
+import { handleEmojiClick } from "./expressions/ExpressionCard";
+import { plainCustomEmoji } from "@/lib/expressions";
 import { AttachmentUploadCard } from "./AttachmentUploadCard";
 import { MessageReactions } from "./MessageReactions";
 import { MessageActionBar } from "./MessageActionBar";
@@ -126,7 +129,7 @@ function renderCustomEmojiMarkdown(
   const out: ReactNode[] = [];
   segs.forEach((s, i) => {
     if (s.kind === "emoji") {
-      out.push(<CustomEmojiImg key={`e-${i}`} name={s.name} url={s.url} />);
+      out.push(<CustomEmojiImg key={`e-${i}`} name={s.name} url={s.url} id={s.id} />);
     } else {
       out.push(
         <Fragment key={`t-${i}`}>
@@ -412,12 +415,13 @@ const codes = extractInviteCodes(content);
       {textOnly && (
         <div
           data-selectable
+          onClick={handleEmojiClick}
           className={`break-words ${sending ? "text-text-muted" : "text-text-normal"} ${
             emojiOnly ? emojiSizeClass || normalClass : normalClass
           }`}
         >
           {singleCustom ? (
-            <CustomEmojiImg name={singleCustom.name} url={singleCustom.url} size="3em" />
+            <CustomEmojiImg name={singleCustom.name} url={singleCustom.url} id={singleCustom.id} size="3em" />
           ) : emojiOnly ? (
             <Twemoji>{textOnly}</Twemoji>
           ) : (
@@ -504,7 +508,7 @@ function ReplyQuote({
   }
 
   const preview =
-    normalizeMessageContent(reply.content)
+    plainCustomEmoji(normalizeMessageContent(reply.content))
     || (reply.attachment_type === "file" ? "Click to see attachment" : "Click to see attachment");
 
   return (
@@ -680,6 +684,9 @@ function ChatMessageImpl({
       progress={message.uploadProgress}
       localUrl={message.attachment_url}
     />
+  ) : multi.length === 1 && multi[0].type === "sticker" ? (
+    // A sticker: its own message part, kept only in the attachments array.
+    <StickerMessage id={multi[0].url} name={multi[0].name} />
   ) : multi.length > 1 ? (
     // Several files on one message: the mosaic, rather than a stack of cards.
     <AttachmentGrid

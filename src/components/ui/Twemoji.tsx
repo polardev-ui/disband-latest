@@ -67,7 +67,28 @@ function emojiImage(grapheme: string, key: string) {
   );
 }
 
-function renderEmojiString(text: string, keyPrefix: string): ReactNode[] {
+/**
+ * For the composer's styled layer, which must keep every glyph exactly where
+ * the textarea has it: the native emoji stays (invisible) to hold its width,
+ * and the Twemoji image is painted over it, sized to that glyph's own box so
+ * it never runs past the caret (native emoji widths vary by system font).
+ */
+function overlayEmojiImage(grapheme: string, key: string) {
+  return (
+    <span key={key} className="relative">
+      <span className="text-transparent">{grapheme}</span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+        draggable={false}
+        alt=""
+        src={twemojiUrl(grapheme)}
+      />
+    </span>
+  );
+}
+
+function renderEmojiString(text: string, keyPrefix: string, overlay = false): ReactNode[] {
   if (!segmenter || !mayContainEmoji(text)) return [text];
   const out: ReactNode[] = [];
   let buf = "";
@@ -81,7 +102,7 @@ function renderEmojiString(text: string, keyPrefix: string): ReactNode[] {
   for (const { segment } of segmenter.segment(text)) {
     if (isEmojiGrapheme(segment)) {
       flush();
-      out.push(emojiImage(segment, `${keyPrefix}e${i++}`));
+      out.push((overlay ? overlayEmojiImage : emojiImage)(segment, `${keyPrefix}e${i++}`));
     } else {
       buf += segment;
     }
@@ -90,23 +111,28 @@ function renderEmojiString(text: string, keyPrefix: string): ReactNode[] {
   return out;
 }
 
-function renderEmojiNodes(node: ReactNode, keyPrefix = "tw"): ReactNode {
+function renderEmojiNodes(node: ReactNode, keyPrefix = "tw", overlay = false): ReactNode {
   if (typeof node === "string") {
-    const parts = renderEmojiString(node, keyPrefix);
+    const parts = renderEmojiString(node, keyPrefix, overlay);
     return parts.length === 1 ? parts[0] : parts;
   }
   if (Array.isArray(node)) {
-    return node.map((child, i) => renderEmojiNodes(child, `${keyPrefix}${i}-`));
+    return node.map((child, i) => renderEmojiNodes(child, `${keyPrefix}${i}-`, overlay));
   }
   if (isValidElement<{ children?: ReactNode }>(node)) {
     const kids = node.props.children;
     if (kids === undefined || kids === null) return node;
     return cloneElement(node, {
       ...node.props,
-      children: renderEmojiNodes(kids, `${keyPrefix}c-`),
+      children: renderEmojiNodes(kids, `${keyPrefix}c-`, overlay),
     } as Record<string, unknown>);
   }
   return node;
+}
+
+/** Twemoji painted over native emoji without moving any text (see overlayEmojiImage). */
+export function TwemojiOverlay({ children }: { children: ReactNode }) {
+  return <>{renderEmojiNodes(children, "two", true)}</>;
 }
 
 const ZWJ = "\u200d";

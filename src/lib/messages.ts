@@ -1,6 +1,6 @@
 import type { Profile } from "@/lib/supabase/types";
 
-export type AttachmentType = "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity";
+export type AttachmentType = "image" | "video" | "gif" | "file" | "poll" | "audio" | "activity" | "sticker";
 export type MessageContext = "channel" | "dm" | "group" | "notes";
 
 export interface MessageAttachmentPayload {
@@ -9,6 +9,23 @@ export interface MessageAttachmentPayload {
   key?: string;
   name?: string;
   size?: number;
+}
+
+/** The kinds the single-attachment columns (`attachment_url`, `attachment_type`, …) can hold. */
+export type LegacyAttachmentType = Exclude<AttachmentType, "sticker">;
+
+/**
+ * The attachment as the single-attachment columns should record it, or null.
+ *
+ * A sticker (`url` is the sticker's id) is kept only in the `attachments`
+ * array: those columns' database check predates stickers and would reject
+ * the row. Clients that read only the old columns show nothing for it.
+ */
+export function legacyAttachment(
+  attachment: MessageAttachmentPayload | null | undefined,
+): (MessageAttachmentPayload & { type: LegacyAttachmentType }) | null {
+  if (!attachment || attachment.type === "sticker") return null;
+  return { ...attachment, type: attachment.type };
 }
 
 export interface MessageSendOptions {

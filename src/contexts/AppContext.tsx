@@ -60,6 +60,7 @@ import {
 import {
   appendLiveMessage,
   fallbackAuthor,
+  legacyAttachment,
   matchesOptimisticRow,
   mergeFetchedRows,
   type MessageContext,
@@ -6429,11 +6430,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .slice(0, MAX_ATTACHMENTS);
 
     let blobUrl: string | null = null;
-    let attUrl = attachment?.url ?? null;
-    let attType = attachment?.type ?? null;
-    let attName = attachment?.name ?? null;
-    let attSize = attachment?.size ?? null;
-    let attKey = attachment?.key ?? null;
+    // A sticker is kept only in the `attachments` array (see legacyAttachment).
+    const legacyAtt = legacyAttachment(attachment);
+    let attUrl = legacyAtt?.url ?? null;
+    let attType = legacyAtt?.type ?? null;
+    let attName = legacyAtt?.name ?? null;
+    let attSize = legacyAtt?.size ?? null;
+    let attKey = legacyAtt?.key ?? null;
 
     // Local previews so the grid appears immediately; revoked once the real
     // URLs come back.
@@ -6584,11 +6587,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .slice(0, MAX_ATTACHMENTS);
 
     let blobUrl: string | null = null;
-    let attUrl = attachment?.url ?? null;
-    let attType = attachment?.type ?? null;
-    let attName = attachment?.name ?? null;
-    let attSize = attachment?.size ?? null;
-    let attKey = attachment?.key ?? null;
+    // A sticker is kept only in the `attachments` array (see legacyAttachment).
+    const legacyAtt = legacyAttachment(attachment);
+    let attUrl = legacyAtt?.url ?? null;
+    let attType = legacyAtt?.type ?? null;
+    let attName = legacyAtt?.name ?? null;
+    let attSize = legacyAtt?.size ?? null;
+    let attKey = legacyAtt?.key ?? null;
 
     // Local previews so the grid appears immediately; revoked once the real
     // URLs come back.
@@ -6624,6 +6629,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attachment_key: attKey,
       attachment_name: attName,
       attachment_size: attSize,
+      // Drawn straight away for a sticker, which has nothing in the columns above.
+      attachments: optimisticAttachments,
       reply_to_id: replyToId ?? null,
       mentions: parseMentions(normalized, other, userId),
       created_at: new Date().toISOString(),
@@ -6736,11 +6743,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .slice(0, MAX_ATTACHMENTS);
 
     let blobUrl: string | null = null;
-    let attUrl = attachment?.url ?? null;
-    let attType = attachment?.type ?? null;
-    let attName = attachment?.name ?? null;
-    let attSize = attachment?.size ?? null;
-    let attKey = attachment?.key ?? null;
+    // A sticker is kept only in the `attachments` array (see legacyAttachment).
+    const legacyAtt = legacyAttachment(attachment);
+    let attUrl = legacyAtt?.url ?? null;
+    let attType = legacyAtt?.type ?? null;
+    let attName = legacyAtt?.name ?? null;
+    let attSize = legacyAtt?.size ?? null;
+    let attKey = legacyAtt?.key ?? null;
 
     // Local previews so the grid appears immediately; revoked once the real
     // URLs come back.
@@ -6776,6 +6785,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attachment_key: attKey,
       attachment_name: attName,
       attachment_size: attSize,
+      // Drawn straight away for a sticker, which has nothing in the columns above.
+      attachments: optimisticAttachments,
       reply_to_id: replyToId ?? null,
       mentions: parseMentions(normalized, group?.members ?? [], userId),
       created_at: new Date().toISOString(),
@@ -6890,11 +6901,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .slice(0, MAX_ATTACHMENTS);
 
     let blobUrl: string | null = null;
-    let attUrl = attachment?.url ?? null;
-    let attType = attachment?.type ?? null;
-    let attName = attachment?.name ?? null;
-    let attSize = attachment?.size ?? null;
-    let attKey = attachment?.key ?? null;
+    // A sticker is kept only in the `attachments` array (see legacyAttachment).
+    const legacyAtt = legacyAttachment(attachment);
+    let attUrl = legacyAtt?.url ?? null;
+    let attType = legacyAtt?.type ?? null;
+    let attName = legacyAtt?.name ?? null;
+    let attSize = legacyAtt?.size ?? null;
+    let attKey = legacyAtt?.key ?? null;
 
     // Local previews so the grid appears immediately; revoked once the real
     // URLs come back.

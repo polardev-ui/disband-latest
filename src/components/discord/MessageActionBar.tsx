@@ -5,6 +5,7 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import type { ChatMessageData } from "./ChatMessage";
 import { toReplyAuthor, type ReplyPreview } from "@/lib/messages";
 import { useMessageQuickActions } from "./message-quick-actions";
+import { twemojiUrl } from "@/components/ui/Twemoji";
 import { IconBookmark, IconEdit, IconForward, IconPin, IconPinOff, IconTrash } from "@/components/icons";
 
 const QUICK_EMOJIS = ["\u{1f44d}", "\u{2764}\u{fe0f}", "\u{1f602}", "\u{1f62e}", "\u{1f622}"];
@@ -134,8 +135,10 @@ export function MessageActionBar({
           onClick={() => onToggleReaction?.(emoji)}
           className="flex h-8 w-8 [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 items-center justify-center text-base leading-none transition-colors hover:bg-interactive-hover"
           title={emoji}
+          aria-label={emoji}
         >
-          {emoji}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={twemojiUrl(emoji)} alt="" draggable={false} className="h-[18px] w-[18px]" />
         </button>
       ))}
 

@@ -15,6 +15,7 @@ import {
 import { ChatMessage, shouldGroupMessages, buildReplyPreviews, type ChatMessageData } from "./ChatMessage";
 import { MessageSkeleton } from "./MessageSkeleton";
 import { ChatInput } from "./ChatInput";
+import { ExpressionCardHost } from "./expressions/ExpressionCard";
 import { ActivityModal } from "./activities/ActivityModal";
 import { ReactionPicker } from "./MessageReactions";
 import { IconArrowDown, IconHash, IconShield } from "@/components/icons";
@@ -1242,6 +1243,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
 
       <div ref={composerWrapRef} className="relative shrink-0 pb-3">
         {composerNotice}
+        <ExpressionCardHost />
         {composerLockedReason ? (
           <div className="mx-4 flex min-h-[52px] items-center gap-2 rounded-xl border border-border-subtle bg-bg-composer px-4 py-2">
             <IconShield size={15} className="shrink-0 text-text-muted" />
@@ -1270,6 +1272,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
           focusSignal={composerFocus}
           tetherEnabled={messageContext !== "notes"}
           allowGifts={messageContext !== "notes"}
+          allowStickers={messageContext !== "notes"}
         />
         )}
         {/* Sits just above the composer instead of taking a row under it, so the

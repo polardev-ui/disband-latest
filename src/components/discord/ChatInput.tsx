@@ -22,6 +22,13 @@ import { lookupShortcode, searchEmojis, type EmojiMatch } from "@/lib/emoji-shor
 import type { Profile, ServerRole } from "@/lib/supabase/types";
 import type { ChannelLite } from "@/lib/markdown";
 import { GifPicker } from "./GifPicker";
+import { StickerPicker } from "./stickers/StickerPicker";
+import { stickerAttachment } from "@/lib/stickers";
+import { safeImageUrl } from "@/lib/safe-url";
+import { decodeCustomEmoji, emojiChoices, encodeCustomEmoji, searchEmojiChoices, useExpressions, type EmojiChoice } from "@/lib/expressions";
+
+/** The glyph a custom emoji occupies in the composer (an emoji, so it's emoji-wide). */
+const EMOJI_SLOT = "\u{1F642}";
 import { EmojiPicker, EmojiImg } from "./EmojiPicker";
 import { PollCreateModal } from "./PollCreateModal";
 import { ActivityPicker } from "./activities/ActivityPicker";
@@ -96,6 +103,12 @@ interface ChatInputProps {
 
   /** Show the gift button. Off in Notes, where there's nobody to gift. */
   allowGifts?: boolean;
+
+  /**
+   * Show the sticker button (when there are stickers to offer). Off in
+   * Notes, whose table has no `attachments` column to keep a sticker in.
+   */
+  allowStickers?: boolean;
 }
 
 interface MentionItem {
@@ -190,6 +203,7 @@ export function ChatInput({
   focusSignal,
   tetherEnabled,
   allowGifts = false,
+  allowStickers = false,
 }: ChatInputProps) {
   const [text, setText] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -234,7 +248,11 @@ export function ChatInput({
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const { entries, add, remove, clear } = useMediaUpload();
 
-  const { subscriptionPlan, tetherProfile, serverPermissions } = useApp();
+  const { subscriptionPlan, tetherProfile, serverPermissions, servers } = useApp();
+  // Custom emoji from every space you're in, usable here (see lib/expressions).
+  const spaceIds = useMemo(() => servers.map((sv) => sv.id), [servers]);
+  const exprVersion = useExpressions(spaceIds);
+  const emojiChoiceList = useMemo(() => emojiChoices(spaceIds, serverId), [spaceIds, serverId, exprVersion]);
   const { t } = useI18n();
 
   /**
@@ -257,6 +275,51 @@ export function ChatInput({
     setText("");
     setSpans([]);
   }, []);
+
+  /**
+   A custom emoji in the composer: one emoji-wide placeholder glyph, kept
+   atomic like a picked mention, with the emoji's image painted over it and
+   <:name:id> sent in its place.
+  */
+  const customEmojiSpan = (start: number, choice: EmojiChoice): MentionSpan => ({
+    start,
+    end: start + EMOJI_SLOT.length,
+    label: EMOJI_SLOT,
+    username: "",
+    raw: `<${choice.emoji.animated ? "a" : ""}:${choice.emoji.name}:${choice.emoji.id}>`,
+    emojiUrl: choice.emoji.url,
+  });
+
+  const findChoice = (label: string) =>
+    emojiChoiceList.find((c) => c.label.toLowerCase() === label.toLowerCase()) ?? null;
+
+  /**
+   Replace base[start, end) with a custom emoji and put the caret after it.
+   `prev` is the composer text before this edit (they differ when the edit is
+   the keystroke that completed the name).
+  */
+  function placeCustomEmoji(prev: string, base: string, start: number, end: number, choice: EmojiChoice, spacer = "") {
+    const next = base.slice(0, start) + EMOJI_SLOT + spacer + base.slice(end);
+    const r = applyText(prev, next, start + EMOJI_SLOT.length + spacer.length);
+    const span = customEmojiSpan(start, choice);
+    if (r.text.slice(span.start, span.end) === span.label) setSpans([...r.spans, span]);
+  }
+
+  /** Every :name: in some text as custom emoji slots (for a message being edited). */
+  function withEmojiSlots(raw: string): { text: string; spans: MentionSpan[] } {
+    let out = "";
+    const spansOut: MentionSpan[] = [];
+    let last = 0;
+    for (const m of raw.matchAll(/:([a-zA-Z0-9_]{2,32}(?:~\d+)?):/g)) {
+      const choice = findChoice(m[1]);
+      if (!choice || m.index === undefined) continue;
+      out += raw.slice(last, m.index);
+      spansOut.push(customEmojiSpan(out.length, choice));
+      out += EMOJI_SLOT;
+      last = m.index + m[0].length;
+    }
+    return { text: out + raw.slice(last), spans: spansOut };
+  }
 
   // Unsent text stays with its channel or DM: switch away and back and it's
   // still there. Kept for the session in memory, and in sessionStorage so a
@@ -289,8 +352,9 @@ export function ChatInput({
 
   useEffect(() => {
     if (editingMessageId && editingContent != null) {
-      setText(editingContent);
-      setSpans([]);
+      const slotted = withEmojiSlots(decodeCustomEmoji(editingContent, emojiChoiceList));
+      setText(slotted.text);
+      setSpans(slotted.spans);
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
   }, [editingMessageId, editingContent]);
@@ -428,10 +492,17 @@ export function ChatInput({
   const channelCtx = getChannelQuery(text, cursor);
   const showChannels = !!channelCtx && !showMentions && !showEmoji;
 
-  const emojiItems = useMemo((): EmojiMatch[] => {
+  // Custom emoji first (they're what a name like :disband finds), then standard ones.
+  const emojiItems = useMemo((): (EmojiMatch & { url?: string; choice?: EmojiChoice })[] => {
     if (!emojiCtx) return [];
-    return searchEmojis(emojiCtx.query);
-  }, [emojiCtx]);
+    const custom = searchEmojiChoices(emojiChoiceList, emojiCtx.query, 6).map((c) => ({
+      emoji: `:${c.label}:`,
+      shortcode: c.label,
+      url: c.emoji.url,
+      choice: c,
+    }));
+    return [...custom, ...searchEmojis(emojiCtx.query, custom.length ? 8 : 12)];
+  }, [emojiCtx, emojiChoiceList]);
 
   const channelItems = useMemo((): ChannelLite[] => {
     if (!channelCtx) return [];
@@ -663,11 +734,17 @@ export function ChatInput({
     requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
-  function insertEmojiFromPicker(item: EmojiMatch) {
+  function insertEmojiFromPicker(item: EmojiMatch & { choice?: EmojiChoice }) {
     if (!emojiCtx || !textareaRef.current) return;
     const before = text.slice(0, emojiCtx.start);
     const after = text.slice(textareaRef.current.selectionStart);
     const spacer = after && !after.startsWith(" ") ? " " : "";
+    if (item.choice) {
+      placeCustomEmoji(text, text, emojiCtx.start, textareaRef.current.selectionStart, item.choice, spacer);
+      setEmojiIdx(0);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+      return;
+    }
     const next = `${before}${item.emoji}${spacer}${after}`;
     applyText(text, next, before.length + item.emoji.length + spacer.length);
     setEmojiIdx(0);
@@ -676,6 +753,17 @@ export function ChatInput({
 
   function insertEmoji(emoji: string) {
     const ta = textareaRef.current;
+    // From the emoji picker, a custom emoji arrives as :label:.
+    const custom = /^:([a-zA-Z0-9_]{2,32}(?:~\d+)?):$/.exec(emoji);
+    const choice = custom ? findChoice(custom[1]) : null;
+    if (choice && ta) {
+      placeCustomEmoji(text, text, ta.selectionStart, ta.selectionEnd, choice);
+      requestAnimationFrame(() => {
+        ta.focus();
+        onTypingActivity?.();
+      });
+      return;
+    }
     if (!ta) {
       setText((prev) => prev + emoji);
       return;
@@ -692,7 +780,7 @@ export function ChatInput({
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
-    const outgoing = resolveMentionSpans(text, spans);
+    const outgoing = encodeCustomEmoji(resolveMentionSpans(text, spans), emojiChoiceList);
     if (editingMessageId) {
       const content = normalizeMessageContent(outgoing);
       if (!content) return;
@@ -1091,7 +1179,12 @@ export function ChatInput({
               onMouseDown={(e) => { e.preventDefault(); insertEmojiFromPicker(item); }}
               className={`${AUTOCOMPLETE_ROW} ${emojiIdx === i ? "bg-interactive-hover" : ""}`}
             >
-              <EmojiImg emoji={item.emoji} />
+              {item.url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={safeImageUrl(item.url) ?? ""} alt="" className="h-[22px] w-[22px] object-contain" loading="lazy" />
+              ) : (
+                <EmojiImg emoji={item.emoji} />
+              )}
               <span className="truncate text-[16px] font-medium text-header-primary">:{item.shortcode}:</span>
             </button>
           ))}
@@ -1335,7 +1428,13 @@ export function ChatInput({
               }
               const token = getCompletedEmojiToken(next, selStart);
               const emoji = token ? lookupShortcode(token.code) : null;
-              if (token && emoji) {
+              // A custom emoji's name typed in full (:disband: or :disband~1:).
+              const typedCustom = emoji ? null : /:([a-zA-Z0-9_]{2,32}(?:~\d+)?):$/.exec(next.slice(0, selStart));
+              const customChoice = typedCustom ? findChoice(typedCustom[1]) : null;
+              if (typedCustom && customChoice) {
+                const start = selStart - typedCustom[0].length;
+                placeCustomEmoji(text, next, start, selStart, customChoice);
+              } else if (token && emoji) {
                 const replaced = next.slice(0, token.start) + emoji + next.slice(selStart);
                 applyText(text, replaced, token.start + emoji.length);
               } else {
@@ -1391,6 +1490,19 @@ export function ChatInput({
               onClearReply?.();
             }}
           />
+          {allowStickers && (
+            <StickerPicker
+              disabled={!!editingMessageId}
+              onSelect={(sticker) => {
+                // Same guard as GIFs: never a new message with an edit left open.
+                if (editingMessageId) return;
+                void onSend("", { attachment: stickerAttachment(sticker), replyToId: replyTo?.id }).then((err) => {
+                  if (err) setError(err);
+                });
+                onClearReply?.();
+              }}
+            />
+          )}
           <EmojiPicker onSelect={insertEmoji} serverId={serverId} />
           {activityScope && !editingMessageId && (
             <button
@@ -1490,9 +1602,19 @@ function renderMentionChips(text: string, spans: MentionSpan[]) {
   for (const m of [...spans].sort((a, b) => a.start - b.start)) {
     out.push(text.slice(last, m.start));
     out.push(
-      <span key={m.start} className="rounded-md bg-brand-soft text-header-primary shadow-[0_0_0_1px_var(--brand-soft)]">
-        {text.slice(m.start, m.end)}
-      </span>,
+      m.emojiUrl ? (
+        // A custom emoji: its slot glyph covered by the image, on the
+        // composer's own background so the glyph underneath doesn't show.
+        <span key={m.start} className="relative bg-bg-composer">
+          {text.slice(m.start, m.end)}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={safeImageUrl(m.emojiUrl) ?? ""} alt="" className="absolute inset-0 h-full w-full object-contain" />
+        </span>
+      ) : (
+        <span key={m.start} className="rounded-md bg-brand-soft text-header-primary shadow-[0_0_0_1px_var(--brand-soft)]">
+          {text.slice(m.start, m.end)}
+        </span>
+      ),
     );
     last = m.end;
   }

@@ -86,3 +86,13 @@ export function searchEmojis(query: string, limit = 12): EmojiMatch[] {
   }
   return results;
 }
+
+const emojiToShortcode = new Map<string, string>();
+for (const [code, emoji] of shortcodeToEmoji) {
+  if (!emojiToShortcode.has(emoji)) emojiToShortcode.set(emoji, code);
+}
+
+/** The shortcode for a standard emoji (👋 -> "wave"), ignoring the variation selector. */
+export function shortcodeFor(emoji: string): string | null {
+  return emojiToShortcode.get(emoji) ?? emojiToShortcode.get(emoji.replace(/️/g, "")) ?? emojiToShortcode.get(`${emoji}️`) ?? null;
+}
