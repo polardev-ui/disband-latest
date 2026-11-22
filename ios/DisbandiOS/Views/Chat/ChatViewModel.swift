@@ -367,6 +367,19 @@ final class ChatViewModel {
         await dispatch(content: trimmed, attachment: nil, replyToId: replyToId, authorId: authorId)
     }
 
+    /// Send a space sticker. It lives only in the `attachments` array, as on the web.
+    func sendSticker(id: String, name: String, replyToId: String? = nil, authorId: String) async {
+        do {
+            _ = try await DatabaseService.sendMessageWithAttachments(
+                source: source, authorId: authorId, content: "",
+                attachments: [StoredAttachment(url: id, key: nil, type: .sticker, name: name, size: nil)],
+                replyToId: replyToId)
+            await load()
+        } catch {
+            loadError = error.localizedDescription
+        }
+    }
+
     /// Send a GIF or uploaded image/file (optionally with a caption).
     func sendAttachment(_ attachment: OutgoingAttachment, caption: String = "",
                         replyToId: String? = nil, authorId: String) async {

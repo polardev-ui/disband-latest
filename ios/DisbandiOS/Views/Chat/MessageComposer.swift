@@ -10,6 +10,8 @@ struct MessageComposer: View {
     var uploading: Bool = false
     var onSend: () -> Void
     var onGif: () -> Void = {}
+    /// Space stickers and custom emoji (nil while editing a message).
+    var onExpressions: (() -> Void)? = nil
     var onPhoto: () -> Void = {}
     /// Nil where polls can't be posted (while editing a message).
     var onPoll: (() -> Void)? = nil
@@ -66,6 +68,10 @@ struct MessageComposer: View {
                             .transition(.opacity)
                     }
                     gifButton.transition(.opacity)
+                    if let onExpressions {
+                        iconButton("square.on.square", label: "Stickers and custom emoji", action: onExpressions)
+                            .transition(.opacity)
+                    }
                     emojiButton
                 }
             }

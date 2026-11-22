@@ -38,6 +38,8 @@ enum ChannelType: String, Codable {
 
 enum AttachmentType: String, Codable {
     case image, video, gif, file, poll, audio
+    /// A sticker: only ever in the `attachments` array, `url` holding its id.
+    case sticker
     /// Anything the server stores that this build doesn't know about yet
     /// (new kinds ship on the web first). Decoding into this instead of
     /// throwing keeps older clients from bricking a whole conversation.

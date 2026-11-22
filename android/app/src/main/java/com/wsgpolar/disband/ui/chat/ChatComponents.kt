@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.outlined.EmojiEmotions
 import kotlinx.coroutines.CancellationException
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.RepeatMode
@@ -730,7 +731,8 @@ private fun Composer(
     // (the value-based field never told Gboard it could, so it refused).
     val draftState = rememberSaveable(conversationKey, saver = TextFieldState.Saver) { TextFieldState() }
     val editState = rememberSaveable(conversationKey, editingRow?.id, saver = TextFieldState.Saver) {
-        TextFieldState(editingRow?.content.orEmpty())
+        // Custom emoji back to the names you'd type (<:name:id> -> :name:).
+        TextFieldState(com.wsgpolar.disband.data.ExpressionStore.decode(editingRow?.content.orEmpty()))
     }
     val fieldState = if (editingRow != null) editState else draftState
     val text = fieldState.text.toString()
@@ -747,7 +749,23 @@ private fun Composer(
     var unexpectedError by remember { mutableStateOf<String?>(null) }
     var attachMenu by remember { mutableStateOf(false) }
     var showPoll by remember { mutableStateOf(false) }
+    var showExpressions by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) { com.wsgpolar.disband.data.ExpressionStore.loadMySpaces() }
+    if (showExpressions && attachments != null) {
+        ExpressionPickerSheet(
+            onDismiss = { showExpressions = false },
+            onSticker = { sticker ->
+                val uid = runCatching { com.wsgpolar.disband.core.DisbandSupabase.auth.currentUserOrNull()?.id }.getOrNull()
+                if (uid != null) scope.launch { attachments.sendSticker(uid, sticker) }
+            },
+            onEmoji = { code ->
+                val current = fieldState.text.toString()
+                val lead = if (current.isNotEmpty() && !current.last().isWhitespace()) " " else ""
+                fieldState.edit { append("$lead$code ") }
+            },
+        )
+    }
     if (showPoll && attachments != null) {
         PollCreateDialog(onDismiss = { showPoll = false }) { pollId ->
             val uid = runCatching { com.wsgpolar.disband.core.DisbandSupabase.auth.currentUserOrNull()?.id }.getOrNull()
@@ -841,7 +859,9 @@ private fun Composer(
                         if (!canSend || sending) return@IconButton
                         sending = true
                         unexpectedError = null
-                        val submitted = text.trim()
+                        // :name: for a custom emoji from any of your spaces goes
+                        // out as <:name:id>, so it shows in every chat.
+                        val submitted = com.wsgpolar.disband.data.ExpressionStore.encode(text.trim())
                         val wasEditing = editingRow != null
                         scope.launch {
                             try {
@@ -864,6 +884,19 @@ private fun Composer(
                         else Icon(Icons.Filled.Send, if (editingRow != null) "Save edit" else "Send message",
                             tint = Color.White, modifier = Modifier.size(18.dp))
                     }
+                }
+            }
+            // Space stickers and custom emoji from every space you're in.
+            if (text.isBlank() && !hasStaged && attachments != null && editingRow == null) {
+                Box(
+                    Modifier
+                        .size(width = 42.dp, height = 48.dp)
+                        .clickable(enabled = enabled && !sending, role = androidx.compose.ui.semantics.Role.Button,
+                            onClickLabel = "Stickers and custom emoji") { showExpressions = true },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(androidx.compose.material.icons.Icons.Outlined.EmojiEmotions, "Stickers and custom emoji",
+                        tint = palette.textSecondary, modifier = Modifier.size(22.dp))
                 }
             }
             if (text.isBlank() && !hasStaged) Spacer(Modifier.width(8.dp))

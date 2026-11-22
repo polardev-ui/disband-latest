@@ -212,7 +212,9 @@ object Database {
         attachments: List<StoredAttachment>,
         replyToId: String? = null,
     ): String? {
-        val first = attachments.firstOrNull()
+        // A sticker stays out of the single-attachment columns: their database
+        // check predates stickers and would reject the row.
+        val first = attachments.firstOrNull()?.takeIf { it.type != "sticker" }
         val response = when (context) {
             "channel" -> client.from("messages").insert(
                 NewMessage(

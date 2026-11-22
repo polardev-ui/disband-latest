@@ -264,7 +264,9 @@ enum DatabaseService {
         source: ChatSource, authorId: String, content: String,
         attachments: [StoredAttachment], replyToId: String? = nil
     ) async throws -> String {
-        let first = attachments.first
+        // A sticker stays out of the single-attachment columns: their
+        // database check predates stickers and would reject the row.
+        let first = attachments.first.flatMap { $0.type == .sticker ? nil : $0 }
         let row: InsertedId
         switch source {
         case .channel(let id, _):

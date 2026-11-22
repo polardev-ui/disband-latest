@@ -45,6 +45,8 @@ struct MessageRow: View {
     @State private var showingReactorsFor: ReactedEmoji?
     /// The message's ||spoilers|| are showing.
     @State private var spoilersOpen = false
+    /// Custom emoji and stickers, looked up by id as messages need them.
+    @ObservedObject private var expressions = ExpressionStore.shared
 
     /// A webhook message shows the webhook's name and picture (or the
     /// per-message override), not the identity behind it.
@@ -213,12 +215,15 @@ struct MessageRow: View {
                     // but a handful of emoji renders large, because at body
                     // size a lone reaction emoji is nearly illegible.
                     let jumbo: CGFloat? = EmojiText.jumboSize(for: message.content)
+                        ?? CustomEmojiText.jumboSize(for: message.content)
                     let size = jumbo ?? UIFont.systemFontSize
                     let baseFont = UIFont.systemFont(ofSize: size)
                     let color = UIColor(message.pending ? Brand.textMuted : Brand.textPrimary)
                     let accent = UIColor(Brand.accent)
-                    Text(ChatMarkdown.render(message.content, baseFont: baseFont, baseColor: color,
-                                             mentionColor: accent, revealSpoilers: spoilersOpen))
+                    CustomEmojiText.text(message.content, store: expressions, font: baseFont) { part in
+                        ChatMarkdown.render(part, baseFont: baseFont, baseColor: color,
+                                            mentionColor: accent, revealSpoilers: spoilersOpen)
+                    }
                         .fixedSize(horizontal: false, vertical: true)
                         // Links take the tint, whatever colour the run asks for.
                         .tint(Color(ChatMarkdown.mentionText(tint: accent, text: color)))
@@ -387,6 +392,10 @@ struct MessageRow: View {
                 type: message.attachmentType,
                 progress: progress,
             )
+        } else if message.attachments.count == 1, let only = message.attachments.first, only.type == .sticker {
+            // A sticker: its own message part, kept only in the attachments array.
+            StickerMessageView(id: only.url, name: only.name)
+                .padding(.top, 4)
         } else if message.attachments.count > 1 {
             multiAttachment
         } else if let urlString = message.attachmentUrl, let url = URL(string: urlString) {

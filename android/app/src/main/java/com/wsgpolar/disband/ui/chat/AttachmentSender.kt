@@ -195,6 +195,19 @@ class AttachmentSender(
         } finally { progress = null }
     }
 
+    /** A space sticker: an `attachments` entry of type "sticker" holding its id, as on the web. */
+    suspend fun sendSticker(authorId: String, sticker: com.wsgpolar.disband.data.ExpressionStore.SpaceSticker): Boolean {
+        val sent = try {
+            Database.sendWithAttachments(
+                context = context, parentId = parentId, authorId = authorId, content = "",
+                attachments = listOf(StoredAttachment(url = sticker.id, type = "sticker", name = sticker.name)),
+            )
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { null }
+        if (sent == null) error = "Couldn't send that sticker."
+        return sent != null
+    }
+
     /**
      * A poll goes out as a message whose attachment is the poll, as on the
      * web and iOS. It shows up through the conversation's realtime feed.

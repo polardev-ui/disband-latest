@@ -54,6 +54,7 @@ struct ChatView: View {
     /// sentinel at the top of the viewport, which must not trigger paging.
     @State private var initialScrollSettled = false
     @State private var showGifPicker = false
+    @State private var showExpressions = false
     @State private var showPollSheet = false
     @State private var showGiftPicker = false
     @State private var showPhotoPicker = false
@@ -163,6 +164,7 @@ struct ChatView: View {
                 // Progress shows on the message itself, so the composer stays usable.
                 MessageComposer(text: $draft, uploading: false, onSend: sendDraft,
                                 onGif: { showGifPicker = true },
+                                onExpressions: editingMessage == nil ? { showExpressions = true } : nil,
                                 onPhoto: { if staged.count < maxAttachments { showPhotoPicker = true } },
                                 onPoll: editingMessage == nil ? { showPollSheet = true } : nil,
                                 onGift: editingMessage == nil ? { showGiftPicker = true } : nil,
@@ -298,6 +300,15 @@ struct ChatView: View {
             model.stop()
         }
         .sheet(isPresented: $showGifPicker) { GifPickerView { sendGif($0) } }
+        .sheet(isPresented: $showExpressions) {
+            ExpressionPickerSheet(
+                onSticker: { sendSticker($0) },
+                onEmoji: { code in
+                    let needsSpace = !(draft.last?.isWhitespace ?? true)
+                    draft += (needsSpace ? " " : "") + code + " "
+                })
+        }
+        .task { await ExpressionStore.shared.loadMySpaces() }
         .sheet(isPresented: $showGiftPicker) {
             GiftPickerSheet { link in
                 let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1084,7 +1095,8 @@ struct ChatView: View {
             replyingTo = nil
             editingMessage = message
         }
-        draft = message.content
+        // Custom emoji back to the names you'd type (<:name:id> -> :name:).
+        draft = ExpressionStore.shared.decode(message.content)
     }
 
     private func stopEditing() {
@@ -1194,7 +1206,7 @@ struct ChatView: View {
             // its own action), as on the web.
             guard !trimmed.isEmpty else { return }
             stopEditing()
-            Task { await model.editMessage(editing, to: trimmed) }
+            Task { await model.editMessage(editing, to: ExpressionStore.shared.encode(trimmed)) }
             return
         }
         // The same text again within a moment is the keyboard handing the
@@ -1226,7 +1238,18 @@ struct ChatView: View {
         guard let uid = app.currentUserId else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         if case .dm(let threadId, _) = model.source { directMessages.markRepliedTo(threadId) }
-        Task { await model.send(content: content, authorId: uid, replyToId: reply) }
+        // :name: for a custom emoji from any of your spaces goes out as
+        // <:name:id>, so it shows in every chat (as on the web).
+        let encoded = ExpressionStore.shared.encode(content)
+        Task { await model.send(content: encoded, authorId: uid, replyToId: reply) }
+    }
+
+    private func sendSticker(_ sticker: ExpressionStore.SpaceSticker) {
+        guard let uid = app.currentUserId else { return }
+        let reply = replyingTo?.id
+        stickToBottom = true
+        withAnimation { replyingTo = nil }
+        Task { await model.sendSticker(id: sticker.id, name: sticker.name, replyToId: reply, authorId: uid) }
     }
 
     private func sendGif(_ gif: GiphyGif) {

@@ -340,8 +340,15 @@ private fun MarkdownBody(content: String, palette: Palette) {
     Column(tap, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         blocks.forEach { block ->
             when (block) {
-                is ChatMarkdown.Block.Text ->
-                    Text(block.content, color = palette.textPrimary, fontSize = 15.sp, lineHeight = 20.sp)
+                is ChatMarkdown.Block.Text -> {
+                    // Custom emoji (<:name:id>) drawn inline; large when that's all there is.
+                    val jumbo = remember(content) { isJumboCustomEmoji(content) }
+                    val (body, inline) = remember(block.content, jumbo) {
+                        withCustomEmoji(block.content, if (jumbo) 48.sp else 20.sp)
+                    }
+                    Text(body, color = palette.textPrimary, fontSize = 15.sp,
+                        lineHeight = if (jumbo) 52.sp else 20.sp, inlineContent = inline)
+                }
 
                 is ChatMarkdown.Block.Quote ->
                     Row {
@@ -352,7 +359,8 @@ private fun MarkdownBody(content: String, palette: Palette) {
                                 .background(palette.textMuted, RoundedCornerShape(2.dp))
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(block.content, color = palette.textSecondary, fontSize = 15.sp, lineHeight = 20.sp)
+                        val (quoted, quotedInline) = remember(block.content) { withCustomEmoji(block.content) }
+                        Text(quoted, color = palette.textSecondary, fontSize = 15.sp, lineHeight = 20.sp, inlineContent = quotedInline)
                     }
 
                 is ChatMarkdown.Block.Code ->
@@ -395,6 +403,11 @@ private fun Attachments(
     onOpen: (StoredAttachment) -> Unit,
 ) {
     if (attachments.isEmpty()) return
+    // A sticker: its own message part, kept only in the attachments array.
+    if (attachments.size == 1 && attachments[0].type == "sticker") {
+        StickerMessage(attachments[0].url, attachments[0].name)
+        return
+    }
     val tiles = attachments.filter { it.type == "image" || it.type == "gif" }
     val videos = attachments.filter { it.type == "video" }
     val rest = attachments - tiles.toSet() - videos.toSet()
