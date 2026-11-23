@@ -311,6 +311,8 @@ struct Message: Codable, Identifiable, Hashable {
     var attachments: [StoredAttachment]?
     var replyToId: String?
     var mentions: [String]?
+    /// It said @everyone or @here and its author had Mention @everyone (migration 0284).
+    var mentionEveryone: Bool?
     let createdAt: String
     var editedAt: String?
     var author: Profile?
@@ -333,6 +335,7 @@ struct Message: Codable, Identifiable, Hashable {
         case attachmentSize = "attachment_size"
         case attachments
         case replyToId = "reply_to_id"
+        case mentionEveryone = "mention_everyone"
         case createdAt = "created_at"
         case editedAt = "edited_at"
     }

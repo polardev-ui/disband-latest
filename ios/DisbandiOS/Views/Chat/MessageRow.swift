@@ -76,9 +76,10 @@ struct MessageRow: View {
         guard let me = currentUserId, message.authorId != me else { return false }
         if let replyTo, replyTo.authorId == me { return true }
         if message.mentions?.contains(me) == true { return true }
-        // @everyone and @here ping every member, as on the web. Only channel
-        // messages carry `mentions`, so DMs and group chats are left alone.
-        return message.mentions != nil
+        // @everyone and @here ping every member when the author was allowed
+        // to (mention_everyone, migration 0284), as on the web. Only channel
+        // messages carry it, so DMs and group chats are left alone.
+        return message.mentionEveryone
             && message.content.range(of: #"@(everyone|here)\b"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 

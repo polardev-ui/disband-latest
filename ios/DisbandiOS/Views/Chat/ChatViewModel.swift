@@ -911,6 +911,7 @@ final class ChatViewModel {
             createdAt: row.createdAt, editedAt: row.editedAt,
             mentions: row.mentions
         )
+        message.mentionEveryone = row.mentionEveryone ?? false
         message.embeds = row.embeds ?? []
         message.webhook = row.webhook
         message.components = row.components?.items ?? []

@@ -320,6 +320,8 @@ data class Message(
     var attachments: List<StoredAttachment>? = null,
     @SerialName("reply_to_id") var replyToId: String? = null,
     var mentions: List<String>? = null,
+    /** It said @everyone or @here and its author had Mention @everyone (migration 0284). */
+    @SerialName("mention_everyone") var mentionEveryone: Boolean = false,
     @SerialName("created_at") val createdAt: String,
     @SerialName("edited_at") var editedAt: String? = null,
     var author: Profile? = null,

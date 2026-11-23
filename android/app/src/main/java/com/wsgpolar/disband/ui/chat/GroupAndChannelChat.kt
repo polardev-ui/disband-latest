@@ -448,7 +448,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
     }
 }
 
-/** @everyone and @here ping every member, as on the web. */
+/** @everyone and @here ping every member when the author was allowed to (mention_everyone), as on the web. */
 private val EVERYONE_PING = Regex("@(everyone|here)\\b", RegexOption.IGNORE_CASE)
 
 private fun Message.toRow(me: String? = null): ChatRow = ChatRow(
@@ -466,7 +466,7 @@ private fun Message.toRow(me: String? = null): ChatRow = ChatRow(
     replyToId = replyToId,
     editedAt = editedAt,
     pingsYou = me != null && authorId != me && (
-    mentions?.contains(me) == true || EVERYONE_PING.containsMatchIn(content)
+    mentions?.contains(me) == true || (mentionEveryone && EVERYONE_PING.containsMatchIn(content))
     ),
     createdAt = createdAt,
     embeds = embeds.orEmpty(),

@@ -164,7 +164,7 @@ object RolePermissionCatalogue {
     )
 
     /** All @everyone may be given; the rest stay off it, as on the web. */
-    val everyoneAllowed = setOf("send_messages", "add_reactions", "attach_files")
+    val everyoneAllowed = setOf("send_messages", "add_reactions", "attach_files", "mention_everyone")
 
     /** The web's `ROLE_COLORS`. */
     val colours = listOf("#5865f2", "#57f287", "#fee75c", "#eb459e", "#ed4245",

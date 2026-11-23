@@ -27,6 +27,9 @@ struct DisplayMessage: Identifiable, Hashable {
     var uploadProgress: Double? = nil
     /// User ids @mentioned here. Only channel messages carry these.
     var mentions: [String]? = nil
+    /// It really pinged everyone: it said @everyone or @here and its author
+    /// had Mention @everyone (migration 0284).
+    var mentionEveryone: Bool = false
     /// Rich embeds from webhooks and bots (channel messages only).
     var embeds: [MessageEmbed] = []
     /// Set when a webhook posted this message.
@@ -70,6 +73,7 @@ struct DisplayMessage: Identifiable, Hashable {
                                                   size: m.attachmentSize),
                   replyToId: m.replyToId, createdAt: m.createdAt, editedAt: m.editedAt,
                   mentions: m.mentions)
+        self.mentionEveryone = m.mentionEveryone ?? false
         self.embeds = m.embeds ?? []
         self.webhook = m.webhook
         self.components = m.components?.items ?? []
@@ -108,6 +112,7 @@ struct RawMessageRow: Decodable, Sendable {
     /// User ids @mentioned in this message; nil on tables that have no such
     /// column (DMs and group chats, where a mention is meaningless).
     let mentions: [String]?
+    let mentionEveryone: Bool?
     let embeds: [MessageEmbed]?
     let webhook: MessageWebhook?
     let components: LossyList<ActionRow>?
@@ -115,6 +120,7 @@ struct RawMessageRow: Decodable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, content, mentions, embeds, webhook, components, interaction
+        case mentionEveryone = "mention_everyone"
         case authorId = "author_id"
         case attachmentUrl = "attachment_url"
         case attachmentType = "attachment_type"
@@ -137,6 +143,7 @@ struct RawMessageRow: Decodable, Sendable {
         replyToId = try? c.decodeIfPresent(String.self, forKey: .replyToId)
         editedAt = try? c.decodeIfPresent(String.self, forKey: .editedAt)
         mentions = try? c.decodeIfPresent([String].self, forKey: .mentions)
+        mentionEveryone = try? c.decodeIfPresent(Bool.self, forKey: .mentionEveryone)
         embeds = try? c.decodeIfPresent([MessageEmbed].self, forKey: .embeds)
         webhook = try? c.decodeIfPresent(MessageWebhook.self, forKey: .webhook)
         components = try? c.decodeIfPresent(LossyList<ActionRow>.self, forKey: .components)

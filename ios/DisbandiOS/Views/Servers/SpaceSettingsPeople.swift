@@ -42,7 +42,7 @@ enum RolePermissionCatalogue {
     ]
 
     /// All @everyone may be given; the rest stay off it, as on the web.
-    static let everyoneAllowed: Set<String> = ["send_messages", "add_reactions", "attach_files"]
+    static let everyoneAllowed: Set<String> = ["send_messages", "add_reactions", "attach_files", "mention_everyone"]
 
     /// The web's `ROLE_COLORS`.
     static let colours = ["#5865f2", "#57f287", "#fee75c", "#eb459e", "#ed4245",
