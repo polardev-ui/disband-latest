@@ -277,7 +277,7 @@ export function MessageReactions({ reactions, onToggle, onOpenPicker }: MessageR
         <button
           type="button"
           onClick={onOpenPicker}
-          className="inline-flex h-7 w-9 items-center justify-center rounded-full border border-border-subtle bg-bg-secondary-alt text-base text-interactive-normal opacity-0 transition-opacity hover:border-border-strong group-hover:opacity-100"
+          className="inline-flex h-7 w-9 items-center justify-center rounded-full border border-border-subtle bg-bg-secondary-alt text-base text-interactive-normal opacity-0 transition-opacity hover:border-border-strong group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
           aria-label={t("Add reaction")}
         >
           +
@@ -346,6 +346,7 @@ export function ReactionPicker({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("Search emoji...")}
+            aria-label={t("Search emoji...")}
             autoFocus
             className="w-full rounded bg-bg-primary px-3 py-2 text-sm text-text-normal placeholder:text-text-muted outline-none"
           />
