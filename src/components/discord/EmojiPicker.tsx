@@ -10,6 +10,7 @@ import { safeImageUrl } from "@/lib/safe-url";
 import { useI18n } from "@/contexts/I18nContext";
 import { useApp } from "@/contexts/AppContext";
 import { emojiChoices, useExpressions, type EmojiChoice } from "@/lib/expressions";
+import { SolidEmojiIcon } from "@/components/icons/SolidIcons";
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
@@ -112,14 +113,21 @@ export function EmojiPicker({ onSelect, serverId }: EmojiPickerProps) {
         onClick={() => setOpen((v) => !v)}
         className="group/emoji mt-[9px] flex h-8 w-10 items-center justify-center"
       >
-        {/* The classic emoji button: a grey face that colours in and grows. */}
+        {/* The classic emoji button: a face in the theme's icon colour, like
+            the buttons beside it, that turns into a full-colour emoji and grows. */}
         <span
           aria-hidden
-          className={`flex leading-none transition-[filter,transform] duration-100 ${
-            open ? "scale-[1.14] grayscale-0" : "grayscale group-hover/emoji:scale-[1.14] group-hover/emoji:grayscale-0"
+          className={`grid leading-none transition-transform duration-100 [&>*]:col-start-1 [&>*]:row-start-1 ${
+            open ? "scale-[1.14]" : "group-hover/emoji:scale-[1.14]"
           }`}
         >
-          <EmojiImg emoji="🙂" size="22px" />
+          <SolidEmojiIcon
+            size={22}
+            className={`text-interactive-normal transition-opacity duration-100 ${open ? "opacity-0" : "group-hover/emoji:opacity-0"}`}
+          />
+          <span className={`flex transition-opacity duration-100 ${open ? "opacity-100" : "opacity-0 group-hover/emoji:opacity-100"}`}>
+            <EmojiImg emoji="🙂" size="22px" />
+          </span>
         </span>
       </button>
 

@@ -96,3 +96,19 @@ export function SolidNotesIcon({ size = 24, className = "" }: Props) {
     </svg>
   );
 }
+
+/** A filled face with its eyes and smile knocked out, for the composer's emoji button. */
+export function SolidEmojiIcon({ size = 24, className = "" }: Props) {
+  const id = useId();
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden className={className}>
+      <mask id={id}>
+        <rect width="24" height="24" fill="#fff" />
+        <circle cx="8.9" cy="9.6" r="1.5" fill="#000" />
+        <circle cx="15.1" cy="9.6" r="1.5" fill="#000" />
+        <path d="M8.2 14c2.1 2.4 5.5 2.4 7.6 0" fill="none" stroke="#000" strokeWidth="1.8" strokeLinecap="round" />
+      </mask>
+      <circle cx="12" cy="12" r="10" fill="currentColor" mask={`url(#${id})`} />
+    </svg>
+  );
+}

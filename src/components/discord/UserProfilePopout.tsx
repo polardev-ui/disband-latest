@@ -71,40 +71,46 @@ function formatDate(iso: string): string {
  * The classic profile popout: opens beside whatever was clicked (a name in
  * chat, a member in the list), with the full profile one click away.
  */
-export function UserProfilePopout({
-  profile,
-  anchor,
-  onClose,
-  onOpenFullProfile,
-  onOpenSettings,
-  onBlock,
-  onUnblock,
-  onReport,
-  isSelf,
-  plan,
-  isServerMember,
-  rolesPending,
-  memberJoinedAt,
-  serverName,
-  serverIcon,
-  serverRoles = [],
-  assignableRoles,
-  memberRoleIds = [],
-  canManageRoles,
-  onSetRoles,
-  selfAssignableRoles = [],
-  onSetSelfRoles,
-}: UserProfilePopoutProps) {
+export function UserProfilePopout(props: UserProfilePopoutProps) {
+  const open = !!props.profile && !!props.anchor;
+  // The parent drops its target the moment the card is dismissed, so through
+  // the exit animation the live props describe nobody: not a space member
+  // (the Roles section vanished), not you, no menu. Render from the props the
+  // card last had open instead, so it leaves exactly as it looked and its
+  // height holds still. While open it reads live props, so a role edit, a
+  // space switch or a DM/group profile still shows straight away.
+  const held = useRef(props);
+  if (open) held.current = props;
+  const {
+    profile: p,
+    anchor,
+    onClose,
+    onOpenFullProfile,
+    onOpenSettings,
+    onBlock,
+    onUnblock,
+    onReport,
+    isSelf,
+    plan,
+    isServerMember,
+    rolesPending,
+    memberJoinedAt,
+    serverName,
+    serverIcon,
+    serverRoles = [],
+    assignableRoles,
+    memberRoleIds = [],
+    canManageRoles,
+    onSetRoles,
+    selfAssignableRoles = [],
+    onSetSelfRoles,
+  } = open ? props : held.current;
   const { t } = useI18n();
   const {
     presenceMap, listeningMap, activityMap, user, openDmWithFriend, sendDmMessage,
     friends, dmThreads, pendingOutgoing, sendFriendRequest,
   } = useApp();
-  const open = !!profile && !!anchor;
   const { mounted, exiting } = usePresence(open);
-  const lastProfile = useRef<Profile | null>(null);
-  if (profile) lastProfile.current = profile;
-  const p = profile ?? lastProfile.current;
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number; side: "left" | "right" } | null>(null);
   const [message, setMessage] = useState("");
@@ -115,12 +121,15 @@ export function UserProfilePopout({
   // Strangers can only be messaged as a request, and only when you share a
   // space other than Disband itself (everyone is in that one). Checked up
   // front so the card offers Add Friend instead of a box that can't send.
-  const targetId = open && p && !isSelf && !p.is_bot ? p.id : null;
+  // Not gated on `open`: the closing card keeps its Add Friend button and box.
+  const targetId = p && !isSelf && !p.is_bot ? p.id : null;
   const knownContact = !!targetId && (friends.some((f) => f.id === targetId) || dmThreads.some((d) => d.friend?.id === targetId));
   // Asked of the server, which applies the same rule when the DM opens
-  // (including Disband's staff being able to reach its members).
+  // (including Disband's staff being able to reach its members). Asked again
+  // on every open; nothing changes on the way out.
   const [canRequest, setCanRequest] = useState<{ id: string; ok: boolean } | null>(null);
   useEffect(() => {
+    if (!open) return;
     setFriendNote(null);
     if (!targetId || knownContact) return;
     let live = true;
@@ -133,7 +142,7 @@ export function UserProfilePopout({
     return () => {
       live = false;
     };
-  }, [targetId, knownContact]);
+  }, [open, targetId, knownContact]);
   const friendsOnly = !!targetId && !knownContact && canRequest?.id === targetId && !canRequest.ok;
   const requestSent = !!targetId && pendingOutgoing.some((f) => f.addressee_id === targetId);
   // The banner's Add Friend button: anyone you aren't friends with yet.
