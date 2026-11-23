@@ -23,15 +23,25 @@ struct RemoteImage<Placeholder: View>: View {
     /// Told the picture once it's available (from cache or the network), so
     /// a caller can size itself to the real shape.
     var onLoad: ((UIImage) -> Void)? = nil
+    /// Shrinks an animated image's frames (long side, in pixels) and keeps at
+    /// most this many, to save memory on big animations such as stickers.
+    var maxPixelSize: Int? = nil
+    var maxFrames: Int? = nil
 
     @State private var image: UIImage?
+
+    /// Cache key: a shrunk copy must not stand in for the full-size picture.
+    private var cacheKey: String? {
+        guard let url else { return nil }
+        return maxPixelSize == nil && maxFrames == nil ? url : "\(url)#\(maxPixelSize ?? 0)x\(maxFrames ?? 0)"
+    }
 
     var body: some View {
         Group {
             // A cached image draws on the very first frame. Waiting for the
             // task flashed the placeholder first, even for a picture already
             // in memory — enough to nudge a chat that had just settled.
-            if let image = image ?? url.flatMap({ ImageCache.shared.image(for: $0) }) {
+            if let image = image ?? cacheKey.flatMap({ ImageCache.shared.image(for: $0) }) {
                 if (image.images?.count ?? 0) > 1 {
                     AnimatedImageView(
                         image: image,
@@ -61,10 +71,10 @@ struct RemoteImage<Placeholder: View>: View {
     }
 
     private func load() async {
-        guard let url, let parsed = URL(string: url) else { image = nil; return }
-        if let current = image, ImageCache.shared.image(for: url) === current { onLoad?(current); return }
+        guard let url, let key = cacheKey, let parsed = URL(string: url) else { image = nil; return }
+        if let current = image, ImageCache.shared.image(for: key) === current { onLoad?(current); return }
         image = nil
-        if let cached = ImageCache.shared.image(for: url) { image = cached; onLoad?(cached); return }
+        if let cached = ImageCache.shared.image(for: key) { image = cached; onLoad?(cached); return }
 
         for attempt in 0..<4 {
             if Task.isCancelled { return }
@@ -74,8 +84,9 @@ struct RemoteImage<Placeholder: View>: View {
                 req.timeoutInterval = 20
                 let (data, _) = try await URLSession.shared.data(for: req)
                 // Animated first: UIImage(data:) would silently flatten it.
-                if let img = AnimatedImageDecoder.decode(data) ?? UIImage(data: data) {
-                    ImageCache.shared.set(img, for: url)
+                if let img = AnimatedImageDecoder.decode(data, maxPixelSize: maxPixelSize, maxFrames: maxFrames)
+                    ?? UIImage(data: data) {
+                    ImageCache.shared.set(img, for: key)
                     MediaSize.shared.record(img, for: url)
                     if !Task.isCancelled { image = img; onLoad?(img) }
                     return

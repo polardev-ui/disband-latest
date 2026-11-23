@@ -11,19 +11,35 @@ import UniformTypeIdentifiers
 enum AnimatedImageDecoder {
     /// Returns an animated `UIImage` when `data` holds more than one frame,
     /// otherwise nil so the caller can fall back to `UIImage(data:)`.
-    static func decode(_ data: Data) -> UIImage? {
+    ///
+    /// `maxPixelSize` shrinks every frame to fit that many pixels on its long
+    /// side, and `maxFrames` keeps an even spread of at most that many frames
+    /// (the timing is kept). Both cut memory for big animations: a 320px,
+    /// 150-frame sticker is about 60 MB decoded in full.
+    static func decode(_ data: Data, maxPixelSize: Int? = nil, maxFrames: Int? = nil) -> UIImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let count = CGImageSourceGetCount(source)
         guard count > 1 else { return nil }
 
+        let step = max(1, Int((Double(count) / Double(maxFrames ?? count)).rounded(.up)))
+        let thumbOptions: CFDictionary? = maxPixelSize.map {
+            [kCGImageSourceCreateThumbnailFromImageAlways: true,
+             kCGImageSourceCreateThumbnailWithTransform: true,
+             kCGImageSourceShouldCacheImmediately: true,
+             kCGImageSourceThumbnailMaxPixelSize: $0] as CFDictionary
+        }
+
         var frames: [UIImage] = []
-        frames.reserveCapacity(count)
+        frames.reserveCapacity(count / step + 1)
         var duration: Double = 0
 
         for index in 0..<count {
-            guard let cg = CGImageSourceCreateImageAtIndex(source, index, nil) else { continue }
-            frames.append(UIImage(cgImage: cg))
             duration += frameDelay(source: source, index: index)
+            guard index % step == 0 else { continue }
+            let cg = thumbOptions.map { CGImageSourceCreateThumbnailAtIndex(source, index, $0) }
+                ?? CGImageSourceCreateImageAtIndex(source, index, nil)
+            guard let cg else { continue }
+            frames.append(UIImage(cgImage: cg))
         }
 
         guard frames.count > 1 else { return nil }
@@ -46,8 +62,10 @@ enum AnimatedImageDecoder {
 
         let unclamped = container?[kCGImagePropertyGIFUnclampedDelayTime] as? Double
             ?? container?[kCGImagePropertyAPNGUnclampedDelayTime] as? Double
+            ?? container?[kCGImagePropertyWebPUnclampedDelayTime] as? Double
         let clamped = container?[kCGImagePropertyGIFDelayTime] as? Double
             ?? container?[kCGImagePropertyAPNGDelayTime] as? Double
+            ?? container?[kCGImagePropertyWebPDelayTime] as? Double
 
         let delay = unclamped ?? clamped ?? 0.1
         return delay < 0.011 ? 0.1 : delay

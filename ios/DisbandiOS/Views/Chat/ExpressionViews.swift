@@ -89,7 +89,8 @@ struct StickerMessageView: View {
     var body: some View {
         Group {
             if let sticker = store.sticker(id: id) {
-                RemoteImage(url: sticker.url, contentMode: .fit) { Color.clear }
+                RemoteImage(url: sticker.url, contentMode: .fit, placeholder: { Color.clear },
+                            maxPixelSize: 320, maxFrames: 60)
                     .accessibilityLabel("\(sticker.name) sticker")
             } else if store.isStickerMissing(id) {
                 VStack(spacing: 6) {
@@ -177,7 +178,7 @@ struct ExpressionPickerSheet: View {
             })
         }.filter { !$0.1.isEmpty }
         if groups.isEmpty {
-            empty(q.isEmpty ? "None of your spaces have stickers yet. A space's owner can add them in its settings."
+            empty(q.isEmpty ? "No stickers yet. A space's owner can add them in its settings."
                             : "No stickers match “\(query)”.")
         }
         ForEach(groups, id: \.0.id) { space, stickers in
@@ -189,7 +190,8 @@ struct ExpressionPickerSheet: View {
                             onSticker(sticker)
                             dismiss()
                         } label: {
-                            RemoteImage(url: sticker.url, contentMode: .fit) { Color.clear }
+                            RemoteImage(url: sticker.url, contentMode: .fit, placeholder: { Color.clear },
+                                        maxPixelSize: 240, maxFrames: 50)
                                 .aspectRatio(1, contentMode: .fit)
                                 .padding(4)
                         }
@@ -232,13 +234,13 @@ struct ExpressionPickerSheet: View {
 
     private func header(_ space: ExpressionStore.Space) -> some View {
         HStack(spacing: 8) {
-            RemoteImage(url: space.iconUrl, contentMode: .fill) {
+            RemoteImage(url: space.iconUrl, contentMode: .fill, placeholder: {
                 Text(String(space.name.prefix(2)))
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Brand.textPrimary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Brand.elevated)
-            }
+            }, maxPixelSize: 66, maxFrames: 30)
             .frame(width: 22, height: 22)
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             Text(space.name)

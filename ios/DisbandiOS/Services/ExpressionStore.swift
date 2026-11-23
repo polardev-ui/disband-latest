@@ -103,9 +103,34 @@ final class ExpressionStore: ObservableObject {
         }
     }
 
-    /// Spaces that have stickers, in your space list's order.
+    /// Sticker packs every build ships with, as on the web (`BUILT_IN_PACKS` in
+    /// `src/lib/stickers.ts`). The art is the animated WebP the website serves.
+    static let builtInPacks: [(space: Space, stickers: [SpaceSticker])] = {
+        let base = "https://www.disband.dev/stickers"
+        func pack(_ id: String, _ name: String, _ stickers: [(id: String, name: String, tags: String)]) -> (space: Space, stickers: [SpaceSticker]) {
+            let list = stickers.map {
+                SpaceSticker(id: $0.id, serverId: "builtin:\(id)", name: $0.name, tags: $0.tags,
+                             url: "\(base)/\(id)/\($0.id).webp", format: "image")
+            }
+            return (Space(id: "builtin:\(id)", name: name, iconUrl: list.first?.url), list)
+        }
+        return [
+            pack("spectre", "Spectre", [
+                ("spectre-hello", "Hello", "hello hi hey wave greetings 👋"),
+                ("spectre-lol", "LOL", "lol laugh haha funny lmao 😂"),
+                ("spectre-sad", "Sad", "sad cry crying tears upset 😢 😭"),
+                ("spectre-love", "Love", "love heart hearts crush adore 😍 ❤️"),
+                ("spectre-party", "Party", "party celebrate yay hype confetti jump 🎉"),
+            ]),
+        ]
+    }()
+
+    private static let builtInById: [String: SpaceSticker] = Dictionary(
+        uniqueKeysWithValues: builtInPacks.flatMap(\.stickers).map { ($0.id, $0) })
+
+    /// The built-in packs, then spaces that have stickers in your space list's order.
     var stickerSpaces: [(space: Space, stickers: [SpaceSticker])] {
-        spaces.compactMap { space in
+        Self.builtInPacks + spaces.compactMap { space in
             guard let list = stickersBySpace[space.id], !list.isEmpty else { return nil }
             return (space, list)
         }
@@ -138,7 +163,7 @@ final class ExpressionStore: ObservableObject {
 
     /// A sticker by id; nil while it's looked up, and also when it's gone (see `isStickerMissing`).
     func sticker(id: String) -> SpaceSticker? {
-        if let hit = stickerById[id] { return hit }
+        if let hit = Self.builtInById[id] ?? stickerById[id] { return hit }
         if !missingStickers.contains(id) { pendingStickers.insert(id); scheduleFlush() }
         return nil
     }
