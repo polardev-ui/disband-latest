@@ -67,7 +67,7 @@ export const PERM_GROUPS: { title: string; perms: { key: ServerPermissionKey; la
 
 export const ROLE_COLORS = ["#5865f2", "#57f287", "#fee75c", "#eb459e", "#ed4245", "#e67e22", "#9b59b6", "#1abc9c", "#95a5ba", "#ffffff"];
 
-const DEFAULT_ROLE_PERMS: ServerPermissionKey[] = ["send_messages", "add_reactions", "attach_files"];
+const DEFAULT_ROLE_PERMS: ServerPermissionKey[] = ["send_messages", "add_reactions", "attach_files", "mention_everyone"];
 const ICON_TYPES = "image/png,image/webp,image/gif,image/jpeg";
 
 type Tab = "display" | "permissions";

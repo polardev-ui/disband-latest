@@ -589,10 +589,11 @@ export function ChatInput({
           ]
         : [];
     // @everyone is a real token in server channels (the server fans it out
-    // to every member), so it gets an autocomplete row like a member. Never
-    // offered in DMs/groups, where the token notifies nobody.
+    // to every member), so it gets an autocomplete row like a member, for
+    // people with Mention @everyone. Never offered in DMs/groups, where the
+    // token notifies nobody.
     const everyoneItems: MentionItem[] =
-      serverId && (q === "" || "everyone".startsWith(q) || "everyone".includes(q))
+      serverId && serverPermissions?.mention_everyone && (q === "" || "everyone".startsWith(q) || "everyone".includes(q))
         ? [
             {
               id: "everyone",

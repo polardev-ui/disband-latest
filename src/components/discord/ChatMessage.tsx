@@ -71,6 +71,8 @@ export interface ChatMessageData {
   edited_at?: string | null;
   created_at: string;
   mentions?: string[];
+  /** It really pinged everyone: the author had Mention @everyone (migration 0284). */
+  mention_everyone?: boolean;
   author?: Profile;
   sending?: boolean;
   uploadProgress?: number;
@@ -766,7 +768,7 @@ function ChatMessageImpl({
 
   const mentionedYou = !!(
     namedYou(message.mentions, body, currentUserId, currentUserName)
-    || mentionsEveryone(body)
+    || (message.mention_everyone === true && mentionsEveryone(body))
   );
   const repliedToYou = !!(
     currentUserId
@@ -1047,7 +1049,7 @@ function messagePingsUser(
   const body = normalizeMessageContent(msg.content);
   return !!(
     namedYou(msg.mentions, body, currentUserId, currentUserName)
-    || mentionsEveryone(body)
+    || (msg.mention_everyone === true && mentionsEveryone(body))
     || (msg.reply_to?.author_id === currentUserId && msg.author_id !== currentUserId)
   );
 }

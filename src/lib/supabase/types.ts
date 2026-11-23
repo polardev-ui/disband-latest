@@ -279,6 +279,8 @@ export interface DbMessage {
   reply_to_id: string | null;
   reply_to_deleted?: boolean;
   mentions: string[];
+  /** It said @everyone or @here and its author had Mention @everyone (migration 0284). */
+  mention_everyone?: boolean;
   /** Discord-shaped rich embeds from a webhook or bot. */
   embeds?: Embed[] | null;
   /** Present when the message was posted by a webhook. */

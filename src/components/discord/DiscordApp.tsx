@@ -1767,6 +1767,7 @@ export function DiscordApp() {
     edited_at?: string | null;
     created_at: string;
     mentions?: string[];
+    mention_everyone?: boolean;
     author?: Profile | null;
     embeds?: import("@/lib/embeds").Embed[] | null;
     webhook?: import("@/lib/embeds").MessageWebhookInfo | null;
@@ -1793,6 +1794,7 @@ export function DiscordApp() {
     edited_at: m.edited_at ?? null,
     created_at: m.created_at,
     mentions: m.mentions ?? [],
+    mention_everyone: m.mention_everyone === true,
     author: m.author ?? undefined,
     // Webhook and bot posts (GitHub, CI) carry their content in embeds; left
     // out here they reached the renderer as bare one-line text.
