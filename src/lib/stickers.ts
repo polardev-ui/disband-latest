@@ -5,10 +5,11 @@ import type { MessageAttachmentPayload } from "@/lib/messages";
  * Stickers: animated artwork sent as a message of its own, picked from the
  * composer's sticker picker.
  *
- * There is no sticker backend yet. On the dev server the packs come from
- * local folders (see src/app/api/dev/stickers), so unreleased stickers can be
- * tried in real chats; every other build has no packs and the picker stays
- * hidden. A sticker message stores only the sticker's id and name (an
+ * Every build has the built-in packs below (their files are in
+ * public/stickers). On the dev server, more packs can come from local folders
+ * (see src/app/api/dev/stickers), so unreleased stickers can be tried in real
+ * chats. Spaces' own stickers come from src/lib/expressions. A sticker
+ * message stores only the sticker's id and name (an
  * `attachments` entry of type "sticker"), and the art is looked up here when
  * the message is drawn.
  */
@@ -45,25 +46,60 @@ export interface StickerPack {
 
 /* ---------------------------------------------------------------- packs */
 
+/** Sticker packs every build ships with. Files live in public/stickers/<pack>/. */
+function builtInPack(
+  id: string,
+  name: string,
+  description: string,
+  stickers: { id: string; name: string; tags: string[]; poster: number }[],
+): StickerPack {
+  return {
+    id,
+    name,
+    description,
+    icon: stickers[0]?.id ?? null,
+    stickers: stickers.map((s) => ({
+      ...s,
+      packId: id,
+      format: "lottie" as const,
+      url: `/stickers/${id}/${s.id}.json`,
+      fallbackUrl: `/stickers/${id}/${s.id}.webp`,
+    })),
+  };
+}
+
+export const BUILT_IN_PACKS: StickerPack[] = [
+  builtInPack("spectre", "Spectre", "Disband's mascot, in five moods.", [
+    { id: "spectre-hello", name: "Hello", tags: ["hello", "hi", "hey", "wave", "greetings", "👋"], poster: 48 },
+    { id: "spectre-lol", name: "LOL", tags: ["lol", "laugh", "haha", "funny", "lmao", "😂"], poster: 32 },
+    { id: "spectre-sad", name: "Sad", tags: ["sad", "cry", "crying", "tears", "upset", "😢", "😭"], poster: 40 },
+    { id: "spectre-love", name: "Love", tags: ["love", "heart", "hearts", "crush", "adore", "😍", "❤️"], poster: 8 },
+    { id: "spectre-party", name: "Party", tags: ["party", "celebrate", "yay", "hype", "confetti", "jump", "🎉"], poster: 48 },
+  ]),
+];
+
 interface PackState {
   packs: StickerPack[];
   ready: boolean;
 }
 
-let packState: PackState = { packs: [], ready: false };
+let packState: PackState = { packs: BUILT_IN_PACKS, ready: false };
 let packLoad: "idle" | "loading" | "done" = "idle";
 const packListeners = new Set<() => void>();
-const SERVER_PACKS: PackState = { packs: [], ready: false };
+const SERVER_PACKS: PackState = { packs: BUILT_IN_PACKS, ready: false };
 
 function loadPacks() {
   if (packLoad !== "idle") return;
   packLoad = "loading";
-  const finish = (packs: StickerPack[]) => {
+  const finish = (local: StickerPack[]) => {
     packLoad = "done";
+    // A local pack with a built-in pack's id is that pack's work in progress.
+    const localIds = new Set(local.map((p) => p.id));
+    const packs = [...BUILT_IN_PACKS.filter((p) => !localIds.has(p.id)), ...local];
     packState = { packs, ready: true };
     packListeners.forEach((l) => l());
   };
-  // Only the dev server has packs. The condition is a build-time constant, so
+  // Only the dev server has local packs. The condition is a build-time constant, so
   // a production bundle doesn't even contain the request.
   if (process.env.NODE_ENV !== "development") {
     finish([]);

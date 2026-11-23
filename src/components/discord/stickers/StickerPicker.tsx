@@ -60,7 +60,7 @@ interface Section {
   stickers: Sticker[];
 }
 
-/** Renders nothing until there are stickers to offer (today: only on the dev server). */
+/** Always shown; with no stickers at all, the panel explains where they come from. */
 export function StickerPicker(props: StickerPickerProps) {
   const { packs: localPacks } = useStickerPacks();
   const { servers } = useApp();
@@ -84,7 +84,6 @@ export function StickerPicker(props: StickerPickerProps) {
     // `version` changes whenever space stickers load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [servers, localPacks, version]);
-  if (packs.length === 0) return null;
   return <StickerPickerButton {...props} packs={packs} />;
 }
 
@@ -455,6 +454,12 @@ function StickerPickerButton({ packs, onSelect, disabled }: StickerPickerProps &
                       <p className="text-[14px]">{t("No stickers match “{query}”.", { query: q })}</p>
                     </div>
                   )
+                ) : sections.length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-text-muted">
+                    <SolidStickerIcon size={40} className="opacity-60" />
+                    <p className="text-[14px] font-semibold text-header-secondary">{t("No stickers yet")}</p>
+                    <p className="text-[13px]">{t("Stickers a space adds in Server Settings show up here.")}</p>
+                  </div>
                 ) : (
                   sections.map((s) => {
                     if (remaining <= 0) return null;
