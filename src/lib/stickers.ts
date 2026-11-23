@@ -69,12 +69,32 @@ function builtInPack(
 }
 
 export const BUILT_IN_PACKS: StickerPack[] = [
-  builtInPack("spectre", "Spectre", "Disband's mascot, in five moods.", [
+  builtInPack("spectre", "Spectre", "Disband's mascot, in thirteen moods.", [
     { id: "spectre-hello", name: "Hello", tags: ["hello", "hi", "hey", "wave", "greetings", "👋"], poster: 48 },
     { id: "spectre-lol", name: "LOL", tags: ["lol", "laugh", "haha", "funny", "lmao", "😂"], poster: 32 },
     { id: "spectre-sad", name: "Sad", tags: ["sad", "cry", "crying", "tears", "upset", "😢", "😭"], poster: 40 },
     { id: "spectre-love", name: "Love", tags: ["love", "heart", "hearts", "crush", "adore", "😍", "❤️"], poster: 8 },
     { id: "spectre-party", name: "Party", tags: ["party", "celebrate", "yay", "hype", "confetti", "jump", "🎉"], poster: 48 },
+    { id: "spectre-typing", name: "Typing", tags: ["typing", "type", "keyboard", "laptop", "mash", "busy", "working", "coding", "⌨️", "💻"], poster: 4 },
+    { id: "spectre-sleepy", name: "Sleepy", tags: ["sleepy", "sleep", "tired", "zzz", "night", "goodnight", "bed", "😴", "💤"], poster: 40 },
+    { id: "spectre-thinking", name: "Hmm", tags: ["hmm", "think", "thinking", "wonder", "confused", "question", "🤔"], poster: 20 },
+    { id: "spectre-shocked", name: "Shocked", tags: ["shocked", "shock", "omg", "wow", "surprised", "scared", "what", "😱", "😮"], poster: 30 },
+    { id: "spectre-angry", name: "Angry", tags: ["angry", "mad", "rage", "furious", "grr", "😠", "😡", "💢"], poster: 10 },
+    { id: "spectre-cool", name: "Cool", tags: ["cool", "sunglasses", "shades", "chill", "swag", "😎"], poster: 0 },
+    { id: "spectre-dance", name: "Dance", tags: ["dance", "dancing", "groove", "vibe", "music", "disco", "🕺", "💃", "🎶"], poster: 6 },
+    { id: "spectre-shrug", name: "Shrug", tags: ["shrug", "idk", "dunno", "whatever", "meh", "🤷"], poster: 40 },
+  ]),
+  builtInPack("wisp", "Wisp", "Wisp, in ten moods.", [
+    { id: "wisp-hi", name: "Hi", tags: ["hi", "hello", "hey", "wave", "👋"], poster: 60 },
+    { id: "wisp-yay", name: "Yay", tags: ["yay", "hooray", "celebrate", "excited", "jump", "🎉", "✨"], poster: 36 },
+    { id: "wisp-thanks", name: "Thanks", tags: ["thanks", "thank you", "ty", "grateful", "bow", "🙏"], poster: 60 },
+    { id: "wisp-shy", name: "Shy", tags: ["shy", "blush", "embarrassed", "cute", "flustered", "😳", "☺️"], poster: 38 },
+    { id: "wisp-sad", name: "Sad", tags: ["sad", "cry", "crying", "tears", "upset", "😢", "😭"], poster: 40 },
+    { id: "wisp-love", name: "Love", tags: ["love", "heart", "hug", "adore", "crush", "❤️", "🥰"], poster: 6 },
+    { id: "wisp-please", name: "Please", tags: ["please", "pleading", "beg", "pretty please", "puppy eyes", "🥺"], poster: 20 },
+    { id: "wisp-pout", name: "Pout", tags: ["pout", "hmph", "angry", "mad", "sulk", "grumpy", "😤", "😠"], poster: 10 },
+    { id: "wisp-sleepy", name: "Sleepy", tags: ["sleepy", "sleep", "tired", "zzz", "night", "goodnight", "😴", "💤"], poster: 60 },
+    { id: "wisp-wink", name: "Wink", tags: ["wink", "flirt", "cheeky", "playful", "😉"], poster: 50 },
   ]),
 ];
 
