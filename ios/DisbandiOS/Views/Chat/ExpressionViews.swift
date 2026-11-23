@@ -89,8 +89,7 @@ struct StickerMessageView: View {
     var body: some View {
         Group {
             if let sticker = store.sticker(id: id) {
-                RemoteImage(url: sticker.url, contentMode: .fit, placeholder: { Color.clear },
-                            maxPixelSize: 320, maxFrames: 60)
+                StickerImage(url: sticker.url)
                     .accessibilityLabel("\(sticker.name) sticker")
             } else if store.isStickerMissing(id) {
                 VStack(spacing: 6) {
@@ -114,6 +113,148 @@ struct StickerMessageView: View {
             }
         }
         .frame(width: 160, height: 160)
+    }
+}
+
+/**
+ A sticker's picture, played frame by frame at its own rate (60 fps for the
+ built-in packs). Each frame is decoded as it's due, so only the file is
+ held in memory, not every decoded frame: decoding all 150 frames of a 320px
+ sticker up front costs about 60 MB.
+ */
+struct StickerImage: UIViewRepresentable {
+    let url: String
+
+    func makeUIView(context: Context) -> StickerPlayerView { StickerPlayerView(frame: .zero) }
+    func updateUIView(_ view: StickerPlayerView, context: Context) { view.load(url) }
+}
+
+final class StickerPlayerView: UIImageView {
+    /// The files themselves (about 1 MB each), shared by every sticker on screen.
+    private static let files = NSCache<NSString, NSData>()
+    private var url: String?
+    /// Bumped whenever a load starts, so a late download for an old url is dropped.
+    private var generation = 0
+
+    private var source: CGImageSource?
+    private var delays: [CFTimeInterval] = []
+    private var frameIndex = 0
+    private var nextFrameAt: CFTimeInterval = 0
+    private var link: CADisplayLink?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        contentMode = .scaleAspectFit
+        isUserInteractionEnabled = false
+        setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        setContentHuggingPriority(.defaultLow, for: .horizontal)
+        setContentHuggingPriority(.defaultLow, for: .vertical)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: UIView.noIntrinsicMetric) }
+
+    func load(_ newURL: String) {
+        guard newURL != url else { return }
+        url = newURL
+        generation += 1
+        stop()
+        source = nil
+        image = nil
+        guard let parsed = URL(string: newURL) else { return }
+        if let data = Self.files.object(forKey: newURL as NSString) {
+            prepare(data as Data)
+            return
+        }
+        let gen = generation
+        Task { [weak self] in
+            var req = URLRequest(url: parsed)
+            req.cachePolicy = .returnCacheDataElseLoad
+            guard let (data, _) = try? await URLSession.shared.data(for: req) else { return }
+            Self.files.setObject(data as NSData, forKey: newURL as NSString, cost: data.count)
+            await MainActor.run { [weak self] in
+                guard let self, self.generation == gen else { return }
+                self.prepare(data)
+            }
+        }
+    }
+
+    // Plays only while on screen; a sticker scrolled away stops decoding.
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil { stop() } else { start() }
+    }
+
+    private func prepare(_ data: Data) {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return }
+        let count = CGImageSourceGetCount(src)
+        guard count > 1 else {
+            image = UIImage(data: data)
+            return
+        }
+        source = src
+        delays = (0..<count).map { Self.delay(src, $0) }
+        frameIndex = 0
+        showFrame()
+        start()
+    }
+
+    private func start() {
+        guard link == nil, window != nil, source != nil, !delays.isEmpty else { return }
+        let link = CADisplayLink(target: WeakTarget(self), selector: #selector(WeakTarget.tick(_:)))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+        link.add(to: .main, forMode: .common)
+        self.link = link
+        nextFrameAt = CACurrentMediaTime() + delays[frameIndex]
+    }
+
+    private func stop() {
+        link?.invalidate()
+        link = nil
+    }
+
+    fileprivate func tick(_ link: CADisplayLink) {
+        guard !delays.isEmpty else { return }
+        let now = link.targetTimestamp
+        guard now >= nextFrameAt else { return }
+        // Step to the frame that's due, skipping any we fell behind on.
+        repeat {
+            frameIndex = (frameIndex + 1) % delays.count
+            nextFrameAt += delays[frameIndex]
+        } while nextFrameAt <= now
+        showFrame()
+    }
+
+    private func showFrame() {
+        guard let source, let frame = CGImageSourceCreateImageAtIndex(
+            source, frameIndex, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else { return }
+        image = UIImage(cgImage: frame)
+    }
+
+    private static func delay(_ source: CGImageSource, _ index: Int) -> CFTimeInterval {
+        let props = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any]
+        let dict = (props?[kCGImagePropertyWebPDictionary] ?? props?[kCGImagePropertyGIFDictionary]
+            ?? props?[kCGImagePropertyPNGDictionary]) as? [CFString: Any]
+        let d = dict?[kCGImagePropertyWebPUnclampedDelayTime] as? Double
+            ?? dict?[kCGImagePropertyGIFUnclampedDelayTime] as? Double
+            ?? dict?[kCGImagePropertyAPNGUnclampedDelayTime] as? Double
+            ?? dict?[kCGImagePropertyWebPDelayTime] as? Double
+            ?? dict?[kCGImagePropertyGIFDelayTime] as? Double
+            ?? dict?[kCGImagePropertyAPNGDelayTime] as? Double
+            ?? 0.1
+        return d < 0.011 ? 0.1 : d
+    }
+
+    /// A display link holds its target strongly; this keeps it from holding the view.
+    private final class WeakTarget: NSObject {
+        weak var view: StickerPlayerView?
+        init(_ view: StickerPlayerView) { self.view = view }
+        @objc func tick(_ link: CADisplayLink) {
+            guard let view else { link.invalidate(); return }
+            view.tick(link)
+        }
     }
 }
 
@@ -190,8 +331,7 @@ struct ExpressionPickerSheet: View {
                             onSticker(sticker)
                             dismiss()
                         } label: {
-                            RemoteImage(url: sticker.url, contentMode: .fit, placeholder: { Color.clear },
-                                        maxPixelSize: 240, maxFrames: 50)
+                            StickerImage(url: sticker.url)
                                 .aspectRatio(1, contentMode: .fit)
                                 .padding(4)
                         }
