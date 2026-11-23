@@ -1,0 +1,18 @@
+{
+  "id": "wisp",
+  "name": "Wisp",
+  "description": "Wisp, in ten moods.",
+  "icon": "wisp-hi",
+  "stickers": [
+    { "id": "wisp-hi", "name": "Hi", "tags": ["hi", "hello", "hey", "wave", "👋"], "lottie": "lottie/wisp-hi.json", "fallback": "fallback/wisp-hi.webp", "poster": 60 },
+    { "id": "wisp-yay", "name": "Yay", "tags": ["yay", "hooray", "celebrate", "excited", "jump", "🎉", "✨"], "lottie": "lottie/wisp-yay.json", "fallback": "fallback/wisp-yay.webp", "poster": 36 },
+    { "id": "wisp-thanks", "name": "Thanks", "tags": ["thanks", "thank you", "ty", "grateful", "bow", "🙏"], "lottie": "lottie/wisp-thanks.json", "fallback": "fallback/wisp-thanks.webp", "poster": 60 },
+    { "id": "wisp-shy", "name": "Shy", "tags": ["shy", "blush", "embarrassed", "cute", "flustered", "😳", "☺️"], "lottie": "lottie/wisp-shy.json", "fallback": "fallback/wisp-shy.webp", "poster": 38 },
+    { "id": "wisp-sad", "name": "Sad", "tags": ["sad", "cry", "crying", "tears", "upset", "😢", "😭"], "lottie": "lottie/wisp-sad.json", "fallback": "fallback/wisp-sad.webp", "poster": 40 },
+    { "id": "wisp-love", "name": "Love", "tags": ["love", "heart", "hug", "adore", "crush", "❤️", "🥰"], "lottie": "lottie/wisp-love.json", "fallback": "fallback/wisp-love.webp", "poster": 6 },
+    { "id": "wisp-please", "name": "Please", "tags": ["please", "pleading", "beg", "pretty please", "puppy eyes", "🥺"], "lottie": "lottie/wisp-please.json", "fallback": "fallback/wisp-please.webp", "poster": 20 },
+    { "id": "wisp-pout", "name": "Pout", "tags": ["pout", "hmph", "angry", "mad", "sulk", "grumpy", "😤", "😠"], "lottie": "lottie/wisp-pout.json", "fallback": "fallback/wisp-pout.webp", "poster": 10 },
+    { "id": "wisp-sleepy", "name": "Sleepy", "tags": ["sleepy", "sleep", "tired", "zzz", "night", "goodnight", "😴", "💤"], "lottie": "lottie/wisp-sleepy.json", "fallback": "fallback/wisp-sleepy.webp", "poster": 60 },
+    { "id": "wisp-wink", "name": "Wink", "tags": ["wink", "flirt", "cheeky", "playful", "😉"], "lottie": "lottie/wisp-wink.json", "fallback": "fallback/wisp-wink.webp", "poster": 50 }
+  ]
+}

@@ -1,0 +1,222 @@
+{
+  "id": "spectre",
+  "name": "Spectre",
+  "description": "Disband's mascot, in thirteen moods.",
+  "icon": "spectre-hello",
+  "stickers": [
+    {
+      "id": "spectre-hello",
+      "name": "Hello",
+      "tags": [
+        "hello",
+        "hi",
+        "hey",
+        "wave",
+        "greetings",
+        "👋"
+      ],
+      "lottie": "lottie/spectre-hello.json",
+      "fallback": "fallback/spectre-hello.webp",
+      "poster": 48
+    },
+    {
+      "id": "spectre-lol",
+      "name": "LOL",
+      "tags": [
+        "lol",
+        "laugh",
+        "haha",
+        "funny",
+        "lmao",
+        "😂"
+      ],
+      "lottie": "lottie/spectre-lol.json",
+      "fallback": "fallback/spectre-lol.webp",
+      "poster": 32
+    },
+    {
+      "id": "spectre-sad",
+      "name": "Sad",
+      "tags": [
+        "sad",
+        "cry",
+        "crying",
+        "tears",
+        "upset",
+        "😢",
+        "😭"
+      ],
+      "lottie": "lottie/spectre-sad.json",
+      "fallback": "fallback/spectre-sad.webp",
+      "poster": 40
+    },
+    {
+      "id": "spectre-love",
+      "name": "Love",
+      "tags": [
+        "love",
+        "heart",
+        "hearts",
+        "crush",
+        "adore",
+        "😍",
+        "❤️"
+      ],
+      "lottie": "lottie/spectre-love.json",
+      "fallback": "fallback/spectre-love.webp",
+      "poster": 8
+    },
+    {
+      "id": "spectre-party",
+      "name": "Party",
+      "tags": [
+        "party",
+        "celebrate",
+        "yay",
+        "hype",
+        "confetti",
+        "jump",
+        "🎉"
+      ],
+      "lottie": "lottie/spectre-party.json",
+      "fallback": "fallback/spectre-party.webp",
+      "poster": 48
+    },
+    {
+      "id": "spectre-typing",
+      "name": "Typing",
+      "tags": [
+        "typing",
+        "type",
+        "keyboard",
+        "laptop",
+        "mash",
+        "busy",
+        "working",
+        "coding",
+        "⌨️",
+        "💻"
+      ],
+      "lottie": "lottie/spectre-typing.json",
+      "fallback": "fallback/spectre-typing.webp",
+      "poster": 4
+    },
+    {
+      "id": "spectre-sleepy",
+      "name": "Sleepy",
+      "tags": [
+        "sleepy",
+        "sleep",
+        "tired",
+        "zzz",
+        "night",
+        "goodnight",
+        "bed",
+        "😴",
+        "💤"
+      ],
+      "lottie": "lottie/spectre-sleepy.json",
+      "fallback": "fallback/spectre-sleepy.webp",
+      "poster": 40
+    },
+    {
+      "id": "spectre-thinking",
+      "name": "Hmm",
+      "tags": [
+        "hmm",
+        "think",
+        "thinking",
+        "wonder",
+        "confused",
+        "question",
+        "🤔"
+      ],
+      "lottie": "lottie/spectre-thinking.json",
+      "fallback": "fallback/spectre-thinking.webp",
+      "poster": 20
+    },
+    {
+      "id": "spectre-shocked",
+      "name": "Shocked",
+      "tags": [
+        "shocked",
+        "shock",
+        "omg",
+        "wow",
+        "surprised",
+        "scared",
+        "what",
+        "😱",
+        "😮"
+      ],
+      "lottie": "lottie/spectre-shocked.json",
+      "fallback": "fallback/spectre-shocked.webp",
+      "poster": 30
+    },
+    {
+      "id": "spectre-angry",
+      "name": "Angry",
+      "tags": [
+        "angry",
+        "mad",
+        "rage",
+        "furious",
+        "grr",
+        "😠",
+        "😡",
+        "💢"
+      ],
+      "lottie": "lottie/spectre-angry.json",
+      "fallback": "fallback/spectre-angry.webp",
+      "poster": 10
+    },
+    {
+      "id": "spectre-cool",
+      "name": "Cool",
+      "tags": [
+        "cool",
+        "sunglasses",
+        "shades",
+        "chill",
+        "swag",
+        "😎"
+      ],
+      "lottie": "lottie/spectre-cool.json",
+      "fallback": "fallback/spectre-cool.webp",
+      "poster": 0
+    },
+    {
+      "id": "spectre-dance",
+      "name": "Dance",
+      "tags": [
+        "dance",
+        "dancing",
+        "groove",
+        "vibe",
+        "music",
+        "disco",
+        "🕺",
+        "💃",
+        "🎶"
+      ],
+      "lottie": "lottie/spectre-dance.json",
+      "fallback": "fallback/spectre-dance.webp",
+      "poster": 6
+    },
+    {
+      "id": "spectre-shrug",
+      "name": "Shrug",
+      "tags": [
+        "shrug",
+        "idk",
+        "dunno",
+        "whatever",
+        "meh",
+        "🤷"
+      ],
+      "lottie": "lottie/spectre-shrug.json",
+      "fallback": "fallback/spectre-shrug.webp",
+      "poster": 40
+    }
+  ]
+}
