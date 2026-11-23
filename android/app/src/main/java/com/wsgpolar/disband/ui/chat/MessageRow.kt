@@ -11,10 +11,14 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -93,14 +97,28 @@ fun MessageRow(
         modifier
             .fillMaxWidth()
             // A message aimed at you is tinted, the way a ping is on the web.
-            .background(if (row.pingsYou) palette.accent.copy(alpha = 0.10f) else androidx.compose.ui.graphics.Color.Transparent)
+            .background(if (row.pingsYou) Brand.idle.copy(alpha = 0.12f) else palette.surfaceRaised)
+            .drawBehind {
+                // Discord's gold edge, so a ping stands out at a glance (as on iOS).
+                if (row.pingsYou) drawRect(Brand.idle, size = androidx.compose.ui.geometry.Size(2.dp.toPx(), size.height))
+            }
             .combinedClickable(
                 onClick = {},
                 onLongClick = onLongPress,
             )
-            .padding(horizontal = 12.dp, vertical = if (grouped) 1.dp else 4.dp)
+            // Same author continuing stays tight; a speaker change gets 18dp (iOS).
+            .padding(start = 16.dp, end = 16.dp, top = if (grouped) 1.dp else 18.dp)
     ) {
         if (repliedTo != null) ReplyPreview(repliedTo, palette)
+        // The original is older than the loaded page (or was deleted). Say
+        // so, rather than letting a reply read as an out-of-place message.
+        else if (row.replyToId != null) Text(
+            "Replying to an earlier message",
+            color = palette.textMuted,
+            fontSize = 12.sp,
+            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+            modifier = Modifier.padding(start = 52.dp, bottom = 2.dp),
+        )
         row.interaction?.let { InteractionHeader(it, palette) }
 
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -127,7 +145,7 @@ fun MessageRow(
                         Text(
                             row.webhook?.name ?: row.author?.name ?: "Unknown",
                             color = palette.textPrimary,
-                            fontSize = 15.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -140,7 +158,7 @@ fun MessageRow(
                         Text(
                             TimeFormat.short(row.createdAt),
                             color = palette.textMuted,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                         )
                         if (row.editedAt != null) {
                             Text(
@@ -173,7 +191,11 @@ fun MessageRow(
 
                 if (row.reactions.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
-                    ReactionChips(row.reactions, palette, onToggleReaction)
+                    var reactionDetails by remember { mutableStateOf<String?>(null) }
+                    reactionDetails?.let { emoji ->
+                        ReactionDetailSheet(row.reactions, emoji) { reactionDetails = null }
+                    }
+                    ReactionChips(row.reactions, palette, onToggleReaction, onDetails = { reactionDetails = it })
                 }
 
                 if (row.pending) {
@@ -195,8 +217,8 @@ private fun AppTag(palette: Palette) {
         fontWeight = FontWeight.Bold,
         modifier = Modifier
             .clip(RoundedCornerShape(4.dp))
-            .background(palette.accent)
-            .padding(horizontal = 4.dp, vertical = 1.dp),
+            .background(androidx.compose.ui.graphics.Color(0xFF4641D9))
+            .padding(horizontal = 5.dp, vertical = 2.dp),
     )
 }
 
@@ -436,10 +458,14 @@ private fun VideoCard(
     palette: Palette,
     onOpen: (StoredAttachment) -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val loader = remember(context) {
+        coil.ImageLoader.Builder(context).components { add(coil.decode.VideoFrameDecoder.Factory()) }.build()
+    }
     Box(
         Modifier
-            .widthIn(max = 280.dp)
-            .heightIn(max = 280.dp)
+            .width(280.dp)
+            .aspectRatio(16f / 9f)
             .clip(RoundedCornerShape(10.dp))
             .background(palette.elevated)
             .clickable(
@@ -451,11 +477,10 @@ private fun VideoCard(
     ) {
         AsyncImage(
             model = attachment.url,
+            imageLoader = loader,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .widthIn(max = 280.dp)
-                .heightIn(max = 220.dp),
+            modifier = Modifier.fillMaxSize(),
         )
         Box(
             Modifier
@@ -595,22 +620,46 @@ private fun FileCard(
 @Composable
 private fun ReplyPreview(replied: ChatRow, palette: Palette) {
     Row(
-        Modifier.fillMaxWidth().padding(start = 52.dp, bottom = 2.dp),
+        Modifier.fillMaxWidth().padding(bottom = 1.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // The elbow joins the reply line up to the avatar's centre, as on iOS.
+        val elbowColor = palette.textMuted.copy(alpha = 0.5f)
+        Box(
+            Modifier
+                .padding(start = 20.dp, top = 10.dp)
+                .size(width = 27.dp, height = 10.dp)
+                .drawBehind {
+                    val r = 6.dp.toPx()
+                    val path = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(0f, size.height)
+                        lineTo(0f, r)
+                        quadraticBezierTo(0f, 0f, r, 0f)
+                        lineTo(size.width, 0f)
+                    }
+                    drawPath(
+                        path, elbowColor,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                        ),
+                    )
+                },
+        )
+        Spacer(Modifier.width(5.dp))
         AvatarImage(url = replied.author?.avatarUrl, name = replied.author?.name ?: "?", size = 16.dp)
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(5.dp))
         Text(
             replied.author?.name ?: "Unknown",
-            color = palette.accent,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
+            color = palette.textSecondary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
         )
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(5.dp))
         Text(
             replied.content.ifBlank { "attachment" },
             color = palette.textMuted,
-            fontSize = 12.sp,
+            fontSize = 13.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -622,6 +671,7 @@ private fun ReactionChips(
     reactions: List<ReactionSummaryRow>,
     palette: Palette,
     onToggle: (String) -> Unit,
+    onDetails: (String) -> Unit = {},
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -636,20 +686,23 @@ private fun ReactionChips(
             Row(
                 Modifier
                     .graphicsLayer { scaleX = scale; scaleY = scale }
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(
-                        if (reaction.reacted) palette.accent.copy(alpha = 0.2f) else palette.elevated
+                        if (reaction.reacted) palette.accent.copy(alpha = 0.18f) else palette.elevated
                     )
-                    .then(
-                        if (reaction.reacted) Modifier.border(1.dp, palette.accent, CircleShape)
-                        else Modifier
+                    .border(
+                        1.dp,
+                        if (reaction.reacted) palette.accent else Color.White.copy(alpha = 0.05f),
+                        RoundedCornerShape(8.dp),
                     )
-                    .clickable(
+                    .combinedClickable(
                         role = Role.Button,
                         onClickLabel = "Toggle ${reaction.emoji} reaction",
+                        onLongClickLabel = "See who reacted",
                         onClick = { onToggle(reaction.emoji) },
+                        onLongClick = { onDetails(reaction.emoji) },
                     )
-                    .padding(horizontal = 9.dp, vertical = 6.dp),
+                    .padding(horizontal = 9.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(reaction.emoji, fontSize = 16.sp)
@@ -657,7 +710,7 @@ private fun ReactionChips(
                 Text(
                     "${reaction.count}",
                     color = if (reaction.reacted) palette.accent else palette.textSecondary,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
             }

@@ -74,6 +74,28 @@ object RealtimeService {
     }
 
     /**
+     * Reaction changes for one context. Inserts and updates are filtered by
+     * context; deletes can't be (Realtime ignores filters on them), so every
+     * delete ticks and the caller re-reads.
+     */
+    suspend fun observeReactions(contextType: String): LiveChannel<Unit> {
+        val channel = client.channel("reactions:$contextType:${UUID.randomUUID().toString().take(8)}") { }
+        val insert = channel.postgresChangeFlow<PostgresAction.Insert>("public") {
+            this.table = "message_reactions"
+            this.filter = "context_type=eq.$contextType"
+        }
+        val update = channel.postgresChangeFlow<PostgresAction.Update>("public") {
+            this.table = "message_reactions"
+            this.filter = "context_type=eq.$contextType"
+        }
+        val delete = channel.postgresChangeFlow<PostgresAction.Delete>("public") {
+            this.table = "message_reactions"
+        }
+        channel.subscribe(blockUntilSubscribed = true)
+        return LiveChannel(channel, merge(insert, update, delete).map { })
+    }
+
+    /**
      * Observe any change (insert/update/delete) on [table], emitting a tick per
      * change. Use when the reaction is "go re-read the row".
      */

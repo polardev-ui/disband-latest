@@ -99,6 +99,9 @@ class CallManager(
     /** Display name used on `ring`/`reject`; set when the profile loads. */
     var myName: String = "User"
 
+    /** Group-call `ring` payloads arriving on `call-user:<me>`; set by [com.wsgpolar.disband.state.AppState]. */
+    var onGroupRing: ((kotlinx.serialization.json.JsonObject) -> Unit)? = null
+
     private var userId: String? = null
     private var activeCallId: String? = null
     private var activePeerId: String? = null
@@ -135,6 +138,7 @@ class CallManager(
             var backoff = 1_000L
             while (isActive) {
                 var channel: io.github.jan.supabase.realtime.RealtimeChannel? = null
+                var ringPump: Job? = null
                 try {
                     val ch = client.channel("call-user:$uid") { broadcast { } }
                     channel = ch
@@ -146,6 +150,10 @@ class CallManager(
                     // subscribes, which is what made this look one-directional.
                     val signals = ch.broadcastFlow<CallSignal>("call")
                     val pump = launch { signals.collect { handleSignal(it) } }
+                    // Group-call rings share this topic (event `group-call`); the
+                    // voice session decides what to do with them.
+                    val groupRings = ch.broadcastFlow<kotlinx.serialization.json.JsonObject>("group-call")
+                    ringPump = launch { groupRings.collect { onGroupRing?.invoke(it) } }
                     ch.subscribe(blockUntilSubscribed = true)
                     listenChannel = ch
                     backoff = 1_000L
@@ -154,6 +162,7 @@ class CallManager(
                     delay(backoff)
                     backoff = (backoff * 2).coerceAtMost(10_000L)
                 } finally {
+                    ringPump?.cancel()
                     if (listenChannel === channel) listenChannel = null
                     runCatching { channel?.leave() }
                 }
@@ -218,10 +227,15 @@ class CallManager(
 
     suspend fun rejectCall(call: IncomingCall) {
         val uid = userId ?: return
-        send(call.fromId, CallSignal(type = "reject", from = uid, to = call.fromId,
-            callId = call.callId, rejecterName = myName))
-        send(uid, CallSignal(type = "handled", from = uid, to = uid, callId = call.callId))
+        val name = myName
+        // Stop ringing now. Each send can wait seconds for a channel join,
+        // which left the ring going and made people tap Decline again.
         resetInternal()
+        scope.launch {
+            runCatching { send(call.fromId, CallSignal(type = "reject", from = uid, to = call.fromId,
+                callId = call.callId, rejecterName = name)) }
+            runCatching { send(uid, CallSignal(type = "handled", from = uid, to = uid, callId = call.callId)) }
+        }
     }
 
     /** "Hang up" on the call notification. */
@@ -248,18 +262,20 @@ class CallManager(
         val uid = userId
         val peerId = activePeerId
         val callId = activeCallId
-        when (_phase.value) {
-            CallPhase.Outgoing -> if (uid != null && peerId != null && callId != null) {
-                send(peerId, CallSignal(type = "cancel", from = uid, to = peerId, callId = callId))
-            }
-            else -> if (uid != null && peerId != null && callId != null) {
-                sendOnSignalChannel(
-                    CallSignal(type = "leave", from = uid, to = peerId, callId = callId),
-                )
-                send(peerId, CallSignal(type = "leave", from = uid, to = peerId, callId = callId))
+        val outgoing = _phase.value == CallPhase.Outgoing
+        // The call channel is already joined, so this one is quick.
+        if (!outgoing && uid != null && peerId != null && callId != null) {
+            sendOnSignalChannel(CallSignal(type = "leave", from = uid, to = peerId, callId = callId))
+        }
+        // Close the mic and the call screen before the slower per-user send,
+        // which can wait seconds to join and kept the call live after End.
+        resetInternal()
+        if (uid != null && peerId != null && callId != null) {
+            val type = if (outgoing) "cancel" else "leave"
+            scope.launch {
+                runCatching { send(peerId, CallSignal(type = type, from = uid, to = peerId, callId = callId)) }
             }
         }
-        resetInternal()
     }
 
     fun toggleMic() {
@@ -317,6 +333,10 @@ class CallManager(
         when (signal.type) {
             "ring" -> {
                 val callId = signal.callId ?: return
+                // The caller re-sends its ring (and a push) while it waits.
+                // Treating a repeat of the call we're already ringing for, or
+                // already in, as a second caller auto-declined our own call.
+                if (callId == _incoming.value?.callId || callId == activeCallId) return
                 if (_phase.value != CallPhase.Idle) {
                     // Busy → auto-decline, mirroring iOS.
                     send(signal.from, CallSignal(type = "reject", from = userId.orEmpty(),
@@ -524,8 +544,16 @@ class CallManager(
         ringWatchdog = scope.launch {
             delay(60_000)
             if (_phase.value == CallPhase.Outgoing || _phase.value == CallPhase.Incoming) {
-                _callNotice.value = if (_phase.value == CallPhase.Outgoing) "No answer" else null
+                val outgoing = _phase.value == CallPhase.Outgoing
+                val uid = userId
+                val peerId = activePeerId
+                val callId = activeCallId
+                _callNotice.value = if (outgoing) "No answer" else null
                 resetInternal()
+                // Without this the other side keeps ringing for a call nobody is on.
+                if (outgoing && uid != null && peerId != null && callId != null) {
+                    runCatching { send(peerId, CallSignal(type = "cancel", from = uid, to = peerId, callId = callId)) }
+                }
             }
         }
     }

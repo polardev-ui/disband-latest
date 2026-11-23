@@ -62,10 +62,10 @@ fun ConversationRow(
         modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp)
-            .clip(RoundedCornerShape(Radii.pressLarge))
+            .clip(RoundedCornerShape(12.dp))
             .background(if (selected) palette.accent.copy(alpha = 0.10f) else Color.Transparent)
             .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 12.dp),
+            .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -89,9 +89,9 @@ fun ConversationRow(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     name,
-                    color = if (isUnread) palette.textPrimary else palette.textSecondary,
-                    fontSize = 15.sp,
-                    fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Medium,
+                    color = palette.textPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = if (isUnread) FontWeight.Bold else FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -111,8 +111,9 @@ fun ConversationRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     preview ?: subtitle ?: "",
-                    color = if (isUnread) palette.accent else palette.textMuted,
+                    color = if (isUnread) palette.textPrimary else palette.textMuted,
                     fontSize = 14.sp,
+                    fontWeight = if (isUnread) FontWeight.Medium else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),

@@ -68,7 +68,8 @@ class MessagingService : FirebaseMessagingService() {
     private fun showCallNotification(callId: String, from: String, callerName: String) {
         if (!notificationsAllowed()) return
         val pending = launchIntent(data = mapOf("callId" to callId, "from" to from,
-            "callerName" to callerName), channel = CALL_CHANNEL_ID)
+            "callerName" to callerName, "pushedAt" to System.currentTimeMillis().toString()),
+            channel = CALL_CHANNEL_ID)
         val notification = baseBuilder(CALL_CHANNEL_ID, "Incoming call", callerName, R.mipmap.ic_launcher)
             .setContentIntent(pending)
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -100,7 +101,11 @@ class MessagingService : FirebaseMessagingService() {
             data.forEach { (k, v) -> putExtra(k, v) }
         }
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        return PendingIntent.getActivity(this, channel.hashCode(), intent, flags)
+        // One request code per conversation. With one per channel, every new
+        // push rewrote the extras of all earlier notifications (extras don't
+        // make PendingIntents distinct), so each one opened the newest chat.
+        val key = data["source"] ?: data["callId"] ?: channel
+        return PendingIntent.getActivity(this, key.hashCode(), intent, flags)
     }
 
     private fun baseBuilder(channel: String, title: String, body: String, icon: Int): NotificationCompat.Builder =

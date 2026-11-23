@@ -304,15 +304,14 @@ private fun CategoryHeader(title: String, collapsed: Boolean, onToggle: () -> Un
                 onClickLabel = if (collapsed) "Expand $title" else "Collapse $title",
                 onClick = onToggle,
             )
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp)
-            .heightIn(min = 40.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
             title.uppercase(),
             color = palette.textMuted,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.6.sp,
         )
@@ -320,7 +319,7 @@ private fun CategoryHeader(title: String, collapsed: Boolean, onToggle: () -> Un
             Icons.Filled.ExpandMore,
             contentDescription = null,
             tint = palette.textMuted,
-            modifier = Modifier.size(14.dp).rotate(rotation),
+            modifier = Modifier.size(12.dp).rotate(rotation),
         )
     }
 }
@@ -362,7 +361,7 @@ private fun ChannelRow(
     Row(
         modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp)
+            .heightIn(min = 38.dp)
             .clip(RoundedCornerShape(Radii.press))
             .background(
                 when {
@@ -378,22 +377,22 @@ private fun ChannelRow(
                 onClickLabel = "Open #${channel.name}",
                 onClick = onSelected,
             )
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = 10.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Icon(
             icon,
             contentDescription = iconDescription,
-            tint = if (isSelected) palette.accent else if (liveTopic != null) Brand.online else if (unread) palette.textPrimary else palette.textSecondary,
-            modifier = Modifier.size(18.dp),
+            tint = if (isSelected) palette.accent else if (liveTopic != null) Brand.online else if (unread) palette.textPrimary else palette.textMuted,
+            modifier = Modifier.size(20.dp),
         )
         Column(Modifier.weight(1f, fill = false)) {
             Text(
                 channel.name,
                 color = if (isSelected || unread) palette.textPrimary else palette.textSecondary,
-                fontSize = 15.sp,
-                fontWeight = if (unread) FontWeight.Bold else if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                fontSize = 16.sp,
+                fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

@@ -104,7 +104,7 @@ fun VoiceStageView(
 
     BackHandler(onBack = onMinimize)
 
-    if (joined) InCall(app, voice, channel, onMinimize)
+    if (joined) InCall(app, voice, channel.name, onMinimize)
     else Lobby(app, voice, channel, onBack)
 
     error?.let { message ->
@@ -126,7 +126,10 @@ private fun Lobby(app: AppState, voice: VoiceSession, channel: Channel, onBack: 
     var stage by remember { mutableStateOf<StageInfo?>(null) }
     var joining by remember { mutableStateOf(false) }
     val phase by voice.phase.collectAsStateValue()
-    LaunchedEffect(phase) { if (phase == VoicePhase.Idle) joining = false }
+    // A refused join (e.g. "finish your call first") sets an error but leaves
+    // the phase Idle, so keying on phase alone left the button spinning.
+    val joinError by voice.error.collectAsStateValue()
+    LaunchedEffect(phase, joinError) { if (phase == VoicePhase.Idle) joining = false }
 
     LaunchedEffect(channel.id) {
         while (isActive) {
@@ -185,7 +188,7 @@ private fun Lobby(app: AppState, voice: VoiceSession, channel: Channel, onBack: 
 // MARK: - In call
 
 @Composable
-private fun InCall(app: AppState, voice: VoiceSession, channel: Channel, onMinimize: () -> Unit) {
+fun InCall(app: AppState, voice: VoiceSession, title: String, onMinimize: () -> Unit) {
     val palette = LocalPalette.current
     val phase by voice.phase.collectAsStateValue()
     val members by voice.members.collectAsStateValue()
@@ -213,7 +216,7 @@ private fun InCall(app: AppState, voice: VoiceSession, channel: Channel, onMinim
 
     Column(Modifier.fillMaxSize().background(palette.background)) {
         TopBar(
-            title = channel.name,
+            title = title,
             subtitle = status,
             icon = if (stage != null) Icons.Filled.Podcasts else Icons.Filled.GraphicEq,
             onBack = onMinimize,

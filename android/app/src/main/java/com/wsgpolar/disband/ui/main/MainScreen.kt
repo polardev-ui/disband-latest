@@ -113,6 +113,7 @@ fun MainScreen(
     var allCategories by remember { mutableStateOf<List<ChannelCategory>>(emptyList()) }
     var dmThreads by remember { mutableStateOf<List<DmThread>>(emptyList()) }
     var groupChats by remember { mutableStateOf<List<GroupChat>>(emptyList()) }
+    var creatingGroup by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
     var inboxLoading by remember { mutableStateOf(true) }
@@ -298,6 +299,13 @@ fun MainScreen(
 
     val openChannel = allChannels.firstOrNull { it.id == selectedChannelId && it.serverId == selectedServerId }
     val openGroup = groupChats.firstOrNull { it.id == selectedChannelId }
+    if (creatingGroup) currentUserId?.let { me ->
+        com.wsgpolar.disband.ui.chat.CreateGroupSheet(
+            uid = me,
+            onDismiss = { creatingGroup = false },
+            onCreated = { id -> scope.launch { refreshInbox(); shellChrome.selectedChannelId = id } },
+        )
+    }
     val openDm = dmThreads.firstOrNull { it.id == selectedChannelId }
 
     /**
@@ -400,6 +408,7 @@ fun MainScreen(
                             onThreadSelected = { id ->
                                 shellChrome.selectedChannelId = id
                             },
+                            onNewGroup = { creatingGroup = true },
                             onGroupSelected = { group ->
                                 shellChrome.selectedChannelId = group.id
                             },
@@ -468,8 +477,10 @@ fun MainScreen(
                             else if (channel.type == ChannelType.Forum) com.wsgpolar.disband.ui.chat.ForumScreen(app, channel, destination.serverName, close)
                             else com.wsgpolar.disband.ui.chat.ChannelChatScreen(app, channel, destination.serverName, close)
                         }
-                        destination.dm != null -> DmChatScreen(app, destination.dm, close)
-                        destination.group != null -> GroupChatScreen(app, destination.group, close)
+                        destination.dm != null -> DmChatScreen(app, destination.dm, close,
+                            onRequestChanged = { scope.launch { refreshInbox() } })
+                        destination.group != null -> GroupChatScreen(app, destination.group, close,
+                            onGroupChanged = { scope.launch { refreshInbox() } })
                         else -> {
                             androidx.activity.compose.BackHandler(onBack = close)
                             androidx.compose.foundation.layout.Column(
@@ -496,6 +507,9 @@ fun MainScreen(
         }
 
         // The dock sits above the shell but below an open chat, and slides away
+        // Offline indicator, overlaid at the very top of the shell.
+        com.wsgpolar.disband.core.OfflineBanner(Modifier.align(Alignment.TopCenter).statusBarsPadding())
+
         // whenever a conversation takes the screen or the keyboard appears. It
         // floats: a ~6dp inset above the navigation bar, not edge-attached.
         AnimatedVisibility(
@@ -523,6 +537,7 @@ fun MainScreen(
         val voiceMuted by app.voice.micMuted.collectAsStateValue()
         val voiceStage by app.voice.stage.collectAsStateValue()
         val inVoice = voiceRoom
+        var groupCallOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
         AnimatedVisibility(
             visible = inVoice != null && shellChrome.dockVisible,
             enter = slideInVertically { it } + fadeIn(),
@@ -540,6 +555,7 @@ fun MainScreen(
                     onToggleMute = { app.voice.toggleMute() },
                     onLeave = { app.voice.leave() },
                     onReturn = {
+                        if (inVoice.isGroup) { groupCallOpen = true; return@VoicePill }
                         shellChrome.navigateTo(Destination.Home, inVoice.serverId)
                         shellChrome.selectedChannelId = inVoice.channelId
                     },
@@ -548,7 +564,9 @@ fun MainScreen(
             }
         }
 
+        com.wsgpolar.disband.ui.calls.GroupCallOverlay(app, open = groupCallOpen, onOpenChange = { groupCallOpen = it })
         CallOverlay(app, shellChrome = shellChrome)
+        com.wsgpolar.disband.ui.calls.GroupRingBanner(app, Modifier.align(Alignment.TopCenter))
     }
 
     // The rail's + and Explore, and an invite link that opened the app.

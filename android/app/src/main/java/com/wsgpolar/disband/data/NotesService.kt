@@ -47,6 +47,11 @@ class NotesService(private val scope: CoroutineScope) {
     }
 
     fun stop() {
+        // Forget who we were: start() returns early for the same user, so
+        // signing out and back in left the old list and no live updates.
+        userId = null
+        hasLoadedOnce = false
+        _notes.value = emptyList()
         watchJob?.cancel()
         watchJob = null
         changeJob?.cancel()
@@ -93,17 +98,22 @@ class NotesService(private val scope: CoroutineScope) {
         }
     }
 
-    suspend fun send(content: String, attachment: OutgoingAttachment? = null) {
-        val uid = userId ?: return
+    /** True when the note was saved. */
+    suspend fun send(content: String, attachment: OutgoingAttachment? = null): Boolean {
+        val uid = userId ?: return false
         val trimmed = content.trim()
-        if (trimmed.isEmpty() && attachment == null) return
-        try {
-            val note = Database.insertNote(uid, trimmed, attachment) ?: return
+        if (trimmed.isEmpty() && attachment == null) return false
+        return try {
+            val note = Database.insertNote(uid, trimmed, attachment) ?: return false
             if (_notes.value.none { it.id == note.id }) {
                 _notes.value = listOf(note) + _notes.value
             }
+            true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             _error.value = friendlyMessage(e)
+            false
         }
     }
 

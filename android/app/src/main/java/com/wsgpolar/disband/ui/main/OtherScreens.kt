@@ -637,8 +637,11 @@ private fun PlanCard(app: AppState, palette: Palette) {
     val subs = app.subscriptions
     val plan = subs.plan
     val row = subs.subscription
+    // A purchase made on the web shows up when you come back to this screen.
+    LaunchedEffect(Unit) { subs.reload() }
 
     val detail = when {
+        row == null && subs.giftUntil != null -> "Gifted · until ${TimeFormat.compact(subs.giftUntil)}"
         row == null -> "Active"
         row.status == "past_due" && row.isApple ->
             "Payment issue — update your Apple Account payment method"
@@ -647,7 +650,7 @@ private fun PlanCard(app: AppState, palette: Palette) {
         else -> "Active"
     }
 
-    if (plan.isPaid) {
+    if (plan.isSubscribed) {
         Row(
             Modifier
                 .fillMaxWidth()

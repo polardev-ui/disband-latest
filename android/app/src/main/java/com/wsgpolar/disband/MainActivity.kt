@@ -1,5 +1,7 @@
 package com.wsgpolar.disband
 
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -93,8 +95,18 @@ class MainActivity : ComponentActivity() {
         // 2) Extras placed by MessagingService (call push or message push)
         val callId = intent.getStringExtra("callId")
         if (callId != null) {
-            // Call handling is done via AppState.calls — just bring the app to foreground;
-            // the incoming call UI is driven by CallManager's incoming flow.
+            // The push arrived while the app was dead, so nothing in-process
+            // knows about this call, and the caller stops re-ringing after a few
+            // seconds. Hand the push to CallManager (it waits for sign-in if
+            // needed), but not for an old notification: that call is over.
+            val from = intent.getStringExtra("from")
+            val pushedAt = intent.getStringExtra("pushedAt")?.toLongOrNull()
+            val name = intent.getStringExtra("callerName") ?: "Disband call"
+            intent.removeExtra("callId")
+            if (from != null && pushedAt != null && System.currentTimeMillis() - pushedAt < 45_000) {
+                val calls = (application as DisbandApp).container.calls
+                lifecycleScope.launch { runCatching { calls.handleCallPush(callId, from, name) } }
+            }
             return
         }
         val source = intent.getStringExtra("source")

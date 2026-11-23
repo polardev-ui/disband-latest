@@ -71,6 +71,7 @@ class AppState(
     /** Server voice channels and stages. */
     val voice = com.wsgpolar.disband.call.VoiceSession(context, turnService).also { v ->
         v.isDirectCallActive = { calls.phase.value != com.wsgpolar.disband.call.CallPhase.Idle }
+        calls.onGroupRing = { raw -> v.receiveRing(raw) }
     }
 
     private val _phase = MutableStateFlow(AuthPhase.Loading)
@@ -263,6 +264,9 @@ class AppState(
             loadProfile()
             presence.start(currentUserId, chosenStatus())
         }
+        // A plan bought or gifted on the web while the app was away, or a
+        // first load that failed, would otherwise stay wrong until restart.
+        scope.launch { runCatching { subscriptions.start(currentUserId); subscriptions.reload() } }
     }
 
     /** App closed or sent to the background: offline straight away. The choice stays saved. */

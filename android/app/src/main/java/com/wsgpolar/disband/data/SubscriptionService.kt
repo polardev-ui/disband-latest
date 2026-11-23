@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.wsgpolar.disband.core.DisbandSupabase
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -22,20 +23,32 @@ import kotlinx.serialization.Serializable
  */
 enum class SubscriptionPlan {
     Free,
+    Lite,
     Aero;
 
+    /** Aero-only perks (premium themes, Tether). Lite is paid but does not get these. */
     val isPaid: Boolean get() = this == Aero
 
-    val label: String get() = if (this == Aero) "Aero" else "Free"
-    val productName: String get() = if (this == Aero) "Disband Aero" else "Disband Free"
+    /** Any paid plan: decides whether to show the subscriber card or the upsell. */
+    val isSubscribed: Boolean get() = this != Free
+
+    val label: String get() = when (this) { Aero -> "Aero"; Lite -> "Lite"; Free -> "Free" }
+    val productName: String get() = "Disband $label"
 
     companion object {
         fun normalize(raw: String?): SubscriptionPlan = when (raw?.lowercase()) {
             "aero", "basic", "super" -> Aero
+            "lite" -> Lite
             else -> Free
         }
     }
 }
+
+@Serializable
+private data class EntitlementResult(
+    val plan: String? = null,
+    @SerialName("gift_until") val giftUntil: String? = null,
+)
 
 @Serializable
 data class Subscription(
@@ -92,7 +105,22 @@ data class Entitlements(
             prioritySupport = true,
         )
 
-        fun forPlan(plan: SubscriptionPlan) = if (plan.isPaid) Aero else Free
+        val Lite = Entitlements(
+            maxUploadBytes = 100L * 1024 * 1024,
+            maxMessageChars = 2500,
+            maxBioLength = 200,
+            animatedAvatar = false,
+            animatedBanner = false,
+            screenShare = true,
+            historyExport = false,
+            prioritySupport = false,
+        )
+
+        fun forPlan(plan: SubscriptionPlan) = when (plan) {
+            SubscriptionPlan.Aero -> Aero
+            SubscriptionPlan.Lite -> Lite
+            SubscriptionPlan.Free -> Free
+        }
     }
 }
 
@@ -119,15 +147,23 @@ class SubscriptionService {
 
     val entitlements: Entitlements get() = Entitlements.forPlan(plan)
 
+    /** Set when the plan comes from a gift (dashboard grant, giveaway) rather than billing. */
+    var giftUntil by mutableStateOf<String?>(null)
+        private set
+
     private var userId: String? = null
+    private var loaded = false
 
     private val grantingStatuses = setOf("active", "trialing", "past_due")
 
     suspend fun start(userId: String?) {
-        if (this.userId == userId) return
+        // A failed first load must not stick for the whole session.
+        if (this.userId == userId && (loaded || userId == null)) return
         this.userId = userId
+        loaded = false
         if (userId == null) {
             subscription = null
+            giftUntil = null
             plan = SubscriptionPlan.Free
             loading = false
             return
@@ -145,7 +181,18 @@ class SubscriptionService {
                     limit(1)
                 }
                 .decodeList<Subscription>()
-            apply(rows.firstOrNull())
+            val row = rows.firstOrNull()
+            // The server's answer counts gifts and Lite, as the web does.
+            // Reading only `subscriptions` treated gifted Aero as Free.
+            val granted = runCatching {
+                DisbandSupabase.client.postgrest.rpc("get_entitlement").decodeAs<EntitlementResult>()
+            }.getOrNull()
+            subscription = row
+            plan = granted?.plan?.let { SubscriptionPlan.normalize(it) } ?: planFrom(row)
+            giftUntil = granted?.giftUntil
+            loaded = true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (_: Exception) {
             // Leave the last known plan in place rather than silently
             // downgrading a paying user because one request failed.
@@ -154,12 +201,7 @@ class SubscriptionService {
         }
     }
 
-    private fun apply(row: Subscription?) {
-        subscription = row
-        plan = if (row != null && row.status in grantingStatuses) {
-            SubscriptionPlan.normalize(row.plan)
-        } else {
-            SubscriptionPlan.Free
-        }
-    }
+    private fun planFrom(row: Subscription?): SubscriptionPlan =
+        if (row != null && row.status in grantingStatuses) SubscriptionPlan.normalize(row.plan)
+        else SubscriptionPlan.Free
 }

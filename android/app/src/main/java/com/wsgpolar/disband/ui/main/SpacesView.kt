@@ -46,6 +46,8 @@ fun SpacesView(
     onChannelSelected: (Channel) -> Unit,
     onThreadSelected: (String) -> Unit,
     onGroupSelected: (GroupChat) -> Unit,
+    /** Start a new group chat (the compose button offers it next to New message). */
+    onNewGroup: () -> Unit = {},
     modifier: Modifier = Modifier,
     loading: Boolean = false,
     loadError: String? = null,
@@ -117,6 +119,22 @@ fun SpacesView(
                     val currentFilter = rememberSaveable { mutableStateOf(InboxFilter.All) }
                     val unread by app.dmUnread.unread.collectAsStateValue()
                     val groupUnread by app.dmUnread.groupUnread.collectAsStateValue()
+                    var composeChooser by remember { mutableStateOf(false) }
+                    if (composeChooser) androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { composeChooser = false },
+                        title = { androidx.compose.material3.Text("Start a conversation") },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = { composeChooser = false; onNewGroup() }) {
+                                androidx.compose.material3.Text("New group")
+                            }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = {
+                                composeChooser = false
+                                state.navigateTo(Destination.Friends)
+                            }) { androidx.compose.material3.Text("New message") }
+                        },
+                    )
                     InboxPanel(
                         dmThreads = dmThreads,
                         groupChats = groupChats,
@@ -131,7 +149,7 @@ fun SpacesView(
                         statusOf = { id -> statuses[id] ?: UserStatus.Offline },
                         unreadForThread = { unread[it] ?: 0 },
                         unreadForGroup = { groupUnread[it] ?: 0 },
-                        onCompose = { state.navigateTo(Destination.Friends) },
+                        onCompose = { composeChooser = true },
                         loading = loading,
                         loadError = loadError,
                         onRetry = onRetry,

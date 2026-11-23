@@ -1,8 +1,18 @@
 package com.wsgpolar.disband.call
 
+import kotlinx.coroutines.sync.withLock
 import android.content.Context
 import android.media.AudioManager
+import com.wsgpolar.disband.core.ApiHttp
 import com.wsgpolar.disband.core.AppConfig
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.contentType
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import com.wsgpolar.disband.core.DisbandSupabase
 import com.wsgpolar.disband.core.leave
 import com.wsgpolar.disband.data.Database
@@ -42,10 +52,30 @@ import org.webrtc.audio.JavaAudioDeviceModule
 
 /** The voice channel this device is in. */
 data class VoiceRoom(
+    /** The voice channel id, or the group chat id for a group call. */
     val channelId: String,
     val name: String,
     val serverId: String,
     val serverName: String,
+    val isGroup: Boolean = false,
+    val iconUrl: String? = null,
+) {
+    /** Mirrors the web and iOS: `voice:<id>`/`signal` and `group-call:<id>`/`group-call`. */
+    val signalTopic: String get() = if (isGroup) "group-call:$channelId" else "voice:$channelId"
+    val signalEvent: String get() = if (isGroup) "group-call" else "signal"
+
+    companion object {
+        fun group(id: String, name: String, iconUrl: String?) =
+            VoiceRoom(channelId = id, name = name, serverId = "", serverName = "Group call", isGroup = true, iconUrl = iconUrl)
+    }
+}
+
+/** Someone started a call in one of your group chats (`ring` on `call-user:<me>`). */
+data class GroupRing(
+    val groupId: String,
+    val groupName: String,
+    val callerName: String,
+    val fromId: String,
 )
 
 /** Someone in a voice channel, as `voice_presence_live` reports them. */
@@ -90,6 +120,10 @@ data class MeshSignal(
     val candidate: CallIceCandidate? = null,
     /** Marks the native apps; the web ignores it. See [VoiceSession.handleOffer]. */
     val client: String? = null,
+    // "ring" only (group calls).
+    val groupId: String? = null,
+    val groupName: String? = null,
+    val callerName: String? = null,
 ) {
     companion object {
         /** Shared with iOS so the two break an offer collision the same way. */
@@ -114,6 +148,21 @@ private data class PresenceWrite(
     @SerialName("user_id") val userId: String,
     val muted: Boolean,
     val deafened: Boolean,
+)
+
+@Serializable
+private data class GroupPresenceRow(
+    @SerialName("group_id") val groupId: String,
+    @SerialName("user_id") val userId: String,
+)
+
+@Serializable
+private data class GroupPushRequest(
+    val calleeId: String,
+    val callId: String,
+    val callerName: String,
+    val groupId: String,
+    val groupName: String,
 )
 
 @Serializable
@@ -168,6 +217,13 @@ class VoiceSession(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    private val _incomingRing = MutableStateFlow<GroupRing?>(null)
+    /** A group call someone just started, shown as a banner until answered or dismissed. */
+    val incomingRing: StateFlow<GroupRing?> = _incomingRing.asStateFlow()
+    private val _ringing = MutableStateFlow<Set<String>>(emptySet())
+    /** Members this device has rung for the group call it is in. */
+    val ringing: StateFlow<Set<String>> = _ringing.asStateFlow()
+
     /** Set by the app so voice never fights a 1:1 call for the microphone. */
     var isDirectCallActive: () -> Boolean = { false }
 
@@ -192,13 +248,57 @@ class VoiceSession(
     private var presenceChannel: RealtimeChannel? = null
     private val loops = mutableListOf<Job>()
     private var savedAudioMode: Int? = null
+    private var focusRequest: android.media.AudioFocusRequest? = null
+    private val focusListener = AudioManager.OnAudioFocusChangeListener { }
+
+    @Suppress("DEPRECATION")
+    private fun requestAudioFocus(am: AudioManager) {
+        runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                if (focusRequest == null) {
+                    focusRequest = android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                        .setAudioAttributes(
+                            android.media.AudioAttributes.Builder()
+                                .setUsage(android.media.AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build(),
+                        )
+                        .setOnAudioFocusChangeListener(focusListener)
+                        .build()
+                }
+                am.requestAudioFocus(focusRequest!!)
+            } else {
+                am.requestAudioFocus(focusListener, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun abandonAudioFocus(am: AudioManager?) {
+        runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                focusRequest?.let { am?.abandonAudioFocusRequest(it) }
+                focusRequest = null
+            } else {
+                am?.abandonAudioFocus(focusListener)
+            }
+        }
+    }
 
     fun clearError() { _error.value = null }
 
     // MARK: - Joining and leaving
 
+    /**
+     * Join and leave run one at a time. Unserialised, a Leave tapped while a
+     * join was still connecting found nothing to clean up, and the join then
+     * finished anyway: a ghost presence row and a live mic with no UI. A quick
+     * leave-then-rejoin could also have its new row removed by the late DELETE.
+     */
+    private val transitions = kotlinx.coroutines.sync.Mutex()
+
     fun join(room: VoiceRoom) {
-        scope.launch { joinNow(room) }
+        scope.launch { transitions.withLock { joinNow(room) } }
     }
 
     private suspend fun joinNow(room: VoiceRoom) {
@@ -215,10 +315,13 @@ class VoiceSession(
         _room.value = room
         _phase.value = VoicePhase.Connecting
         _connectedPeers.value = emptySet()
+        if (room.isGroup && _incomingRing.value?.groupId == room.channelId) {
+            _incomingRing.value = null
+        }
 
         // A stage puts everyone in the audience, muted, until they're brought
-        // up. Known before the mic exists so it never opens.
-        _stage.value = fetchStage(room.channelId, uid)
+        // up. Known before the mic exists so it never opens. Group calls have none.
+        _stage.value = if (room.isGroup) null else fetchStage(room.channelId, uid)
         if (_stage.value != null) _micMuted.value = true
 
         startAudio()
@@ -233,11 +336,19 @@ class VoiceSession(
             // soon as they see the new row, and an offer sent before we are
             // listening is lost.
             subscribeSignals(room)
-            client.from("voice_presence").upsert(
-                PresenceWrite(room.channelId, uid, _micMuted.value, _deafened.value),
-            )
+            if (room.isGroup) {
+                client.from("group_call_presence").upsert(GroupPresenceRow(room.channelId, uid))
+            } else {
+                client.from("voice_presence").upsert(
+                    PresenceWrite(room.channelId, uid, _micMuted.value, _deafened.value),
+                )
+            }
         } catch (e: Exception) {
-            _error.value = "Couldn't join ${room.name}. Check your connection and try again."
+            // A full or locked channel refuses the presence row with its own
+            // reason (0197); show that, as the web does.
+            val server = (e as? RestException)?.let { it.error.takeIf { m -> m.isNotBlank() } ?: it.description }
+                ?.takeIf { it.isNotBlank() }
+            _error.value = server ?: "Couldn't join ${room.name}. Check your connection and try again."
             leaveNow()
             return
         }
@@ -247,7 +358,10 @@ class VoiceSession(
         _connectedAt.value = System.currentTimeMillis()
         if (_stage.value == null) CallTones.playConnected()
         CallForegroundService.voiceHangup = { leave() }
-        CallForegroundService.start(appContext, title = "Voice connected", caller = room.name, incoming = false)
+        CallForegroundService.start(
+            appContext, title = if (room.isGroup) "Group call connected" else "Voice connected",
+            caller = room.name, incoming = false,
+        )
 
         reloadMembers()
         for (member in _members.value) if (member.userId != uid) offer(member.userId)
@@ -255,7 +369,76 @@ class VoiceSession(
     }
 
     fun leave() {
-        scope.launch { leaveNow() }
+        scope.launch { transitions.withLock { leaveNow() } }
+    }
+
+    /** Start a group call and ring everyone in the group who isn't in it. */
+    fun startGroupCall(groupId: String, name: String, iconUrl: String?, memberIds: List<String>, callerName: String) {
+        scope.launch {
+            transitions.withLock { joinNow(VoiceRoom.group(groupId, name, iconUrl)) }
+            val uid = userId ?: return@launch
+            if (!isIn(groupId)) return@launch
+            val present = _members.value.map { it.userId }.toSet()
+            val toRing = memberIds.filter { it != uid && it !in present }
+            _ringing.value = toRing.toSet()
+            for (memberId in toRing) {
+                val ring = MeshSignal(type = "ring", from = uid, groupId = groupId, groupName = name, callerName = callerName)
+                launch { sendRing(ring, memberId) }
+                // Wakes members whose app is closed, exactly as the web does.
+                launch { pushRing(memberId, groupId, name, callerName) }
+            }
+            launch {
+                delay(30_000)
+                _ringing.value = emptySet()
+            }
+        }
+    }
+
+    // MARK: - Rings
+
+    /** A `group-call` broadcast on `call-user:<me>`; only `ring` matters here. */
+    fun receiveRing(raw: JsonObject) {
+        val signal = runCatching {
+            DisbandSupabase.sessionJson.decodeFromJsonElement(MeshSignal.serializer(), raw)
+        }.getOrNull() ?: return
+        val groupId = signal.groupId ?: return
+        if (signal.type != "ring" || signal.from == userId || isIn(groupId)) return
+        val ring = GroupRing(groupId, signal.groupName ?: "Group call", signal.callerName ?: "Someone", signal.from)
+        _incomingRing.value = ring
+        scope.launch {
+            delay(30_000)
+            if (_incomingRing.value == ring) _incomingRing.value = null
+        }
+    }
+
+    fun declineRing() { _incomingRing.value = null }
+
+    private suspend fun sendRing(ring: MeshSignal, memberId: String) {
+        runCatching {
+            val channel = client.channel("call-user:$memberId") { broadcast { acknowledgeBroadcasts = false } }
+            withTimeoutOrNull(6_000) { channel.subscribe(blockUntilSubscribed = true) }
+            try {
+                channel.broadcast("group-call", ring)
+                delay(120)
+            } finally {
+                runCatching { channel.leave() }
+            }
+        }
+    }
+
+    private suspend fun pushRing(memberId: String, groupId: String, name: String, callerName: String) {
+        val token = runCatching { client.auth.currentSessionOrNull()?.accessToken }.getOrNull() ?: return
+        runCatching {
+            ApiHttp.client.post("${AppConfig.SUPABASE_URL}/functions/v1/send-call-push") {
+                header(HttpHeaders.Authorization, "Bearer $token")
+                contentType(ContentType.Application.Json)
+                setBody(
+                    Json.encodeToString(
+                        GroupPushRequest(memberId, groupId, callerName, groupId, name),
+                    ),
+                )
+            }
+        }
     }
 
     private suspend fun leaveNow() {
@@ -291,16 +474,26 @@ class VoiceSession(
         _connectedPeers.value = emptySet()
         _connectedAt.value = null
         _stage.value = null
+        _ringing.value = emptySet()
 
         // Then tell everyone. Waited on (briefly) so a quick rejoin of the
         // same room can't have its new row deleted by this one.
         if (uid != null) {
             withTimeoutOrNull(4_000) {
                 runCatching {
-                    client.from("voice_presence").delete {
-                        filter {
-                            eq("channel_id", leavingRoom.channelId)
-                            eq("user_id", uid)
+                    if (leavingRoom.isGroup) {
+                        client.from("group_call_presence").delete {
+                            filter {
+                                eq("group_id", leavingRoom.channelId)
+                                eq("user_id", uid)
+                            }
+                        }
+                    } else {
+                        client.from("voice_presence").delete {
+                            filter {
+                                eq("channel_id", leavingRoom.channelId)
+                                eq("user_id", uid)
+                            }
                         }
                     }
                 }
@@ -361,6 +554,7 @@ class VoiceSession(
             savedAudioMode = am.mode
             runCatching { am.mode = AudioManager.MODE_IN_COMMUNICATION }
         }
+        if (am != null) requestAudioFocus(am)
         routeAudio()
     }
 
@@ -378,6 +572,7 @@ class VoiceSession(
         runCatching { audioModule?.release() }
         audioModule = null
         val am = appContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        abandonAudioFocus(am)
         savedAudioMode?.let { mode ->
             if (!isDirectCallActive()) {
                 @Suppress("DEPRECATION")
@@ -399,10 +594,10 @@ class VoiceSession(
     // MARK: - Signalling
 
     private suspend fun subscribeSignals(room: VoiceRoom) {
-        val channel = client.channel("voice:${room.channelId}") { broadcast { acknowledgeBroadcasts = false } }
+        val channel = client.channel(room.signalTopic) { broadcast { acknowledgeBroadcasts = false } }
         // Decoded one by one, so a payload this app doesn't understand (the
         // web also sends soundboard and screen signals) can't end the stream.
-        val signals = channel.broadcastFlow<JsonObject>("signal")
+        val signals = channel.broadcastFlow<JsonObject>(room.signalEvent)
         loops += scope.launch {
             signals.collect { raw ->
                 val signal = runCatching {
@@ -418,10 +613,11 @@ class VoiceSession(
 
     private fun broadcast(signal: MeshSignal) {
         val channel = signalChannel ?: return
+        val event = _room.value?.signalEvent ?: "signal"
         scope.launch {
-            if (runCatching { channel.broadcast("signal", signal) }.isFailure) {
+            if (runCatching { channel.broadcast(event, signal) }.isFailure) {
                 delay(400)
-                runCatching { channel.broadcast("signal", signal) }
+                runCatching { channel.broadcast(event, signal) }
             }
         }
     }
@@ -450,6 +646,8 @@ class VoiceSession(
             "leave" -> {
                 dropPeer(signal.from)
                 _members.value = _members.value.filterNot { it.userId == signal.from }
+                // The web ends a group call once nobody else is connected.
+                if (_room.value?.isGroup == true && peers.isEmpty() && _ringing.value.isEmpty()) leave()
             }
         }
     }
@@ -541,6 +739,7 @@ class VoiceSession(
     private suspend fun syncMuteState() {
         val uid = userId ?: return
         val room = _room.value ?: return
+        if (room.isGroup) return
         runCatching {
             client.from("voice_presence").update({
                 set("muted", _micMuted.value)
@@ -559,8 +758,11 @@ class VoiceSession(
 
     private suspend fun reloadMembers() {
         val room = _room.value ?: return
-        val loaded = runCatching { fetchMembers(room.channelId) }.getOrNull() ?: return
+        val loaded = runCatching {
+            if (room.isGroup) fetchGroupMembers(room.channelId) else fetchMembers(room.channelId)
+        }.getOrNull() ?: return
         if (_room.value != room) return
+        _ringing.value -= loaded.map { it.userId }.toSet()
 
         if (wasRemoved(room, loaded)) {
             leaveNow()
@@ -590,6 +792,7 @@ class VoiceSession(
      * few missed heartbeats can't hang anyone up.
      */
     private suspend fun wasRemoved(room: VoiceRoom, loaded: List<VoiceMember>): Boolean {
+        if (room.isGroup) return false
         val uid = userId ?: return false
         val since = _connectedAt.value ?: return false
         if (_phase.value != VoicePhase.Connected || System.currentTimeMillis() - since < 5_000) return false
@@ -612,7 +815,8 @@ class VoiceSession(
         // safety net for a dropped realtime connection.
         loops += scope.launch {
             val live = runCatching {
-                RealtimeService.observeChanges("voice_presence", "channel_id=eq.${room.channelId}")
+                if (room.isGroup) RealtimeService.observeChanges("group_call_presence", "group_id=eq.${room.channelId}")
+                else RealtimeService.observeChanges("voice_presence", "channel_id=eq.${room.channelId}")
             }.getOrNull() ?: return@launch
             presenceChannel = live.channel
             live.flow.collect { reloadMembers() }
@@ -623,8 +827,9 @@ class VoiceSession(
                 reloadMembers()
             }
         }
-        // Heartbeat, so `voice_presence_live` keeps showing us.
-        loops += scope.launch {
+        // Heartbeat, so `voice_presence_live` keeps showing us. Group presence
+        // has no heartbeat on the web either.
+        if (!room.isGroup) loops += scope.launch {
             while (isActive) {
                 runCatching {
                     DisbandSupabase.postgrest.rpc("touch_voice_presence",
@@ -676,8 +881,12 @@ class VoiceSession(
         val next = mutableSetOf<String>()
         var mine = 0.0
         for ((remoteId, peer) in peers.toMap()) {
-            if (peer.inboundAudioLevel() > 0.04 && heard(remoteId)) next += remoteId
-            if (transmitting) mine = maxOf(mine, peer.outboundAudioLevel())
+            // A peer can be dropped (and its connection disposed) while an
+            // earlier peer's stats call is suspended. Skip it rather than crash.
+            if (peers[remoteId] !== peer) continue
+            val inbound = runCatching { peer.inboundAudioLevel() }.getOrDefault(0.0)
+            if (inbound > 0.04 && heard(remoteId)) next += remoteId
+            if (transmitting) mine = maxOf(mine, runCatching { peer.outboundAudioLevel() }.getOrDefault(0.0))
         }
         if (mine > 0.04) next += uid
         if (next != _speaking.value) _speaking.value = next
@@ -724,6 +933,16 @@ class VoiceSession(
         /** Who is in a voice channel, for the lobby and the channel list too. */
         suspend fun fetchMembers(channelId: String): List<VoiceMember> =
             occupants(listOf(channelId))[channelId].orEmpty()
+
+        /** Who is in a group call (`group_call_presence`). */
+        suspend fun fetchGroupMembers(groupId: String): List<VoiceMember> {
+            val rows = DisbandSupabase.client.from("group_call_presence")
+                .select(io.github.jan.supabase.postgrest.query.Columns.list("group_id", "user_id")) {
+                    filter { eq("group_id", groupId) }
+                }.decodeList<GroupPresenceRow>()
+            val profiles = runCatching { Database.profiles(rows.map { it.userId }.distinct()) }.getOrDefault(emptyMap())
+            return rows.map { VoiceMember(userId = it.userId, profile = profiles[it.userId]) }
+        }
 
         /** Occupants of several voice channels in one round trip. */
         suspend fun occupants(channelIds: List<String>): Map<String, List<VoiceMember>> {

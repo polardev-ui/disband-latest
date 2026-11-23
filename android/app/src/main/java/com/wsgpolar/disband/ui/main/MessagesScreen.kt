@@ -106,7 +106,11 @@ fun MessagesScreen(app: AppState) {
     }
     val openG = openGroup
     if (openG != null) {
-        GroupChatScreen(app = app, group = openG, onBack = { openGroup = null })
+        val groupScope = rememberCoroutineScope()
+        GroupChatScreen(app = app, group = openG, onBack = { openGroup = null }, onGroupChanged = {
+            val me = uid
+            if (me != null) groupScope.launch { groups = runCatching { Database.myGroups(me) }.getOrDefault(groups) }
+        })
         return
     }
 

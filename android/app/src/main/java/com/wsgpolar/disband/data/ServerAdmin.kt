@@ -72,7 +72,24 @@ object ServerAdmin {
 
     // MARK: - Permissions
 
-    suspend fun permissions(serverId: String): Map<String, Boolean> = runCatching {
+    /**
+     * Retries a read a couple of times before giving up. One dropped request
+     * used to read as "no permissions" (settings hidden from admins) or "not
+     * timed out" (offering Time out on someone already timed out).
+     */
+    private suspend fun <T> retrying(block: suspend () -> T): Result<T> {
+        var last: Result<T> = Result.failure(IllegalStateException("not run"))
+        for (attempt in 0 until 3) {
+            last = try { Result.success(block()) }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: Exception) { Result.failure(e) }
+            if (last.isSuccess) return last
+            kotlinx.coroutines.delay(400L * (attempt + 1))
+        }
+        return last
+    }
+
+    suspend fun permissions(serverId: String): Map<String, Boolean> = retrying {
         val obj = postgrest.rpc("my_server_permissions", buildJsonObject { put("p_server_id", serverId) })
             .decodeAs<JsonObject>()
         obj.mapValues { (_, v) -> (v as? JsonPrimitive)?.booleanOrNull == true }
@@ -83,12 +100,13 @@ object ServerAdmin {
     @Serializable
     private data class DiscoverableRow(val discoverable: Boolean? = null)
 
-    suspend fun isDiscoverable(serverId: String): Boolean = runCatching {
+    /** Null when the load failed: showing Off for a listed space made the first tap a no-op. */
+    suspend fun isDiscoverable(serverId: String): Boolean? = runCatching {
         client.from("servers").select(Columns.raw("discoverable")) {
             filter { eq("id", serverId) }
             limit(1)
         }.decodeList<DiscoverableRow>().firstOrNull()?.discoverable == true
-    }.getOrDefault(false)
+    }.getOrNull()
 
     suspend fun setDiscoverable(serverId: String, on: Boolean) {
         client.from("servers").update({ set("discoverable", on) }) { filter { eq("id", serverId) } }
@@ -104,7 +122,11 @@ object ServerAdmin {
         postgrest.rpc("create_channel", buildJsonObject {
             put("p_server_id", serverId)
             put("p_name", name)
-            put("p_type", if (type == ChannelType.Voice) "voice" else "text")
+            put("p_type", when (type) {
+                ChannelType.Voice -> "voice"
+                ChannelType.Forum -> "forum"
+                ChannelType.Text -> "text"
+            })
             put("p_category_id", categoryId)
         })
     }
@@ -257,15 +279,15 @@ object ServerAdmin {
     private data class TimeoutRow(@SerialName("expires_at") val expiresAt: String)
 
     /** When the member's timeout ends (epoch millis), or null if they aren't timed out. */
-    suspend fun timeoutEnds(serverId: String, userId: String): Long? = runCatching {
+    suspend fun timeoutEnds(serverId: String, userId: String): Long? = retrying {
         val row = client.from("server_timeouts").select(Columns.raw("expires_at")) {
             filter {
                 eq("server_id", serverId)
                 eq("user_id", userId)
             }
             limit(1)
-        }.decodeList<TimeoutRow>().firstOrNull() ?: return@runCatching null
-        val end = java.time.OffsetDateTime.parse(row.expiresAt).toInstant().toEpochMilli()
+        }.decodeList<TimeoutRow>().firstOrNull() ?: return@retrying null
+        val end = com.wsgpolar.disband.core.TimeFormat.parse(row.expiresAt)?.toEpochMilli() ?: return@retrying null
         end.takeIf { it > System.currentTimeMillis() }
     }.getOrNull()
 

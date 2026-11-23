@@ -72,9 +72,25 @@ object Database {
         // server no matter its size. The old "fetch ids then profiles(ids)"
         // path built a `profiles?select=*&id=in.(...)` URL past the proxy
         // limit on big servers and 400'd, so this never fetches by id.
-        return postgrest.rpc("get_server_members", buildJsonObject { put("p_server_id", serverId) })
-            .decodeList<ServerMember>()
+        //
+        // The RPC returns at most 1000 rows a call (0160), in a stable
+        // joined_at order. Asking once cut every space off at 1000 members.
+        val pageSize = 1000
+        val all = mutableListOf<ServerMember>()
+        for (page in 1..MAX_MEMBER_PAGES) {
+            val rows = postgrest.rpc("get_server_members", buildJsonObject {
+                put("p_server_id", serverId)
+                put("p_page", page)
+                put("p_page_size", pageSize)
+            }).decodeList<ServerMember>()
+            all += rows
+            if (rows.size < pageSize) break
+        }
+        return all.distinctBy { it.userId }
     }
+
+    /** 10,000 members: past that, search (search_server_members) is the way in. */
+    private const val MAX_MEMBER_PAGES = 10
 
     /** The new space's id. `.data` was the raw body, a uuid still wrapped in JSON quotes. */
     suspend fun createServer(name: String): String {
@@ -179,7 +195,7 @@ object Database {
     }
 
     suspend fun sendMessage(channelId: String, authorId: String, content: String,
-                            attachment: OutgoingAttachment? = null, replyToId: String? = null): String? {
+                            attachment: OutgoingAttachment? = null, replyToId: String? = null): InsertedMessage? {
         val payload = NewMessage(
             channelId = channelId,
             authorId = authorId,
@@ -192,7 +208,7 @@ object Database {
         // The row id comes back so callers can fire follow-ups — a Tether
         // ask has to name the exact message that was saved.
         return client.from("messages").insert(payload) { select() }
-            .decodeSingleOrNull<InsertedId>()?.id
+            .decodeSingleOrNull<InsertedMessage>()
     }
 
     /**
@@ -211,7 +227,7 @@ object Database {
         content: String,
         attachments: List<StoredAttachment>,
         replyToId: String? = null,
-    ): String? {
+    ): InsertedMessage? {
         // A sticker stays out of the single-attachment columns: their database
         // check predates stickers and would reject the row.
         val first = attachments.firstOrNull()?.takeIf { it.type != "sticker" }
@@ -244,7 +260,7 @@ object Database {
                 )
             ) { select() }
         }
-        return response.decodeSingleOrNull<InsertedId>()?.id
+        return response.decodeSingleOrNull<InsertedMessage>()
     }
 
     suspend fun messageById(id: String): Message {
@@ -293,13 +309,13 @@ object Database {
 
     suspend fun myDmThreads(currentUserId: String): List<DmThread> {
         val a = client.from("dm_threads")
-            .select(columns("user_a,user_b,id,created_at,last_message_at,last_message_preview")) {
+            .select(columns("user_a,user_b,id,created_at,last_message_at,last_message_preview,requested_by,accepted_at,request_ignored_at")) {
                 filter { eq("user_a", currentUserId) }
                 order("created_at", Order.ASCENDING)
             }
             .decodeList<DmThread>()
         val b = client.from("dm_threads")
-            .select(columns("user_a,user_b,id,created_at,last_message_at,last_message_preview")) {
+            .select(columns("user_a,user_b,id,created_at,last_message_at,last_message_preview,requested_by,accepted_at,request_ignored_at")) {
                 filter { eq("user_b", currentUserId) }
                 order("created_at", Order.ASCENDING)
             }
@@ -324,6 +340,14 @@ object Database {
             // top and left a reply from a minute ago somewhere down the list.
             // Timestamps are ISO-8601 UTC from Postgres, so they sort lexically.
             .sortedByDescending { it.lastMessageAt ?: it.createdAt ?: "" }
+    }
+
+    /** Accept or ignore a message request you received (migration 0193). */
+    suspend fun respondMessageRequest(threadId: String, accept: Boolean) {
+        postgrest.rpc("respond_message_request", buildJsonObject {
+            put("p_thread_id", threadId)
+            put("p_action", if (accept) "accept" else "ignore")
+        })
     }
 
     fun previewText(msg: DmMessage): String {
@@ -391,7 +415,7 @@ object Database {
     }
 
     suspend fun sendDmMessage(threadId: String, authorId: String, content: String,
-                              attachment: OutgoingAttachment? = null, replyToId: String? = null): String? {
+                              attachment: OutgoingAttachment? = null, replyToId: String? = null): InsertedMessage? {
         val payload = NewDmMessage(
             threadId = threadId,
             authorId = authorId,
@@ -404,7 +428,7 @@ object Database {
         // The row id comes back so callers can fire follow-ups — a Tether
         // ask has to name the exact message that was saved.
         return client.from("dm_messages").insert(payload) { select() }
-            .decodeSingleOrNull<InsertedId>()?.id
+            .decodeSingleOrNull<InsertedMessage>()
     }
 
     // MARK: - Group chats
@@ -455,7 +479,7 @@ object Database {
     }
 
     suspend fun sendGroupMessage(groupId: String, authorId: String, content: String,
-                                 attachment: OutgoingAttachment? = null, replyToId: String? = null): String? {
+                                 attachment: OutgoingAttachment? = null, replyToId: String? = null): InsertedMessage? {
         val payload = NewGroupMessage(
             groupId = groupId,
             authorId = authorId,
@@ -468,7 +492,7 @@ object Database {
         // The row id comes back so callers can fire follow-ups — a Tether
         // ask has to name the exact message that was saved.
         return client.from("group_messages").insert(payload) { select() }
-            .decodeSingleOrNull<InsertedId>()?.id
+            .decodeSingleOrNull<InsertedMessage>()
     }
 
     /** Set (or clear, with null) a group chat's picture. */
@@ -476,6 +500,29 @@ object Database {
         postgrest.rpc("set_group_chat_icon", buildJsonObject {
             put("p_group_id", groupId)
             put("p_icon_url", iconUrl)
+        })
+    }
+
+    /** A name and 3 to 9 accepted friends (create_group_chat, 0149). Returns the new group's id. */
+    suspend fun createGroupChat(name: String, memberIds: List<String>): String =
+        postgrest.rpc("create_group_chat", buildJsonObject {
+            put("p_name", name)
+            put("p_member_ids", kotlinx.serialization.json.JsonArray(memberIds.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+        }).decodeAs<String>()
+
+    /** Owner only (rename_group_chat enforces it). */
+    suspend fun renameGroup(groupId: String, name: String) {
+        postgrest.rpc("rename_group_chat", buildJsonObject {
+            put("p_group_id", groupId)
+            put("p_name", name)
+        })
+    }
+
+    /** Any member may add accepted friends, up to 10 members (add_group_members). */
+    suspend fun addGroupMembers(groupId: String, memberIds: List<String>) {
+        postgrest.rpc("add_group_members", buildJsonObject {
+            put("p_group_id", groupId)
+            put("p_member_ids", kotlinx.serialization.json.JsonArray(memberIds.map { kotlinx.serialization.json.JsonPrimitive(it) }))
         })
     }
 
@@ -598,12 +645,15 @@ object Database {
     // MARK: - Profile & settings updates
 
     suspend fun updateProfile(userId: String, patch: ProfilePatch) {
+        // null leaves a column alone; "" clears it. Without the second case
+        // there was no way to remove pronouns, a display name or a status
+        // expiry: the field was skipped and the old value stayed.
         client.from("profiles").update({
-            patch.displayName?.let { set("display_name", it) }
+            patch.displayName?.let { if (it.isEmpty()) setToNull("display_name") else set("display_name", it) }
             patch.bio?.let { set("bio", it) }
-            patch.pronouns?.let { set("pronouns", it) }
-            patch.statusNote?.let { set("status_note", it) }
-            patch.statusExpiresAt?.let { set("status_expires_at", it) }
+            patch.pronouns?.let { if (it.isEmpty()) setToNull("pronouns") else set("pronouns", it) }
+            patch.statusNote?.let { if (it.isEmpty()) setToNull("status_note") else set("status_note", it) }
+            patch.statusExpiresAt?.let { if (it.isEmpty()) setToNull("status_expires_at") else set("status_expires_at", it) }
             patch.avatarUrl?.let { set("avatar_url", it) }
             patch.bannerUrl?.let { set("banner_url", it) }
             patch.accentColor?.let { set("accent_color", it) }

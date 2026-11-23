@@ -2,7 +2,9 @@ package com.wsgpolar.disband.ui.chat
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -138,7 +140,28 @@ object ChatMarkdown {
     )
 
     /** `@&Role-Name` (role pings, as the web writes them) or `@username`. */
-    private val MENTION = Regex("(?<![\\w.])@(&[A-Za-z0-9_-]{1,64}|[A-Za-z0-9_.]{1,32})")
+    // Usernames are letters, digits and underscores (the web's rule). Allowing
+    // "." swallowed the full stop in "thanks @bob." into the mention.
+    private val MENTION = Regex("(?<![\\w.])@(&[A-Za-z0-9_-]{1,64}|[A-Za-z0-9_]{1,32})")
+
+    /** A `<#channel-id>` reference or an http(s) URL, as the web's INLINE_RE reads them. */
+    data class LinkToken(val start: Int, val endExclusive: Int, val url: String?, val channelId: String?)
+
+    private val LINK = Regex(
+        "<#([0-9a-fA-F-]{36})>|(https?://[^\\s<>\\[\\]()]+[^\\s<>\\[\\]().,;:!?'\"`])",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** First link or channel reference in [text], or null. */
+    fun findLink(text: String): LinkToken? = LINK.find(text)?.toToken()
+
+    fun findLinks(text: String): List<LinkToken> = LINK.findAll(text).map { it.toToken() }.toList()
+
+    private fun MatchResult.toToken() = LinkToken(
+        range.first, range.last + 1,
+        url = groups[2]?.value,
+        channelId = groups[1]?.value,
+    )
 
     private data class RoleInfo(val name: String, val color: Color?)
 
@@ -191,12 +214,44 @@ object ChatMarkdown {
 
                 for (rule in ruleSet) {
                     val quoted = Regex.escape(rule.marker)
-                    val found = Regex("$quoted([\\s\\S]+?)$quoted").find(rest) ?: continue
+                    // Only bold may span lines, as on the web. Letting `*` span
+                    // lines turned a "* a\n* b" list into italics.
+                    val body = if (rule.marker.startsWith("**")) "[\\s\\S]+?" else "[^\\n]+?"
+                    val found = Regex("$quoted($body)$quoted").find(rest) ?: continue
                     if (found.range.first < bestIndex) {
                         bestIndex = found.range.first
                         bestRule = rule
                         bestMatch = found
                     }
+                }
+
+                // Links win ties and anything that starts earlier, so an
+                // underscore inside a URL is not read as italics.
+                val link = findLink(rest)
+                if (link != null && link.start <= bestIndex) {
+                    appendPlain(rest.substring(0, link.start), palette)
+                    if (link.url != null) {
+                        pushLink(
+                            LinkAnnotation.Url(
+                                link.url,
+                                TextLinkStyles(SpanStyle(color = palette.accent, textDecoration = TextDecoration.Underline)),
+                            )
+                        )
+                        append(link.url)
+                        pop()
+                    } else {
+                        pushStyle(
+                            SpanStyle(
+                                color = palette.accent,
+                                background = palette.accent.copy(alpha = 0.15f),
+                                fontWeight = FontWeight.Medium,
+                            )
+                        )
+                        append("#channel")
+                        pop()
+                    }
+                    rest = rest.substring(link.endExclusive)
+                    continue
                 }
 
                 if (bestIndex == Int.MAX_VALUE) {

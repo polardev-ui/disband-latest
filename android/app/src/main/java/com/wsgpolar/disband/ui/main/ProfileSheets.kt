@@ -158,8 +158,18 @@ fun AccountSheet(app: AppState, onDismiss: () -> Unit) {
                 // Downscale client-side: a 12 MP phone photo as PNG is tens of
                 // MB; the server caps Free at 50 MB but the upload is slow and
                 // avatars render at 88dp. JPEG at 1024px is plenty.
-                val scaled = runCatching { downscale(bytes, 1024) }.getOrDefault(bytes)
-                val result = MediaService.uploadImage(scaled, "$kind.jpg", "image/jpeg")
+                // GIF/WebP keep their frames for plans that include animated
+                // avatars/banners (Aero). Re-encoding to JPEG froze them, so
+                // the perk on the plan card never actually worked.
+                val mime = context.contentResolver.getType(uri)?.lowercase()
+                val ent = app.subscriptions.entitlements
+                val mayAnimate = if (kind == "avatar") ent.animatedAvatar else ent.animatedBanner
+                val result = if (mayAnimate && (mime == "image/gif" || mime == "image/webp")) {
+                    MediaService.uploadImage(bytes, if (mime == "image/gif") "$kind.gif" else "$kind.webp", mime)
+                } else {
+                    val scaled = runCatching { downscale(bytes, 1024) }.getOrDefault(bytes)
+                    MediaService.uploadImage(scaled, "$kind.jpg", "image/jpeg")
+                }
                 val patch = if (kind == "avatar") {
                     ProfilePatch(avatarUrl = result.url)
                 } else {
@@ -324,8 +334,8 @@ fun AccountSheet(app: AppState, onDismiss: () -> Unit) {
                         }
                         error = app.saveProfile(
                             ProfilePatch(
-                                displayName = displayName.trim().ifBlank { null },
-                                pronouns = pronouns.trim().ifBlank { null },
+                                displayName = displayName.trim(),
+                                pronouns = pronouns.trim(),
                                 bio = bio.trim(),
                             )
                         )
@@ -489,8 +499,10 @@ fun StatusSheet(app: AppState, onDismiss: () -> Unit) {
                             }
                             error = app.saveProfile(
                                 ProfilePatch(
-                                    statusNote = note.trim().ifBlank { null },
-                                    statusExpiresAt = expiresAt,
+                                    statusNote = note.trim(),
+                                    // "Never" has to clear the old expiry, or the
+                                    // new status vanishes when the previous one would have.
+                                    statusExpiresAt = expiresAt ?: "",
                                 )
                             )
                             saving = false

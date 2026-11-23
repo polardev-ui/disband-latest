@@ -164,7 +164,8 @@ fun NotesScreen(app: AppState) {
                 val body = draft.trim()
                 if (body.isNotEmpty()) {
                     draft = ""
-                    scope.launch { app.notes.send(body) }
+                    // A failed save used to lose the note. Put it back.
+                    scope.launch { if (!app.notes.send(body) && draft.isEmpty()) draft = body }
                 }
             },
         )

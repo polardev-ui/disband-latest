@@ -3,7 +3,13 @@ package com.wsgpolar.disband.ui.chat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.wsgpolar.disband.core.leave
 import com.wsgpolar.disband.data.Database
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.withContext
 
 /**
  * Reactions for the messages on screen.
@@ -30,6 +36,34 @@ class ReactionState(private val contextType: String) {
      * per person per emoji, and the row wants a count and whether *you* are
      * in it.
      */
+    /** Messages with a toggle still in flight; their local state wins over a reload. */
+    private val pending = mutableMapOf<String, Int>()
+
+    /**
+     * Reload whenever anybody reacts. Deletes cannot be filtered server-side,
+     * so ticks for other contexts are possible and just cost one cheap read.
+     */
+    suspend fun watch(ids: () -> List<String>, currentUserId: String) {
+        while (true) {
+            try {
+                val live = com.wsgpolar.disband.data.RealtimeService.observeReactions(contextType)
+                try {
+                    live.flow.collectLatest {
+                        delay(250)
+                        load(ids(), currentUserId)
+                    }
+                } finally {
+                    withContext(NonCancellable) { runCatching { live.channel.leave() } }
+                }
+                return
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                delay(3_000)
+            }
+        }
+    }
+
     suspend fun load(messageIds: List<String>, currentUserId: String) {
         if (messageIds.isEmpty()) {
             byMessage = emptyMap()
@@ -37,7 +71,7 @@ class ReactionState(private val contextType: String) {
         }
         val rows = runCatching { Database.reactions(contextType, messageIds) }.getOrNull() ?: return
 
-        byMessage = rows
+        val fresh = rows
             .groupBy { it.messageId }
             .mapValues { (_, forMessage) ->
                 forMessage
@@ -47,12 +81,16 @@ class ReactionState(private val contextType: String) {
                             emoji = emoji,
                             count = uses.size,
                             reacted = uses.any { it.userId == currentUserId },
+                            userIds = uses.map { it.userId },
                         )
                     }
                     // Most-used first, then alphabetically, so the order does
                     // not jump around as counts change.
                     .sortedWith(compareByDescending<ReactionSummaryRow> { it.count }.thenBy { it.emoji })
             }
+        // Keep what an in-flight toggle shows; the server hasn't caught up yet.
+        val kept = pending.keys.filter { it in messageIds }.associateWith { byMessage[it].orEmpty() }
+        byMessage = fresh.filterKeys { it !in kept } + kept.filterValues { it.isNotEmpty() }
     }
 
     /**
@@ -78,10 +116,16 @@ class ReactionState(private val contextType: String) {
                 current.map { if (it.emoji == emoji) it.copy(count = it.count + 1, reacted = true) else it }
         }
         byMessage = byMessage + (messageId to optimistic)
+        pending[messageId] = (pending[messageId] ?: 0) + 1
 
-        val ok = runCatching {
-            Database.toggleReaction(contextType, messageId, currentUserId, emoji, wasReacted)
-        }.isSuccess
+        val ok = try {
+            runCatching {
+                Database.toggleReaction(contextType, messageId, currentUserId, emoji, wasReacted)
+            }.isSuccess
+        } finally {
+            val left = (pending[messageId] ?: 1) - 1
+            if (left <= 0) pending.remove(messageId) else pending[messageId] = left
+        }
 
         if (!ok) byMessage = byMessage + (messageId to current)
     }

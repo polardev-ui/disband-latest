@@ -102,13 +102,13 @@ object Themes {
 
     val all: List<ThemeDefinition> = listOf(
         ThemeDefinition(
-            ThemeId.Dark, "Disband Dark", "Classic Disband dark theme",
+            ThemeId.Dark, "Disband Dark", "The desktop app's own colours",
             Palette(
-                background = color(0x1E1F22), surface = color(0x2B2D31),
-                surfaceRaised = color(0x313338), elevated = color(0x35373C),
-                accent = color(0x5865F2), accentSoft = color(0x4752C4),
-                textPrimary = color(0xF2F3F5), textSecondary = color(0xB5BAC1),
-                textMuted = color(0x949BA4), divider = color(0x3F4147), isDark = true,
+                background = color(0x141217), surface = color(0x1A181E),
+                surfaceRaised = color(0x1F1D23), elevated = color(0x26232B),
+                accent = color(0x4641D9), accentSoft = color(0x3A35C2),
+                textPrimary = color(0xF4F4F6), textSecondary = color(0xCECBD4),
+                textMuted = color(0x9D97AA), divider = color(0x2C2932), isDark = true,
             ),
         ),
         ThemeDefinition(
@@ -391,7 +391,7 @@ fun UserStatus.color(palette: Palette): Color = when (this) {
 /** Stable color derived from an arbitrary string (avatar fallback). */
 fun Color.Companion.seeded(seed: String): Color {
     val palette = listOf(
-        0x5865F2L, 0xEB459EL, 0xED4245L, 0xFAA61AL,
+        0x4641D9L, 0xEB459EL, 0xED4245L, 0xFAA61AL,
         0x57F287L, 0x3BA55CL, 0x9B59B6L, 0x1ABC9CL, 0xE67E22L,
     )
     var hash = 5381L

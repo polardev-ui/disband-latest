@@ -170,18 +170,32 @@ class WebRTCEngine(
         remoteAudio?.setEnabled(enabled)
     }
 
+    private var previousAudioMode: Int? = null
+
     fun setSpeaker(on: Boolean) {
-        // setSpeakerMute only mutes the speaker; it doesn't route earpiece vs
-        // speaker. Route via AudioManager when available, fallback to mute.
+        // Route with AudioManager only. JavaAudioDeviceModule.setSpeakerMute
+        // silences playout entirely, so calling it with !on made the default
+        // earpiece mode play nothing until you tapped Speaker.
         try {
             val am = appContext.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+            // Earpiece/speaker routing only applies in communication mode.
+            if (previousAudioMode == null) {
+                previousAudioMode = am.mode
+                am.mode = android.media.AudioManager.MODE_IN_COMMUNICATION
+            }
             am.isSpeakerphoneOn = on
         } catch (_: Exception) { }
-        // Keep the WebRTC module in sync so its internal routing matches.
-        runCatching { audioModule.setSpeakerMute(!on) }
     }
 
     fun dispose() {
+        previousAudioMode?.let { mode ->
+            runCatching {
+                val am = appContext.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                am.isSpeakerphoneOn = false
+                am.mode = mode
+            }
+            previousAudioMode = null
+        }
         runCatching {
             pc.close()
             localAudio.dispose()

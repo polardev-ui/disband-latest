@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -100,17 +101,14 @@ fun ServerRail(
             Box(
                 Modifier
                     .size(ICON_SIZE)
-                    .background(
-                        Brush.verticalGradient(listOf(palette.accent, palette.accentSoft)),
-                        RoundedCornerShape(Radii.railSquircle),
-                    ),
+                    .background(Brush.verticalGradient(listOf(palette.accent, palette.accentSoft))),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     Icons.Filled.Forum,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(19.dp),
                 )
                 // Own presence dot on the inbox tile, as on iOS.
                 if (selfStatus == UserStatus.Online) {
@@ -208,7 +206,7 @@ fun ServerRail(
                 Icons.Filled.Add,
                 contentDescription = null,
                 tint = Brand.online,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(19.dp),
             )
         }
 
@@ -217,7 +215,7 @@ fun ServerRail(
                 Icons.Filled.Explore,
                 contentDescription = null,
                 tint = palette.accent,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(19.dp),
             )
         }
 
@@ -329,18 +327,18 @@ private fun BoxScope.RailBadge(count: Int, strokeColor: Color) {
     Box(
         Modifier
             .align(Alignment.BottomEnd)
-            .offset(x = 4.dp, y = 4.dp)
-            .border(3.dp, strokeColor, CircleShape)
+            .offset(x = 5.dp, y = 5.dp)
             .clip(CircleShape)
-            .background(Brand.danger)
+            .background(Brand.dnd)
+            .border(3.dp, strokeColor, CircleShape)
             .padding(horizontal = 5.dp)
-            .height(14.dp),
+            .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             if (count > 99) "99+" else "$count",
             color = Color.White,
-            fontSize = 9.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
             maxLines = 1,

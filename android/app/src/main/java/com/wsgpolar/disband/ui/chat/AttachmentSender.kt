@@ -47,6 +47,9 @@ class AttachmentSender(
 
     var sentRow: ChatRow? = null
         private set
+
+    /** The sender's plan limit (Entitlements.maxUploadBytes). Screens keep it current. */
+    var maxUploadBytes: Long = 50L * 1024 * 1024
     private val uploadedCache = mutableMapOf<Uri, StoredAttachment>()
 
     fun stage(uris: List<Uri>) {
@@ -126,8 +129,19 @@ class AttachmentSender(
                 progress = (index + 1f) / uris.size
                 continue
             }
+            // Check the size before reading: the server would refuse it anyway,
+            // after a long upload, and reading a huge file into memory can crash.
+            val declared = withContext(Dispatchers.IO) { fileSize(androidContext, uri) }
+            if (declared != null && declared > maxUploadBytes) {
+                failure = "That file is over your ${maxUploadBytes / (1024 * 1024)} MB upload limit."
+                continue
+            }
             val bytes = withContext(Dispatchers.IO) {
                 runCatching { androidContext.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
+            }
+            if (bytes != null && bytes.size > maxUploadBytes) {
+                failure = "That file is over your ${maxUploadBytes / (1024 * 1024)} MB upload limit."
+                continue
             }
             if (bytes == null) {
                 failure = "Couldn't read one of those images."
@@ -167,7 +181,7 @@ class AttachmentSender(
         }
 
         val sentAt = java.time.Instant.now().toString()
-        val id = try {
+        val sent = try {
             Database.sendWithAttachments(
                 context = context,
                 parentId = parentId,
@@ -179,13 +193,14 @@ class AttachmentSender(
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) { null }
 
+        val id = sent?.id
         if (id == null) {
             error = "Couldn't send that message."
             return false
         }
 
         sentRow = ChatRow(id = id, author = null, authorId = authorId, content = caption.trim(),
-            attachmentType = null, attachments = uploaded.toList(), createdAt = sentAt, replyToId = replyToId)
+            attachmentType = null, attachments = uploaded.toList(), createdAt = sent.createdAt ?: sentAt, replyToId = replyToId)
         staged = staged - uploadedUris.toSet()
         uploadedUris.forEach { uploadedCache.remove(it) }
         if (failure != null) {
@@ -193,19 +208,6 @@ class AttachmentSender(
         }
         return true
         } finally { progress = null }
-    }
-
-    /** A space sticker: an `attachments` entry of type "sticker" holding its id, as on the web. */
-    suspend fun sendSticker(authorId: String, sticker: com.wsgpolar.disband.data.ExpressionStore.SpaceSticker): Boolean {
-        val sent = try {
-            Database.sendWithAttachments(
-                context = context, parentId = parentId, authorId = authorId, content = "",
-                attachments = listOf(StoredAttachment(url = sticker.id, type = "sticker", name = sticker.name)),
-            )
-        } catch (e: CancellationException) { throw e }
-        catch (_: Exception) { null }
-        if (sent == null) error = "Couldn't send that sticker."
-        return sent != null
     }
 
     /**
@@ -225,6 +227,39 @@ class AttachmentSender(
         catch (_: Exception) { null }
         if (id == null) error = "Couldn't send the poll."
         return id != null
+    }
+
+    private fun fileSize(androidContext: Context, uri: Uri): Long? = runCatching {
+        androidContext.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (index >= 0 && cursor.moveToFirst() && !cursor.isNull(index)) cursor.getLong(index) else null
+        }
+    }.getOrNull()
+
+    /** A space sticker: an `attachments` entry of type "sticker" holding its id, as on the web. */
+    suspend fun sendSticker(authorId: String, sticker: com.wsgpolar.disband.data.ExpressionStore.SpaceSticker): Boolean {
+        val sent = try {
+            Database.sendWithAttachments(
+                context = context, parentId = parentId, authorId = authorId, content = "",
+                attachments = listOf(StoredAttachment(url = sticker.id, type = "sticker", name = sticker.name)),
+            )
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { null }
+        if (sent == null) error = "Couldn't send that sticker."
+        return sent != null
+    }
+
+    /** A GIF from the picker: already hosted, so it goes straight out as an attachment, as on iOS. */
+    suspend fun sendGif(authorId: String, gif: StoredAttachment): Boolean {
+        val sent = try {
+            Database.sendWithAttachments(
+                context = context, parentId = parentId, authorId = authorId,
+                content = "", attachments = listOf(gif),
+            )
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { null }
+        if (sent == null) error = "Couldn't send that GIF."
+        return sent != null
     }
 
     /** The original filename, so a set does not arrive as ten files all called "image.jpg". */

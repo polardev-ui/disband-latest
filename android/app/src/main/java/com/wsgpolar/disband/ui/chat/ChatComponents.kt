@@ -1,5 +1,6 @@
 package com.wsgpolar.disband.ui.chat
 
+import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -28,7 +29,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
 import kotlinx.coroutines.launch
-import androidx.compose.material.icons.outlined.EmojiEmotions
 import kotlinx.coroutines.CancellationException
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.RepeatMode
@@ -51,9 +51,11 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Gif
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.automirrored.filled.Forward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -79,6 +81,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -163,6 +166,8 @@ data class ReactionSummaryRow(
     val count: Int,
     /** True when the signed-in user is one of them. */
     val reacted: Boolean,
+    /** Who reacted, for the long-press details sheet. */
+    val userIds: List<String> = emptyList(),
 )
 
 /** Human-readable byte counts, matching the other clients. */
@@ -224,6 +229,8 @@ fun ChatScaffold(
     onTyping: () -> Unit = {},
     /** Shown above the composer with the current draft: bot command suggestions. */
     commandBar: (@Composable (draft: String, clear: () -> Unit) -> Unit)? = null,
+    /** Who an "@" can suggest. Null turns suggestions off. */
+    mentionSource: MentionSource? = null,
 ) {
     val palette = LocalPalette.current
     val listState = rememberLazyListState()
@@ -232,6 +239,8 @@ fun ChatScaffold(
 
     val scope = rememberCoroutineScope()
     BackHandler(onBack = onBack)
+    var viewing by remember { mutableStateOf<StoredAttachment?>(null) }
+    viewing?.let { a -> MediaViewer(a, onDismiss = { viewing = null }, onOpenExternally = { onOpenAttachment(a) }) }
     var followLatest by rememberSaveable(conversationKey) { mutableStateOf(true) }
     var previousLastId by rememberSaveable(conversationKey) { mutableStateOf<String?>(null) }
     val showJumpToBottom by remember { derivedStateOf {
@@ -320,7 +329,7 @@ fun ChatScaffold(
                 else -> MessageList(
                     listState, rows, ownUserId,
                     onToggleReaction = onToggleReaction,
-                    onOpenAttachment = onOpenAttachment,
+                    onOpenAttachment = { a -> if (a.opensInViewer()) viewing = a else onOpenAttachment(a) },
                     onLongPress = onMessageLongPress,
                     onAuthorClick = { row ->
                         (row.author ?: row.authorId?.let { Profile(id = it) })?.let { profileFor = it }
@@ -390,6 +399,7 @@ fun ChatScaffold(
             onSendAttachments = onSendAttachments,
             onTyping = onTyping,
             commandBar = commandBar,
+            mentionSource = mentionSource,
         )
     }
 }
@@ -407,9 +417,9 @@ private fun ChatTopBar(
     Row(
         Modifier
             .fillMaxWidth()
-            .background(palette.surface)
+            .background(palette.background)
             .statusBarsPadding()
-            .heightIn(min = 60.dp)
+            .heightIn(min = 56.dp)
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -435,7 +445,7 @@ private fun ChatTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) {
-            AvatarImage(url = avatarUrl, name = avatarName, size = 34.dp)
+            AvatarImage(url = avatarUrl, name = avatarName, size = 32.dp)
             Column(Modifier.padding(start = 9.dp).weight(1f, fill = false)) {
                 Text(title, color = palette.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -467,6 +477,26 @@ private fun MessageList(
     val byId = remember(rows) { rows.associateBy { it.id } }
     val days = remember(rows) { rows.map { TimeFormat.parse(it.createdAt)?.atZone(java.time.ZoneId.systemDefault())?.toLocalDate() } }
 
+    // The header is the list's first item, so older rows prepended after it
+    // left the reader at the top of the new page. Remember which message was
+    // first on screen (and how far down) and put it back once rows change.
+    var anchor by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    val firstId = rows.firstOrNull()?.id
+    LaunchedEffect(firstId, loadingOlder) {
+        val a = anchor ?: return@LaunchedEffect
+        val index = rows.indexOfFirst { it.id == a.first }
+        if (index >= 0 && firstId != null && listState.layoutInfo.visibleItemsInfo.none { it.key == a.first && it.offset == a.second }) {
+            listState.scrollToItem(index + 1, listState.layoutInfo.beforeContentPadding - a.second)
+        }
+        if (!loadingOlder) anchor = null
+    }
+    val loadOlder: () -> Unit = {
+        anchor = listState.layoutInfo.visibleItemsInfo
+            .firstOrNull { it.key != "history" }
+            ?.let { (it.key as? String)?.to(it.offset) }
+        onLoadOlder()
+    }
+
     LazyColumn(
         Modifier.fillMaxSize(),
         state = listState,
@@ -478,7 +508,7 @@ private fun MessageList(
         item(key = "history", contentType = "history") {
             Box(Modifier.fillMaxWidth().padding(bottom = 12.dp), contentAlignment = Alignment.Center) {
                 if (loadingOlder) CircularProgressIndicator(Modifier.size(20.dp), color = palette.accent, strokeWidth = 2.dp)
-                else if (hasOlder) androidx.compose.material3.TextButton(onClick = onLoadOlder) {
+                else if (hasOlder) androidx.compose.material3.TextButton(onClick = loadOlder) {
                     Text("Load earlier messages", color = palette.accent, fontSize = 13.sp)
                 }
             }
@@ -541,12 +571,14 @@ private fun ChatRow.groupsWith(previous: ChatRow?): Boolean {
 private fun ReplyBanner(row: ChatRow, onDismiss: () -> Unit) {
     val palette = LocalPalette.current
     Row(
-        Modifier.fillMaxWidth().background(palette.surfaceRaised).padding(horizontal = 12.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().background(palette.surface).padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null, tint = palette.accent, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            Text("Replying to ${row.author?.name ?: "Unknown"}", color = palette.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Text(row.content, color = palette.textSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Replying to ${row.author?.name ?: "Unknown"}", color = palette.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(row.content, color = palette.textMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Filled.Close, contentDescription = "Dismiss reply", tint = palette.textMuted, modifier = Modifier.size(18.dp))
@@ -588,6 +620,7 @@ fun MessageActionSheet(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onReact: (String) -> Unit,
+    onForward: (() -> Unit)? = null,
 ) {
     val palette = LocalPalette.current
     androidx.compose.material3.ModalBottomSheet(
@@ -621,6 +654,9 @@ fun MessageActionSheet(
             androidx.compose.material3.HorizontalDivider(color = palette.divider)
             SheetAction("Reply", Icons.AutoMirrored.Filled.Reply, palette) { onReply(); onDismiss() }
             SheetAction("Copy text", Icons.Filled.ContentCopy, palette) { onCopy(); onDismiss() }
+            if (onForward != null) {
+                SheetAction("Forward", Icons.AutoMirrored.Filled.Forward, palette) { onForward(); onDismiss() }
+            }
             if (isOwn && row.content.isNotBlank()) {
                 SheetAction("Edit", Icons.Filled.Edit, palette) { onEdit(); onDismiss() }
             }
@@ -726,6 +762,7 @@ private fun Composer(
     onSendAttachments: (suspend (String) -> Boolean)? = null,
     onTyping: () -> Unit = {},
     commandBar: (@Composable (draft: String, clear: () -> Unit) -> Unit)? = null,
+    mentionSource: MentionSource? = null,
 ) {
     // State-based fields: only these take images and GIFs from the keyboard
     // (the value-based field never told Gboard it could, so it refused).
@@ -749,6 +786,7 @@ private fun Composer(
     var unexpectedError by remember { mutableStateOf<String?>(null) }
     var attachMenu by remember { mutableStateOf(false) }
     var showPoll by remember { mutableStateOf(false) }
+    var showGifs by remember { mutableStateOf(false) }
     var showExpressions by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { com.wsgpolar.disband.data.ExpressionStore.loadMySpaces() }
@@ -766,6 +804,12 @@ private fun Composer(
             },
         )
     }
+    if (showGifs && attachments != null) {
+        GifPickerSheet(onDismiss = { showGifs = false }) { gif ->
+            val uid = runCatching { com.wsgpolar.disband.core.DisbandSupabase.auth.currentUserOrNull()?.id }.getOrNull()
+            if (uid != null) scope.launch { attachments.sendGif(uid, gif) }
+        }
+    }
     if (showPoll && attachments != null) {
         PollCreateDialog(onDismiss = { showPoll = false }) { pollId ->
             val uid = runCatching { com.wsgpolar.disband.core.DisbandSupabase.auth.currentUserOrNull()?.id }.getOrNull()
@@ -781,11 +825,12 @@ private fun Composer(
         }
     }
     val border by androidx.compose.animation.animateColorAsState(
-        if (focused) palette.accent.copy(alpha = 0.55f) else palette.divider, label = "composerFocus",
+        if (focused) palette.accent.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.07f), label = "composerFocus",
     )
 
     Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
         if (editingRow == null) commandBar?.invoke(text) { draftState.clearText() }
+        mentionSource?.let { MentionSuggestionBar(it, fieldState) }
         if (hasStaged && attachments != null) StagedStrip(attachments, palette)
         attachments?.progress?.let { progress ->
             LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(2.dp),
@@ -795,24 +840,22 @@ private fun Composer(
             Text(it, color = Brand.dnd, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp))
         }
         Row(
-            Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+            Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 8.dp)
                 .fillMaxWidth()
                 .animateContentSize(spring(stiffness = 500f))
-                .clip(RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(24.dp))
                 .background(palette.elevated)
-                .border(1.dp, border, RoundedCornerShape(28.dp))
-                .padding(4.dp),
+                .border(1.dp, border, RoundedCornerShape(24.dp))
+                .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
             if (picker != null) Box {
                 IconButton(
                     onClick = { attachMenu = true },
                     enabled = enabled && !sending && editingRow == null,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(width = 44.dp, height = 52.dp),
                 ) {
-                    Box(Modifier.size(34.dp).clip(CircleShape).background(palette.surface), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Add, "Add attachment", tint = palette.textSecondary, modifier = Modifier.size(20.dp))
-                    }
+                    Icon(Icons.Filled.Add, "Add attachment", tint = palette.textSecondary, modifier = Modifier.size(24.dp))
                 }
                 androidx.compose.material3.DropdownMenu(expanded = attachMenu, onDismissRequest = { attachMenu = false }) {
                     androidx.compose.material3.DropdownMenuItem(
@@ -821,6 +864,14 @@ private fun Composer(
                         onClick = {
                             attachMenu = false
                             picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                        },
+                    )
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("GIF") },
+                        leadingIcon = { Icon(Icons.Filled.Gif, contentDescription = null) },
+                        onClick = {
+                            attachMenu = false
+                            showGifs = true
                         },
                     )
                     androidx.compose.material3.DropdownMenuItem(
@@ -835,17 +886,17 @@ private fun Composer(
             } else Spacer(Modifier.width(12.dp))
             BasicTextField(
                 state = fieldState,
-                modifier = Modifier.weight(1f).heightIn(min = 48.dp).onFocusChanged { focused = it.isFocused }
+                modifier = Modifier.weight(1f).heightIn(min = 52.dp).onFocusChanged { focused = it.isFocused }
                     .pastedMedia(attachments.takeIf { editingRow == null && enabled && !sending }, androidContext)
-                    .padding(vertical = 13.dp, horizontal = 4.dp)
+                    .padding(vertical = 15.dp, horizontal = 4.dp)
                     .semantics { contentDescription = if (editingRow != null) "Edit message" else "Message" },
-                textStyle = TextStyle(color = palette.textPrimary, fontSize = 16.sp, lineHeight = 22.sp),
+                textStyle = TextStyle(color = palette.textPrimary, fontSize = 17.sp, lineHeight = 22.sp),
                 cursorBrush = SolidColor(palette.accent),
                 lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 6),
                 enabled = enabled && !sending,
                 decorator = { field ->
                     Box {
-                        if (text.isEmpty()) Text(placeholder, color = palette.textMuted, fontSize = 16.sp, maxLines = 1,
+                        if (text.isEmpty()) Text(placeholder, color = palette.textMuted, fontSize = 17.sp, maxLines = 1,
                             overflow = TextOverflow.Ellipsis)
                         field()
                     }
@@ -877,20 +928,36 @@ private fun Composer(
                         }
                     },
                     enabled = canSend,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(width = 50.dp, height = 52.dp),
                 ) {
-                    Box(Modifier.size(36.dp).clip(CircleShape).background(palette.accent), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(width = 44.dp, height = 36.dp).clip(RoundedCornerShape(12.dp)).background(palette.accent), contentAlignment = Alignment.Center) {
                         if (sending) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
                         else Icon(Icons.Filled.Send, if (editingRow != null) "Save edit" else "Send message",
                             tint = Color.White, modifier = Modifier.size(18.dp))
                     }
                 }
             }
-            // Space stickers and custom emoji from every space you're in.
-            if (text.isBlank() && !hasStaged && attachments != null && editingRow == null) {
+            // iOS keeps a GIF shortcut on the right while the box is empty.
+            if (text.isBlank() && !hasStaged && picker != null && editingRow == null) {
                 Box(
                     Modifier
-                        .size(width = 42.dp, height = 48.dp)
+                        .size(width = 42.dp, height = 52.dp)
+                        .clickable(enabled = enabled && !sending, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Send a GIF") { showGifs = true },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "GIF", color = palette.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier
+                            .border(1.7.dp, palette.textSecondary, RoundedCornerShape(5.dp))
+                            .height(21.dp)
+                            .padding(horizontal = 5.dp)
+                            .wrapContentHeight(Alignment.CenterVertically),
+                    )
+                }
+                // Space stickers and custom emoji from every space you're in.
+                Box(
+                    Modifier
+                        .size(width = 42.dp, height = 52.dp)
                         .clickable(enabled = enabled && !sending, role = androidx.compose.ui.semantics.Role.Button,
                             onClickLabel = "Stickers and custom emoji") { showExpressions = true },
                     contentAlignment = Alignment.Center,
@@ -899,7 +966,7 @@ private fun Composer(
                         tint = palette.textSecondary, modifier = Modifier.size(22.dp))
                 }
             }
-            if (text.isBlank() && !hasStaged) Spacer(Modifier.width(8.dp))
+            if (text.isBlank() && !hasStaged) Spacer(Modifier.width(4.dp))
         }
     }
 }

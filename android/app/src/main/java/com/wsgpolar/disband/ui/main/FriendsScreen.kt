@@ -25,7 +25,10 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,6 +59,7 @@ import com.wsgpolar.disband.core.Brand
 import com.wsgpolar.disband.core.LocalPalette
 import com.wsgpolar.disband.core.TimeFormat
 import com.wsgpolar.disband.core.color
+import com.wsgpolar.disband.core.leave
 import com.wsgpolar.disband.data.Database
 import com.wsgpolar.disband.data.Friendship
 import com.wsgpolar.disband.data.FriendshipStatus
@@ -73,8 +77,26 @@ import com.wsgpolar.disband.ui.components.ScreenHeader
 import com.wsgpolar.disband.ui.components.SectionCaption
 import com.wsgpolar.disband.ui.components.SettingsDivider
 import com.wsgpolar.disband.ui.components.SettingsGroup
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import com.wsgpolar.disband.data.RealtimeService
+import io.github.jan.supabase.exceptions.RestException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+
+/** The server's own words for a failed request (RLS, duplicates, blocks), else the exception text. */
+private fun serverMessage(e: Throwable): String {
+    if (e is RestException) {
+        val m = e.error.takeIf { it.isNotBlank() } ?: e.description
+        if (!m.isNullOrBlank()) return m
+    }
+    return e.message?.takeIf { it.isNotBlank() } ?: "Something went wrong. Try again."
+}
 
 enum class FriendFilter(val title: String) {
     Online("Online"),
@@ -117,6 +139,11 @@ fun FriendsScreen(
     var query by remember { mutableStateOf("") }
     var showAdd by remember { mutableStateOf(false) }
     var openingDm by remember { mutableStateOf<String?>(null) }
+    var busyIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var actionError by remember { mutableStateOf<String?>(null) }
+    var confirmRemove by remember { mutableStateOf<Profile?>(null) }
+    var confirmBlock by remember { mutableStateOf<Profile?>(null) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
 
     suspend fun refresh(silent: Boolean = false) {
         if (uid == null) return
@@ -134,6 +161,48 @@ fun FriendsScreen(
     LaunchedEffect(uid) {
         loading = true
         refresh()
+    }
+
+    // Live: reload whenever a friendship row changes, and again on resume
+    // (the channel is only held while the screen is started).
+    LaunchedEffect(uid, lifecycle) {
+        if (uid == null) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            refresh(silent = true)
+            val live: com.wsgpolar.disband.data.LiveChannel<Unit>? = try {
+                RealtimeService.observeChanges("friendships")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            try {
+                live?.flow?.collectLatest {
+                    delay(300)
+                    refresh(silent = true)
+                }
+            } finally {
+                withContext(NonCancellable) { runCatching { live?.channel?.leave() } }
+            }
+        }
+    }
+
+    /** Runs a write once per [key]; the key stays busy until it finishes. */
+    fun guarded(key: String, op: suspend () -> Unit) {
+        if (key in busyIds) return
+        busyIds = busyIds + key
+        actionError = null
+        scope.launch {
+            try {
+                op()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                actionError = serverMessage(e)
+            }
+            refresh(silent = true)
+            busyIds = busyIds - key
+        }
     }
 
     /** The other party in a friendship, whichever side of it we are on. */
@@ -257,6 +326,18 @@ fun FriendsScreen(
         )
         HorizontalDivider(color = palette.divider)
 
+        actionError?.let { msg ->
+            Text(
+                msg,
+                color = Brand.dnd,
+                fontSize = 13.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { actionError = null }
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+            )
+        }
+
         CapsuleFilterBar(
             options = FriendFilter.entries,
             selected = filter,
@@ -288,11 +369,9 @@ fun FriendsScreen(
             filter == FriendFilter.Pending -> PendingContent(
                 incoming = incoming,
                 outgoing = outgoing,
+                busyIds = busyIds,
                 onRespond = { id, accept ->
-                    scope.launch {
-                        runCatching { Database.respondToFriendRequest(id, accept) }
-                        refresh(silent = true)
-                    }
+                    guarded(id) { Database.respondToFriendRequest(id, accept) }
                 },
             )
 
@@ -336,10 +415,41 @@ fun FriendsScreen(
                     onOpenDm = ::openDm,
                     onViewProfile = onViewProfile,
                     openingDmId = openingDm,
+                    onRemove = { confirmRemove = it },
+                    onBlock = { confirmBlock = it },
                 )
                 Spacer(Modifier.size(96.dp)) // clears the floating dock
             }
         }
+    }
+
+    confirmRemove?.let { peer ->
+        AlertDialog(
+            onDismissRequest = { confirmRemove = null },
+            title = { Text("Remove ${peer.name}?") },
+            text = { Text("They will no longer be in your friends list.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmRemove = null
+                    if (uid != null) guarded("remove:${peer.id}") { Database.removeFriend(uid, peer.id) }
+                }) { Text("Remove", color = Brand.dnd) }
+            },
+            dismissButton = { TextButton(onClick = { confirmRemove = null }) { Text("Cancel") } },
+        )
+    }
+    confirmBlock?.let { peer ->
+        AlertDialog(
+            onDismissRequest = { confirmBlock = null },
+            title = { Text("Block ${peer.name}?") },
+            text = { Text("They won't be able to message or call you, and you'll stop being friends.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmBlock = null
+                    guarded("block:${peer.id}") { Database.blockUser(peer.id) }
+                }) { Text("Block", color = Brand.dnd) }
+            },
+            dismissButton = { TextButton(onClick = { confirmBlock = null }) { Text("Cancel") } },
+        )
     }
 
     if (showAdd) {
@@ -403,6 +513,8 @@ private fun FriendsList(
     onOpenDm: (Profile) -> Unit,
     onViewProfile: (Profile) -> Unit,
     openingDmId: String? = null,
+    onRemove: (Profile) -> Unit = {},
+    onBlock: (Profile) -> Unit = {},
 ) {
     val palette = LocalPalette.current
     SettingsGroup {
@@ -428,6 +540,27 @@ private fun FriendsList(
                                 strokeWidth = 2.dp,
                             )
                         } else {
+                            var menu by remember { mutableStateOf(false) }
+                            Box {
+                                IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) {
+                                    Icon(
+                                        Icons.Filled.MoreVert,
+                                        contentDescription = "More options for ${peer.name}",
+                                        tint = palette.textSecondary,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text("Remove friend", color = Brand.dnd) },
+                                        onClick = { menu = false; onRemove(peer) },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Block", color = Brand.dnd) },
+                                        onClick = { menu = false; onBlock(peer) },
+                                    )
+                                }
+                            }
                             IconButton(
                                 onClick = { onOpenDm(peer) },
                                 modifier = Modifier.size(48.dp),
@@ -451,6 +584,7 @@ private fun FriendsList(
 private fun PendingContent(
     incoming: List<Friendship>,
     outgoing: List<Friendship>,
+    busyIds: Set<String>,
     onRespond: (id: String, accept: Boolean) -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -473,12 +607,14 @@ private fun PendingContent(
                         FriendRow(profile = peer, modifier = Modifier.weight(1f))
                         IconButton(
                             onClick = { onRespond(friendship.id, false) },
+                            enabled = friendship.id !in busyIds,
                             modifier = Modifier.size(48.dp),
                         ) {
                             Icon(Icons.Filled.Close, "Decline request from ${peer.name}", tint = Brand.dnd, modifier = Modifier.size(20.dp))
                         }
                         IconButton(
                             onClick = { onRespond(friendship.id, true) },
+                            enabled = friendship.id !in busyIds,
                             modifier = Modifier.size(48.dp),
                         ) {
                             Icon(Icons.Filled.Check, "Accept request from ${peer.name}", tint = Brand.online, modifier = Modifier.size(20.dp))
@@ -530,6 +666,8 @@ private fun AddFriendSheet(
     var results by remember { mutableStateOf<List<Profile>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     var sent by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var adding by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var addError by remember { mutableStateOf<String?>(null) }
 
     // Debounced so a search does not fire on every keystroke. Database
     // .searchProfiles is an exact username match, so a partial word finds
@@ -567,6 +705,9 @@ private fun AddFriendSheet(
                 modifier = Modifier.padding(top = 12.dp),
             )
 
+            addError?.let {
+                Text(it, color = Brand.dnd, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            }
             when {
                 searching -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = palette.accent, modifier = Modifier.size(22.dp))
@@ -592,15 +733,22 @@ private fun AddFriendSheet(
                                 profile.id in sent ->
                                     Text("Sent", color = palette.textMuted, fontSize = 12.sp)
                                 else -> Button(
+                                    enabled = profile.id !in adding,
                                     onClick = {
+                                        if (profile.id in adding) return@Button
+                                        adding = adding + profile.id
+                                        addError = null
                                         scope.launch {
-                                            val ok = runCatching {
+                                            try {
                                                 Database.sendFriendRequest(uid, profile.id)
-                                            }.isSuccess
-                                            if (ok) {
                                                 sent = sent + profile.id
                                                 onAdded()
+                                            } catch (e: CancellationException) {
+                                                throw e
+                                            } catch (e: Exception) {
+                                                addError = serverMessage(e)
                                             }
+                                            adding = adding - profile.id
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(

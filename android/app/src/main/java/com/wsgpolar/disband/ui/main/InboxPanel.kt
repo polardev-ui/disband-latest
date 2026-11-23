@@ -1,5 +1,11 @@
 package com.wsgpolar.disband.ui.main
 
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -92,10 +98,20 @@ fun InboxPanel(
     // so the last row clears the floating dock on every device.
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
+    // Message requests (migration 0193): a non-friend started the thread and
+    // you haven't accepted. They get their own section; ignored ones are hidden.
+    // The peer is the friend, so "requested by the friend" means incoming.
+    fun DmThread.incomingRequest() = requestedBy != null && acceptedAt == null && requestedBy == friend?.id
+    val requests = if (filter == InboxFilter.Groups) emptyList() else dmThreads.filter {
+        it.incomingRequest() && it.requestIgnoredAt == null &&
+            (query.isBlank() || it.friend?.name?.contains(query.trim(), ignoreCase = true) == true ||
+                it.friend?.handle?.contains(query.trim(), ignoreCase = true) == true)
+    }
+
     // Unread first, then most recent — the same ordering iOS applies.
     val items: List<InboxItem> = buildList {
         if (filter != InboxFilter.Groups) {
-            dmThreads.forEach { add(InboxItem.Dm(it)) }
+            dmThreads.filter { !it.incomingRequest() }.forEach { add(InboxItem.Dm(it)) }
         }
         groupChats.forEach { add(InboxItem.Group(it)) }
     }.let { list ->
@@ -125,7 +141,7 @@ fun InboxPanel(
             }.thenByDescending {
                 when (it) {
                     is InboxItem.Dm -> it.thread.lastMessageAt ?: it.thread.createdAt ?: ""
-                    is InboxItem.Group -> it.group.createdAt ?: ""
+                    is InboxItem.Group -> it.group.lastMessageAt ?: it.group.createdAt ?: ""
                 }
             },
         )
@@ -139,7 +155,7 @@ fun InboxPanel(
     ) {
         item(key = "header") {
             Row(
-                Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -151,7 +167,7 @@ fun InboxPanel(
                 )
                 Box(
                     Modifier
-                        .size(48.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
                         .background(palette.elevated)
                         .clickable(onClickLabel = "New message", onClick = onCompose),
@@ -161,19 +177,18 @@ fun InboxPanel(
                         Icons.Filled.Edit,
                         contentDescription = null,
                         tint = palette.textPrimary,
-                        modifier = Modifier.size(17.dp),
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }
         }
 
         item(key = "search") {
-            CapsuleSearchField(query, { query = it }, prompt = "Search messages",
-                modifier = Modifier.padding(bottom = 14.dp))
+            InboxSearchField(query, { query = it })
         }
         item(key = "filters") {
             Row(
-                Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, bottom = 10.dp),
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 InboxFilter.entries.forEach { option ->
@@ -181,14 +196,14 @@ fun InboxPanel(
                     val fill by animateColorAsState(if (selected) palette.accent else palette.elevated, label = "inboxFilter")
                     Box(
                         Modifier
-                            .heightIn(min = 36.dp)
+                            .height(32.dp)
                             .clip(CircleShape)
                             .background(fill)
                             .selectable(selected = selected,
                                 role = androidx.compose.ui.semantics.Role.Tab,
                                 onClick = { onFilterChanged(option) },
                             )
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                            .padding(horizontal = 14.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -216,7 +231,7 @@ fun InboxPanel(
                 }
             }
         }
-        if (items.isEmpty() && !loading && loadError == null) {
+        if (items.isEmpty() && requests.isEmpty() && !loading && loadError == null) {
             item(key = "empty") {
                 Column(
                     Modifier.fillMaxWidth().padding(top = 70.dp, start = 32.dp, end = 32.dp),
@@ -257,6 +272,37 @@ fun InboxPanel(
             }
         }
 
+        if (requests.isNotEmpty()) {
+            item(key = "requests-header") {
+                Text(
+                    "Message Requests (${requests.size})",
+                    color = palette.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(start = 20.dp, end = 16.dp, top = 4.dp, bottom = 6.dp),
+                )
+            }
+            items(requests, key = { "request:${it.id}" }, contentType = { "conversation" }) { thread ->
+                ConversationRow(
+                    modifier = Modifier.animateItem(),
+                    iconUrl = thread.friend?.avatarUrl,
+                    name = thread.friend?.name ?: "Unknown",
+                    userId = thread.friend?.id,
+                    status = thread.friend?.let { statusOf(it.id) },
+                    preview = thread.lastMessagePreview,
+                    time = TimeFormat.compact(thread.lastMessageAt ?: thread.createdAt),
+                    unread = unreadForThread(thread.id),
+                    selected = thread.id == selectedThreadId,
+                    onClick = { onThreadSelected(thread.id) },
+                )
+            }
+            item(key = "requests-footer") {
+                Text(
+                    "From people you share a space with. They won't know you've seen it unless you reply.",
+                    color = palette.textMuted, fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 20.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
+                )
+            }
+        }
+
         items(items, key = { it.key }, contentType = { "conversation" }) { item ->
             when (item) {
                 is InboxItem.Dm -> {
@@ -289,3 +335,45 @@ fun InboxPanel(
     }
 }
 
+
+/** iOS inbox search box: 38dp, 12dp radius, elevated fill, accent hairline while focused. */
+@Composable
+private fun InboxSearchField(query: String, onChange: (String) -> Unit) {
+    val palette = LocalPalette.current
+    var focused by remember { mutableStateOf(false) }
+    val border by animateColorAsState(
+        if (focused) palette.accent.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.05f), label = "inboxSearch",
+    )
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
+            .height(38.dp)
+            .clip(shape)
+            .background(palette.elevated)
+            .border(1.dp, border, shape)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(Icons.Filled.Search, contentDescription = null, tint = palette.textMuted, modifier = Modifier.size(16.dp))
+        Box(Modifier.weight(1f)) {
+            if (query.isEmpty()) Text("Search conversations", color = palette.textMuted, fontSize = 15.sp, maxLines = 1)
+            androidx.compose.foundation.text.BasicTextField(
+                value = query,
+                onValueChange = onChange,
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = palette.textPrimary, fontSize = 15.sp),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(palette.accent),
+                modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+            )
+        }
+        if (query.isNotEmpty()) {
+            Icon(
+                Icons.Filled.Cancel, contentDescription = "Clear search", tint = palette.textMuted,
+                modifier = Modifier.size(16.dp).clickable { onChange("") },
+            )
+        }
+    }
+}

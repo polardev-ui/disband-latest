@@ -65,7 +65,7 @@ fun AvatarImage(
             Box(
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .size((size.value * 0.34f).dp)
+                    .size((size.value * 0.30f).dp)
                     .clip(CircleShape)
                     .background(ring)
                     .padding((size.value * 0.06f).coerceAtLeast(2f).dp),

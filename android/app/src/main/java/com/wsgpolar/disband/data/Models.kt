@@ -383,8 +383,18 @@ data class DmThread(
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("last_message_at") var lastMessageAt: String? = null,
     @SerialName("last_message_preview") var lastMessagePreview: String? = null,
+    /** Message requests (migration 0193): who opened a non-friend thread; null for a normal DM. */
+    @SerialName("requested_by") val requestedBy: String? = null,
+    @SerialName("accepted_at") val acceptedAt: String? = null,
+    @SerialName("request_ignored_at") val requestIgnoredAt: String? = null,
     var friend: Profile? = null,
-)
+) {
+    /** A request someone else sent you that you haven't replied to or accepted. */
+    fun isIncomingRequest(uid: String?): Boolean = requestedBy != null && uid != null && requestedBy != uid && acceptedAt == null
+
+    /** A request you sent that hasn't been answered yet. */
+    fun isOutgoingRequest(uid: String?): Boolean = requestedBy != null && uid != null && requestedBy == uid && acceptedAt == null
+}
 
 @Serializable
 data class DmMessage(
@@ -413,6 +423,8 @@ data class GroupChat(
     @SerialName("owner_id") val ownerId: String,
     @SerialName("icon_url") var iconUrl: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    /** Kept current by a trigger (0176). Inbox recency sorts on this. */
+    @SerialName("last_message_at") val lastMessageAt: String? = null,
     var members: List<Profile>? = null,
 )
 
@@ -673,6 +685,17 @@ data class NewNote(
 /** Just the id, for an insert that returns the row it wrote. */
 @Serializable
 data class InsertedId(val id: String)
+
+/**
+ * A sent message as the server saved it. The timestamp matters: an
+ * optimistic row stamped with the phone's clock sorts wherever that clock
+ * says, so a few seconds of skew put your reply above the message it answers.
+ */
+@Serializable
+data class InsertedMessage(
+    val id: String,
+    @SerialName("created_at") val createdAt: String? = null,
+)
 
 data class OutgoingAttachment(
     val url: String,

@@ -1,5 +1,6 @@
 package com.wsgpolar.disband.ui.chat
 
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.MoreVert
 import android.content.Intent
 import androidx.compose.material3.AlertDialog
@@ -34,18 +35,25 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
 @Composable
-fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
+fun GroupChatScreen(
+    app: AppState,
+    group: GroupChat,
+    onBack: () -> Unit,
+    /** The group's icon or membership changed: the inbox list needs reloading. */
+    onGroupChanged: () -> Unit = {},
+) {
     val uid = app.currentUserId ?: return
     val dmUnread = app.dmUnread
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
 
+    val typing = remember(group.id) { TypingState("group", group.id, scope) }
     val timeline = rememberChatTimeline(
         key = "group:${group.id}", table = "group_messages", filter = "group_id=eq.${group.id}",
         serializer = GroupMessage.serializer(), toRow = { it.toRow(uid) },
         fetch = { before -> Database.groupMessages(group.id, before = before).map { it.toRow(uid) } },
-        onIncoming = { row -> if (row.authorId != uid) runCatching { Database.markGroupRead(group.id) } },
+        onIncoming = { row -> row.authorId?.let { typing.clear(it) }; if (row.authorId != uid) runCatching { Database.markGroupRead(group.id) } },
     )
     val rows = timeline.rows
 
@@ -56,12 +64,44 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
     var deleteRow by remember(group.id) { mutableStateOf<ChatRow?>(null) }
     val reactions = remember(group.id) { ReactionState("group") }
     val ctx = LocalContext.current
-    val typing = remember(group.id) { TypingState("group", group.id, scope) }
     val attach = remember(group.id) { AttachmentSender("group", group.id) }
+    attach.maxUploadBytes = app.subscriptions.entitlements.maxUploadBytes
 
     // The group's picture: change or remove it from the header's menu.
     var groupIcon by remember(group.id) { mutableStateOf(group.iconUrl) }
     var optionsOpen by remember(group.id) { mutableStateOf(false) }
+    var confirmLeave by remember(group.id) { mutableStateOf(false) }
+    var groupName by remember(group.id) { mutableStateOf(group.name) }
+    var renaming by remember(group.id) { mutableStateOf(false) }
+    var addingPeople by remember(group.id) { mutableStateOf(false) }
+    if (renaming) RenameGroupDialog(group.id, groupName, onDismiss = { renaming = false },
+        onRenamed = { groupName = it; onGroupChanged() })
+    if (addingPeople) AddGroupMembersSheet(
+        uid = uid,
+        groupId = group.id,
+        currentMemberIds = group.members?.mapTo(hashSetOf()) { it.id } ?: setOf(uid),
+        onDismiss = { addingPeople = false },
+        onAdded = onGroupChanged,
+    )
+    if (confirmLeave) AlertDialog(
+        onDismissRequest = { confirmLeave = false },
+        title = { Text("Leave ${group.name}?") },
+        text = { Text("You'll stop getting its messages. Someone in the group will have to add you back.") },
+        confirmButton = {
+            TextButton(onClick = {
+                confirmLeave = false
+                scope.launch {
+                    try {
+                        Database.leaveGroup(group.id)
+                        onGroupChanged()
+                        onBack()
+                    } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                    catch (_: Exception) { sendError = "Couldn't leave the group. Try again." }
+                }
+            }) { Text("Leave", color = Brand.dnd) }
+        },
+        dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text("Cancel") } },
+    )
     val pickIcon = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
@@ -73,11 +113,13 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
                 val url = com.wsgpolar.disband.data.MediaService.uploadImage(bytes, filename = "group-icon", mimeType = mime).url
                 Database.setGroupIcon(group.id, url)
                 groupIcon = url
+                onGroupChanged()
             }.onFailure { sendError = "The group picture couldn't be changed. Try again." }
         }
     }
 
     LaunchedEffect(rows.map { it.id }) { reactions.load(rows.map { it.id }, uid) }
+    LaunchedEffect(group.id) { val latest = { timeline.rows.map { it.id } }; reactions.watch(latest, uid) }
 
     fun openAttachment(url: String) {
         runCatching {
@@ -102,12 +144,31 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
         }
     }
 
+    val startGroupCall = com.wsgpolar.disband.ui.calls.rememberAudioPermissionTrigger {
+        app.voice.startGroupCall(
+            groupId = group.id,
+            name = groupName,
+            iconUrl = groupIcon,
+            memberIds = group.members.orEmpty().map { it.id },
+            callerName = app.profile.value?.name ?: "Someone",
+        )
+    }
+
     ChatScaffold(
-        title = group.name,
+        mentionSource = MentionSource.Local(group.members.orEmpty().filter { it.id != uid }),
+        title = groupName,
         subtitle = if (group.members.isNullOrEmpty()) "Group chat" else "${group.members!!.size} members",
         avatarUrl = groupIcon,
-        avatarName = group.name,
+        avatarName = groupName,
         callAction = {
+            androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            androidx.compose.material3.IconButton(onClick = { startGroupCall() }) {
+                androidx.compose.material3.Icon(
+                    androidx.compose.material.icons.Icons.Filled.Call,
+                    contentDescription = "Start group call",
+                    tint = Brand.online,
+                )
+            }
             androidx.compose.foundation.layout.Box {
                 androidx.compose.material3.IconButton(onClick = { optionsOpen = true }) {
                     androidx.compose.material3.Icon(
@@ -133,13 +194,27 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
                             onClick = {
                                 optionsOpen = false
                                 scope.launch {
-                                    runCatching { Database.setGroupIcon(group.id, null); groupIcon = null }
+                                    runCatching { Database.setGroupIcon(group.id, null); groupIcon = null; onGroupChanged() }
                                         .onFailure { sendError = "The group picture couldn't be removed. Try again." }
                                 }
                             },
                         )
                     }
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Add people") },
+                        onClick = { optionsOpen = false; addingPeople = true },
+                    )
+                    // rename_group_chat is owner-only; don't offer what will be refused.
+                    if (group.ownerId == uid) androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Rename group") },
+                        onClick = { optionsOpen = false; renaming = true },
+                    )
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Leave group", color = Brand.dnd) },
+                        onClick = { optionsOpen = false; confirmLeave = true },
+                    )
                 }
+            }
             }
         },
         ownUserId = uid,
@@ -160,11 +235,18 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
         onEditDismiss = { editingRow = null },
         onSend = send@{ text ->
             sendError = null
+            // Say why up front rather than letting the server refuse it as a
+            // vague "Couldn't send". The draft stays in the composer.
+            val maxChars = app.subscriptions.entitlements.maxMessageChars
+            if (text.length > maxChars) {
+                sendError = "Messages can be up to $maxChars characters on your plan (this one is ${text.length})."
+                return@send false
+            }
             val target = editingRow
             if (target != null) {
                 try {
                     Database.editGroupMessage(target.id, text)
-                    timeline.upsert(target.copy(content = text, editedAt = java.time.Instant.now().toString()))
+                    timeline.upsert((timeline.rows.firstOrNull { it.id == target.id } ?: target).copy(content = text, editedAt = java.time.Instant.now().toString()))
                     editingRow = null
                     return@send true
                 } catch (e: kotlinx.coroutines.CancellationException) { throw e }
@@ -175,18 +257,19 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
             }
             val replyId = replyTo?.id
             val sentAt = java.time.Instant.now().toString()
-            val messageId = try { Database.sendGroupMessage(group.id, uid, text, replyToId = replyId) }
+            val sent = try { Database.sendGroupMessage(group.id, uid, text, replyToId = replyId) }
                 catch (e: kotlinx.coroutines.CancellationException) { throw e }
                 catch (_: Exception) { null }
-            if (messageId == null) {
+            if (sent == null) {
                 sendError = "Couldn't send. Your draft is saved — try again."
                 false
             } else {
+                val messageId = sent.id
                 // A successful HTTP response is enough to show our message. The
                 // socket may be late or reconnecting; its echo shares this id.
                 if (timeline.rows.none { it.id == messageId }) timeline.upsert(ChatRow(
                     id = messageId, author = app.profile.value, authorId = uid,
-                    content = text, attachmentType = null, createdAt = sentAt, replyToId = replyId,
+                    content = text, attachmentType = null, createdAt = sent.createdAt ?: sentAt, replyToId = replyId,
                 ))
                 replyTo = null
                 scope.launch { TetherService.fireAskIfNeeded(
@@ -217,6 +300,13 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
         onBack = onBack,
     )
 
+    var forwardRow by remember { mutableStateOf<ChatRow?>(null) }
+    forwardRow?.let { row ->
+        ForwardSheet(uid = uid, row = row, onDismiss = { forwardRow = null }, onForwarded = { message ->
+            android.widget.Toast.makeText(ctx, message, android.widget.Toast.LENGTH_SHORT).show()
+        })
+    }
+
     actionRow?.let { row ->
         val isOwn = row.authorId == uid || row.author?.id == uid
         MessageActionSheet(
@@ -228,6 +318,7 @@ fun GroupChatScreen(app: AppState, group: GroupChat, onBack: () -> Unit) {
             onEdit = { editingRow = row },
             onDelete = { deleteRow = row },
             onReact = { emoji -> scope.launch { reactions.toggle(row.id, emoji, uid) } },
+            onForward = { forwardRow = row },
         )
     }
     deleteRow?.let { row ->
@@ -263,11 +354,12 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
 
+    val typing = remember(channel.id) { TypingState("ch", channel.id, scope) }
     val timeline = rememberChatTimeline(
         key = "channel:${channel.id}", table = "messages", filter = "channel_id=eq.${channel.id}",
         serializer = Message.serializer(), toRow = { it.toRow(uid) },
         fetch = { before -> Database.messages(channel.id, before = before).map { it.toRow(uid) } },
-        onIncoming = { row -> if (row.authorId != uid) com.wsgpolar.disband.data.ChannelUnreads.sawMessage(channel.id) },
+        onIncoming = { row -> row.authorId?.let { typing.clear(it) }; if (row.authorId != uid) com.wsgpolar.disband.data.ChannelUnreads.sawMessage(channel.id) },
     )
     val rows = timeline.rows
 
@@ -277,8 +369,8 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
     val ctx = LocalContext.current
     // "ch" matches iOS `typing:ch:{id}` — "channel" would be a topic nobody
     // else listens on, silently dropping typing indicators cross-platform.
-    val typing = remember(channel.id) { TypingState("ch", channel.id, scope) }
     val attach = remember(channel.id) { AttachmentSender("channel", channel.id) }
+    attach.maxUploadBytes = app.subscriptions.entitlements.maxUploadBytes
     var sendError by remember(channel.id) { mutableStateOf<String?>(null) }
     var replyTo by remember(channel.id) { mutableStateOf<ChatRow?>(null) }
     var editingRow by remember(channel.id) { mutableStateOf<ChatRow?>(null) }
@@ -286,6 +378,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
     var deleteRow by remember(channel.id) { mutableStateOf<ChatRow?>(null) }
 
     LaunchedEffect(rows.map { it.id }) { reactions.load(rows.map { it.id }, uid) }
+    LaunchedEffect(channel.id) { val latest = { timeline.rows.map { it.id } }; reactions.watch(latest, uid) }
 
     fun openAttachment(url: String) {
         runCatching {
@@ -324,6 +417,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
     }
     val readOnly = channel.readOnly == true && permissions?.get("manage_channels") != true
     ChatScaffold(
+        mentionSource = MentionSource.Space(channel.serverId),
         title = "#" + channel.name,
         subtitle = serverName,
         avatarUrl = null,
@@ -352,11 +446,18 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         onEditDismiss = { editingRow = null },
         onSend = send@{ text ->
             sendError = null
+            // Say why up front rather than letting the server refuse it as a
+            // vague "Couldn't send". The draft stays in the composer.
+            val maxChars = app.subscriptions.entitlements.maxMessageChars
+            if (text.length > maxChars) {
+                sendError = "Messages can be up to $maxChars characters on your plan (this one is ${text.length})."
+                return@send false
+            }
             val target = editingRow
             if (target != null) {
                 try {
                     Database.editChannelMessage(target.id, text)
-                    timeline.upsert(target.copy(content = text, editedAt = java.time.Instant.now().toString()))
+                    timeline.upsert((timeline.rows.firstOrNull { it.id == target.id } ?: target).copy(content = text, editedAt = java.time.Instant.now().toString()))
                     editingRow = null
                     return@send true
                 } catch (e: kotlinx.coroutines.CancellationException) { throw e }
@@ -367,18 +468,19 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
             }
             val replyId = replyTo?.id
             val sentAt = java.time.Instant.now().toString()
-            val messageId = try { Database.sendMessage(channel.id, uid, text, replyToId = replyId) }
+            val sent = try { Database.sendMessage(channel.id, uid, text, replyToId = replyId) }
                 catch (e: kotlinx.coroutines.CancellationException) { throw e }
                 catch (_: Exception) { null }
-            if (messageId == null) {
+            if (sent == null) {
                 sendError = "Couldn't send. Your draft is saved — try again."
                 false
             } else {
+                val messageId = sent.id
                 // A successful HTTP response is enough to show our message. The
                 // socket may be late or reconnecting; its echo shares this id.
                 if (timeline.rows.none { it.id == messageId }) timeline.upsert(ChatRow(
                     id = messageId, author = app.profile.value, authorId = uid,
-                    content = text, attachmentType = null, createdAt = sentAt, replyToId = replyId,
+                    content = text, attachmentType = null, createdAt = sent.createdAt ?: sentAt, replyToId = replyId,
                 ))
                 replyTo = null
                 scope.launch { TetherService.fireAskIfNeeded(
@@ -409,6 +511,13 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         onBack = onBack,
     )
 
+    var forwardRow by remember { mutableStateOf<ChatRow?>(null) }
+    forwardRow?.let { row ->
+        ForwardSheet(uid = uid, row = row, onDismiss = { forwardRow = null }, onForwarded = { message ->
+            android.widget.Toast.makeText(ctx, message, android.widget.Toast.LENGTH_SHORT).show()
+        })
+    }
+
     actionRow?.let { row ->
         val isOwn = row.authorId == uid || row.author?.id == uid
         MessageActionSheet(
@@ -420,6 +529,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
             onEdit = { editingRow = row },
             onDelete = { deleteRow = row },
             onReact = { emoji -> scope.launch { reactions.toggle(row.id, emoji, uid) } },
+            onForward = { forwardRow = row },
         )
     }
     deleteRow?.let { row ->

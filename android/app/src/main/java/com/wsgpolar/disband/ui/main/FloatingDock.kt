@@ -55,8 +55,8 @@ import androidx.compose.ui.unit.sp
 import com.wsgpolar.disband.core.Brand
 import com.wsgpolar.disband.core.LocalPalette
 
-private val DOCK_HEIGHT = 64.dp
-private val DOCK_ITEM = 48.dp
+private val DOCK_HEIGHT = 58.dp
+private val DOCK_ITEM = 46.dp
 
 /**
  * The floating glass capsule dock, mirroring iOS FloatingDock. It is not
@@ -75,12 +75,13 @@ fun FloatingDock(
     val palette = LocalPalette.current
 
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 18.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             modifier = Modifier
+                .fillMaxWidth()
                 .height(DOCK_HEIGHT)
                 .shadow(
                     elevation = 18.dp,
@@ -89,9 +90,14 @@ fun FloatingDock(
                     spotColor = Color.Black.copy(alpha = 0.40f),
                 )
                 .clip(CircleShape)
-                .background(palette.surface.copy(alpha = 0.97f))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
-                .padding(horizontal = 6.dp).selectableGroup(),
+                .background(palette.surface)
+                .background(palette.elevated.copy(alpha = 0.55f))
+                .border(
+                    1.dp,
+                    Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.03f))),
+                    CircleShape,
+                )
+                .padding(6.dp).selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -110,6 +116,7 @@ fun FloatingDock(
                     iconColor = iconColor,
                     badge = if (destination == Destination.Home) homeBadge else 0,
                     onSelected = { onDestinationSelected(destination) },
+                    modifier = if (isSelected) Modifier else Modifier.weight(1f),
                 )
             }
         }
@@ -125,6 +132,7 @@ private fun DockItem(
     iconColor: Color,
     badge: Int = 0,
     onSelected: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
@@ -133,16 +141,22 @@ private fun DockItem(
     val haptic = LocalHapticFeedback.current
     val scale by animateFloatAsState(if (pressed) 0.94f else 1f,
         animationSpec = spring(stiffness = 550f), label = "dockPress")
-    val fill by animateColorAsState(if (isSelected) palette.accent else Color.Transparent,
+    val fillAlpha by animateFloatAsState(if (isSelected) 1f else 0f,
         animationSpec = tween(180), label = "dockSelection")
 
-    Box {
+    Box(modifier = modifier) {
         Row(
             modifier = Modifier
+                .then(if (isSelected) Modifier else Modifier.fillMaxWidth())
                 .height(DOCK_ITEM)
                 .graphicsLayer { scaleX = scale; scaleY = scale }
                 .clip(CircleShape)
-                .background(fill)
+                .background(
+                    Brush.linearGradient(
+                        listOf(palette.accent.copy(alpha = fillAlpha), palette.accentSoft.copy(alpha = fillAlpha)),
+                    ),
+                )
+                .border(1.dp, Color.White.copy(alpha = 0.18f * fillAlpha), CircleShape)
                 .selectable(
                     selected = isSelected, role = Role.Tab,
                     interactionSource = interaction, indication = null,
@@ -153,17 +167,19 @@ private fun DockItem(
                         }
                     },
                 )
-                .padding(horizontal = 14.dp),
+                .padding(horizontal = if (isSelected) 16.dp else 0.dp),
+            horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(icon, contentDescription = label, tint = iconColor, modifier = Modifier.size(20.dp))
+            Icon(icon, contentDescription = label, tint = iconColor,
+                modifier = Modifier.size(if (isSelected) 22.dp else 21.dp))
             AnimatedVisibility(
                 visible = isSelected,
                 enter = expandHorizontally(spring(stiffness = 500f), expandFrom = Alignment.Start) + fadeIn(tween(160)),
                 exit = shrinkHorizontally(spring(stiffness = 500f), shrinkTowards = Alignment.Start) + fadeOut(tween(100)),
             ) {
                 Text(label, modifier = Modifier.padding(start = 7.dp), color = Color.White,
-                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
 
@@ -171,13 +187,12 @@ private fun DockItem(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = 4.dp, y = (-4).dp)
-                    .border(2.dp, palette.surface, CircleShape)
-                    .padding(2.dp)
+                    .offset(x = 4.dp, y = (-2).dp)
                     .clip(CircleShape)
-                    .background(Brand.danger)
+                    .background(Brand.dnd)
+                    .border(2.dp, palette.surface, CircleShape)
                     // Sized from the text so large font settings can't clip the count.
-                    .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+                    .defaultMinSize(minWidth = 17.dp, minHeight = 17.dp)
                     .padding(horizontal = 4.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -186,7 +201,7 @@ private fun DockItem(
                     color = Color.White,
                     fontSize = 10.sp,
                     lineHeight = 12.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                 )
             }
         }

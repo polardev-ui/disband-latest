@@ -54,6 +54,8 @@ class TypingState(
         if (watchJob != null) return
         val topic = TypingService.topic(kind, parentId)
 
+        // Clear the handle when the watch ends (failed join, dropped socket),
+        // or every later start() returned early and typing stayed dead.
         watchJob = scope.launch {
             val (channel, flow) = runCatching { TypingService.watch(topic) }.getOrNull()
                 ?: return@launch
@@ -70,7 +72,7 @@ class TypingState(
                 watchChannel = null
                 runCatching { channel.leave() }
             }
-        }
+        }.also { job -> job.invokeOnCompletion { if (watchJob === job) watchJob = null } }
 
         // Nobody sends a "stopped typing", so expiry is on us.
         sweepJob = scope.launch {
@@ -101,6 +103,13 @@ class TypingState(
         scope.launch {
             TypingService.send(TypingService.topic(kind, parentId), currentUserId, displayName, via = watchChannel)
         }
+    }
+
+    /** The typer's message arrived, so they are no longer typing. */
+    fun clear(userId: String) {
+        if (lastSeen.remove(userId) == null && typers.none { it.id == userId }) return
+        names.remove(userId)
+        typers = typers.filterNot { it.id == userId }
     }
 
     fun stop() {

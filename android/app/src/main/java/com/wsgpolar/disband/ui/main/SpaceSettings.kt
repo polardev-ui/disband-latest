@@ -406,8 +406,12 @@ private fun OverviewPage(app: AppState, server: Server, editable: Boolean, onBac
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(server.id) {
-        discoverable = ServerAdmin.isDiscoverable(server.id)
-        discoverableLoaded = true
+        val listed = ServerAdmin.isDiscoverable(server.id)
+        if (listed == null) error = "Couldn't load Discover visibility. Reopen this page to try again."
+        else {
+            discoverable = listed
+            discoverableLoaded = true
+        }
     }
 
     fun upload(uri: Uri?, banner: Boolean) {
@@ -675,7 +679,11 @@ private fun MemberPage(
         val detail = ServerAdmin.memberDetail(server.id, profile.id)
         memberRole = detail?.role
         roleIds = detail?.roleIds?.toSet() ?: emptySet()
-        roles = runCatching { ServerAdmin.roles(server.id) }.getOrDefault(emptyList())
+        // set_member_roles replaces the whole list. If we don't know the
+        // member's current roles, offering toggles would wipe all but one.
+        if (detail == null) error = "Couldn't load this member's roles. Go back and try again."
+        roles = if (detail == null) emptyList()
+            else runCatching { ServerAdmin.roles(server.id) }.getOrDefault(emptyList())
         timeoutEnds = ServerAdmin.timeoutEnds(server.id, profile.id)
         loading = false
     }
@@ -1859,6 +1867,30 @@ private fun GuildTagPage(app: AppState, server: Server, onBack: () -> Unit) {
         }
     }
     if (showCatalysts) {
-        // reuse CatalystSheet? Need import. Skip sheet; just dismiss.
+        val scope = rememberCoroutineScope()
+        var boosting by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { if (!boosting) showCatalysts = false },
+            title = { Text("Boost ${server.name}?") },
+            text = { Text("This uses one of your monthly Catalysts. Aero includes Catalysts every month.") },
+            confirmButton = {
+                TextButton(enabled = !boosting, onClick = {
+                    boosting = true
+                    scope.launch {
+                        val problem = com.wsgpolar.disband.data.CatalystService.allocate(server.id)
+                        if (problem == null) {
+                            catalystCount = runCatching { Database.catalystCount(server.id) }.getOrDefault(catalystCount + 1)
+                            notice = "Catalyst added."
+                            error = null
+                        } else {
+                            error = problem
+                        }
+                        boosting = false
+                        showCatalysts = false
+                    }
+                }) { Text(if (boosting) "Boosting…" else "Use a Catalyst") }
+            },
+            dismissButton = { TextButton(enabled = !boosting, onClick = { showCatalysts = false }) { Text("Cancel") } },
+        )
     }
 }
