@@ -48,6 +48,11 @@ final class ChatViewModel {
     private var reactionTask: Task<Void, Never>?
     private var reactionDeleteChannel: RealtimeChannelV2?
     private var reactionDeleteTask: Task<Void, Never>?
+    /// The database trigger's broadcast of each new message (see
+    /// `subscribeBroadcast`), and the catch-up check that backs both feeds up.
+    private var broadcastChannel: RealtimeChannelV2?
+    private var broadcastTask: Task<Void, Never>?
+    private var catchUpTask: Task<Void, Never>?
     nonisolated(unsafe) private var foregroundObserver: NSObjectProtocol?
 
     init(source: ChatSource) {
@@ -108,12 +113,14 @@ final class ChatViewModel {
 
     private func subscribeAll() async {
         async let inserts: Void = subscribe()
+        async let broadcasts: Void = subscribeBroadcast()
         async let deletes: Void = subscribeDeletes()
         async let reacts: Void = subscribeReactions()
         async let reactionDeletes: Void = subscribeReactionDeletes()
         async let selfDm: Void = detectSelfDm()
         async let typing: Void = subscribeTyping()
-        _ = await (inserts, deletes, reacts, reactionDeletes, selfDm, typing)
+        _ = await (inserts, broadcasts, deletes, reacts, reactionDeletes, selfDm, typing)
+        startCatchUp()
     }
 
     private var typingTopic: String? {
@@ -192,33 +199,38 @@ final class ChatViewModel {
         deleteTask?.cancel()
         reactionTask?.cancel()
         reactionDeleteTask?.cancel()
+        broadcastTask?.cancel()
+        catchUpTask?.cancel()
+        catchUpTask = nil
         typingTask?.cancel()
         for task in typingTimers.values { task.cancel() }
         typingTimers = [:]
         let ch = channel, dc = deleteChannel, rc = reactionChannel, rdc = reactionDeleteChannel, tc = typingChannel
+        let bc = broadcastChannel
         channel = nil; deleteChannel = nil; reactionChannel = nil; reactionDeleteChannel = nil; typingChannel = nil
+        broadcastChannel = nil
         Task {
             await ch?.unsubscribe(); await dc?.unsubscribe(); await rc?.unsubscribe()
-            await rdc?.unsubscribe(); await tc?.unsubscribe()
+            await rdc?.unsubscribe(); await tc?.unsubscribe(); await bc?.unsubscribe()
         }
     }
 
     // MARK: - Loading
 
     /// Fetch the newest page, or the page immediately before `before`.
-    private func fetchMessages(before: String? = nil) async throws -> [DisplayMessage] {
+    private func fetchMessages(before: String? = nil, limit: Int = ChatViewModel.pageSize) async throws -> [DisplayMessage] {
         switch source {
         case .channel(let id, _):
             return try await DatabaseService.messages(
-                channelId: id, limit: Self.pageSize, before: before
+                channelId: id, limit: limit, before: before
             ).map(DisplayMessage.init)
         case .dm(let threadId, _):
             return try await DatabaseService.dmMessages(
-                threadId: threadId, limit: Self.pageSize, before: before
+                threadId: threadId, limit: limit, before: before
             ).map(DisplayMessage.init)
         case .group(let id, _):
             return try await DatabaseService.groupMessages(
-                groupId: id, limit: Self.pageSize, before: before
+                groupId: id, limit: limit, before: before
             ).map(DisplayMessage.init)
         }
     }
@@ -856,6 +868,95 @@ final class ChatViewModel {
     }
 
     // MARK: - Realtime
+
+    /*
+     The live feed used to be Postgres Changes alone. Realtime delivers those
+     on its own change-data poll and checks every row against every
+     subscriber's permissions, so in a busy space messages reached the phone
+     seconds to minutes after the desktop, and some never did. The web also
+     listens to the broadcast a database trigger sends for each insert
+     (`broadcast_chat_message`, a private topic per conversation), which
+     arrives over the open socket at once. iOS now does the same, and a light
+     catch-up check fills in anything both feeds missed. Every path dedupes by
+     message id.
+     */
+    private var broadcastTopic: String {
+        switch source {
+        case .channel(let id, _): return "messages:ch:\(id)"
+        case .dm(let threadId, _): return "messages:dm:\(threadId)"
+        case .group(let id, _): return "messages:group:\(id)"
+        }
+    }
+
+    private func subscribeBroadcast() async {
+        let ch = SupabaseManager.client.channel(broadcastTopic) {
+            $0.isPrivate = true
+            $0.broadcast.receiveOwnBroadcasts = false
+        }
+        let stream = ch.broadcastStream(event: "INSERT")
+        await ch.subscribe()
+        broadcastChannel = ch
+        broadcastTask = Task { [weak self] in
+            for await envelope in stream {
+                guard let self else { return }
+                // The callback hands over the whole broadcast; the trigger's
+                // own body ({ record, author }) is under "payload".
+                let body = envelope["payload"]?.objectValue ?? envelope
+                guard let record = body["record"],
+                      let data = try? JSONEncoder().encode(record),
+                      let row = try? JSONDecoder().decode(RawMessageRow.self, from: data)
+                else { continue }
+                if let author = body["author"],
+                   let authorData = try? JSONEncoder().encode(author),
+                   let profile = try? JSONDecoder().decode(Profile.self, from: authorData),
+                   self.profileCache[profile.id] == nil {
+                    self.profileCache[profile.id] = profile
+                }
+                await self.handleInsert(row)
+            }
+        }
+    }
+
+    /// Every few seconds while the chat is on screen, fetch the newest few
+    /// messages and add any the live feeds didn't deliver.
+    private func startCatchUp() {
+        catchUpTask?.cancel()
+        catchUpTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(4))
+                guard let self, !Task.isCancelled else { return }
+                guard UIApplication.shared.applicationState == .active, !self.loading else { continue }
+                await self.catchUp()
+            }
+        }
+    }
+
+    private func catchUp() async {
+        guard let fetched = try? await fetchMessages(limit: 20), !fetched.isEmpty else { return }
+        let known = Set(messages.map(\.id))
+        let newestShown = messages.last(where: { !$0.pending })?.createdAt ?? ""
+        let missing = fetched.filter { !known.contains($0.id) && $0.createdAt >= newestShown }
+        guard !missing.isEmpty else { return }
+        for m in missing {
+            if let a = m.author { profileCache[a.id] = a }
+            // An optimistic row the server has now saved: confirm it in place.
+            if let idx = messages.firstIndex(where: { $0.pending && matches($0, m) }) {
+                messages[idx] = m
+                continue
+            }
+            if m.authorId != currentUserId, case .channel(let channelId, _) = source {
+                ChannelUnreadStore.shared.sawMessage(in: channelId)
+            }
+            messages.append(m)
+        }
+        messages.sort { a, b in
+            // Unsent rows stay at the bottom, in the order they were typed.
+            if a.pending != b.pending { return !a.pending }
+            return a.createdAt < b.createdAt
+        }
+        cacheNow()
+        await loadReactions(for: missing.map(\.id), replacing: false)
+    }
 
     private func subscribe() async {
         let (ch, stream) = await RealtimeService.observeInserts(
