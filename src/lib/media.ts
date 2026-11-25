@@ -77,9 +77,11 @@ export async function getDisbandUserMedia(
           domErr.name === "NotFoundError" ||
           domErr.name === "NotReadableError")
       ) {
+        // The saved mic is gone: use the system default, but keep the
+        // echo, gain and noise settings rather than the browser's defaults.
         return await navigator.mediaDevices.getUserMedia({
           ...merged,
-          audio: true,
+          audio: buildAudioConstraints(""),
         });
       }
       if (

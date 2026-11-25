@@ -1,5 +1,6 @@
 "use client";
 
+import { getMirrorOwnVideo } from "@/lib/audio-settings";
 import { LoadingDots } from "@/components/ui/LoadingDots";
 
 import { useEffect, useState } from "react";
@@ -171,7 +172,7 @@ export function StagePanel({ channel }: { channel: Channel }) {
       profile: r.profile,
       label: nameOf(r) + (self ? ` ${t("(you)")}` : ""),
       stream: inThisChannel ? (self ? session.localStream : session.remoteStreams.get(r.user_id)) ?? null : null,
-      mirrored: self,
+      mirrored: self && getMirrorOwnVideo(),
       muted: self ? micMuted : !!(r.muted || r.deafened),
       menuExtras: extrasFor(r),
     };

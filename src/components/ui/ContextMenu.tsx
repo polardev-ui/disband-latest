@@ -44,10 +44,30 @@ interface ContextMenuContextValue {
 
 const ContextMenuContext = createContext<ContextMenuContextValue | null>(null);
 
-/* ------------------------------------------------------- desktop fallback
-   The webview's own context menu reads as a browser: Reload, Back, Save As,
-   View Source. On desktop, any right-click the app does not claim gets one of
-   ours instead — the same clipboard actions a native app would offer. */
+/* ---------------------------------------------------- right-click fallback
+   The browser's own context menu reads as a web page: Reload, Back, Save As,
+   View Source, Inspect. Inside the app, a right-click the app does not claim
+   never shows it. Instead:
+   - selected text, links and images get one of ours, with the clipboard
+     actions a native app would offer;
+   - anywhere else (a sidebar, a header, empty space) nothing opens, as in
+     Discord;
+   - text fields: in the desktop app, ours (Cut, Copy, Paste, Select All); on
+     the web the browser's own stays, because its spelling suggestions and
+     its Paste (which needs no clipboard permission prompt) only exist there. */
+
+const TEXT_INPUT_TYPES = new Set(["text", "search", "email", "url", "tel", "password", "number", ""]);
+
+function textFieldOf(target: HTMLElement): HTMLElement | null {
+  const field = target.closest<HTMLElement>("input, textarea, [contenteditable=''], [contenteditable='true'], [contenteditable='plaintext-only']");
+  if (!field) return null;
+  if (field instanceof HTMLInputElement && !TEXT_INPUT_TYPES.has(field.type)) return null;
+  return field;
+}
+
+function isTextField(target: HTMLElement): boolean {
+  return textFieldOf(target) !== null;
+}
 
 function focusedEditable(): HTMLElement | null {
   const el = document.activeElement as HTMLElement | null;
@@ -125,10 +145,33 @@ async function copyImageSource(src: string): Promise<void> {
   }
 }
 
-function buildDesktopMenuItems(target: HTMLElement): ContextMenuItem[] {
+function openExternal(href: string) {
+  if (isTauri()) {
+    void import("@tauri-apps/api/core")
+      .then(({ invoke }) => invoke("plugin:opener|open_url", { url: href }))
+      .catch(() => window.open(href, "_blank", "noopener,noreferrer"));
+    return;
+  }
+  window.open(href, "_blank", "noopener,noreferrer");
+}
+
+function buildFallbackMenuItems(target: HTMLElement): ContextMenuItem[] {
   const groups: ContextMenuItem[][] = [];
-  const selection = window.getSelection()?.toString() ?? "";
-  const editable = focusedEditable();
+  let selection = window.getSelection()?.toString() ?? "";
+  // Only the field that was right-clicked, not one focused elsewhere.
+  const field = textFieldOf(target);
+  if (field && document.activeElement !== field) field.focus();
+  const editable = field ? focusedEditable() : null;
+  // getSelection() doesn't see inside an input or textarea in every engine.
+  if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
+    try {
+      const start = editable.selectionStart ?? 0;
+      const end = editable.selectionEnd ?? 0;
+      if (end > start) selection = editable.value.slice(start, end);
+    } catch {
+      // Inputs like number have no text selection.
+    }
+  }
   const link = target.closest("a[href]") as HTMLAnchorElement | null;
   const image = target.closest("img") as HTMLImageElement | null;
 
@@ -168,6 +211,7 @@ function buildDesktopMenuItems(target: HTMLElement): ContextMenuItem[] {
   if (link) {
     const href = link.href;
     groups.push([
+      { id: "open-link", label: "Open Link", onClick: () => openExternal(href) },
       { id: "copy-link", label: "Copy Link", onClick: () => void copyText(href) },
     ]);
   }
@@ -180,7 +224,9 @@ function buildDesktopMenuItems(target: HTMLElement): ContextMenuItem[] {
     ]);
   }
 
-  groups.push([{ id: "select-all", label: "Select All", onClick: selectAllInFocused }]);
+  // Select All only means something in a text field; on the app's chrome it
+  // would paint the whole window blue.
+  if (editable) groups[0]?.push({ id: "select-all", label: "Select All", onClick: selectAllInFocused });
 
   const flat: ContextMenuItem[] = [];
   groups.forEach((group, i) => {
@@ -246,11 +292,10 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     };
   }, [menu, closeMenu]);
 
-  // Desktop fallback: any right-click the app did not claim gets one of our
-  // menus instead of the webview's browser menu. Browsers keep their own menu,
-  // so this never fires there.
+  // Fallback: a right-click the app did not claim never shows the browser's
+  // menu (see the note above buildFallbackMenuItems).
   useEffect(() => {
-    if (!isTauri()) return;
+    const desktop = isTauri();
 
     // Capture phase runs before React's handlers: clear the latch so the
     // bubble listener below can see whether an app menu opened for this event.
@@ -261,8 +306,13 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
       if (e.defaultPrevented || openedRef.current) return;
       const target = e.target as HTMLElement | null;
       if (!target) return;
+      // Shift + right-click still opens the browser's menu on the web, the
+      // escape hatch Discord also leaves (for extensions, translation, etc.).
+      if (!desktop && e.shiftKey) return;
+      if (!desktop && isTextField(target)) return;
       e.preventDefault();
-      openMenu(e.clientX, e.clientY, buildDesktopMenuItems(target));
+      const items = buildFallbackMenuItems(target);
+      if (items.length > 0) openMenu(e.clientX, e.clientY, items);
     };
 
     document.addEventListener("contextmenu", reset, true);

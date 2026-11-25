@@ -1,5 +1,6 @@
 "use client";
 
+import { getMirrorOwnVideo } from "@/lib/audio-settings";
 import { LoadingDots } from "@/components/ui/LoadingDots";
 
 import { useEffect, useState } from "react";
@@ -94,7 +95,7 @@ export function VoicePanel({ channelId, channelName, onOpenSettings }: VoicePane
       stream: inThisChannel
         ? (isSelf ? session.localStream : session.remoteStreams.get(p.user_id)) ?? null
         : null,
-      mirrored: isSelf,
+      mirrored: isSelf && getMirrorOwnVideo(),
       // Remote mute/deafen come from presence (previously dropped, so only
       // the local user ever showed a mute icon). Deafened implies muted.
       muted: isSelf ? micMuted : !!(p.muted || p.deafened),

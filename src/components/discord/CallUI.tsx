@@ -1,5 +1,6 @@
 "use client";
 
+import { getMirrorOwnVideo } from "@/lib/audio-settings";
 import { useI18n } from "@/contexts/I18nContext";
 import { Soundboard } from "./Soundboard";
 import { Avatar } from "@/components/ui/Avatar";
@@ -289,7 +290,7 @@ export function CallPanel({
             deafened={deafened}
             screens={[]}
             members={[
-              ...(selfProfile ? [{ id: "self", profile: selfProfile, label: t("You"), stream: localStream, mirrored: true, muted: micMuted }] : []),
+              ...(selfProfile ? [{ id: "self", profile: selfProfile, label: t("You"), stream: localStream, mirrored: getMirrorOwnVideo(), muted: micMuted }] : []),
               ...(peer ? [{ id: peer.id, profile: peer, label: displayName(peer), ringing: true }] : []),
             ]}
           />
@@ -333,7 +334,7 @@ export function CallPanel({
                 : []),
             ]}
             members={[
-              ...(selfProfile ? [{ id: "self", profile: selfProfile, label: t("You"), stream: localStream, mirrored: true, muted: micMuted }] : []),
+              ...(selfProfile ? [{ id: "self", profile: selfProfile, label: t("You"), stream: localStream, mirrored: getMirrorOwnVideo(), muted: micMuted }] : []),
               ...(peer ? [{ id: peer.id, profile: peer, label: displayName(peer), stream: remoteStream }] : []),
             ]}
           />

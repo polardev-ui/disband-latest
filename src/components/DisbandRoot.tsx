@@ -96,6 +96,13 @@ function AppShell() {
 }
 
 export function DisbandRoot() {
+  // The app (not the marketing site or docs) behaves like an app: see
+  // "web app shell" in globals.css.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-app-shell", "");
+    return () => document.documentElement.removeAttribute("data-app-shell");
+  }, []);
+
   return (
     <ThemeProvider>
       <AppProvider>

@@ -63,7 +63,10 @@
   --radius-2xl: var(--skin-radius-2xl, 1rem);
   --radius-3xl: var(--skin-radius-3xl, 1.5rem);
 
-  --font-sans: var(--skin-font, var(--font-plex, var(--font-noto, var(--font-discord))));
+  /* Noto Sans is the app's face: rounder and calmer at small sizes than IBM
+     Plex Sans, which read as awkward in the chrome. Plex stays as the next
+     choice behind it. */
+  --font-sans: var(--skin-font, var(--font-noto, var(--font-plex, var(--font-discord))));
 }
 
 @font-face {
@@ -129,7 +132,9 @@
 
   --bg-secondary-alt: color-mix(in srgb, var(--bg-secondary) 96%, var(--mix-contrast));
   --bg-floating: color-mix(in srgb, var(--bg-secondary) 76%, var(--mix-shade));
-  --bg-composer: color-mix(in srgb, var(--bg-primary) 96%, var(--mix-contrast));
+  /* 8%, not 4%: the composer has no border now (a bordered box read as a
+     web form field), so it needs its own tone to stand off the chat. */
+  --bg-composer: color-mix(in srgb, var(--bg-primary) 92%, var(--mix-contrast));
   --bg-message-hover: color-mix(in srgb, var(--bg-primary) 98%, var(--mix-contrast));
   --interactive-normal: color-mix(in srgb, var(--text-normal) 55%, var(--text-muted));
   --interactive-active: color-mix(in srgb, var(--text-normal) 30%, var(--mix-contrast));
@@ -441,6 +446,151 @@ html[data-desktop] [role="menuitem"] {
 html[data-desktop] ::selection {
   background-color: var(--brand);
   color: var(--brand-foreground, #fff);
+}
+
+/* --------------------------------------------------------------- web app shell
+   The same native feel in the browser, inside the app only (`data-app-shell`
+   is set by DisbandRoot, so marketing pages and docs stay ordinary pages).
+   Without it the app read as a website: dragging across the sidebar painted
+   channel names blue, avatars and emoji dragged off as ghost images, and the
+   text cursor showed over every label. Message text, code, fields and
+   anything marked .selectable / [data-selectable] stay selectable. */
+html[data-app-shell] {
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+  /* Hovers answer at once. Tailwind's 150 ms default made every row and
+     button fade in behind the pointer, which is a lot of why the app felt
+     slow next to Discord, where hover is immediate. Explicit duration-*
+     classes still win. */
+  --default-transition-duration: 70ms;
+}
+html[data-app-shell] body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+html[data-app-shell] input,
+html[data-app-shell] textarea,
+html[data-app-shell] select,
+html[data-app-shell] [contenteditable="true"],
+html[data-app-shell] pre,
+html[data-app-shell] code,
+html[data-app-shell] .selectable,
+html[data-app-shell] [data-selectable],
+html[data-app-shell] [data-selectable] * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+html[data-app-shell] img,
+html[data-app-shell] svg,
+html[data-app-shell] a {
+  -webkit-user-drag: none;
+}
+html[data-app-shell] button,
+html[data-app-shell] [role="button"],
+html[data-app-shell] [role="menuitem"],
+html[data-app-shell] [role="tab"],
+html[data-app-shell] [role="option"] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+html[data-app-shell] ::selection {
+  background-color: color-mix(in srgb, var(--brand) 55%, transparent);
+}
+
+/* Range sliders: one look everywhere (Voice & Video uses `.disband-range`).
+   `--fill` is the filled share of the track, set inline. */
+.disband-range {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  --fill: 0%;
+}
+.disband-range:focus-visible {
+  outline: none;
+}
+.disband-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--brand) var(--fill), var(--bg-accent, rgba(255, 255, 255, 0.1)) var(--fill));
+}
+.disband-range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-accent, rgba(255, 255, 255, 0.1));
+}
+.disband-range::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--brand);
+}
+.disband-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -5px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 120ms ease;
+}
+.disband-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.disband-range:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+.disband-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--focus-ring, rgba(88, 101, 242, 0.5));
+}
+/* Over a custom track (input sensitivity): only the thumb shows. */
+.disband-range-bare::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 32px;
+}
+.disband-range-bare::-webkit-slider-thumb {
+  width: 6px;
+  height: 22px;
+  margin-top: 5px;
+  border-radius: 3px;
+}
+.disband-range-bare::-moz-range-track,
+.disband-range-bare::-moz-range-progress {
+  background: transparent;
+}
+.disband-range-bare::-moz-range-thumb {
+  width: 6px;
+  height: 22px;
+  border-radius: 3px;
+}
+.vv-reveal {
+  animation: view-enter 0.16s ease-out backwards;
+}
+
+/* Voice Connected docks onto the user panel under it: one block split by a
+   hairline, not two cards with a gap, so the corner reads as one control. */
+.dock-call:has(+ .dock-user) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.dock-call + .dock-user {
+  padding-top: 0;
+}
+.dock-call + .dock-user > .dock-user-card {
+  border-top-width: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 /* Height of the app bar, shared by the bar itself and by the full-height app
@@ -822,11 +972,14 @@ img.twemoji {
   animation-delay: 0.3s;
 }
 
-/* Classic modal entrance: scale up from 0.9 with a touch of overshoot. */
+/* Modal entrance: a short fade and settle, no bounce. It used to grow from
+   0.9 with an overshoot, which read as a web page's popup rather than an
+   app's window; menus and popovers (menu-pop) and the exit below are the
+   same family now. */
 @keyframes modal-pop {
   from {
     opacity: 0;
-    transform: scale(0.9);
+    transform: scale(0.96);
   }
   to {
     opacity: 1;
@@ -835,7 +988,7 @@ img.twemoji {
 }
 
 .modal-pop {
-  animation: modal-pop 0.22s cubic-bezier(0.18, 1.25, 0.4, 1) forwards;
+  animation: modal-pop 0.16s cubic-bezier(0.2, 0, 0, 1) forwards;
 }
 
 @keyframes overlay-fade {
@@ -864,7 +1017,7 @@ img.twemoji {
   }
   to {
     opacity: 0;
-    transform: scale(0.94);
+    transform: scale(0.97);
   }
 }
 
@@ -2080,7 +2233,7 @@ img.twemoji {
 }
 
 /* Popout menus (context menus, the composer's + menu) scale in quickly. */
-.menu-pop { animation: menu-pop 0.1s cubic-bezier(0.2, 0.8, 0.3, 1) both; transform-origin: bottom left; }
+.menu-pop { animation: menu-pop 0.12s cubic-bezier(0.2, 0, 0, 1) both; transform-origin: bottom left; }
 @keyframes menu-pop {
   from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: none; }

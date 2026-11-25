@@ -1,5 +1,6 @@
 "use client";
 
+import { usePrefetchOnHover } from "@/hooks/usePrefetchOnHover";
 import type { AeroCheckoutRequest } from "@/components/subscription/AeroPage";
 import { AppearanceEffect } from "./AppearanceEffect";
 import { favoritesAvailable, isFavorite, toggleFavorite, useFavorites, type FavoriteKind } from "@/lib/favorites";
@@ -123,6 +124,9 @@ import { UserProfilePopout } from "./UserProfilePopout";
 
 export function DiscordApp() {
   const app = useApp();
+  // A channel or DM starts loading when the pointer rests on it, so the click paints at once.
+  usePrefetchOnHover("data-channel-id", app.prefetchChannel);
+  usePrefetchOnHover("data-dm-thread-id", app.prefetchDm);
   // Discord-style addresses (/channels/@me, /channels/<space>/<channel>) on the web.
   useUrlRoutes({
     viewMode: app.viewMode,
@@ -160,7 +164,7 @@ export function DiscordApp() {
   // Checkout the Aero page asked for, handed to SubscriptionModal.
   const [checkoutStart, setCheckoutStart] = useState<AeroCheckoutRequest | null>(null);
   // What the main column shows in the home view: friends, or the Aero page.
-  const [homePage, setHomePage] = useState<"friends" | "aero">("friends");
+  const [homePage, setHomePage] = useState<"friends" | "aero" | "shop">("friends");
   // The rail's star: the sidebar lists favorites in place of channels/DMs.
   const [favoritesView, setFavoritesView] = useState(false);
   // "Remind me…" on a message (Lite and Aero).
@@ -169,7 +173,6 @@ export function DiscordApp() {
   useSavedMessages(app.user?.id);
   // Loads the favorites list once per account, so menus know what's starred.
   useFavorites(app.user?.id);
-  const [shopOpen, setShopOpen] = useState(false);
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   // Ctrl/⌘+K opens the Quick Switcher from anywhere in the app.
   useEffect(() => {
@@ -335,7 +338,7 @@ export function DiscordApp() {
           if (cancelled) return;
           setShopCategory(item.category);
           setShopPurchase(item.name);
-          setShopOpen(true);
+          openShopPage();
         })();
         return () => { cancelled = true; };
       }
@@ -1981,6 +1984,13 @@ export function DiscordApp() {
     setHomePage("aero");
     setMobileMenuOpen(false);
   }, [app]);
+  // The Shop is a page in the same place, like Aero.
+  const openShopPage = useCallback(() => {
+    setFavoritesView(false);
+    app.setViewHome();
+    setHomePage("shop");
+    setMobileMenuOpen(false);
+  }, [app]);
   const openFriendsPage = useCallback(() => {
     app.setViewHome();
     setHomePage("friends");
@@ -2167,8 +2177,9 @@ export function DiscordApp() {
                   onGroupContext={handleGroupContext}
                   onOpenSubscription={openAeroPage}
                   aeroActive={app.viewMode === "home" && homePage === "aero"}
+                  shopActive={app.viewMode === "home" && homePage === "shop"}
                   onOpenFriends={openFriendsPage}
-                  onOpenShop={() => setShopOpen(true)}
+                  onOpenShop={openShopPage}
                     onOpenQuickSwitcher={() => setQuickSwitcherOpen(true)}
                 />
               ) : (
@@ -2271,8 +2282,9 @@ export function DiscordApp() {
                     onGroupContext={handleGroupContext}
                     onOpenSubscription={openAeroPage}
                     aeroActive={app.viewMode === "home" && homePage === "aero"}
+                  shopActive={app.viewMode === "home" && homePage === "shop"}
                     onOpenFriends={openFriendsPage}
-                    onOpenShop={() => setShopOpen(true)}
+                    onOpenShop={openShopPage}
                     onOpenQuickSwitcher={() => setQuickSwitcherOpen(true)}
                   />
                 </div>
@@ -2619,7 +2631,20 @@ export function DiscordApp() {
           }}
         />
       )}
-      {app.viewMode === "home" && homePage !== "aero" && (
+      {app.viewMode === "home" && homePage === "shop" && (
+        <ShopModal
+          variant="page"
+          open
+          onClose={openFriendsPage}
+          initialCategory={shopCategory}
+          onChanged={() => void app.refreshProfile()}
+          self={{
+            name: app.profile ? displayName(app.profile) : "You",
+            avatarUrl: app.profile?.avatar_url,
+          }}
+        />
+      )}
+      {app.viewMode === "home" && homePage === "friends" && (
         <>
           <FriendsPanel onOpenProfile={openProfile} onFriendContext={handleFriendContext} />
           <ActiveNowPanel />
@@ -3060,23 +3085,6 @@ export function DiscordApp() {
         }}
         userId={app.user?.id}
         startWith={checkoutStart}
-      />
-      <ShopModal
-        open={shopOpen}
-        onClose={() => setShopOpen(false)}
-        initialCategory={shopCategory}
-        // Equipping writes profiles.equipped_* server-side: reload the own
-        // profile so the bottom-left panel, profile popout, and every other
-        // context-profile avatar pick the new effect up immediately (chat
-        // already shows it — message authors are fetched fresh per row).
-        onChanged={() => void app.refreshProfile()}
-        self={{
-          name: app.profile ? displayName(app.profile) : "You",
-          avatarUrl: app.profile?.avatar_url,
-        }}
-        // Equipping is a profile UPDATE, and the profiles realtime
-        // subscription already reloads on that — every avatar and name on
-        // screen picks the new effect up without anything further here.
       />
       <TimeoutModal
         open={!!timeoutTarget}

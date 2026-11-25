@@ -41,6 +41,8 @@ interface HomePanelProps {
   onOpenQuickSwitcher?: () => void;
   /** The Aero page is showing in the main column (its row is selected). */
   aeroActive?: boolean;
+  /** The Shop page is open in the main column. */
+  shopActive?: boolean;
   /** Shows the friends page; defaults to the plain home view. */
   onOpenFriends?: () => void;
 }
@@ -125,6 +127,7 @@ export function HomePanel({
   onOpenShop,
   onOpenQuickSwitcher,
   aeroActive = false,
+  shopActive = false,
   onOpenFriends,
 }: HomePanelProps) {
   const {
@@ -194,7 +197,7 @@ export function HomePanel({
     }
   }
 
-  const onFriends = viewMode === "home" && !aeroActive;
+  const onFriends = viewMode === "home" && !aeroActive && !shopActive;
 
   // Aero users get a pinned Tether row so the assistant is discoverable: it
   // opens a real DM thread (migration 0102) where every message is an ask.
@@ -357,6 +360,7 @@ export function HomePanel({
         <NavRow
           icon={<CartIcon size={18} />}
           label={t("Shop")}
+          active={shopActive}
           onClick={() => onOpenShop?.()}
         />
         {messageRequests.length > 0 && (
@@ -482,6 +486,7 @@ export function HomePanel({
                 <button
                   key={item.id}
                   type="button"
+                  data-dm-thread-id={entry.threadId ?? undefined}
                   onClick={(e) => {
                     if (dmLongPress.current.fired) {
                       dmLongPress.current.fired = false;

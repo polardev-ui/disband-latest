@@ -1,6 +1,6 @@
 "use client";
 
-import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
+import { applyAudioOutputToElement, getPreferredAudioOutputId, getSoundboardVolume } from "@/lib/audio-settings";
 import { getParticipantControls } from "@/lib/call-participant-settings";
 import { PUBLIC_ENV } from "@/lib/public-env";
 
@@ -34,7 +34,8 @@ export function isSoundboardUrl(url: unknown): url is string {
 export function playSoundboardLocally(url: string, volume = 1): HTMLAudioElement | null {
   if (typeof window === "undefined" || !isSoundboardUrl(url)) return null;
   const audio = new Audio(url);
-  audio.volume = Math.min(1, Math.max(0, volume));
+  // Scaled by the soundboard volume in Voice & Video settings.
+  audio.volume = Math.min(1, Math.max(0, volume * (getSoundboardVolume() / 100)));
   void applyAudioOutputToElement(audio, getPreferredAudioOutputId());
   void audio.play().catch(() => {});
   return audio;

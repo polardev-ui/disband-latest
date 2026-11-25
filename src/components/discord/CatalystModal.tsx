@@ -437,101 +437,100 @@ export function CatalystModal({ server: serverProp, open, onClose, variant = "pa
     <main
       role="region"
       aria-label={t("Space Catalysts")}
-      className={`view-enter fixed inset-0 z-40 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary md:static md:z-auto${exiting ? " opacity-0" : ""}`}
+      className={`fixed inset-0 z-40 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary md:static md:z-auto${exiting ? " opacity-0" : ""}`}
     >
-      <div className="settings-scroll min-h-0 flex-1 overflow-y-auto">
-        <section className="aero-hero relative overflow-hidden px-6 pb-16 pt-10 text-white">
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("Close")}
-            className="absolute right-4 top-4 z-[2] flex h-9 w-9 items-center justify-center rounded-full bg-black/25 text-white ring-1 ring-white/15 transition-colors hover:bg-black/40"
-          >
-            <IconClose size={18} />
-          </button>
-          <div className="relative z-[1] mx-auto flex max-w-[880px] flex-col items-center text-center">
-            <span className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-[22px] bg-white/15 text-[28px] font-bold ring-1 ring-white/25">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {icon ? <img src={icon} alt="" className="h-full w-full object-cover" /> : server.name.slice(0, 2)}
-            </span>
-            <p className="mt-4 text-[12px] font-bold uppercase tracking-[0.12em] text-white/70">{t("Space Catalysts")}</p>
-            <h1 className="mt-1 text-[34px] font-extrabold leading-[1.1] tracking-[-0.02em] drop-shadow-[0_4px_18px_rgba(10,6,60,0.35)] sm:text-[44px]">
-              {t("Boost")} {server.name}
-            </h1>
-            <p className="mt-2 max-w-[520px] text-[15px] leading-6 text-white/80">
-              {t("Catalysts unlock perks for everyone in this space: better quality, more emoji, bigger uploads and more.")}
-            </p>
+      {/* Same height and rule as the channel header it replaces. */}
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-column-border px-4">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md bg-bg-tertiary text-[10px] font-semibold text-text-normal">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {icon ? <img src={icon} alt="" className="h-full w-full object-cover" /> : server.name.slice(0, 2)}
+        </span>
+        <h1 className="min-w-0 truncate text-[16px] font-semibold text-header-primary">{t("Boost")} {server.name}</h1>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t("Close")}
+          className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-interactive-normal transition-colors hover:bg-interactive-hover hover:text-interactive-active"
+        >
+          <IconClose size={20} />
+        </button>
+      </header>
 
-            <div className="mt-7 w-full max-w-[520px] rounded-2xl bg-black/25 p-5 text-left ring-1 ring-white/15">
-              <div className="flex items-end justify-between gap-3">
-                <div>
-                  <p className="text-[30px] font-extrabold leading-none tabular-nums">{count}</p>
-                  <p className="mt-1 text-[13px] text-white/75">{count === 1 ? t("Catalyst") : t("Catalysts")}</p>
-                </div>
-                <span className="rounded-full bg-white/15 px-3 py-1 text-[12px] font-bold ring-1 ring-white/20">{level.name}</span>
+      <div className="settings-scroll min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[1040px] px-6 py-8">
+          <p className="max-w-[620px] text-[15px] leading-6 text-text-muted">
+            {t("Catalysts unlock perks for everyone in this space: better quality, more emoji, bigger uploads and more.")}{" "}
+            {t("Each one lasts a month.")}
+          </p>
+
+          {/* Where the space stands, and the one thing you can do about it. */}
+          <section className="mt-6 rounded-lg border border-border-subtle bg-bg-secondary p-5">
+            <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+              <div>
+                <p className="text-[13px] text-text-muted">{level.name}</p>
+                <p className="mt-0.5 text-[32px] font-bold leading-none tracking-[-0.02em] text-header-primary tabular-nums">
+                  {count}
+                  <span className="ml-2 text-[15px] font-medium tracking-normal text-text-muted">{count === 1 ? t("Catalyst") : t("Catalysts")}</span>
+                </p>
               </div>
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/15">
-                <div className="h-full rounded-full bg-white transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />
-              </div>
-              <p className="mt-2 text-[12px] text-white/75">
-                {next ? t("{n} more to {name}", { n: next.min - count, name: next.name }) : t("Every level unlocked")}
-              </p>
-              {error && <p className="mt-3 rounded-lg bg-black/30 px-3 py-2 text-[13px] text-[#ffb4b4]">{error}</p>}
-              <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
-                  disabled={busy || balance <= 0}
-                  onClick={() => void doAllocate()}
-                  title={grant === 0 ? t("A paid plan includes monthly credits") : balance <= 0 ? t("No credits left this month") : t("Spend a monthly credit")}
-                  className={`h-11 flex-1 rounded-xl bg-white text-[15px] font-bold text-[#1d1a4f] transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50 ${busy ? BUSY_BUTTON : ""}`}
-                >
-                  <BusyLabel busy={busy}>{grant > 0 ? t("Boost with a monthly credit") : t("Boost this space")}</BusyLabel>
-                </button>
+              <div className="flex gap-2">
                 {myHere > 0 && (
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => void doWithdraw()}
-                    className="h-11 rounded-xl bg-black/25 px-4 text-[14px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/40 disabled:opacity-50"
+                    className="h-9 rounded-md bg-button-secondary px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover disabled:opacity-50"
                   >
                     {t("Withdraw")}
                   </button>
                 )}
+                <button
+                  type="button"
+                  disabled={busy || balance <= 0}
+                  onClick={() => void doAllocate()}
+                  title={grant === 0 ? t("A paid plan includes monthly credits") : balance <= 0 ? t("No credits left this month") : t("Spend a monthly credit")}
+                  className={`h-9 rounded-md bg-brand px-4 text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50 ${busy ? BUSY_BUTTON : ""}`}
+                >
+                  <BusyLabel busy={busy}>{grant > 0 ? t("Boost with a monthly credit") : t("Boost this space")}</BusyLabel>
+                </button>
               </div>
-              <p className="mt-2 text-[12px] text-white/70">
+            </div>
+            <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-bg-tertiary">
+              <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />
+            </div>
+            <div className="mt-2 flex flex-wrap justify-between gap-x-4 gap-y-1 text-[13px] text-text-muted">
+              <span>{next ? t("{n} more to {name}", { n: next.min - count, name: next.name }) : t("Every level unlocked")}</span>
+              <span>
                 {grant > 0
                   ? t("{left} of {total} monthly credits left", { left: balance, total: grant })
                   : t("Aero includes {a} Catalysts a month and Lite {l}.", { a: MONTHLY_GRANT, l: LITE_MONTHLY_GRANT })}
-              </p>
+              </span>
             </div>
-          </div>
-        </section>
+            {error && <p className="mt-3 text-[13px] text-status-dnd">{error}</p>}
+          </section>
 
-        <div className="mx-auto grid max-w-[1040px] gap-6 px-6 py-8 lg:grid-cols-[1fr_360px]">
+          <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_340px]">
           <section>
-            <h2 className="text-[12px] font-bold uppercase tracking-[0.06em] text-text-muted">{t("Perks at every level")}</h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <h2 className="text-[16px] font-semibold text-header-primary">{t("Perks at every level")}</h2>
+            <div className="mt-3 overflow-hidden rounded-lg border border-border-subtle">
               {tiers.map((l) => {
                 const unlocked = count >= l.min;
                 return (
-                  <div
-                    key={l.level}
-                    className={`rounded-2xl border p-4 ${unlocked ? "border-brand bg-brand-soft" : "border-border-subtle bg-bg-secondary"}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[15px] font-bold text-header-primary">{l.name}</p>
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${unlocked ? "bg-brand text-white" : "bg-bg-tertiary text-text-muted"}`}>
+                  <div key={l.level} className="border-b border-border-subtle px-5 py-4 last:border-b-0">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="text-[15px] font-semibold text-header-primary">{l.name}</p>
+                      <span className={`text-[13px] ${unlocked ? "font-medium text-status-online" : "text-text-muted"}`}>
                         {unlocked ? t("Unlocked") : `${l.min} ${l.min === 1 ? "catalyst" : "catalysts"}`}
                       </span>
                     </div>
-                    <div className="mt-3 space-y-1.5">
+                    <ul className="mt-2 space-y-1.5">
                       {l.perks.map((perk) => (
-                        <div key={perk} className="flex items-start gap-2">
+                        <li key={perk} className="flex items-start gap-2.5">
                           <span className="mt-[3px]"><Check locked={!unlocked} /></span>
-                          <span className={`text-[13px] leading-5 ${unlocked ? "text-text-normal" : "text-text-muted"}`}>{perk}</span>
-                        </div>
+                          <span className={`text-[14px] leading-5 ${unlocked ? "text-text-normal" : "text-text-muted"}`}>{perk}</span>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </div>
                 );
               })}
@@ -539,8 +538,8 @@ export function CatalystModal({ server: serverProp, open, onClose, variant = "pa
           </section>
 
           <aside className="space-y-4">
-            <div className="rounded-2xl border border-border-subtle bg-bg-secondary p-4">
-              <p className="text-[15px] font-bold text-header-primary">{t("Buy Catalysts")}</p>
+            <div className="rounded-lg border border-border-subtle bg-bg-secondary p-4">
+              <p className="text-[15px] font-semibold text-header-primary">{t("Buy Catalysts")}</p>
               <p className="mt-0.5 text-[13px] text-text-muted">{t("Each lasts a month from purchase ·")} {formatCents(unitCents)} each</p>
               {buySecret ? (
                 <div className="mt-3">
@@ -550,7 +549,7 @@ export function CatalystModal({ server: serverProp, open, onClose, variant = "pa
                 <>
                   {buyError && <p className="mt-2 text-[13px] text-status-dnd">{buyError}</p>}
                   <div className="mt-3 flex items-center gap-2">
-                    <div className="flex h-10 items-center rounded-xl border border-border-subtle bg-bg-tertiary">
+                    <div className="flex h-9 items-center rounded-md bg-bg-tertiary">
                       <button type="button" aria-label={t("Fewer")} onClick={() => setQty((q) => Math.max(1, q - 1))} className="h-full px-3 text-lg leading-none text-text-muted hover:text-text-normal">−</button>
                       <span className="w-7 text-center text-[14px] font-bold tabular-nums">{qty}</span>
                       <button type="button" aria-label={t("More")} onClick={() => setQty((q) => Math.min(99, q + 1))} className="h-full px-3 text-lg leading-none text-text-muted hover:text-text-normal">+</button>
@@ -559,7 +558,7 @@ export function CatalystModal({ server: serverProp, open, onClose, variant = "pa
                       type="button"
                       disabled={buying}
                       onClick={() => void startBuy()}
-                      className={`h-10 flex-1 rounded-xl bg-brand text-[14px] font-semibold text-white hover:bg-brand-hover disabled:opacity-60 ${buying ? BUSY_BUTTON : ""}`}
+                      className={`h-9 flex-1 rounded-md bg-brand text-[14px] font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-60 ${buying ? BUSY_BUTTON : ""}`}
                     >
                       <BusyLabel busy={buying}>{t("Buy {qty} · {value}", { qty, value: formatCents(unitCents * qty) })}</BusyLabel>
                     </button>
@@ -569,8 +568,8 @@ export function CatalystModal({ server: serverProp, open, onClose, variant = "pa
             </div>
 
             {mine.length > 0 && (
-              <div className="rounded-2xl border border-border-subtle bg-bg-secondary p-4">
-                <p className="text-[15px] font-bold text-header-primary">{t("Your Catalysts")}</p>
+              <div className="rounded-lg border border-border-subtle bg-bg-secondary p-4">
+                <p className="text-[15px] font-semibold text-header-primary">{t("Your Catalysts")}</p>
                 <p className="mt-0.5 text-[13px] leading-5 text-text-muted">
                   {t("Each lasts a month. Move one to another space once it has been on its current space for a week.")}
                 </p>
@@ -582,7 +581,7 @@ export function CatalystModal({ server: serverProp, open, onClose, variant = "pa
                     const canMove = movableAt !== null && movableAt <= Date.now();
                     const targets = servers.filter((sv) => sv.id !== c.server_id);
                     return (
-                      <li key={c.id} className="rounded-xl bg-bg-tertiary px-3 py-2">
+                      <li key={c.id} className="rounded-md bg-bg-tertiary px-3 py-2">
                         <div className="flex items-center gap-2">
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-[14px] font-semibold text-text-normal">{here?.name ?? t("A space you left")}</span>
@@ -627,6 +626,7 @@ export function CatalystModal({ server: serverProp, open, onClose, variant = "pa
               </div>
             )}
           </aside>
+          </div>
         </div>
       </div>
     </main>

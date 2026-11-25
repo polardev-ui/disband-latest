@@ -12,7 +12,7 @@ import {
 import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 import type { GroupCallParticipant } from "@/hooks/useGroupCallManager";
-import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
+import { applyAudioOutputToElement, getPreferredAudioOutputId, getMirrorOwnVideo } from "@/lib/audio-settings";
 import { applyParticipantAudioControls } from "@/lib/call-participant-settings";
 import { useI18n } from "@/contexts/I18nContext";
 
@@ -79,7 +79,7 @@ export function GroupCallStage({
     id: p.user_id,
     profile: p.profile ?? members.find((m) => m.id === p.user_id),
     stream: p.user_id === selfId ? localStream : remoteStreams.get(p.user_id),
-    mirrored: p.user_id === selfId,
+    mirrored: p.user_id === selfId && getMirrorOwnVideo(),
     // Not once they've connected: the ring outlived the answer (bug report, Nov 12).
     ringing: ringingIds.has(p.user_id) && !connectedPeerIds.has(p.user_id),
     muted: p.user_id === selfId ? micMuted : undefined,

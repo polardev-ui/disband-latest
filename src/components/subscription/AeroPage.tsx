@@ -51,39 +51,72 @@ export interface AeroCheckoutRequest {
 
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
-/** One perk card in the "Everything in Aero" grid. */
+/** One perk: an icon, what you get, and a line on what it means. */
 function Perk({ icon, title, body, badge }: { icon: React.ReactNode; title: string; body: string; badge?: string }) {
   return (
-    <div className="flex gap-3.5 rounded-2xl border border-border-subtle bg-bg-secondary-alt p-4">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand [&_svg]:h-5 [&_svg]:w-5">
+    <li className="flex gap-3 py-3.5">
+      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-interactive-normal [&_svg]:h-[18px] [&_svg]:w-[18px]">
         {icon}
       </span>
       <div className="min-w-0">
-        <p className="flex flex-wrap items-center gap-2 text-[15px] font-semibold leading-5 text-header-primary">
+        <p className="text-[15px] font-semibold leading-5 text-header-primary">
           {title}
-          {badge && (
-            <span className="rounded-full bg-status-online/15 px-2 py-px text-[10px] font-bold uppercase tracking-[0.06em] text-status-online">
-              {badge}
-            </span>
-          )}
+          {badge && <span className="ml-2 text-[12px] font-semibold text-brand">{badge}</span>}
         </p>
-        <p className="mt-1 text-[13px] leading-[18px] text-text-muted">{body}</p>
+        <p className="mt-0.5 text-[14px] leading-5 text-text-muted">{body}</p>
       </div>
-    </div>
+    </li>
   );
 }
 
-/** The emblem in the hero: the Aero wing on layered, softly lit rings. */
-function AeroEmblem() {
+/** One way to pay: a selectable option with its price and what it works out at. */
+function PriceOption({
+  selected,
+  onSelect,
+  label,
+  price,
+  per,
+  note,
+  tag,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  label: string;
+  price: string;
+  per: string;
+  note: string;
+  tag?: string;
+}) {
   return (
-    <div aria-hidden className="aero-emblem relative mx-auto h-[172px] w-[172px]">
-      <span className="absolute inset-0 rounded-full border border-white/25" />
-      <span className="aero-orbit absolute inset-[-14px] rounded-full border border-dashed border-white/20" />
-      <span className="absolute inset-[18px] rounded-full bg-[radial-gradient(circle_at_35%_30%,rgba(255,255,255,0.55),rgba(255,255,255,0.06)_60%)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25)]" />
-      <span className="absolute inset-0 flex items-center justify-center">
-        <AeroIcon size={84} colour="#ffffff" highlight="#ffd8fb" className="drop-shadow-[0_10px_24px_rgba(20,10,80,0.45)]" />
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className={`flex flex-1 items-start gap-3 rounded-lg border px-4 py-3.5 text-left transition-colors ${
+        selected ? "border-brand bg-brand/[0.06]" : "border-border-subtle hover:border-border-strong"
+      }`}
+    >
+      <span
+        aria-hidden
+        className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 ${
+          selected ? "border-brand" : "border-interactive-normal/60"
+        }`}
+      >
+        {selected && <span className="h-2 w-2 rounded-full bg-brand" />}
       </span>
-    </div>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2">
+          <span className="text-[14px] font-semibold text-header-primary">{label}</span>
+          {tag && <span className="text-[12px] font-semibold text-status-online">{tag}</span>}
+        </span>
+        <span className="mt-1 block text-[22px] font-bold leading-7 tracking-[-0.01em] text-header-primary tabular-nums">
+          {price}
+          <span className="text-[14px] font-medium text-text-muted">{per}</span>
+        </span>
+        <span className="mt-0.5 block text-[13px] text-text-muted">{note}</span>
+      </span>
+    </button>
   );
 }
 
@@ -92,6 +125,7 @@ export function AeroPage({ onCheckout }: { onCheckout: (request: AeroCheckoutReq
   const { t } = useI18n();
   const { plan, subscription, loading, openPortal } = useSubscription(user?.id);
   const [focus, setFocus] = useState<"aero" | "lite">("aero");
+  const [interval, setBillingInterval] = useState<BillingInterval>("year");
   const [gifting, setGifting] = useState(false);
   const [giftLink, setGiftLink] = useState<string | null>(null);
   const [giftCopied, setGiftCopied] = useState(false);
@@ -134,17 +168,16 @@ export function AeroPage({ onCheckout }: { onCheckout: (request: AeroCheckoutReq
   };
 
   return (
-    <main className="view-enter relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
+    <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-primary">
       <div className="settings-scroll min-h-0 flex-1 overflow-y-auto">
-        {/* Hero */}
-        <section className="aero-hero relative overflow-hidden px-6 pb-28 pt-14 text-center text-white">
-          <div className="relative z-[1] mx-auto max-w-[760px]">
-            <AeroEmblem />
-            <h1 className="mt-8 text-[44px] font-extrabold leading-[1.05] tracking-[-0.03em] drop-shadow-[0_4px_18px_rgba(10,6,60,0.35)] sm:text-[64px]">
-              {focus === "aero" ? "Disband Aero" : "Disband Lite"}
-            </h1>
-
-            <div role="tablist" aria-label={t("Plan")} className="mx-auto mt-6 inline-flex rounded-full bg-black/25 p-1 ring-1 ring-white/15">
+        <div className="mx-auto w-full max-w-[880px] px-6 pb-4 pt-10 md:px-10">
+          {/* Plan and price */}
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2.5">
+              <AeroIcon size={26} lite={focus === "lite"} colour="var(--brand)" />
+              <span className="text-[15px] font-semibold text-header-primary">Disband {focus === "aero" ? "Aero" : "Lite"}</span>
+            </div>
+            <div role="tablist" aria-label={t("Plan")} className="inline-flex rounded-lg bg-bg-tertiary p-1">
               {(["aero", "lite"] as const).map((id) => (
                 <button
                   key={id}
@@ -152,118 +185,115 @@ export function AeroPage({ onCheckout }: { onCheckout: (request: AeroCheckoutReq
                   role="tab"
                   aria-selected={focus === id}
                   onClick={() => setFocus(id)}
-                  className={`rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors ${
-                    focus === id ? "bg-white text-[#2b2290]" : "text-white/80 hover:text-white"
+                  className={`h-8 rounded-md px-4 text-[13px] font-semibold transition-colors ${
+                    focus === id ? "bg-bg-primary text-header-primary shadow-[var(--elevation-low)]" : "text-interactive-normal hover:text-interactive-active"
                   }`}
                 >
                   {id === "aero" ? "Aero" : "Lite"}
                 </button>
               ))}
             </div>
+          </div>
 
-            <div className="mt-6 flex flex-wrap items-end justify-center gap-x-3 gap-y-1">
-              <span className="text-[28px] font-extrabold tracking-[-0.02em]">{money(monthly)}<span className="text-[18px] font-bold text-white/80">/{t("mo")}</span></span>
-              <span className="pb-1.5 text-[15px] font-medium text-white/70">{t("or")}</span>
-              <span className="relative text-[28px] font-extrabold tracking-[-0.02em]">
-                {savings > 0 && (
-                  <span className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[12px] font-bold text-[#ffe08a]">
-                    {t("Save {percent}%", { percent: savings })}
-                  </span>
-                )}
-                {money(yearly)}<span className="text-[18px] font-bold text-white/80">/{t("yr")}</span>
-              </span>
+          <h1 className="mt-8 max-w-[640px] text-[32px] font-bold leading-[1.15] tracking-[-0.02em] text-header-primary">
+            {focus === "aero"
+              ? t("Bigger uploads, sharper video, and Disband the way you like it.")
+              : t("A little more room, for a little less.")}
+          </h1>
+          <p className="mt-3 max-w-[600px] text-[15px] leading-6 text-text-muted">
+            {focus === "aero"
+              ? t("500 MB uploads, 1440p calls and streams, animated profiles, skins and four Catalysts a month.")
+              : t("100 MB uploads, 1080p video, your own accent colour and a Catalyst a month.")}
+          </p>
+
+          {loading ? (
+            <div className="mt-8 flex h-[132px] items-center" role="status" aria-label={t("Loading your plan")}>
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-border-strong border-t-brand" />
             </div>
-
-            {loading ? (
-              <div className="mt-8 flex justify-center" role="status" aria-label={t("Loading your plan")}>
-                <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              </div>
-            ) : onThisPlan ? (
-              <div className="mx-auto mt-8 max-w-md rounded-2xl bg-black/25 px-5 py-4 ring-1 ring-white/15">
-                <p className="flex items-center justify-center gap-2 text-[16px] font-semibold">
-                  <IconCheck size={18} /> {t("You're on {plan}", { plan: focus === "aero" ? "Aero" : "Lite" })}
+          ) : onThisPlan ? (
+            <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border-subtle bg-bg-secondary px-5 py-4">
+              <div>
+                <p className="flex items-center gap-2 text-[15px] font-semibold text-header-primary">
+                  <IconCheck size={16} className="text-status-online" />
+                  {t("You're on {plan}", { plan: focus === "aero" ? "Aero" : "Lite" })}
                 </p>
                 {subscription?.current_period_end && (
-                  <p className="mt-1 text-[13px] text-white/75">
+                  <p className="mt-0.5 text-[13px] text-text-muted">
                     {subscription.cancel_at_period_end ? t("Ends") : t("Renews")}{" "}
                     {new Date(subscription.current_period_end).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}
                   </p>
                 )}
-                {subscription?.stripe_customer_id && (
-                  <button
-                    type="button"
-                    onClick={() => void openPortal()}
-                    className="mt-3 h-10 rounded-xl bg-white px-5 text-[14px] font-bold text-[#2b2290] transition-transform hover:-translate-y-px"
-                  >
-                    {t("Manage billing")}
-                  </button>
-                )}
               </div>
-            ) : (
-              <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+              {subscription?.stripe_customer_id && (
                 <button
                   type="button"
-                  onClick={() => onCheckout({ plan: focus, interval: "year" })}
-                  className="group flex h-12 items-center gap-2 rounded-xl bg-white px-6 text-[16px] font-bold text-[#2b2290] shadow-[0_6px_0_rgba(20,12,90,0.25)] transition-transform hover:-translate-y-0.5 active:translate-y-0"
+                  onClick={() => void openPortal()}
+                  className="h-9 rounded-md bg-button-secondary px-4 text-[14px] font-medium text-white transition-colors hover:bg-button-secondary-hover"
                 >
-                  {t("Get yearly")}
-                  <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
+                  {t("Manage billing")}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onCheckout({ plan: focus, interval: "month" })}
-                  className="flex h-12 items-center rounded-xl bg-[#1d1680]/70 px-6 text-[16px] font-bold text-white shadow-[0_6px_0_rgba(10,6,60,0.3)] ring-1 ring-white/15 transition-transform hover:-translate-y-0.5 active:translate-y-0"
-                >
-                  {t("Get monthly")}
-                </button>
-              </div>
-            )}
-
-            <div className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[14px] font-semibold">
-              <button type="button" onClick={() => setGifting(true)} className="flex items-center gap-1.5 text-white/90 hover:text-white">
-                <IconGift size={16} /> {t("Gift Aero")}
-              </button>
-              <button type="button" onClick={() => setRedeemOpen(true)} className="flex items-center gap-1.5 text-white/90 hover:text-white">
-                <IconSparkle size={16} /> {t("Redeem a gift code")}
-              </button>
+              )}
             </div>
-            <p className="mt-5 text-[14px] text-white/80">
-              {t("Just want to support Disband?")}{" "}
-              <a href={websiteHref("/donate")} target="_blank" rel="noreferrer" className="font-semibold text-white underline decoration-white/40 underline-offset-4 hover:decoration-white">
-                {t("Donate instead.")}
-              </a>
-            </p>
-          </div>
-          <svg aria-hidden viewBox="0 0 1440 120" preserveAspectRatio="none" className="absolute inset-x-0 bottom-[-1px] z-[1] h-[80px] w-full">
-            <path d="M0 64c160 34 320 48 480 34S800 30 960 30s320 34 480 50v40H0Z" fill="var(--bg-primary)" />
-          </svg>
-        </section>
+          ) : (
+            <>
+              <div role="radiogroup" aria-label={t("Billing")} className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <PriceOption
+                  selected={interval === "year"}
+                  onSelect={() => setBillingInterval("year")}
+                  label={t("Yearly")}
+                  price={money(yearly)}
+                  per={` / ${t("year")}`}
+                  note={t("{price} a month, billed once a year", { price: money(Math.round(yearly / 12)) })}
+                  tag={savings > 0 ? t("Save {percent}%", { percent: savings }) : undefined}
+                />
+                <PriceOption
+                  selected={interval === "month"}
+                  onSelect={() => setBillingInterval("month")}
+                  label={t("Monthly")}
+                  price={money(monthly)}
+                  per={` / ${t("month")}`}
+                  note={t("Billed every month, cancel any time")}
+                />
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
+                <button
+                  type="button"
+                  onClick={() => onCheckout({ plan: focus, interval })}
+                  className="h-10 rounded-md bg-brand px-5 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover"
+                >
+                  {t("Get {plan}", { plan: focus === "aero" ? "Aero" : "Lite" })}
+                </button>
+                <button type="button" onClick={() => setGifting(true)} className="flex items-center gap-1.5 text-[14px] font-medium text-text-link hover:underline">
+                  <IconGift size={15} /> {t("Gift Aero")}
+                </button>
+                <button type="button" onClick={() => setRedeemOpen(true)} className="text-[14px] font-medium text-text-link hover:underline">
+                  {t("Redeem a gift code")}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Perks */}
-        <section className="mx-auto max-w-[1040px] px-6 pb-6 pt-4">
-          <h2 className="text-[26px] font-bold tracking-[-0.01em] text-header-primary">
+        <section className="mx-auto w-full max-w-[880px] px-6 pt-10 md:px-10">
+          <h2 className="border-b border-border-subtle pb-3 text-[16px] font-semibold text-header-primary">
             {focus === "aero" ? t("Everything in Aero") : t("Everything in Lite")}
           </h2>
-          <p className="mt-1 text-[15px] text-text-muted">
-            {focus === "aero"
-              ? t("The full set: bigger uploads, sharper streams and every way to make Disband yours.")
-              : t("The essentials for a little more room, at a little price.")}
-          </p>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid gap-x-10 sm:grid-cols-2 [&>li]:border-b [&>li]:border-border-subtle">
             {focus === "aero" ? (
               <>
                 <Perk icon={<IconUpload />} title={t("500 MB uploads")} body={t("Send files ten times bigger than on Free.")} />
-                <Perk icon={<IconVideo />} title={t("2K video and streams")} body={t("1440p camera and screen share at up to 120 fps.")} />
-                <Perk icon={<IconImage />} title={t("Animated avatar and banner")} body={t("Bring your profile to life with GIFs.")} />
+                <Perk icon={<IconVideo />} title={t("1440p video and streams")} body={t("Camera and screen share at up to 120 fps.")} />
+                <Perk icon={<IconImage />} title={t("Animated avatar and banner")} body={t("Use a GIF for your picture and banner.")} />
                 <Perk icon={<IconPalette />} title={t("Custom accent colour")} body={t("Pick any colour and the whole app takes it on.")} badge={t("New")} />
                 <Perk icon={<IconStar />} title={t("Chat wallpapers")} body={t("Set a backdrop behind every conversation.")} badge={t("New")} />
                 <Perk icon={<IconBell />} title={t("Message reminders")} body={t("Ask Disband to bring a message back to you later.")} badge={t("New")} />
                 <Perk icon={<IconEmoji />} title={t("Unlimited custom emoji")} body={t("Upload as many emoji to your spaces as you like.")} />
                 <Perk icon={<IconCrown />} title={t("4 Catalysts a month")} body={t("Boost the spaces you love to unlock their perks.")} />
-                <Perk icon={<IconSparkle />} title={t("Skins and exclusive themes")} body={t("Nine skins, four Aero themes and your own CSS.")} />
+                <Perk icon={<IconSparkle />} title={t("Skins and Aero themes")} body={t("Nine skins, four Aero themes and your own CSS.")} />
                 <Perk icon={<IconDownload />} title={t("History export")} body={t("Take a copy of your messages with you.")} />
                 <Perk icon={<IconTrophy />} title={t("Priority support")} body={t("Your tickets go to the front of the queue.")} />
-                <Perk icon={<AeroIcon size={20} />} title={t("Aero badge")} body={t("Show your support on your profile.")} />
+                <Perk icon={<AeroIcon size={18} />} title={t("Aero badge")} body={t("Shown on your profile.")} />
               </>
             ) : (
               <>
@@ -274,50 +304,62 @@ export function AeroPage({ onCheckout }: { onCheckout: (request: AeroCheckoutReq
                 <Perk icon={<IconBell />} title={t("Message reminders")} body={t("Ask Disband to bring a message back to you later.")} badge={t("New")} />
                 <Perk icon={<IconEmoji />} title={t("10 custom emoji slots")} body={t("Add your own emoji to the spaces you run.")} />
                 <Perk icon={<IconCrown />} title={t("1 Catalyst a month")} body={t("Boost a space you love.")} />
-                <Perk icon={<AeroIcon size={20} lite />} title={t("Lite badge")} body={t("A badge on your profile.")} />
+                <Perk icon={<AeroIcon size={18} lite />} title={t("Lite badge")} body={t("Shown on your profile.")} />
               </>
             )}
-          </div>
+          </ul>
         </section>
 
         {/* Compare */}
-        <section className="mx-auto max-w-[1040px] px-6 pb-16 pt-8">
-          <h2 className="text-[22px] font-bold text-header-primary">{t("Compare plans")}</h2>
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-border-subtle">
-            <table className="w-full min-w-[560px] border-collapse text-left text-[14px]">
+        <section className="mx-auto w-full max-w-[880px] px-6 pb-16 pt-12 md:px-10">
+          <h2 className="text-[16px] font-semibold text-header-primary">{t("Compare plans")}</h2>
+          <div className="mt-3 overflow-x-auto rounded-lg border border-border-subtle">
+            <table className="w-full min-w-[520px] border-collapse text-left text-[14px]">
               <thead>
-                <tr className="bg-bg-secondary-alt text-text-muted">
-                  <th className="px-4 py-3 font-semibold">{t("Perk")}</th>
-                  <th className="px-4 py-3 font-semibold">Free</th>
-                  <th className="px-4 py-3 font-semibold">Lite</th>
-                  <th className="px-4 py-3 font-semibold text-brand">Aero</th>
+                <tr className="bg-bg-secondary text-[13px] text-text-muted">
+                  <th className="px-4 py-2.5 font-medium" />
+                  <th className="w-[18%] px-4 py-2.5 font-medium">Free</th>
+                  <th className="w-[18%] px-4 py-2.5 font-medium">Lite</th>
+                  <th className="w-[18%] px-4 py-2.5 font-semibold text-header-primary">Aero</th>
                 </tr>
               </thead>
               <tbody>
                 {[
                   [t("File uploads"), "50 MB", "100 MB", "500 MB"],
                   [t("Video quality"), "720p", "1080p", "1440p"],
-                  [t("Custom emoji slots"), "—", "10", t("Unlimited")],
-                  [t("Catalysts each month"), "—", "1", "4"],
-                  [t("Custom accent colour"), "—", "✓", "✓"],
-                  [t("Chat wallpapers"), "—", "✓", "✓"],
-                  [t("Message reminders"), "—", "✓", "✓"],
-                  [t("Animated avatar and banner"), "—", "—", "✓"],
-                  [t("Skins and Aero themes"), "—", "—", "✓"],
-                  [t("History export"), "—", "—", "✓"],
-                ].map(([label, free, lite, aero]) => (
+                  [t("Custom emoji slots"), "", "10", t("Unlimited")],
+                  [t("Catalysts each month"), "", "1", "4"],
+                  [t("Custom accent colour"), "", "yes", "yes"],
+                  [t("Chat wallpapers"), "", "yes", "yes"],
+                  [t("Message reminders"), "", "yes", "yes"],
+                  [t("Animated avatar and banner"), "", "", "yes"],
+                  [t("Skins and Aero themes"), "", "", "yes"],
+                  [t("History export"), "", "", "yes"],
+                ].map(([label, ...cells]) => (
                   <tr key={label} className="border-t border-border-subtle">
-                    <td className="px-4 py-3 font-medium text-header-primary">{label}</td>
-                    <td className="px-4 py-3 text-text-muted">{free}</td>
-                    <td className="px-4 py-3 text-text-normal">{lite}</td>
-                    <td className="px-4 py-3 font-semibold text-header-primary">{aero}</td>
+                    <td className="px-4 py-2.5 text-text-normal">{label}</td>
+                    {cells.map((cell, i) => (
+                      <td key={i} className={`px-4 py-2.5 tabular-nums ${i === 2 ? "font-medium text-header-primary" : "text-text-muted"}`}>
+                        {cell === "yes" ? (
+                          <IconCheck size={16} className={i === 2 ? "text-header-primary" : "text-text-muted"} />
+                        ) : cell === "" ? (
+                          <span aria-label={t("Not included")} className="text-text-muted/50">–</span>
+                        ) : (
+                          cell
+                        )}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           <p className="mt-4 text-[12px] leading-5 text-text-muted">
-            {t("Prices in US dollars. Subscriptions renew until cancelled; cancel any time from Manage billing and keep your perks to the end of the period.")}
+            {t("Prices in US dollars. Subscriptions renew until cancelled; cancel any time from Manage billing and keep your perks to the end of the period.")}{" "}
+            {t("Just want to support Disband?")}{" "}
+            <a href={websiteHref("/donate")} target="_blank" rel="noreferrer" className="font-medium text-text-link hover:underline">
+              {t("Donate instead.")}
+            </a>
           </p>
         </section>
       </div>

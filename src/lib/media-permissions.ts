@@ -23,17 +23,45 @@ export async function requestNativeMediaPermissions(constraints: {
       requestCameraPermission,
     } = await import("tauri-plugin-macos-permissions-api");
 
-    if (wantsAudio) {
-      const granted = await checkMicrophonePermission();
-      if (!granted) await requestMicrophonePermission();
+    // The plugin's request only shows the macOS prompt; it returns before
+    // anyone answers it. Opening the mic straight after raced the prompt:
+    // WebKit got "not determined" and handed back a silent or failed track,
+    // so the first call after install (or after a reset) had no mic. Wait
+    // for the answer instead.
+    if (wantsAudio && !(await checkMicrophonePermission())) {
+      await requestMicrophonePermission();
+      await waitForGrant(checkMicrophonePermission);
     }
 
-    if (wantsVideo) {
-      const granted = await checkCameraPermission();
-      if (!granted) await requestCameraPermission();
+    if (wantsVideo && !(await checkCameraPermission())) {
+      await requestCameraPermission();
+      await waitForGrant(checkCameraPermission);
     }
   } catch {
+    // The plugin isn't there (an older build): WebKit asks by itself.
+  }
+}
 
+/**
+ * Polls until access is granted, the prompt is answered "Don't Allow", or a
+ * minute passes. The prompt takes the app's focus while it is up, so once the
+ * window has focus back for a moment without a grant, it was declined (or
+ * was declined before and macOS didn't ask): stop waiting and let
+ * getUserMedia report it.
+ */
+async function waitForGrant(check: () => Promise<boolean>): Promise<void> {
+  const started = Date.now();
+  let focusedSince: number | null = null;
+  while (Date.now() - started < 60_000) {
+    if (await check()) return;
+    const focused = typeof document !== "undefined" && document.hasFocus();
+    if (focused) {
+      focusedSince ??= Date.now();
+      if (Date.now() - focusedSince > 1_200) return;
+    } else {
+      focusedSince = null;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
   }
 }
 

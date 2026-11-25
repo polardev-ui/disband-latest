@@ -84,14 +84,25 @@ export function CreatorPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-5 rounded-xl bg-gradient-to-br from-[#ff4f6d] to-[#7b2ff7] p-6 text-white">
-        <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/15"><BadgeGlyph badgeKey="creator" size={40} /></span>
-        <div>
-          <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-white/80">{t("Creator Program")}</p>
-          <p className="text-[22px] font-extrabold leading-tight">{verified ? t("You're a verified creator") : t("For creators with a following")}</p>
-          <p className="mt-1 text-[14px] text-white/85">
-            {t("Connect your channel. Pass")}{" "}{THRESHOLD.toLocaleString("en-GB")} followers on any platform and the Content Creator badge appears on your profile, showing your count on hover.
+      <div className="flex items-start gap-4 rounded-lg border border-border-subtle bg-bg-secondary p-5">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-bg-tertiary"><BadgeGlyph badgeKey="creator" size={26} /></span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[16px] font-semibold text-header-primary">{verified ? t("You have the Content Creator badge") : t("Content Creator badge")}</p>
+          <p className="mt-1 text-[14px] leading-5 text-text-muted">
+            {verified
+              ? t("It's on your profile and shows your follower count on hover.")
+              : t("Connect a channel below. Once one platform passes {n} followers, the badge appears on your profile and shows your count on hover.", { n: THRESHOLD.toLocaleString("en-GB") })}
           </p>
+          {!verified && best > 0 && (
+            <div className="mt-3 max-w-sm">
+              <div className="h-1.5 overflow-hidden rounded-full bg-bg-tertiary">
+                <div className="h-full rounded-full bg-brand" style={{ width: `${Math.min(1, best / THRESHOLD) * 100}%` }} />
+              </div>
+              <p className="mt-1.5 text-[12px] tabular-nums text-text-muted">
+                {t("{have} of {need} on your biggest platform", { have: best.toLocaleString("en-GB"), need: THRESHOLD.toLocaleString("en-GB") })}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

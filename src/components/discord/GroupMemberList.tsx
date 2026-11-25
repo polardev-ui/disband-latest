@@ -1,5 +1,6 @@
 "use client";
 
+import { MemberColumnHeader } from "./MemberList";
 import { Avatar } from "@/components/ui/Avatar";
 import { displayName } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
@@ -65,8 +66,9 @@ export function GroupMemberList({
 
   return (
 
-    <aside className="flex w-60 shrink-0 flex-col overflow-y-auto bg-bg-secondary">
-      <div className="p-4">
+    <aside className="flex w-[248px] shrink-0 flex-col border-l border-column-border bg-bg-primary">
+      <MemberColumnHeader title={t("Members")} count={null} />
+      <div className="member-scroll min-h-0 flex-1 overflow-y-auto p-4">
         {onInvite && members.length < 10 && (
           <button
             type="button"

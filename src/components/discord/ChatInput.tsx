@@ -1246,7 +1246,7 @@ export function ChatInput({
       ) : (
       <>
       {(replyTo || editingMessageId) && (
-        <div className="flex h-[36px] items-center gap-2 rounded-t-xl border border-b-0 border-border-subtle bg-bg-secondary-alt pl-4 pr-2 text-[14px]">
+        <div className="flex h-[36px] items-center gap-2 rounded-t-lg bg-bg-secondary-alt pl-4 pr-2 text-[14px]">
           <p className="min-w-0 flex-1 truncate text-header-secondary">
             {editingMessageId ? (
               t("Editing message — escape to cancel")
@@ -1281,7 +1281,7 @@ export function ChatInput({
           setDragOver(false);
           if (e.dataTransfer.files?.length) void handleFiles(e.dataTransfer.files);
         }}
-        className={`relative rounded-xl border bg-bg-composer transition-colors ${dragOver ? "border-brand ring-2 ring-brand/40" : "border-border-subtle focus-within:border-border-strong"} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
+        className={`relative rounded-lg border bg-bg-composer ${dragOver ? "border-brand ring-2 ring-brand/40" : "border-transparent"} ${replyTo || editingMessageId ? "rounded-t-none" : ""}`}
       >
         {entries.length > 0 && (
           <div className="flex flex-wrap gap-2 border-b border-divider px-3 py-2">

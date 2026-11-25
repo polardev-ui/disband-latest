@@ -1,5 +1,6 @@
 
 import { isSoundEnabled } from "@/lib/user-settings";
+import { isAppSoundEnabled } from "@/lib/audio-settings";
 
 function newCtx(): AudioContext | null {
   try {
@@ -32,8 +33,9 @@ function tone(
   osc.stop(start + duration + 0.03);
 }
 
-export function playCallConnected() {
-  if (!isSoundEnabled()) return;
+/** `preview` plays it even when turned off (the settings page's Play button). */
+export function playCallConnected(preview = false) {
+  if (!preview && (!isSoundEnabled() || !isAppSoundEnabled("callConnected"))) return;
   const ctx = newCtx();
   if (!ctx) return;
   const t = ctx.currentTime;
@@ -42,8 +44,9 @@ export function playCallConnected() {
   setTimeout(() => void ctx.close(), 600);
 }
 
-export function playCallJoin() {
-  if (!isSoundEnabled()) return;
+/** `preview` plays it even when turned off (the settings page's Play button). */
+export function playCallJoin(preview = false) {
+  if (!preview && (!isSoundEnabled() || !isAppSoundEnabled("callJoin"))) return;
   const ctx = newCtx();
   if (!ctx) return;
   const t = ctx.currentTime;
@@ -52,8 +55,9 @@ export function playCallJoin() {
   setTimeout(() => void ctx.close(), 400);
 }
 
-export function playCallLeave() {
-  if (!isSoundEnabled()) return;
+/** `preview` plays it even when turned off (the settings page's Play button). */
+export function playCallLeave(preview = false) {
+  if (!preview && (!isSoundEnabled() || !isAppSoundEnabled("callLeave"))) return;
   const ctx = newCtx();
   if (!ctx) return;
   const t = ctx.currentTime;
@@ -62,8 +66,9 @@ export function playCallLeave() {
   setTimeout(() => void ctx.close(), 400);
 }
 
-export function playCallEnd() {
-  if (!isSoundEnabled()) return;
+/** `preview` plays it even when turned off (the settings page's Play button). */
+export function playCallEnd(preview = false) {
+  if (!preview && (!isSoundEnabled() || !isAppSoundEnabled("callEnd"))) return;
   const ctx = newCtx();
   if (!ctx) return;
   const t = ctx.currentTime;
@@ -74,8 +79,9 @@ export function playCallEnd() {
 
 /** Update chime: two rising tones, distinct from the call sounds. Played
  * when an app update is offered so an auto-install never lands silent. */
-export function playUpdateReady() {
-  if (!isSoundEnabled()) return;
+/** `preview` plays it even when turned off (the settings page's Play button). */
+export function playUpdateReady(preview = false) {
+  if (!preview && (!isSoundEnabled() || !isAppSoundEnabled("updateReady"))) return;
   const ctx = newCtx();
   if (!ctx) return;
   const t = ctx.currentTime;

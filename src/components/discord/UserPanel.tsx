@@ -55,10 +55,10 @@ export function UserPanel({ onOpenSettings, onOpenProfile, onContextMenu }: User
   }, []);
 
   return (
-    <div className="shrink-0 px-2 pb-3 pt-1">
+    <div className="dock-user shrink-0 px-2 pb-3 pt-1">
     <div
       ref={panelRef}
-      className="flex h-[52px] items-center gap-0.5 rounded-xl border border-border-subtle bg-bg-secondary-alt px-1.5"
+      className="dock-user-card flex h-[52px] items-center gap-0.5 rounded-xl border border-border-subtle bg-bg-secondary-alt px-1.5"
       onContextMenu={onContextMenu}
     >
       {popupMounted && (

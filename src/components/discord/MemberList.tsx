@@ -100,11 +100,22 @@ function roleColor(member: ServerMember, roles: ServerRole[]): string | null {
   return topRole(member, roles)?.color ?? null;
 }
 
+/** Lines up with the chat header beside it (same height, same rule). */
+export function MemberColumnHeader({ title, count }: { title: string; count: number | null }) {
+  return (
+    <div className="flex h-14 shrink-0 items-center gap-1.5 border-b border-column-border px-4">
+      <h2 className="text-[15px] font-semibold leading-5 text-header-primary">{title}</h2>
+      {count !== null && <span className="text-[13px] font-medium tabular-nums text-text-muted">{count}</span>}
+    </div>
+  );
+}
+
 export function MemberList({ serverId = null, channelId = null, members, roles, ownerId = null, loading, hasMore, onLoadMore, onMemberClick, onMemberContext }: MemberListProps) {
   const { presenceMap, listeningMap, activityMap, serverTimeouts, rosterVersion } = useApp();
   const { t } = useI18n();
   const windowed = useMemberWindow(serverId, presenceMap, channelId, rosterVersion);
   const useWindow = !!serverId && windowed.mode === "window" && windowed.total !== null;
+  const memberTotal = useWindow ? windowed.total : members.length > 0 ? members.length : null;
 
   const timedOutIds = useMemo(() => {
     const now = Date.now();
@@ -271,11 +282,9 @@ export function MemberList({ serverId = null, channelId = null, members, roles, 
   // members followed by a pop-in list.
   if (loading && !useWindow) {
     return (
-      <aside className="flex w-[248px] shrink-0 flex-col border-l border-column-border bg-bg-primary px-4 py-4" aria-label={t("Loading members")}>
-        <h2 className="px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
-          {t("Members")}
-        </h2>
-        <div className="flex flex-col gap-1" aria-hidden>
+      <aside className="flex w-[248px] shrink-0 flex-col border-l border-column-border bg-bg-primary" aria-label={t("Loading members")}>
+        <MemberColumnHeader title={t("Members")} count={null} />
+        <div className="flex flex-col gap-1 px-4 pt-5" aria-hidden>
           {Array.from({ length: 10 }).map((_, i) => (
             <div key={i} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
               <span className="skeleton-glimmer h-8 w-8 shrink-0 rounded-full" />
@@ -296,11 +305,9 @@ export function MemberList({ serverId = null, channelId = null, members, roles, 
   // blank rail with no explanation.
   if (!useWindow && members.length === 0) {
     return (
-      <aside className="flex w-[248px] shrink-0 flex-col border-l border-column-border bg-bg-primary px-4 py-4">
-        <h2 className="px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
-          {t("Members")}
-        </h2>
-        <p className="px-2 py-2 text-sm text-text-muted">
+      <aside className="flex w-[248px] shrink-0 flex-col border-l border-column-border bg-bg-primary">
+        <MemberColumnHeader title={t("Members")} count={null} />
+        <p className="px-6 py-4 text-sm text-text-muted">
           {t("No members to show yet.")}
         </p>
       </aside>
@@ -309,10 +316,15 @@ export function MemberList({ serverId = null, channelId = null, members, roles, 
 
   return (
 
+    <div className="flex w-[248px] shrink-0 flex-col border-l border-column-border bg-bg-primary">
+    {/* Same height and rule as the chat header beside it, so the line under
+        the headers runs unbroken across the window instead of stopping at
+        this column. Outside the scroller, so row windowing is unaffected. */}
+    <MemberColumnHeader title={t("Members")} count={memberTotal} />
     <aside
       ref={scrollerRef}
       onScroll={onScroll}
-      className="member-scroll flex w-[248px] shrink-0 flex-col overflow-y-auto border-l border-column-border bg-bg-primary"
+      className="member-scroll flex min-h-0 flex-1 flex-col overflow-y-auto"
     >
       <div className="pb-5 pl-2 pr-0">
         <div style={{ height: padTop }} aria-hidden />
@@ -376,6 +388,7 @@ export function MemberList({ serverId = null, channelId = null, members, roles, 
         )}
       </div>
     </aside>
+    </div>
   );
 }
 

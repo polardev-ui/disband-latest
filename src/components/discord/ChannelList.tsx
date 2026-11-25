@@ -600,7 +600,7 @@ export function ChannelList({
         <button
           type="button"
           onClick={onOpenCatalysts}
-          className="mx-2 mt-2 flex shrink-0 items-center gap-2 rounded-lg border border-border-subtle bg-bg-secondary-alt px-2.5 py-2 text-left transition-colors hover:border-border-strong"
+          className="mx-2 mt-2 flex shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-channels-default transition-colors hover:bg-interactive-hover hover:text-text-normal"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden className="shrink-0 text-[#e879f9]">
             <path fill="currentColor" d="M12 2 5 7v10l7 5 7-5V7l-7-5Zm0 3.2 4.5 3.2v7.2L12 18.8l-4.5-3.2V8.4L12 5.2Z" />

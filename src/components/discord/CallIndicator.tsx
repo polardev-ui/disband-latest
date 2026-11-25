@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { IconPhoneOff, IconScreenShare, IconVideo } from "@/components/icons";
 import { getCallIndicatorState, subscribeCallIndicator, type CallIndicatorState } from "@/lib/call-status";
 import { useVoiceSession } from "@/contexts/VoiceSessionContext";
+import { useApp } from "@/contexts/AppContext";
 import { Tooltip } from "./Tooltip";
 import { Soundboard } from "./Soundboard";
 import { useI18n } from "@/contexts/I18nContext";
@@ -48,6 +49,7 @@ export function CallIndicator() {
   const [now, setNow] = useState(() => Date.now());
   const [quality, setQuality] = useState(connectionQuality);
   const session = useVoiceSession();
+  const app = useApp();
 
   useEffect(() => subscribeCallIndicator(() => setState(getCallIndicatorState())), []);
 
@@ -73,9 +75,17 @@ export function CallIndicator() {
     (session.participants.length <= 1 || session.connectedPeerIds.size > 0);
   const connected = voice ? voiceConnected : !!state.connected;
   const elapsed = connected && state.startedAt ? formatElapsed(Math.max(0, now - state.startedAt)) : null;
+  // A voice channel's name is the one you joined, not the one on screen, and
+  // clicking it takes you there (from a DM, another channel or another space).
+  const voiceChannelId = voice ? session.connectedChannelId : null;
+  const viewingVoiceChannel = !!voiceChannelId && app.viewMode === "space" && app.activeChannelId === voiceChannelId;
+  const focus = voiceChannelId
+    ? viewingVoiceChannel ? null : () => void app.openChannelById(voiceChannelId)
+    : state.focus;
+  const placeLabel = voice && session.connectedChannelName ? session.connectedChannelName : state.label.replace(/^In /, "");
 
   return (
-    <div className="rtc-enter mx-2 mt-1 shrink-0 rounded-xl border border-border-subtle bg-bg-secondary-alt px-2 pb-2 pt-2">
+    <div className="dock-call rtc-enter mx-2 mt-1 shrink-0 rounded-xl border border-border-subtle bg-bg-secondary-alt px-2 pb-2 pt-2">
       <div className="flex items-center gap-1">
         <div className="min-w-0 flex-1 pl-1">
           <div className="flex items-center gap-1">
@@ -86,11 +96,12 @@ export function CallIndicator() {
           </div>
           <button
             type="button"
-            disabled={!state.focus}
-            onClick={state.focus ?? undefined}
-            className="block max-w-full truncate text-left text-[12px] leading-4 text-header-secondary enabled:hover:underline disabled:cursor-default"
+            disabled={!focus}
+            onClick={focus ?? undefined}
+            title={focus ? t("Go to {name}", { name: placeLabel }) : undefined}
+            className="block max-w-full truncate text-left text-[12px] leading-4 text-header-secondary enabled:cursor-pointer enabled:hover:text-header-primary enabled:hover:underline disabled:cursor-default"
           >
-            {state.label.replace(/^In /, "")}
+            {placeLabel}
             {state.sublabel ? ` / ${state.sublabel}` : ""}
             {elapsed ? ` · ${elapsed}` : ""}
           </button>

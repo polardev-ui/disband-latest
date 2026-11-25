@@ -1245,7 +1245,7 @@ export const ChatCanvas = forwardRef<ChatCanvasHandle, ChatCanvasProps>(function
         {composerNotice}
         <ExpressionCardHost />
         {composerLockedReason ? (
-          <div className="mx-4 flex min-h-[52px] items-center gap-2 rounded-xl border border-border-subtle bg-bg-composer px-4 py-2">
+          <div className="mx-4 flex min-h-[52px] items-center gap-2 rounded-lg bg-bg-composer px-4 py-2">
             <IconShield size={15} className="shrink-0 text-text-muted" />
             <p className="text-[14px] text-text-muted">{composerLockedReason}</p>
           </div>

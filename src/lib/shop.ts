@@ -73,11 +73,9 @@ export function lottieSrc(id: string | null | undefined): string | null {
 }
 
 export const SHOP_CATEGORIES: { id: ShopCategory; label: string; blurb: string }[] = [
-  {
-    id: "name",
-    label: "Name effects",
-    blurb: "Animate your display name wherever it appears.",
-  },
+  // Name effects are no longer sold. Anyone who bought one keeps it (the
+  // items stay in SHOP_ITEMS so they still render), and the shop offers a
+  // way to take it off.
   {
     id: "ring",
     label: "Avatar decorations",
@@ -256,7 +254,8 @@ export function isShopItemAvailable(item: ShopItem): boolean {
   // are sold, and the older effects stay wearable for anyone who owns one.
   if (item.category === "ring") return !!item.decoration && !item.unreleased;
   if (item.category === "overlay") return !!item.skin && !item.unreleased;
-  return item.category === "name";
+  // Name effects: retired from sale, still worn by those who own one.
+  return false;
 }
 
 /** Every drawn decoration, released or not, in catalogue order. */

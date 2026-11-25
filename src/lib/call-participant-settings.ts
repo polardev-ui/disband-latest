@@ -1,3 +1,4 @@
+import { VOICE_SETTINGS_EVENT, getOutputVolume, type VoiceSettingsEventDetail } from "@/lib/audio-settings";
 export interface ParticipantControls {
   volume: number;
   micMuted: boolean;
@@ -108,7 +109,8 @@ function ensureGainNode(element: HTMLAudioElement): GainNode | null {
 export function applyParticipantAudioControls(element: HTMLAudioElement | null, userId: string) {
   if (!element) return;
   const controls = getParticipantControls(userId);
-  const level = Math.max(0, controls.volume / 100);
+  // Their own volume, scaled by the speaker volume in Voice & Video.
+  const level = Math.max(0, (controls.volume / 100) * (getOutputVolume() / 100));
   const existing = gainNodes.get(element);
   const gain = existing ?? (level > 1 ? ensureGainNode(element) : null);
   if (gain) {
@@ -129,4 +131,14 @@ export function isCameraDisabled(userId: string): boolean {
 
 export function isSoundboardMuted(userId: string): boolean {
   return getParticipantControls(userId).soundboardMuted;
+}
+// A new speaker volume applies to everyone already playing.
+if (typeof window !== "undefined") {
+  window.addEventListener(VOICE_SETTINGS_EVENT, (event) => {
+    if ((event as CustomEvent<VoiceSettingsEventDetail>).detail?.key !== "disband:output-volume") return;
+    document.querySelectorAll<HTMLAudioElement>("audio[data-call-user]").forEach((el) => {
+      const uid = el.dataset.callUser;
+      if (uid) applyParticipantAudioControls(el, uid);
+    });
+  });
 }

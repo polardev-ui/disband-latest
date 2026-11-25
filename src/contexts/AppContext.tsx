@@ -22,6 +22,7 @@ import { isTauri } from "@/lib/platform";
 import { notifyUser, alertIncomingDm, alertMention, setNotificationFocusState, parseNotificationLink, primeNotificationPermission, isAppInBackground, setCurrentUserStatus } from "@/lib/notifications";
 import { requestUnreadJump } from "@/lib/notification-jump";
 import { syncUserSettings } from "@/lib/user-settings";
+import { startVoiceSettingsSync } from "@/lib/voice-settings-sync";
 import { getAuthRedirectUrl } from "@/lib/auth-redirect";
 import { preloadImages } from "@/lib/preload-images";
 import { readRestriction, rememberRestriction } from "@/lib/network-restriction-client";
@@ -204,6 +205,10 @@ interface AppContextValue {
   setViewNotes: () => Promise<void>;
   selectServer: (serverId: string) => Promise<void>;
   selectChannel: (channelId: string) => void;
+  /** Starts loading a channel the pointer is on, so the click paints at once. */
+  prefetchChannel: (channelId: string) => void;
+  /** The same for a DM. */
+  prefetchDm: (threadId: string) => void;
   selectDmThread: (threadId: string) => Promise<void>;
   selectGroupChat: (groupId: string) => Promise<void>;
   refreshGroupChats: () => Promise<void>;
@@ -326,6 +331,8 @@ interface AppContextValue {
   markNotificationRead: (id: string) => Promise<void>;
 
   routeToNotification: (link: string | null, at?: string | null) => Promise<boolean>;
+  /** Shows a channel, switching space first if it is in another one. False if it is gone. */
+  openChannelById: (channelId: string) => Promise<boolean>;
   loadVoicePresence: (channelId: string) => Promise<void>;
   voiceJoinedChannelId: string | null;
   setVoiceJoinedChannelId: (channelId: string | null) => void;
@@ -424,6 +431,8 @@ const MEMBER_PAGE_SIZE = 500;
 const SPACE_CACHE_LIMIT = 12;
 const CHANNEL_CACHE_LIMIT = 40;
 const CHANNEL_SNAPSHOT_ROWS = 100;
+/** A hover-prefetched channel is used as is for this long, then fetched again. */
+const CHANNEL_PREFETCH_FRESH_MS = 20_000;
 
 interface SpaceSnapshot {
   categories: ChannelCategory[];
@@ -439,6 +448,13 @@ interface SpaceSnapshot {
 
 interface ChannelSnapshot {
   messages: (Message & { author: Profile })[];
+  hasMore: boolean;
+  reactions: MessageReaction[];
+}
+
+/** A DM as last seen, so going back to it paints at once (see dmSnapshotsRef). */
+interface DmSnapshot {
+  messages: (DmMessage & { author: Profile })[];
   hasMore: boolean;
   reactions: MessageReaction[];
 }
@@ -776,6 +792,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const serverDetailsCacheRef = useRef<{ categories: ChannelCategory[]; channels: Channel[]; roles: ServerRole[] } | null>(null);
   const spaceSnapshotsRef = useRef<Map<string, SpaceSnapshot>>(new Map());
   const channelSnapshotsRef = useRef<Map<string, ChannelSnapshot>>(new Map());
+  const dmSnapshotsRef = useRef<Map<string, DmSnapshot>>(new Map());
+  const dmPrefetchedAtRef = useRef(new Map<string, number>());
+  const channelPrefetchRef = useRef(new Map<string, { at: number; run: Promise<{ data: unknown[] } | null> }>());
   // Which space the permission flags in state belong to; they linger from the
   // previous space until the new space's answer lands.
   const permissionsServerRef = useRef<string | null>(null);
@@ -788,6 +807,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   sessionRef.current = session;
   profileRef.current = profile;
   syncUserSettings(profile);
+
+  // Voice & Video settings follow the account between web and desktop.
+  useEffect(() => {
+    startVoiceSettingsSync();
+  }, []);
 
   // Pre-warm TURN/STUN credentials so the first call doesn't pay the
   // /api/turn round trip. Cached 30 min; fire-and-forget.
@@ -2357,12 +2381,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // you left and came back. A retry happens on the next navigation or
     // realtime event.
     try {
-      const { data } = await supabase
-        .from("messages")
-        .select("*, author:profiles(*)")
-        .eq("channel_id", channelId)
-        .order("created_at", { ascending: false })
-        .limit(MESSAGE_PAGE_SIZE + 1);
+      // Hovered a moment ago: that request is already under way (or just
+      // landed); use it rather than starting the same one again.
+      const prefetch = channelPrefetchRef.current.get(channelId);
+      const fresh = prefetch && Date.now() - prefetch.at < CHANNEL_PREFETCH_FRESH_MS ? await prefetch.run : null;
+      let data: unknown[] | null = fresh?.data ?? null;
+      if (!fresh) {
+        const res = await supabase
+          .from("messages")
+          .select("*, author:profiles(*)")
+          .eq("channel_id", channelId)
+          .order("created_at", { ascending: false })
+          .limit(MESSAGE_PAGE_SIZE + 1);
+        data = res.data;
+      }
+      channelPrefetchRef.current.delete(channelId);
       if (activeChannelRef.current !== channelId) return;
 
       const { rows, hasMore } = paginateDescendingRows(data as (Message & { author: Profile })[] | null);
@@ -2382,6 +2415,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (activeChannelRef.current !== channelId) return;
       setMessagesLoading(false);
     }
+  }, []);
+
+  /*
+   Prefetch on hover. Discord feels instant because a channel is usually
+   loaded before the click lands: resting the pointer on it (or pressing
+   down, ~100 ms before the click) starts the request. The result fills the
+   same snapshot cache a visited channel leaves behind, so selecting it
+   paints straight away and then refreshes as usual.
+  */
+  const prefetchChannel = useCallback((channelId: string) => {
+    if (activeChannelRef.current === channelId) return;
+    if (channelSnapshotsRef.current.has(channelId)) return;
+    const existing = channelPrefetchRef.current.get(channelId);
+    if (existing && Date.now() - existing.at < CHANNEL_PREFETCH_FRESH_MS) return;
+    const supabase = getSupabaseClient();
+    const run = (async () => {
+      try {
+        const res = await supabase
+          .from("messages")
+          .select("*, author:profiles(*)")
+          .eq("channel_id", channelId)
+          .order("created_at", { ascending: false })
+          .limit(MESSAGE_PAGE_SIZE + 1);
+        if (res.error || !res.data) return null;
+        // Not opened in the meantime: keep it ready for the click.
+        if (activeChannelRef.current !== channelId && !channelSnapshotsRef.current.has(channelId)) {
+          const { rows, hasMore } = paginateDescendingRows(res.data as (Message & { author: Profile })[]);
+          const rxn = await loadReactionsForMessages(supabase, "channel", rows.map((m) => m.id)).catch(() => []);
+          if (activeChannelRef.current !== channelId && !channelSnapshotsRef.current.has(channelId)) {
+            rememberRecent(channelSnapshotsRef.current, channelId, { messages: rows, hasMore, reactions: rxn }, CHANNEL_CACHE_LIMIT);
+          }
+        }
+        return { data: res.data as unknown[] };
+      } catch {
+        return null;
+      }
+    })();
+    channelPrefetchRef.current.set(channelId, { at: Date.now(), run });
   }, []);
 
   // A channel switch can call this twice (the select handler and the chat
@@ -2741,6 +2812,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDmLoading(false);
     }
   }, [bumpDmThreadActivity]);
+
+  /** Hover prefetch for DMs: fills the DM snapshot cache (see prefetchChannel). */
+  const prefetchDm = useCallback((threadId: string) => {
+    if (activeDmRef.current === threadId || dmSnapshotsRef.current.has(threadId)) return;
+    const last = dmPrefetchedAtRef.current.get(threadId);
+    if (last && Date.now() - last < CHANNEL_PREFETCH_FRESH_MS) return;
+    dmPrefetchedAtRef.current.set(threadId, Date.now());
+    void (async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+          .from("dm_messages")
+          .select("*, author:profiles(*)")
+          .eq("thread_id", threadId)
+          .order("created_at", { ascending: false })
+          .limit(MESSAGE_PAGE_SIZE + 1);
+        if (error || !data) return;
+        const { rows, hasMore } = paginateDescendingRows(data as (DmMessage & { author: Profile })[]);
+        const rxn = await loadReactionsForMessages(supabase, "dm", rows.map((m) => m.id)).catch(() => []);
+        // Opened meanwhile: the real load owns it now.
+        if (activeDmRef.current === threadId || dmSnapshotsRef.current.has(threadId)) return;
+        rememberRecent(dmSnapshotsRef.current, threadId, { messages: rows, hasMore, reactions: rxn }, CHANNEL_CACHE_LIMIT);
+      } catch {
+        // A failed prefetch just means the click loads it as before.
+      }
+    })();
+  }, []);
 
   // A thread switch can call this twice (the select handler and the chat
   // effect); share the first in-flight fetch instead of paying twice.
@@ -4964,6 +5062,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, CHANNEL_CACHE_LIMIT);
   }, [activeChannelId, viewMode, messagesLoading, messages, channelHasMore, messageReactions]);
 
+  // Another account's cached spaces, channels and DMs never show under this one.
+  useEffect(() => {
+    spaceSnapshotsRef.current.clear();
+    channelSnapshotsRef.current.clear();
+    dmSnapshotsRef.current.clear();
+    channelPrefetchRef.current.clear();
+    dmPrefetchedAtRef.current.clear();
+  }, [userId]);
+
+  // Record the DM on screen the same way.
+  useEffect(() => {
+    const threadId = activeDmThreadId;
+    if (!threadId || viewMode !== "dm" || dmLoading) return;
+    if (dmMessages.length === 0 || dmMessages.some((m) => m.thread_id !== threadId)) return;
+    const settled = dmMessages.filter((m) => !m.id.startsWith("opt-"));
+    const rows = settled.slice(-CHANNEL_SNAPSHOT_ROWS);
+    const ids = new Set(rows.map((m) => m.id));
+    rememberRecent(dmSnapshotsRef.current, threadId, {
+      messages: rows,
+      hasMore: dmHasMore || rows.length < settled.length,
+      reactions: messageReactions.filter((r) => r.context_type === "dm" && ids.has(r.message_id)),
+    }, CHANNEL_CACHE_LIMIT);
+  }, [activeDmThreadId, viewMode, dmLoading, dmMessages, dmHasMore, messageReactions]);
+
   /** Paint a channel from its snapshot. False when there is none. */
   const restoreChannelSnapshot = useCallback((channelId: string) => {
     const snap = channelSnapshotsRef.current.get(channelId);
@@ -5189,9 +5311,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     activeGroupRef.current = null;
     setActiveChannelId(null);
 
-    setDmMessages([]);
-    setDmHasMore(false);
-    setDmLoading(true);
+    // A DM you've had open comes back as you left it, then refreshes. It
+    // used to blank to a spinner every time, which is most of why switching
+    // conversations felt slow.
+    const snap = dmSnapshotsRef.current.get(threadId);
+    if (snap) {
+      setDmMessages(snap.messages);
+      setDmHasMore(snap.hasMore);
+      setMessageReactions((prev) => replaceReactionsForContext(prev, "dm", snap.reactions));
+      setDmLoading(false);
+    } else {
+      setDmMessages([]);
+      setDmHasMore(false);
+      setDmLoading(true);
+    }
     clearDmUnread(threadId);
 
     void markDmReadNow(threadId);
@@ -5274,6 +5407,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     requestUnreadJump("channel", target.channelId, at);
     return true;
   }, [userId, loadDmThreads, loadGroupChats, loadServerDetails, selectDmThread, selectGroupChat, selectServer, selectChannel]);
+
+  const openChannelById = useCallback(async (channelId: string) => {
+    const known = channelsRef.current.find((c) => c.id === channelId);
+    let serverId = known?.server_id ?? null;
+    if (!known) {
+      const { data } = await getSupabaseClient()
+        .from("channels")
+        .select("id, server_id")
+        .eq("id", channelId)
+        .maybeSingle();
+      if (!data) return false;
+      serverId = (data as { server_id: string }).server_id;
+      const rows = await loadServerDetails(serverId);
+      if (!rows.some((c) => c.id === channelId)) return false;
+    }
+    if (serverId && (serverId !== activeServerRef.current || viewModeRef.current !== "space")) {
+      await selectServer(serverId);
+    }
+    selectChannel(channelId);
+    return true;
+  }, [loadServerDetails, selectServer, selectChannel]);
 
   const createGroupChat = useCallback(async (name: string, memberIds: string[]) => {
     if (!userId) return "Not signed in";
@@ -7426,6 +7580,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setViewNotes,
     selectServer,
     selectChannel,
+    prefetchChannel,
+    prefetchDm,
     selectDmThread,
     selectGroupChat,
     refreshGroupChats,
@@ -7521,6 +7677,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     markNotificationsSeen,
     markNotificationRead,
     routeToNotification,
+    openChannelById,
     loadVoicePresence,
     voiceJoinedChannelId,
     setVoiceJoinedChannelId: handleVoiceJoinedChannel,

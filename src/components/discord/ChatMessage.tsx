@@ -410,7 +410,9 @@ const codes = extractInviteCodes(content);
   const emojiOnly = isEmojiOnlyMessage(textOnly);
   const singleCustom = isSingleCustomEmoji(textOnly, customEmoji);
   const emojiSizeClass = emojiOnly ? emojiOnlySizeClass(textOnly) : "";
-  const normalClass = compact ? "text-[15px] leading-[1.25rem]" : "text-[15px] leading-[1.375rem]";
+  // 16px under a 16px name, as Discord sets it. At 15px the text sat a size
+  // below its own author line, which read as slightly off.
+  const normalClass = compact ? "text-[16px] leading-[1.25rem]" : "text-[16px] leading-[1.375rem]";
 
   return (
     <>
@@ -954,13 +956,13 @@ function ChatMessageImpl({
             type="button"
             onClick={openAuthor}
             onContextMenu={authorContextMenu}
-            className={`text-[16px] font-semibold leading-[22px] text-header-primary hover:underline focus:outline-none ${nameFontClass}`}
+            className={`text-[16px] font-medium leading-[22px] text-header-primary hover:underline focus:outline-none ${nameFontClass}`}
             style={nameStyle}
           >
             {displayName(shownAuthor ?? {})}
           </button>
         ) : (
-          <span className={`text-[16px] font-semibold leading-[22px] text-header-primary ${nameFontClass}`} style={nameStyle}>
+          <span className={`text-[16px] font-medium leading-[22px] text-header-primary ${nameFontClass}`} style={nameStyle}>
             {displayName(shownAuthor ?? {})}
           </span>
         )}

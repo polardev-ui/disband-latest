@@ -58,6 +58,11 @@ const ALL_PERMISSIONS: Record<ServerPermissionKey, boolean> = {
 };
 
 export function PreviewApp() {
+  // Same app-shell rules as the real app (see DisbandRoot).
+  useEffect(() => {
+    document.documentElement.setAttribute("data-app-shell", "");
+    return () => document.documentElement.removeAttribute("data-app-shell");
+  }, []);
   const [viewMode, setViewMode] = useState<ViewMode>("space");
   const [activeServerId, setActiveServerId] = useState<string | null>(M.SERVERS[0].id);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(M.CHANNELS[0].id);
@@ -328,6 +333,9 @@ export function PreviewApp() {
     markNotificationsSeen: asyncVoid,
     markNotificationRead: asyncVoid,
     routeToNotification: async () => false,
+    openChannelById: async () => false,
+    prefetchChannel: () => {},
+    prefetchDm: () => {},
     loadVoicePresence: asyncVoid,
     voiceJoinedChannelId: null,
     setVoiceJoinedChannelId: noop,

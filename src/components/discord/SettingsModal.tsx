@@ -21,25 +21,11 @@ import {
   settingsInputClass,
   Hint,
 } from "./settings/SettingsPrimitives";
-import { MicTest } from "./settings/MicTest";
+import { VoiceVideoPanel, VoiceVideoSubNav } from "./settings/VoiceVideoPanel";
 import { SettingsLayer, SettingsNavHeader, SettingsNavItem, SettingsNavSeparator } from "@/components/ui/SettingsLayer";
 import { ClassicModal, classicBtn } from "@/components/ui/ClassicModal";
 import { MyAccountPanel } from "./settings/MyAccountPanel";
 import { AppearancePerksPanel } from "./settings/AppearancePerksPanel";
-import {
-  getAutoGainControl,
-  getEchoCancellation,
-  getInputVolume,
-  isAppleWebKit,
-  getNoiseSuppressionMode,
-  MAX_INPUT_VOLUME,
-  setAutoGainControl,
-  setEchoCancellation,
-  setInputVolume,
-  setNoiseSuppressionMode,
-  type NoiseSuppressionMode,
-} from "@/lib/audio-settings";
-import { setVoiceMixerAutoGainControl, setVoiceMixerEchoCancellation, setVoiceMixerInputVolume, setVoiceMixerNoiseMode } from "@/lib/voice-mixer";
 import { loadAllBadgesForUser, setBadgeVisible } from "@/lib/badge-store";
 import type { AwardedBadge } from "@/lib/badge-store";
 import {
@@ -79,18 +65,8 @@ import { BotsPanel } from "./settings/BotsPanel";
 import { MyReferralCard } from "@/components/referrals/MyReferralCard";
 import Link from "next/link";
 import { requestNotificationPermissionFromGesture } from "@/lib/notifications";
-import { useAudioDevices } from "@/hooks/useAudioDevices";
 import { useZoom, MIN_ZOOM, MAX_ZOOM } from "@/hooks/useZoom";
 import { getStoredMotion, setStoredMotion, type MotionPreference } from "@/lib/motion";
-import { getDisbandUserMedia } from "@/lib/media";
-import {
-  getPreferredAudioInputId,
-  getPreferredAudioOutputId,
-  getPreferredVideoInputId,
-  setPreferredAudioInputId,
-  setPreferredAudioOutputId,
-  setPreferredVideoInputId,
-} from "@/lib/audio-settings";
 import {
   DEFAULT_ACCENT,
   getAvatarStyle,
@@ -170,8 +146,8 @@ const TABS = [
     description: "What reaches you, and how.",
     keywords: "sound desktop push alerts mentions ping" },
   { id: "voice" as const, label: "Voice & Video", group: "App", icon: <IconMic size={17} />,
-    description: "Microphone, speakers and camera.",
-    keywords: "mic microphone input output speaker headphones camera webcam test device" },
+    description: "Microphone, speakers, camera and sounds.",
+    keywords: "mic microphone input output speaker headphones camera webcam test device sensitivity push to talk ptt noise echo gain isolation studio soundboard sounds stream" },
   { id: "textMedia" as const, label: "Text & Media", group: "App", icon: <IconMessage size={17} />,
     description: "Link previews, embeds and media in chat.",
     keywords: "links previews embeds images gif media unfurl" },
@@ -363,14 +339,6 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
   const [linkPreviews, setLinkPreviews] = useState(true);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | "unsupported">("default");
-  const [audioInput, setAudioInput] = useState("");
-  const [noiseMode, setNoiseModeState] = useState<NoiseSuppressionMode>(getNoiseSuppressionMode());
-  const [inputVolume, setInputVolumeState] = useState(getInputVolume);
-  const [autoGain, setAutoGainState] = useState(getAutoGainControl);
-  const [echoCancellation, setEchoCancellationState] = useState(getEchoCancellation);
-  const [audioOutput, setAudioOutput] = useState("");
-  const [videoInput, setVideoInput] = useState("");
-  const [mediaTestMessage, setMediaTestMessage] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [saving, setSaving] = useState(false);
   // Connections tab: Spotify tokens live server-side (see music-presence
@@ -681,16 +649,6 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     setLastfmSaved(false);
     setLastfmNote("Last.fm disconnected. Your profile will stop showing its tracks.");
   }
-  const { inputs, outputs, cameras, loading: devicesLoading, refresh: refreshDevices } = useAudioDevices();
-
-  useEffect(() => {
-    if (!open) return;
-    setAudioInput(getPreferredAudioInputId() ?? "");
-    setAudioOutput(getPreferredAudioOutputId() ?? "");
-    setVideoInput(getPreferredVideoInputId() ?? "");
-    void refreshDevices();
-  }, [open, refreshDevices]);
-
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
       setNotifPermission(Notification.permission);
@@ -977,19 +935,6 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
     }
   }
 
-  async function testMediaAccess() {
-    setMediaTestMessage(null);
-    setSettingsError(null);
-    try {
-      const stream = await getDisbandUserMedia({ audio: true, video: true });
-      stream.getTracks().forEach((track) => track.stop());
-      setMediaTestMessage(t("Microphone and camera access granted."));
-      await refreshDevices();
-    } catch (err) {
-      setSettingsError(err instanceof Error ? err.message : t("Could not access microphone or camera."));
-    }
-  }
-
   // Management is for Disband managers and the owner only.
   const visibleTabs = TABS.filter((item) => item.id !== "management" || isManager || isStaff);
   const activeTab = visibleTabs.find((item) => item.id === tab);
@@ -1107,7 +1052,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                     >
                       {t(item.label)}
                     </SettingsNavItem>
-                  ))}
+                  )).flatMap((node, i) => (items[i].id === "voice" && tab === "voice" ? [node, <VoiceVideoSubNav key="voice-subnav" />] : [node]))}
                 </div>
               );
             })}
@@ -1831,185 +1776,7 @@ export function SettingsModal({ open, onClose, initialTab }: SettingsModalProps)
                 </div>
               )}
 
-              {tab === "voice" && (
-                <div className="space-y-6">
-                  <SettingsSection
-                    title={t("Devices")}
-                    description={t("Choose your microphone, speaker, and camera for voice channels and calls. Device lists populate after permission is granted.")}
-                  >
-                    <SettingRow label={t("Input device")} stacked>
-                      <select
-                        value={audioInput}
-                        disabled={devicesLoading}
-                        onChange={(e) => {
-                          setAudioInput(e.target.value);
-                          setPreferredAudioInputId(e.target.value);
-                        }}
-                        className={settingsInputClass}
-                      >
-                        <option value="">{t("System default")}</option>
-                        {inputs.map((device) => (
-                          <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
-                        ))}
-                      </select>
-                    </SettingRow>
-                    <SettingRow
-                      label={t("Input volume")}
-                      description={t("If people say you're quiet, turn this up. Above 100% boosts your mic.")}
-                      stacked
-                    >
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="range"
-                          min={0}
-                          max={MAX_INPUT_VOLUME}
-                          step={1}
-                          value={inputVolume}
-                          onChange={(e) => {
-                            const next = Number.parseInt(e.target.value, 10);
-                            setInputVolumeState(next);
-                            setInputVolume(next);
-                            setVoiceMixerInputVolume(next);
-                          }}
-                          className="flex-1 accent-brand"
-                          aria-label={t("Input volume")}
-                        />
-                        <span className="w-12 shrink-0 text-right text-[14px] tabular-nums text-text-muted">
-                          {inputVolume}%
-                        </span>
-                      </div>
-                    </SettingRow>
-                    <SettingRow
-                      label={t("Automatic gain control")}
-                      description={t("Evens out how loud you are. If you still sound quiet, try turning this off: on Windows it can lower your microphone level in system settings.")}
-                      htmlFor="voice-auto-gain"
-                    >
-                      <Toggle
-                        id="voice-auto-gain"
-                        label={t("Automatic gain control")}
-                        checked={autoGain}
-                        onChange={(next) => {
-                          setAutoGainState(next);
-                          setAutoGainControl(next);
-                          setVoiceMixerAutoGainControl(next);
-                        }}
-                      />
-                    </SettingRow>
-                    <SettingRow
-                      label={t("Echo cancellation")}
-                      description={isAppleWebKit()
-                        ? t("Stops your speakers echoing back into the call. On a Mac this also cuts your mic out when you talk quietly or over someone, even with gain control and noise suppression off. Wearing headphones? Turn it off.")
-                        : t("Stops your speakers echoing back into the call. Only turn it off if you wear headphones.")}
-                      htmlFor="voice-echo-cancellation"
-                    >
-                      <Toggle
-                        id="voice-echo-cancellation"
-                        label={t("Echo cancellation")}
-                        checked={echoCancellation}
-                        onChange={(next) => {
-                          setEchoCancellationState(next);
-                          setEchoCancellation(next);
-                          setVoiceMixerEchoCancellation(next);
-                        }}
-                      />
-                    </SettingRow>
-                    <SettingRow label={t("Output device")} stacked>
-                      <select
-                        value={audioOutput}
-                        disabled={devicesLoading}
-                        onChange={(e) => {
-                          setAudioOutput(e.target.value);
-                          setPreferredAudioOutputId(e.target.value);
-                        }}
-                        className={settingsInputClass}
-                      >
-                        <option value="">{t("System default")}</option>
-                        {outputs.map((device) => (
-                          <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
-                        ))}
-                      </select>
-                    </SettingRow>
-                    <SettingRow label={t("Camera")} stacked>
-                      <select
-                        value={videoInput}
-                        disabled={devicesLoading}
-                        onChange={(e) => {
-                          setVideoInput(e.target.value);
-                          setPreferredVideoInputId(e.target.value);
-                        }}
-                        className={settingsInputClass}
-                      >
-                        <option value="">{t("System default")}</option>
-                        {cameras.map((device) => (
-                          <option key={device.deviceId} value={device.deviceId}>{device.label}</option>
-                        ))}
-                      </select>
-                    </SettingRow>
-                  </SettingsSection>
-
-                  <SettingsSection
-                    title={t("Noise suppression")}
-                    description={t("Remove background noise like keyboards, fans, dogs and traffic before your voice reaches anyone else.")}
-                  >
-                    <SettingRow
-                      label={t("Noise suppression")}
-                      description={
-                        noiseMode === "ai"
-                          ? t("AI noise suppression runs a speech model on your device and keeps only your voice. It needs a fast computer: if people say you sound crackly, switch back to Standard.")
-                          : noiseMode === "standard"
-                            ? "Your browser's built-in filter. Steady on any computer; very loud noise can still get through."
-                            : t("No filtering. Best for music or a studio mic in a quiet room.")
-                      }
-                    >
-                      <select
-                        value={noiseMode}
-                        onChange={(e) => {
-                          const mode = e.target.value as NoiseSuppressionMode;
-                          setNoiseModeState(mode);
-                          setNoiseSuppressionMode(mode);
-                          setVoiceMixerNoiseMode(mode);
-                        }}
-                        className={settingsInputClass}
-                      >
-                        <option value="standard">{t("Standard (recommended)")}</option>
-                        <option value="ai">{t("AI noise suppression")}</option>
-                        <option value="off">{t("None")}</option>
-                      </select>
-                    </SettingRow>
-                  </SettingsSection>
-
-                  <SettingsSection
-                    title={t("Microphone test")}
-                    description={t("Hear yourself through the same noise suppression a call uses.")}
-                  >
-                    <SettingRow
-                      label={t("Live input level")}
-                      description={t("Speak and watch the meter move.")}
-                      stacked
-                    >
-                      <MicTest deviceId={audioInput} noiseMode={noiseMode} inputVolume={inputVolume} autoGain={autoGain} echoCancellation={echoCancellation} />
-                    </SettingRow>
-                  </SettingsSection>
-
-                  <SettingsSection
-                    title={t("Access")}
-                    description={t("Grant permission once so devices can be listed and tested.")}
-                  >
-                    <SettingRow label={t("Microphone & camera access")}>
-                      <button
-                        type="button"
-                        onClick={() => void testMediaAccess()}
-                        className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
-                      >
-                        {t("Allow microphone & camera")}
-                      </button>
-                    </SettingRow>
-                  </SettingsSection>
-
-                  {mediaTestMessage && <p className="text-sm text-status-online">{mediaTestMessage}</p>}
-                  {settingsError && <p className="text-sm text-status-dnd">{settingsError}</p>}
-                </div>
-              )}
+              {tab === "voice" && <VoiceVideoPanel plan={subPlan} />}
 
               {tab === "subscriptions" && (
                 <div className="space-y-4">
