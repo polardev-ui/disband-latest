@@ -1,0 +1,23 @@
+/* Paper Plane. See paperPlane.tsx; the keyframes are generated into
+   paperPlane.flight.css. The lap is 10s, and every part takes the same
+   (negative) delay from the component, so they start together, part of
+   the way round. */
+
+.ppl-fly { animation-name: ppl-fly; animation-duration: calc(10s * var(--deco-slow, 1)); animation-timing-function: linear; animation-iteration-count: infinite; }
+.ppl-shade { animation-name: ppl-shade; animation-duration: calc(10s * var(--deco-slow, 1)); animation-timing-function: linear; animation-iteration-count: infinite; }
+
+/* A window of --w (out of 100) ending at the plane: at progress u its dash
+   covers [100u − w, 100u), so the offset runs from w to w − 100 in a lap,
+   which is the same dash pattern, so the loop is seamless. Still pose: the
+   start of the lap's share (0.2), as the plane's own still pose. */
+.ppl-window {
+  stroke-dashoffset: calc(var(--w) - 20px);
+  animation-name: ppl-window; animation-duration: calc(10s * var(--deco-slow, 1)); animation-timing-function: linear; animation-iteration-count: infinite;
+}
+@keyframes ppl-window {
+  from { stroke-dashoffset: var(--w); }
+  to { stroke-dashoffset: calc(var(--w) - 100px); }
+}
+
+.ppl-trail { opacity: .8; transition: opacity calc(450ms * var(--deco-slow, 1)) ease; }
+.deco-paper-plane[data-hover="true"] .ppl-trail { opacity: 1; stroke-width: 1.35px; }

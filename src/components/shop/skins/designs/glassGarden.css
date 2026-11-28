@@ -1,0 +1,40 @@
+/* Glass Garden. See glassGarden.tsx. */
+
+/* The glass walls: two fine grids, a little apart, so the panes read as
+   layers. */
+.gg-room {
+  position: absolute; inset: 0; display: block;
+  background:
+    repeating-linear-gradient(90deg, rgba(191, 243, 240, .045) 0 1px, transparent 1px 20%),
+    repeating-linear-gradient(180deg, rgba(191, 243, 240, .03) 0 1px, transparent 1px 26cqw),
+    repeating-linear-gradient(90deg, rgba(127, 230, 203, .025) 0 1px, transparent 1px 13%),
+    linear-gradient(180deg, #0c1311 0%, #0f1715 55%, #0c1210 100%);
+}
+/* The room's light, drifting from side to side under the dome. */
+.gg-light {
+  position: absolute; left: -10cqw; top: -24cqw; width: 80cqw; height: 70cqw; display: block; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(63, 214, 160, .16), rgba(63, 214, 160, 0));
+  animation: gg-light 15s cubic-bezier(.37, 0, .63, 1) infinite alternate;
+}
+@keyframes gg-light { from { transform: translateX(0); opacity: .75; } to { transform: translateX(42cqw); opacity: 1; } }
+
+/* A reflection crossing the ceiling, then a long pause; off the glass at
+   both ends. */
+.gg-sweep-clip { position: absolute; left: 0; right: 0; top: 0; height: 31cqw; display: block; overflow: hidden; }
+.gg-sweep {
+  position: absolute; top: -20%; bottom: -20%; left: 0; width: 12%; display: block;
+  background: linear-gradient(90deg, rgba(230, 255, 250, 0), rgba(230, 255, 250, .1) 50%, rgba(230, 255, 250, 0));
+  transform: translateX(-30cqw) skewX(-24deg);
+  animation: gg-sweep 11s cubic-bezier(.45, 0, .55, 1) infinite;
+}
+@keyframes gg-sweep { 0%, 8% { transform: translateX(-30cqw) skewX(-24deg); } 52%, 100% { transform: translateX(120cqw) skewX(-24deg); } }
+
+.gg-vine { transform-origin: 50% 0; }
+
+/* Each leaf sways about its own base (SVG origin, set by its group). */
+.gg-sway { animation: gg-sway var(--sw) cubic-bezier(.37, 0, .63, 1) var(--sd) infinite alternate; }
+@keyframes gg-sway { from { transform: rotate(calc(var(--sa) * -1)); } to { transform: rotate(var(--sa)); } }
+.gg-vein { opacity: .8; animation: gg-vein 4.2s ease-in-out var(--vd, 0s) infinite alternate; }
+@keyframes gg-vein { from { opacity: .55; } to { opacity: .95; } }
+.gg-pod { animation: gg-pod 3.4s ease-in-out var(--pd, 0s) infinite alternate; }
+@keyframes gg-pod { from { opacity: .5; } to { opacity: 1; } }

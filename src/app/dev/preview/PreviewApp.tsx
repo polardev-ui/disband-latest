@@ -8,6 +8,8 @@
  * Query parameters pick the starting screen:
  *   ?view=home | space | dm | group | discover   (default: space)
  *   ?theme=dark | midnight | light               (default: stored theme)
+ *   ?ring=<shop item id>&skin=<shop item id>     (everyone wears them; for
+ *                                                checking cosmetics in place)
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
@@ -89,6 +91,18 @@ export function PreviewApp() {
     }
     const theme = params.get("theme");
     if (theme) document.documentElement.setAttribute("data-theme", theme);
+    const ring = params.get("ring");
+    const skin = params.get("skin");
+    if (ring || skin) {
+      const wear = <P extends Profile>(p: P): P => ({
+        ...p,
+        ...(ring ? { equipped_ring_effect: ring } : {}),
+        ...(skin ? { equipped_overlay_effect: skin } : {}),
+      });
+      setProfile((p) => wear(p));
+      setMessages((rows) => rows.map((r) => (r.author ? { ...r, author: wear(r.author) } : r)));
+      setDmMessages((rows) => rows.map((r) => (r.author ? { ...r, author: wear(r.author) } : r)));
+    }
   }, []);
 
   const user = useMemo(

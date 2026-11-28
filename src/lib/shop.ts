@@ -221,6 +221,25 @@ const DECORATION_ITEMS: ShopItem[] = ([
   { id: "ring-sunseeker", name: "Sunseeker", description: "Your face in a sunflower, with a bumblebee close by. Hover and the bee takes a lap.", priceCents: 399, decoration: "sunseeker" },
 ] satisfies Omit<ShopItem, "category" | "className">[]).map((item) => ({ ...item, category: "ring" as const, className: "fx-ring-art", overAvatar: true }));
 
+/*
+ Avatar decorations, December 2026: the night-and-motion collection. Each
+ idle loop is the whole performance (they move all the time, slowly), and
+ hover only lifts a light or a trail. Listed ahead of the October set, so
+ the newest work leads the shop. Their shop_items rows are migration 0287.
+*/
+const NIGHT_DECORATIONS: ShopItem[] = ([
+  { id: "ring-moonlit-orbit", name: "Moonlit Orbit", description: "A little cratered moon on a slow, tilted orbit, slipping behind your picture and back, with two stars keeping their own time.", priceCents: 499, decoration: "moonlit-orbit" },
+  { id: "ring-liquid-chrome", name: "Liquid Chrome", description: "A ring of liquid metal that never quite holds its shape, with a highlight running round it and a bead that surfaces now and then.", priceCents: 549, decoration: "liquid-chrome" },
+  { id: "ring-pixel-comet", name: "Pixel Comet", description: "A sharp little comet circling your picture, shedding a wake of pixels that hang for a moment and fade.", priceCents: 449, decoration: "pixel-comet" },
+  { id: "ring-deep-sea-drifter", name: "Deep Sea Drifter", description: "A glassy jellyfish at your shoulder, pulsing upwards and drifting down again, its tentacles always a beat behind.", priceCents: 499, decoration: "deep-sea-drifter" },
+  { id: "ring-koi-current", name: "Koi Current", description: "Two koi circling your picture on a thin current of water, passing behind you and coming round in front.", priceCents: 549, decoration: "koi-current" },
+  { id: "ring-pocket-phantom", name: "Pocket Phantom", description: "A small sheet of glowing cloth that floats beside you, stretches, and every so often has a good look around.", priceCents: 399, decoration: "pocket-phantom" },
+  { id: "ring-circuit-bloom", name: "Circuit Bloom", description: "A gunmetal flower with live circuitry. A pulse runs in along the traces, the core lights and the petals open, then fold away again.", priceCents: 549, decoration: "circuit-bloom" },
+  { id: "ring-paper-plane", name: "Paper Plane", description: "A folded paper plane doing laps of your picture, banking on the corners and looping the loop, with a pencil trail behind it.", priceCents: 399, decoration: "paper-plane" },
+  { id: "ring-crystal-resonance", name: "Crystal Resonance", description: "A cluster of amethyst crystals that turn at their own pace and breathe apart and back together as light sweeps across them.", priceCents: 499, decoration: "crystal-resonance" },
+  { id: "ring-magnetic-field", name: "Magnetic Field", description: "Three thin bands of dark metal turning round your picture, bending gently, with tiny fragments tumbling along them.", priceCents: 449, decoration: "magnetic-field" },
+] satisfies Omit<ShopItem, "category" | "className">[]).map((item) => ({ ...item, category: "ring" as const, className: "fx-ring-art", overAvatar: true }));
+
 const DECORATION_UPGRADES = new Map<string, Partial<ShopItem>>([
   ["ring-graphite", { decoration: "graphite", description: "Pencil circles that won't sit still. Hover and they draw another." }],
 ]);
@@ -242,9 +261,23 @@ const SKIN_ITEMS: ShopItem[] = ([
   { id: "fx-afterglow", name: "Afterglow", description: "A striped sun setting between neon mountains, a grid floor that runs on forever, and palms in the breeze.", priceCents: 599, skin: "afterglow" },
 ] satisfies Omit<ShopItem, "category" | "className">[]).map((item) => ({ ...item, category: "overlay" as const, className: "fx-overlay-art" }));
 
+/*
+ Profile skins, December 2026: whole scenes built round the card's layout
+ rather than pieces at its edges. Bright detail stays in the banner band and
+ the floor; the middle, where the text sits, is kept dark and calm. Also in
+ migration 0287.
+*/
+const NIGHT_SKINS: ShopItem[] = ([
+  { id: "fx-midnight-express", name: "Midnight Express", description: "A seat by the window on the night train: hills and far-off city lights going by, the lamp lit and the tea still hot.", priceCents: 699, skin: "midnight-express" },
+  { id: "fx-glass-garden", name: "Glass Garden", description: "A greenhouse after dark under a dome of glass, where the plants give the light and their leaves sway in the stillness.", priceCents: 649, skin: "glass-garden" },
+  { id: "fx-stormwatch", name: "Stormwatch", description: "Heavy cloud rolling over a dark sea, a lighthouse on the headland, and lightning, far off, once in a while.", priceCents: 649, skin: "stormwatch" },
+  { id: "fx-astral-archive", name: "Astral Archive", description: "A library adrift among the stars: books floating loose, an astrolabe and a great engraved ring slowly turning.", priceCents: 699, skin: "astral-archive" },
+  { id: "fx-emberfall", name: "Emberfall", description: "Volcanic country at dusk: a glowing horizon, a smoking cone, and embers drifting up into the dark.", priceCents: 599, skin: "emberfall" },
+] satisfies Omit<ShopItem, "category" | "className">[]).map((item) => ({ ...item, category: "overlay" as const, className: "fx-overlay-art" }));
+
 // Stable IDs preserve previous purchases. Older effects remain wearable but
 // are no longer offered to new buyers.
-export const SHOP_ITEMS: ShopItem[] = [...SKETCH_ITEMS, ...DECORATION_ITEMS, ...SKIN_ITEMS, ...FLIGHT_ITEMS, ...NAME_EFFECTS, ...AVATAR_RINGS, ...PROFILE_EFFECTS]
+export const SHOP_ITEMS: ShopItem[] = [...NIGHT_DECORATIONS, ...SKETCH_ITEMS, ...DECORATION_ITEMS, ...NIGHT_SKINS, ...SKIN_ITEMS, ...FLIGHT_ITEMS, ...NAME_EFFECTS, ...AVATAR_RINGS, ...PROFILE_EFFECTS]
   .map((item) => (item.skin ? item : { ...item, ...ART_UPGRADES.get(item.id), ...DECORATION_UPGRADES.get(item.id) }));
 
 export function isShopItemAvailable(item: ShopItem): boolean {

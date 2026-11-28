@@ -1,0 +1,162 @@
+// Generates the Paper Plane decoration's flight: the trail path and the
+// keyframes that carry the plane along it.
+//
+//   node scripts/shop/paper-plane-flight.mjs
+//
+// Writes src/components/shop/decorations/designs/paperPlane.flight.ts and
+// paperPlane.flight.css. The flight is a rounded square round the photo
+// (a superellipse, so the sides run straight and the turns come at the
+// corners, where the plane banks) with a loop-the-loop over the head.
+// Everything is sampled by distance along the path, so the plane moves at
+// an even speed and the trail (a dash run along the same path, linear in
+// time) stays exactly under it. The first and last keyframes are the same
+// pose, so the loop is seamless.
+
+import { writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const OUT = join(dirname(fileURLToPath(import.meta.url)), "../../src/components/shop/decorations/designs");
+
+const CX = 100, CY = 106, A = 68, B = 70, N_EXP = 3;
+const LOOP = { x: 100, y: 27, r: 9 };
+/** Where the plane sits when motion is off (and starts), as a share of the lap. */
+const START = 0.2;
+const KEYFRAMES = 120;
+const TRAIL_POINTS = 480;
+
+const r2 = (n) => Math.round(n * 100) / 100;
+const sgnpow = (v, p) => Math.sign(v) * Math.pow(Math.abs(v), p);
+
+// Dense samples: the loop first (from its bottom, climbing to the right and
+// over), then the rounded square clockwise from the top.
+const dense = [];
+const loopIdx = [];
+for (let i = 0; i < 720; i++) {
+  const a = ((90 - (i / 720) * 360) * Math.PI) / 180;
+  dense.push([LOOP.x + LOOP.r * Math.cos(a), LOOP.y + LOOP.r * Math.sin(a)]);
+  loopIdx.push(true);
+}
+for (let i = 0; i < 8000; i++) {
+  const t = ((-90 + (i / 8000) * 360) * Math.PI) / 180;
+  dense.push([CX + A * sgnpow(Math.cos(t), 2 / N_EXP), CY + B * sgnpow(Math.sin(t), 2 / N_EXP)]);
+  loopIdx.push(false);
+}
+dense.push(dense[0]);
+loopIdx.push(true);
+
+const cum = [0];
+for (let i = 1; i < dense.length; i++) {
+  cum.push(cum[i - 1] + Math.hypot(dense[i][0] - dense[i - 1][0], dense[i][1] - dense[i - 1][1]));
+}
+const total = cum[cum.length - 1];
+
+/** Point, heading (radians) and whether it is in the loop, at distance s. */
+function at(s) {
+  s = ((s % total) + total) % total;
+  let lo = 0, hi = cum.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (cum[mid] <= s) lo = mid; else hi = mid;
+  }
+  const t = (s - cum[lo]) / (cum[hi] - cum[lo] || 1);
+  const p = [dense[lo][0] + (dense[hi][0] - dense[lo][0]) * t, dense[lo][1] + (dense[hi][1] - dense[lo][1]) * t];
+  return { p, loop: loopIdx[lo] };
+}
+function heading(s) {
+  const a = at(s - 0.6).p, b = at(s + 0.6).p;
+  return Math.atan2(b[1] - a[1], b[0] - a[0]);
+}
+/** Signed turn rate (radians per unit) averaged over a short window. */
+function turn(s, w = 6) {
+  let d = heading(s + w) - heading(s - w);
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return d / (2 * w);
+}
+
+// Bank: how hard it is turning on the square's corners, smoothed so it rolls
+// into and out of each turn; none in the loop, which is a pitch, not a turn.
+function bank(s) {
+  let sum = 0, n = 0;
+  for (let k = -14; k <= 14; k += 2) {
+    const q = at(s + k);
+    sum += q.loop ? 0 : Math.min(1, Math.max(0, turn(s + k) * 48));
+    n++;
+  }
+  return sum / n;
+}
+
+// Keyframes are linear between samples, so sample densely where the plane
+// turns fast (no more than MAX_TURN degrees of heading per step) and every
+// MAX_STEP units on the straights.
+const MAX_STEP = 520 / KEYFRAMES;
+const MAX_TURN = 8;
+const samples = [];
+for (let s = 0; s < total; ) {
+  samples.push(s);
+  const rate = Math.abs(turn(s, 1)) * (180 / Math.PI);
+  s += Math.min(MAX_STEP, rate > 0 ? MAX_TURN / rate : MAX_STEP);
+}
+samples.push(total);
+
+const frames = [];
+let prev = null;
+for (const s of samples) {
+  const { p } = at(s);
+  let h = (heading(s) * 180) / Math.PI;
+  if (prev !== null) {
+    while (h - prev > 180) h -= 360;
+    while (h - prev < -180) h += 360;
+  }
+  prev = h;
+  const b = bank(s);
+  frames.push({ pct: (s / total) * 100, x: p[0], y: p[1], h, sy: 1 - 0.4 * b, shade: 0.5 * b });
+}
+// A whole lap turns the plane through 720° (the square, and the loop), and
+// rotate(720deg) is rotate(0deg): the last frame is drawn exactly as the first.
+const turns = Math.round((frames[frames.length - 1].h - frames[0].h) / 360);
+
+const pose = (fr) => `translate(${r2(fr.x)}px, ${r2(fr.y)}px) rotate(${r2(fr.h)}deg) scale(1, ${r2(fr.sy)})`;
+const fly = frames.map((fr) => `  ${r2(fr.pct)}% { transform: ${pose(fr)}; }`).join("\n");
+const shade = frames.map((fr) => `  ${r2(fr.pct)}% { opacity: ${r2(fr.shade)}; }`).join("\n");
+
+const startFrame = (() => {
+  const s = START * total;
+  const { p } = at(s);
+  const b = bank(s);
+  return { x: p[0], y: p[1], h: (heading(s) * 180) / Math.PI, sy: 1 - 0.4 * b, shade: 0.5 * b };
+})();
+
+const css = `/* Generated by scripts/shop/paper-plane-flight.mjs. Do not edit by hand. */
+/* ${r2(total)} units a lap, ${turns} full turns of heading, start ${START} of the way round. */
+
+.ppl-fly { transform: ${pose(startFrame)}; }
+.ppl-shade { opacity: ${r2(startFrame.shade)}; }
+
+@keyframes ppl-fly {
+${fly}
+}
+
+@keyframes ppl-shade {
+${shade}
+}
+`;
+
+const trail = [];
+for (let i = 0; i <= TRAIL_POINTS; i++) trail.push(at((i / TRAIL_POINTS) * total).p);
+const d = "M" + trail.slice(0, -1).map(([x, y]) => `${r2(x)} ${r2(y)}`).join("L") + "Z";
+
+const ts = `// Generated by scripts/shop/paper-plane-flight.mjs. Do not edit by hand.
+
+/** The flight path, from the bottom of the loop, as flown. */
+export const FLIGHT_PATH = "${d}";
+/** Length of one lap in canvas units. */
+export const FLIGHT_LENGTH = ${r2(total)};
+/** Where the plane starts (and rests), as a share of the lap. */
+export const FLIGHT_START = ${START};
+`;
+
+writeFileSync(join(OUT, "paperPlane.flight.css"), css);
+writeFileSync(join(OUT, "paperPlane.flight.ts"), ts);
+console.log(`lap ${r2(total)} units, ${turns} turns, start pose ${pose(startFrame)}`);

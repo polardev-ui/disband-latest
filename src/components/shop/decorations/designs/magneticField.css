@@ -1,0 +1,29 @@
+/* Magnetic Field. See magneticField.tsx. */
+
+.mf-spin { transform: rotate(var(--s0)); animation: mf-spin calc(var(--spin) * var(--deco-slow, 1)) linear infinite; }
+.mf-spin-back { animation-direction: reverse; }
+@keyframes mf-spin { from { transform: rotate(var(--s0)); } to { transform: rotate(calc(var(--s0) + 360deg)); } }
+
+/* Out of round along an axis that turns: an ellipse is the same after half
+   a turn, so 180° is a whole loop. */
+.mf-pull { transform: scale(var(--px), var(--py)); animation: mf-pull calc(var(--pt) * var(--deco-slow, 1)) linear infinite; }
+@keyframes mf-pull {
+  from { transform: rotate(0deg) scale(var(--px), var(--py)) rotate(0deg); }
+  to { transform: rotate(180deg) scale(var(--px), var(--py)) rotate(-180deg); }
+}
+
+/* A chip runs the band end to end, visible only between its ends. */
+.mf-chip { transform: rotate(calc((var(--f0) + var(--f1)) / 2)); animation: mf-chip calc(var(--ct) * var(--deco-slow, 1)) cubic-bezier(.45, 0, .55, 1) calc(var(--cd) * var(--deco-slow, 1)) infinite; }
+@keyframes mf-chip {
+  0% { transform: rotate(var(--f0)); opacity: 0; }
+  14% { opacity: 1; }
+  86% { opacity: 1; }
+  100% { transform: rotate(var(--f1)); opacity: 0; }
+}
+.mf-tumble { animation: mf-tumble calc(var(--tt) * var(--deco-slow, 1)) linear infinite; }
+@keyframes mf-tumble { to { transform: rotate(360deg); } }
+
+.mf-cyan { opacity: .8; transition: opacity calc(450ms * var(--deco-slow, 1)) ease; }
+.mf-cyan-glow { opacity: .1; transition: opacity calc(450ms * var(--deco-slow, 1)) ease; }
+.deco-magnetic-field[data-hover="true"] .mf-cyan { opacity: 1; }
+.deco-magnetic-field[data-hover="true"] .mf-cyan-glow { opacity: .26; }

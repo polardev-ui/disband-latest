@@ -1,0 +1,49 @@
+/* Circuit Bloom. See circuitBloom.tsx. One 8s sequence:
+     0–12%   pulse runs in along the traces
+     12–34%  blades unfold in turn (each --i a little later)
+     34–70%  open; a second, fainter pulse at 46–58%
+     70–90%  blades fold back
+     90–100% closed
+   The staggered blades use positive delays with fill both, so before their
+   first start they hold their 0% (folded) pose and nothing jumps. */
+
+.cb-spin { animation: cb-spin calc(48s * var(--deco-slow, 1)) linear infinite; }
+@keyframes cb-spin { to { transform: rotate(360deg); } }
+
+.cb-blade { animation: cb-blade calc(8s * var(--deco-slow, 1)) calc(var(--i) * 45ms * var(--deco-slow, 1)) infinite both; }
+@keyframes cb-blade {
+  0%, 12% { transform: rotate(-28deg) scale(.42, .8); animation-timing-function: cubic-bezier(.3, .7, .25, 1); }
+  32% { transform: rotate(0deg) scale(1, 1); animation-timing-function: linear; }
+  70% { transform: rotate(0deg) scale(1, 1); animation-timing-function: cubic-bezier(.55, 0, .45, 1); }
+  88%, 100% { transform: rotate(-28deg) scale(.42, .8); }
+}
+.cb-blade-light { opacity: 1; animation: cb-blade-light calc(8s * var(--deco-slow, 1)) ease-in-out calc(var(--i) * 45ms * var(--deco-slow, 1)) infinite both; }
+@keyframes cb-blade-light { 0%, 16% { opacity: .25; } 30%, 68% { opacity: 1; } 84%, 100% { opacity: .25; } }
+
+.cb-core { opacity: .9; animation: cb-core calc(8s * var(--deco-slow, 1)) ease-in-out infinite; }
+@keyframes cb-core {
+  0%, 11% { opacity: .32; transform: scale(.8); }
+  17% { opacity: 1; transform: scale(1.12); }
+  30% { opacity: .88; transform: scale(1); }
+  56% { opacity: 1; transform: scale(1.06); }
+  70% { opacity: .86; transform: scale(1); }
+  90%, 100% { opacity: .32; transform: scale(.8); }
+}
+
+/* A dash 9 long in a 110-long pattern: at offset -100 it lies past the
+   pad end, at 10 before the flower end, so it is out of sight at both
+   ends of its run and the loop never shows a jump. */
+.cb-pulse, .cb-pulse-2 { stroke-dasharray: 9 101; stroke-dashoffset: 10; }
+.cb-pulse { animation: cb-pulse calc(8s * var(--deco-slow, 1)) linear calc(var(--pd) * var(--deco-slow, 1)) infinite both; }
+@keyframes cb-pulse {
+  0% { stroke-dashoffset: -100; animation-timing-function: cubic-bezier(.5, 0, .9, .6); }
+  12%, 100% { stroke-dashoffset: 10; }
+}
+.cb-pulse-2 { opacity: .55; animation: cb-pulse-2 calc(8s * var(--deco-slow, 1)) linear calc(var(--pd) * var(--deco-slow, 1)) infinite both; }
+@keyframes cb-pulse-2 {
+  0%, 45% { stroke-dashoffset: -100; animation-timing-function: cubic-bezier(.5, 0, .9, .6); }
+  57%, 100% { stroke-dashoffset: 10; }
+}
+
+.cb-trace-lit { opacity: .5; transition: opacity calc(450ms * var(--deco-slow, 1)) ease; }
+.deco-circuit-bloom[data-hover="true"] .cb-trace-lit { opacity: .9; }

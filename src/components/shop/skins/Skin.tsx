@@ -2,7 +2,7 @@
 
 import { useContext, useEffect, useId, useRef, useState } from "react";
 import { CosmeticMotionContext } from "../AnimatedCosmetic";
-import { SKINS, type SkinDesign } from "./designs";
+import { SCENE_SKINS, SKINS, type SkinDesign } from "./designs";
 import "./skins.css";
 
 /** What every skin is drawn with. */
@@ -45,7 +45,7 @@ export function Skin({ design, playing = true }: { design: SkinDesign; playing?:
   const uid = `sk${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const Design = SKINS[design];
   return (
-    <span ref={ref} className={`skin skin-${design}`} data-still={still} data-running={!still && visible && shown} aria-hidden="true">
+    <span ref={ref} className={`skin skin-${design}`} data-scene={SCENE_SKINS.has(design) || undefined} data-still={still} data-running={!still && visible && shown} aria-hidden="true">
       <Design uid={uid} />
     </span>
   );

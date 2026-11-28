@@ -1,0 +1,42 @@
+/*
+ Shared motion for the scene skins (see scene.tsx). Each scene's own
+ keyframes live beside it. Every loop here returns to its first frame:
+ strips pan exactly one tile, twinkles and sways alternate.
+*/
+
+.scn-strip { position: absolute; left: 0; width: 200%; display: block; transform: translateX(0); animation: scn-pan var(--dur) linear var(--delay, 0s) infinite; }
+.scn-strip > svg { display: block; width: 100%; height: auto; }
+.scn-strip-rev { animation-direction: reverse; }
+@keyframes scn-pan { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+.scn-twinkle { animation: scn-twinkle var(--tw) ease-in-out var(--td) infinite alternate; }
+@keyframes scn-twinkle { from { opacity: calc(var(--o) * .3); } to { opacity: var(--o); } }
+
+/* A scene skin paints the whole card, so the card's text has to read on it
+   in every app theme. These are the tokens a dark-painted profile card uses
+   (src/lib/profileColor.ts), scoped to a card wearing one. */
+.fx-overlay-host:has(.skin[data-scene]),
+.cosmetic-profile:has(.skin[data-scene]) {
+  color: #eceef2;
+  --header-primary: #ffffff;
+  --header-secondary: #e3e5e8;
+  --text-normal: #f2f3f5;
+  --text-muted: #c3c8cf;
+  --text-link: #9ecbff;
+  --interactive-normal: #d7dade;
+  --interactive-active: #ffffff;
+  --channels-default: #cdd1d6;
+  --divider: rgba(255, 255, 255, .16);
+  --bg-floating: rgba(14, 15, 18, .82);
+  --overlay-surface: rgba(14, 15, 18, .86);
+  --overlay-panel: rgba(14, 15, 18, .86);
+  --bg-accent: rgba(14, 15, 18, .3);
+  --bg-tertiary: rgba(14, 15, 18, .34);
+  --bg-secondary: rgba(14, 15, 18, .26);
+  --bg-secondary-alt: rgba(14, 15, 18, .5);
+  --interactive-hover: rgba(255, 255, 255, .08);
+  --interactive-selected: rgba(255, 255, 255, .12);
+  --border-subtle: rgba(255, 255, 255, .1);
+  border-color: rgba(255, 255, 255, .1);
+}
+.cosmetic-profile:has(.skin[data-scene]) .cosmetic-avatar-face { background: #2a2d35; color: #e6e7ee; }

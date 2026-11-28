@@ -1,0 +1,36 @@
+/* Moonlit Orbit. See moonlitOrbit.tsx. --t is seconds per lap, --p the
+   start angle as a share of a lap; every delay is negative so all three
+   orbiters are already in place on the first frame. */
+
+.mo-orbit {
+  transform: rotate(var(--a0)) translateX(var(--r)) rotate(calc(var(--a0) * -1));
+  animation: mo-orbit calc(var(--t) * var(--deco-slow, 1)) linear calc(var(--t) * var(--p) * -1 * var(--deco-slow, 1)) infinite;
+}
+@keyframes mo-orbit {
+  from { transform: rotate(0deg) translateX(var(--r)) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(var(--r)) rotate(-360deg); }
+}
+
+/* Half a lap far to near, then back: smallest at the top of the orbit,
+   largest at the bottom. Sine easing keeps the swell as smooth as the path. */
+.mo-depth {
+  animation: mo-depth calc(var(--t) * .5 * var(--deco-slow, 1)) cubic-bezier(.37, 0, .63, 1) calc(var(--t) * (var(--p) + .25) * -1 * var(--deco-slow, 1)) infinite alternate;
+}
+@keyframes mo-depth {
+  from { transform: scale(var(--far)); opacity: .78; }
+  to { transform: scale(var(--near)); opacity: 1; }
+}
+
+.mo-twinkle { animation: mo-twinkle calc(var(--tw) * var(--deco-slow, 1)) ease-in-out calc(var(--td) * var(--deco-slow, 1)) infinite alternate; }
+@keyframes mo-twinkle {
+  from { transform: scale(.72) rotate(0deg); opacity: .6; }
+  to { transform: scale(1.12) rotate(45deg); opacity: 1; }
+}
+
+.mo-glow { opacity: .8; animation: mo-glow calc(5.2s * var(--deco-slow, 1)) ease-in-out infinite alternate; }
+@keyframes mo-glow { from { opacity: .62; } to { opacity: 1; } }
+
+.mo-trace { opacity: .6; transition: opacity calc(500ms * var(--deco-slow, 1)) ease; }
+.mo-glow-hover { opacity: 0; transition: opacity calc(500ms * var(--deco-slow, 1)) ease; }
+.deco-moonlit-orbit[data-hover="true"] .mo-trace { opacity: 1; }
+.deco-moonlit-orbit[data-hover="true"] .mo-glow-hover { opacity: .9; }

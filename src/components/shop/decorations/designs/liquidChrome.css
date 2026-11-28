@@ -1,0 +1,34 @@
+/* Liquid Chrome. See liquidChrome.tsx. An ellipse is symmetric under a
+   half turn, so turning its long axis 180° is a whole loop. */
+
+.lc-wob-a { animation: lc-wob-a calc(9s * var(--deco-slow, 1)) linear infinite; }
+@keyframes lc-wob-a {
+  from { transform: rotate(0deg) scale(1.03, .97) rotate(0deg); }
+  to { transform: rotate(180deg) scale(1.03, .97) rotate(-180deg); }
+}
+.lc-wob-b { animation: lc-wob-b calc(7s * var(--deco-slow, 1)) linear infinite; }
+@keyframes lc-wob-b {
+  from { transform: rotate(30deg) scale(.975, 1.025) rotate(-30deg); }
+  to { transform: rotate(-150deg) scale(.975, 1.025) rotate(150deg); }
+}
+.lc-breathe { animation: lc-breathe calc(4.6s * var(--deco-slow, 1)) cubic-bezier(.37, 0, .63, 1) infinite alternate; }
+@keyframes lc-breathe { from { transform: scale(.996); } to { transform: scale(1.012); } }
+
+.lc-spec { transform: rotate(-120deg); animation: lc-spec calc(6.5s * var(--deco-slow, 1)) linear infinite; }
+@keyframes lc-spec { from { transform: rotate(-120deg); } to { transform: rotate(240deg); } }
+.lc-glint { transform: rotate(60deg); animation: lc-glint calc(10s * var(--deco-slow, 1)) linear infinite; }
+@keyframes lc-glint { from { transform: rotate(60deg); } to { transform: rotate(-300deg); } }
+
+/* The bead rides round once every 15s and surfaces twice on the way. */
+.lc-bead-orbit { transform: rotate(150deg); animation: lc-bead-orbit calc(15s * var(--deco-slow, 1)) linear infinite; }
+@keyframes lc-bead-orbit { from { transform: rotate(150deg); } to { transform: rotate(510deg); } }
+.lc-bead { transform: translateX(61px) scale(1); animation: lc-bead calc(7.5s * var(--deco-slow, 1)) linear infinite; }
+@keyframes lc-bead {
+  0%, 100% { transform: translateX(56.4px) scale(.3); animation-timing-function: cubic-bezier(.3, 0, .2, 1); }
+  16% { transform: translateX(61px) scale(1); animation-timing-function: linear; }
+  62% { transform: translateX(61px) scale(1); animation-timing-function: cubic-bezier(.6, 0, .7, 1); }
+  80% { transform: translateX(56.4px) scale(.3); }
+}
+
+.lc-spec-soft { opacity: .22; transition: opacity calc(400ms * var(--deco-slow, 1)) ease; }
+.deco-liquid-chrome[data-hover="true"] .lc-spec-soft { opacity: .42; }

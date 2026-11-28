@@ -1,5 +1,15 @@
 import type { DesignSpec } from "../Decoration";
 import { angelic } from "./angelic";
+import { circuitBloom } from "./circuitBloom";
+import { crystalResonance } from "./crystalResonance";
+import { deepSeaDrifter } from "./deepSeaDrifter";
+import { koiCurrent } from "./koiCurrent";
+import { liquidChrome } from "./liquidChrome";
+import { magneticField } from "./magneticField";
+import { moonlitOrbit } from "./moonlitOrbit";
+import { paperPlane } from "./paperPlane";
+import { pixelComet } from "./pixelComet";
+import { pocketPhantom } from "./pocketPhantom";
 import { catEars } from "./catEars";
 import { devilsDemise } from "./devilsDemise";
 import { graphite } from "./graphite";
@@ -28,7 +38,18 @@ export type DecorationDesign =
   | "tangled-up"
   | "slurp"
   | "sunseeker"
-  | "cat-ears";
+  | "cat-ears"
+  // The night-and-motion collection, December 2026.
+  | "moonlit-orbit"
+  | "liquid-chrome"
+  | "pixel-comet"
+  | "deep-sea-drifter"
+  | "koi-current"
+  | "pocket-phantom"
+  | "circuit-bloom"
+  | "paper-plane"
+  | "crystal-resonance"
+  | "magnetic-field";
 
 export const DESIGNS: Record<DecorationDesign, DesignSpec> = {
   graphite,
@@ -45,4 +66,14 @@ export const DESIGNS: Record<DecorationDesign, DesignSpec> = {
   slurp,
   sunseeker,
   "cat-ears": catEars,
+  "moonlit-orbit": moonlitOrbit,
+  "liquid-chrome": liquidChrome,
+  "pixel-comet": pixelComet,
+  "deep-sea-drifter": deepSeaDrifter,
+  "koi-current": koiCurrent,
+  "pocket-phantom": pocketPhantom,
+  "circuit-bloom": circuitBloom,
+  "paper-plane": paperPlane,
+  "crystal-resonance": crystalResonance,
+  "magnetic-field": magneticField,
 };

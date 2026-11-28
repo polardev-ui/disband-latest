@@ -1,0 +1,37 @@
+/* Pixel Comet. See pixelComet.tsx. */
+
+.pc-orbit { transform: rotate(-58deg); animation: pc-orbit calc(7s * var(--deco-slow, 1)) linear infinite; }
+@keyframes pc-orbit { from { transform: rotate(-58deg); } to { transform: rotate(302deg); } }
+
+/* The four-point core is the same every quarter turn. */
+.pc-spin { animation: pc-spin calc(1.6s * var(--deco-slow, 1)) linear infinite; }
+@keyframes pc-spin { to { transform: rotate(90deg); } }
+.pc-glow { animation: pc-glow calc(.9s * var(--deco-slow, 1)) ease-in-out infinite alternate; }
+@keyframes pc-glow { from { opacity: .72; transform: scale(.94); } to { opacity: 1; transform: scale(1.06); } }
+
+/* A fragment slides back along the orbit (and drifts in or out) while it
+   fades and shrinks in sprite-like steps; it is invisible at both ends of
+   its life, where it jumps back to the head. Still pose: mid-life. */
+.pc-frag {
+  transform: rotate(calc(var(--fa) * .35)) translateX(calc(var(--fx) * .35));
+  animation: pc-frag calc(var(--fl) * var(--deco-slow, 1)) linear calc(var(--fd) * var(--deco-slow, 1)) infinite;
+}
+@keyframes pc-frag {
+  from { transform: rotate(0deg) translateX(0); }
+  to { transform: rotate(var(--fa)) translateX(var(--fx)); }
+}
+.pc-pix {
+  opacity: .85;
+  animation: pc-pix calc(var(--fl) * var(--deco-slow, 1)) steps(1, end) calc(var(--fd) * var(--deco-slow, 1)) infinite;
+}
+@keyframes pc-pix {
+  0% { opacity: 0; transform: scale(1); }
+  5% { opacity: 1; transform: scale(1); }
+  32% { opacity: .82; transform: scale(1); }
+  54% { opacity: .58; transform: scale(.76); }
+  76% { opacity: .32; transform: scale(.52); }
+  92%, 100% { opacity: 0; transform: scale(.52); }
+}
+
+.pc-tail-hover { opacity: 0; transition: opacity calc(450ms * var(--deco-slow, 1)) ease; }
+.deco-pixel-comet[data-hover="true"] .pc-tail-hover { opacity: .2; }

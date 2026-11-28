@@ -229,15 +229,42 @@ function FocusView({ item, size, t, hover, photo }: { item: ShopItem; size: numb
   );
 }
 
+/**
+ * `?export=<item id>`: the mobile apps' art for one decoration. Its still
+ * pose (motion reduced) on a transparent page, on a 256px photo centred in
+ * 512 × 512, with the photo's circle left empty: the parts drawn behind the
+ * photo are cut out there, as the photo would hide them. Headless Chrome
+ * takes the picture (scripts/shop/export-decorations.sh) into
+ * public/decorations/<id>.png, which iOS and Android lay over the photo.
+ */
+function ExportView({ item }: { item: ShopItem }) {
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.motion = "reduced";
+    root.style.background = "transparent";
+    document.body.style.background = "transparent";
+  }, []);
+  return (
+    <div className="lab-export">
+      <span className={`fx-ring ${item.className}`} style={{ width: 256, height: 256 }}>
+        <AvatarDecoration itemId={item.id} playing={false} />
+      </span>
+    </div>
+  );
+}
+
 export default function DecorationLabPage() {
   const items = useMemo(() => decorationItems(), []);
   const [focus, setFocus] = useState<{ id: string; size: number; t: number | null; hover: boolean } | null>(null);
+  const [exportId, setExportId] = useState<string | null>(null);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
+    setExportId(q.get("export"));
     const id = q.get("focus");
     if (!id) return;
     setFocus({ id, size: Number(q.get("size")) || 320, t: q.has("t") ? Number(q.get("t")) : null, hover: q.get("hover") === "1" });
   }, []);
+  const exportItem = exportId ? items.find((i) => i.id === exportId) : undefined;
   const [slow, setSlow] = useState(1);
   const [forceAll, setForceAll] = useState(false);
   const [bg, setBg] = useState<Background>("app");
@@ -251,6 +278,8 @@ export default function DecorationLabPage() {
     if (reduced) root.dataset.motion = "reduced";
     else if (root.dataset.motion === "reduced") delete root.dataset.motion;
   }, [reduced]);
+
+  if (exportItem) return <ExportView item={exportItem} />;
 
   return (
     <main className={`lab ${bg === "light" ? "lab-light cosmetic-profile-light" : ""}`} style={{ "--lab-bg": BACKGROUNDS[bg] } as CSSProperties}>

@@ -1,0 +1,39 @@
+/* Crystal Resonance. See crystalResonance.tsx. */
+
+/* The shared breath: out from the cluster's centre and back, 6s a round. */
+.cr-breathe { animation: cr-breathe calc(3s * var(--deco-slow, 1)) cubic-bezier(.37, 0, .63, 1) calc(var(--bd) * var(--deco-slow, 1)) infinite alternate; }
+@keyframes cr-breathe { from { transform: translate(0, 0); } to { transform: translate(var(--ox), var(--oy)); } }
+
+.cr-rock { animation: cr-rock calc(var(--rt) * var(--deco-slow, 1)) cubic-bezier(.37, 0, .63, 1) calc(var(--rd) * var(--deco-slow, 1)) infinite alternate; }
+@keyframes cr-rock { from { transform: rotate(calc(var(--rk) * -1)); } to { transform: rotate(var(--rk)); } }
+.cr-spin { animation: cr-spin calc(var(--st) * var(--deco-slow, 1)) linear infinite; }
+.cr-spin-back { animation-direction: reverse; }
+@keyframes cr-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* The sweep crosses a crystal in the first 18% of 6.5s, then waits off it.
+   Delays are positive with fill both: before its first run a band holds
+   its start, which is off the crystal. */
+.cr-sweep { transform: translateX(var(--sw0)); opacity: .6; animation: cr-sweep calc(6.5s * var(--deco-slow, 1)) calc(var(--sd) * var(--deco-slow, 1)) infinite both; }
+@keyframes cr-sweep {
+  0% { transform: translateX(var(--sw0)); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  18%, 100% { transform: translateX(var(--sw1)); }
+}
+
+.cr-glint { transform: scale(0); animation: cr-glint calc(6.5s * var(--deco-slow, 1)) ease-in-out infinite; }
+@keyframes cr-glint {
+  0%, 17% { transform: scale(0) rotate(0deg); opacity: 0; }
+  22% { transform: scale(1) rotate(30deg); opacity: 1; }
+  31%, 100% { transform: scale(0) rotate(60deg); opacity: 0; }
+}
+
+.cr-ring { opacity: 0; animation: cr-ring calc(6.5s * var(--deco-slow, 1)) linear infinite; }
+@keyframes cr-ring {
+  0%, 4% { transform: scale(1); opacity: 0; }
+  10% { opacity: .2; }
+  46%, 100% { transform: scale(1.9); opacity: 0; }
+}
+
+.cr-glow { opacity: .8; animation: cr-glow calc(3s * var(--deco-slow, 1)) cubic-bezier(.37, 0, .63, 1) infinite alternate; }
+@keyframes cr-glow { from { opacity: .6; } to { opacity: 1; } }
+.cr-glow-hover { opacity: 0; transition: opacity calc(450ms * var(--deco-slow, 1)) ease; }
+.deco-crystal-resonance[data-hover="true"] .cr-glow-hover { opacity: .9; }

@@ -1,0 +1,70 @@
+/* Midnight Express. See midnightExpress.tsx. */
+
+/* The carriage: lacquered panels with fine seams. */
+.mx-wall {
+  position: absolute; inset: 0; display: block;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .028) 0 1px, transparent 1px 25%),
+    linear-gradient(180deg, #15161b 0%, #18191e 60%, #141418 100%);
+}
+/* The lamp's warmth on the panelling in the bottom corner. */
+.mx-wall-glow {
+  position: absolute; right: -20cqw; bottom: -14cqw; width: 70cqw; height: 70cqw; display: block; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(240, 165, 74, .16), rgba(240, 165, 74, 0));
+  animation: mx-breathe 7s ease-in-out infinite alternate;
+}
+@keyframes mx-breathe { from { opacity: .7; } to { opacity: 1; } }
+
+.mx-glass { position: absolute; display: block; overflow: hidden; isolation: isolate; }
+.mx-sky {
+  position: absolute; inset: 0; display: block;
+  background:
+    radial-gradient(60% 34% at 38% 100%, rgba(200, 138, 74, .22), rgba(200, 138, 74, 0)),
+    linear-gradient(180deg, #070d1b 0%, #0d1830 52%, #172644 80%, #1f2a44 100%);
+}
+.mx-stars { position: absolute; left: 0; top: 0; width: 100%; height: auto; }
+
+/* The rails: everything outside rocks a fraction, on a short beat. */
+.mx-rock { position: absolute; inset: 0; display: block; animation: mx-rock 1.35s ease-in-out infinite alternate; }
+@keyframes mx-rock { from { transform: translateY(-.12cqw); } to { transform: translateY(.12cqw); } }
+.mx-city { bottom: 9cqw; }
+.mx-far { bottom: 4.6cqw; }
+.mx-mid { bottom: 1.2cqw; }
+.mx-near { bottom: -1.6cqw; }
+
+/* Two lights in the city blink, out of step, on steps (no tweening, so
+   their layer only repaints when one changes). */
+.mx-blink { animation: mx-blink 3.2s steps(1, end) infinite; }
+.mx-blink-2 { animation-duration: 4.6s; animation-delay: -1.7s; }
+.mx-blink-3 { animation-duration: 5.8s; animation-delay: -3.1s; }
+@keyframes mx-blink { 0%, 62% { opacity: .95; } 64%, 70% { opacity: .15; } 72%, 100% { opacity: .95; } }
+
+/* The reflections: two soft bars sliding across the glass and away, then a
+   pause; they are off the glass at both ends of the loop. */
+.mx-reflect { position: absolute; inset: 0; display: block; pointer-events: none; }
+.mx-reflect > span {
+  position: absolute; top: -10%; bottom: -10%; left: 0; display: block; width: 9%;
+  background: linear-gradient(90deg, rgba(220, 230, 255, 0), rgba(220, 230, 255, .08) 50%, rgba(220, 230, 255, 0));
+  transform: translateX(-30cqw) skewX(-18deg);
+  animation: mx-slide 13s cubic-bezier(.45, 0, .55, 1) infinite;
+}
+.mx-reflect > span + span { width: 3.5%; margin-left: 12%; opacity: .8; }
+@keyframes mx-slide {
+  0% { transform: translateX(-30cqw) skewX(-18deg); }
+  58%, 100% { transform: translateX(110cqw) skewX(-18deg); }
+}
+.mx-lamp-ghost {
+  position: absolute; right: 7%; bottom: 12%; width: 18%; height: 30%; display: block; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(240, 165, 74, .09), rgba(240, 165, 74, 0));
+}
+/* Darker glass along the bottom, so text that crosses it stays readable. */
+.mx-glass-shade { position: absolute; left: 0; right: 0; bottom: 0; height: 42%; display: block; background: linear-gradient(180deg, rgba(5, 7, 12, 0), rgba(5, 7, 12, .45)); }
+
+.mx-lamp-pool { animation: mx-breathe 7s ease-in-out infinite alternate; }
+.mx-steam { opacity: 0; animation: mx-steam 4.6s ease-in-out infinite; }
+.mx-steam-b { animation-duration: 5.4s; animation-delay: -2.4s; }
+@keyframes mx-steam {
+  0% { transform: translateY(2px) scaleY(.8); opacity: 0; }
+  30% { opacity: .5; }
+  100% { transform: translateY(-5px) scaleY(1.1); opacity: 0; }
+}

@@ -1,0 +1,50 @@
+/* Deep Sea Drifter. See deepSeaDrifter.tsx. The beat is 3.8s; every part of
+   it starts 0.6s in (negative delays), and the trailing parts start a
+   little less far in, which is the same thing as running late. */
+
+.dsd-bell { animation: dsd-bell calc(3.8s * var(--deco-slow, 1)) calc(-.6s * var(--deco-slow, 1)) infinite; }
+@keyframes dsd-bell {
+  0%, 100% { transform: scale(1, 1); animation-timing-function: cubic-bezier(.35, 0, .5, 1); }
+  16% { transform: scale(.84, 1.09); animation-timing-function: cubic-bezier(.3, 0, .3, 1); }
+  42% { transform: scale(1.05, .95); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  68% { transform: scale(.99, 1.01); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+}
+
+/* Up on the stroke, then a long slow sink back to where it started. */
+.dsd-rise { animation: dsd-rise calc(3.8s * var(--deco-slow, 1)) calc(-.6s * var(--deco-slow, 1)) infinite; }
+@keyframes dsd-rise {
+  0%, 100% { transform: translateY(0); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  10% { transform: translateY(.6px); animation-timing-function: cubic-bezier(.2, .6, .3, 1); }
+  38% { transform: translateY(-6.2px); animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+}
+
+.dsd-glow { animation: dsd-glow calc(3.8s * var(--deco-slow, 1)) ease-in-out calc(-.6s * var(--deco-slow, 1)) infinite; }
+@keyframes dsd-glow { 0%, 100% { opacity: .5; } 17% { opacity: 1; } 52% { opacity: .62; } }
+
+/* Tentacles stretch out behind the stroke and gather again, late. */
+.dsd-trail { animation: dsd-trail calc(3.8s * var(--deco-slow, 1)) ease-in-out calc((var(--lag) - .6s) * var(--deco-slow, 1)) infinite; }
+@keyframes dsd-trail {
+  0%, 100% { transform: scale(1, 1) skewX(0deg); }
+  24% { transform: scale(.92, 1.1) skewX(2deg); }
+  56% { transform: scale(1.03, .95) skewX(-1.5deg); }
+}
+.dsd-sway { animation: dsd-sway calc(var(--sw) * var(--deco-slow, 1)) cubic-bezier(.37, 0, .63, 1) calc(var(--sd) * var(--deco-slow, 1)) infinite alternate; }
+@keyframes dsd-sway { from { transform: skewX(-6deg); } to { transform: skewX(6deg); } }
+
+.dsd-drift { animation: dsd-drift calc(11s * var(--deco-slow, 1)) cubic-bezier(.37, 0, .63, 1) calc(-3s * var(--deco-slow, 1)) infinite alternate; }
+@keyframes dsd-drift { from { transform: translateX(-2.4px); } to { transform: translateX(2.4px); } }
+.dsd-lean { animation: dsd-lean calc(7.4s * var(--deco-slow, 1)) cubic-bezier(.37, 0, .63, 1) calc(-1.6s * var(--deco-slow, 1)) infinite alternate; }
+@keyframes dsd-lean { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+
+.dsd-snow { opacity: .35; animation: dsd-snow calc(var(--sd) * var(--deco-slow, 1)) linear calc(var(--so) * var(--deco-slow, 1)) infinite; }
+@keyframes dsd-snow {
+  0% { transform: translate(0, 0); opacity: 0; }
+  20% { opacity: .6; }
+  80% { opacity: .6; }
+  100% { transform: translate(1.5px, 14px); opacity: 0; }
+}
+
+.dsd-margin { opacity: .75; transition: opacity calc(450ms * var(--deco-slow, 1)) ease; }
+.dsd-glow-hover { opacity: 0; transition: opacity calc(450ms * var(--deco-slow, 1)) ease; }
+.deco-deep-sea-drifter[data-hover="true"] .dsd-margin { opacity: 1; }
+.deco-deep-sea-drifter[data-hover="true"] .dsd-glow-hover { opacity: .7; }

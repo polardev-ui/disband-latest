@@ -1,0 +1,44 @@
+/* Stormwatch. See stormwatch.tsx. */
+
+.sw-sky {
+  position: absolute; inset: 0; display: block;
+  background: linear-gradient(180deg, #0a111d 0%, #0e1726 38%, #132031 72%, #182838 100%);
+}
+.sw-cloud { top: 0; }
+.sw-stratus { top: 46cqw; opacity: .8; }
+
+/* Lightning, once per 14s, far off top right: a glow behind the clouds, a
+   softer one on them, and a faint answer on the water, all on one
+   timeline. A flash, a flicker, then dark for the rest of the loop. */
+.sw-flash {
+  position: absolute; right: -24cqw; top: -30cqw; width: 90cqw; height: 70cqw; display: block; border-radius: 50%;
+  opacity: 0; animation: sw-flash 14s linear infinite;
+}
+.sw-flash-back { background: radial-gradient(closest-side, rgba(169, 196, 221, .55), rgba(169, 196, 221, 0)); }
+.sw-flash-front { background: radial-gradient(closest-side, rgba(188, 211, 230, .2), rgba(188, 211, 230, 0)); }
+.sw-flash-sea { opacity: 0; animation: sw-flash 14s linear infinite; }
+@keyframes sw-flash {
+  0%, 60% { opacity: 0; }
+  60.6% { opacity: .75; }
+  61.4% { opacity: .2; }
+  62.2% { opacity: 1; }
+  64.5% { opacity: .35; }
+  68%, 100% { opacity: 0; }
+}
+
+.sw-waves-far { bottom: 18.6cqw; }
+.sw-waves-mid { bottom: 11.6cqw; }
+.sw-heave { position: absolute; left: 0; right: 0; bottom: -1.2cqw; height: 8cqw; display: block; animation: sw-heave 4.2s cubic-bezier(.37, 0, .63, 1) infinite alternate; }
+.sw-heave > .scn-strip { bottom: 0; }
+@keyframes sw-heave { from { transform: translateY(.5cqw); } to { transform: translateY(-.5cqw); } }
+
+.sw-glint { opacity: .2; animation: sw-glint var(--gd) ease-in-out var(--gl) infinite alternate; }
+@keyframes sw-glint { from { opacity: .08; } to { opacity: .6; } }
+
+.sw-surf { opacity: .3; animation: sw-surf 3.6s ease-in-out infinite; }
+.sw-surf-b { animation-delay: -1.5s; }
+@keyframes sw-surf { 0%, 100% { opacity: .15; } 35% { opacity: .75; } }
+
+/* The lighthouse lamp comes round every 6s: a quick swell of light. */
+.sw-lamp, .sw-lamp-halo { opacity: .45; animation: sw-lamp 6s ease-in-out infinite; }
+@keyframes sw-lamp { 0%, 100% { opacity: .35; } 10% { opacity: 1; } 24% { opacity: .35; } }

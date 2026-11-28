@@ -1,0 +1,55 @@
+/* Emberfall. See emberfall.tsx. */
+
+.ef-sky {
+  position: absolute; inset: 0; display: block;
+  background: linear-gradient(180deg, #0f0c0d 0%, #130f10 42%, #181112 72%, #221310 100%);
+}
+.ef-ash { top: 0; }
+
+/* Smoke curling up each side: rises, swells, thins out, and starts again
+   unseen. */
+.ef-smoke { position: absolute; bottom: 14cqw; width: 46cqw; display: block; opacity: 0; animation: ef-smoke 17s linear infinite; }
+.ef-smoke > svg { display: block; width: 100%; height: auto; }
+.ef-smoke-l { left: -18cqw; }
+.ef-smoke-r { right: -20cqw; animation-delay: -8.5s; }
+@keyframes ef-smoke {
+  0% { transform: translateY(0) scale(.6); opacity: 0; }
+  25% { opacity: .9; }
+  70% { opacity: .5; }
+  100% { transform: translateY(-38cqw) scale(1.25); opacity: 0; }
+}
+
+/* An ember lifts from the ground and goes out --h (cqh) higher. */
+.ef-ember { position: absolute; bottom: 4cqw; display: block; transform: translateY(calc(var(--h) * -.4cqh)); opacity: calc(var(--o) * .7); animation: ef-rise var(--dur) linear var(--delay) infinite; }
+@keyframes ef-rise {
+  0% { transform: translateY(0); opacity: 0; }
+  8% { opacity: var(--o); }
+  60% { opacity: calc(var(--o) * .7); }
+  100% { transform: translateY(calc(var(--h) * -1cqh)); opacity: 0; }
+}
+.ef-ember-sway { display: block; animation: ef-sway var(--swd) cubic-bezier(.37, 0, .63, 1) var(--delay) infinite alternate; }
+.ef-ember-sway > svg { display: block; width: 100%; height: auto; }
+@keyframes ef-sway { from { transform: translateX(calc(var(--sw) * -100%)); } to { transform: translateX(calc(var(--sw) * 100%)); } }
+
+.ef-crater { animation: ef-breathe 5.4s ease-in-out infinite alternate; }
+@keyframes ef-breathe { from { opacity: .55; } to { opacity: 1; } }
+.ef-lava { opacity: .7; animation: ef-lava 6.6s ease-in-out infinite alternate; }
+.ef-lava-glow { animation-name: ef-lava-glow; }
+@keyframes ef-lava { from { opacity: .45; } to { opacity: .95; } }
+@keyframes ef-lava-glow { from { opacity: .08; } to { opacity: .28; } }
+
+.ef-puff { opacity: 0; animation: ef-puff 9.6s linear var(--pd) infinite; }
+@keyframes ef-puff {
+  0% { transform: translate(0, 0) scale(.5); opacity: 0; }
+  15% { opacity: .6; }
+  100% { transform: translate(10px, -24px) scale(2.2); opacity: 0; }
+}
+
+/* A spark flicks up and fades, then nothing until its next turn. */
+.ef-spark { opacity: 0; transform: scale(0); animation: ef-spark var(--sd) ease-out var(--sl) infinite; }
+@keyframes ef-spark {
+  0%, 70% { transform: translate(0, 0) scale(0); opacity: 0; }
+  74% { transform: translate(0, -1px) scale(1); opacity: 1; }
+  92% { transform: translate(1px, -6px) scale(.4); opacity: 0; }
+  100% { transform: translate(1px, -6px) scale(0); opacity: 0; }
+}

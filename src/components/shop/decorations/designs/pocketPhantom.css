@@ -1,0 +1,39 @@
+/* Pocket Phantom. See pocketPhantom.tsx. */
+
+.pp-float { animation: pp-float calc(4.4s * var(--deco-slow, 1)) cubic-bezier(.37, 0, .63, 1) infinite alternate; }
+@keyframes pp-float { from { transform: translateY(2.4px); } to { transform: translateY(-2.6px); } }
+
+/* Half a float behind: the cloth is longest just as the body tops out. */
+.pp-stretch { animation: pp-stretch calc(4.4s * var(--deco-slow, 1)) cubic-bezier(.37, 0, .63, 1) calc(-1.2s * var(--deco-slow, 1)) infinite alternate; }
+@keyframes pp-stretch { from { transform: scale(1.02, .98); } to { transform: scale(.97, 1.07); } }
+
+/* Look left, hold, look right, hold, home. The eyes lead by moving with it. */
+.pp-look { animation: pp-look calc(9s * var(--deco-slow, 1)) infinite; }
+@keyframes pp-look {
+  0%, 100% { transform: rotate(0deg); animation-timing-function: cubic-bezier(.45, 0, .3, 1); }
+  14% { transform: rotate(-9deg); animation-timing-function: linear; }
+  32% { transform: rotate(-8deg); animation-timing-function: cubic-bezier(.45, 0, .3, 1); }
+  50% { transform: rotate(7deg); animation-timing-function: linear; }
+  67% { transform: rotate(6deg); animation-timing-function: cubic-bezier(.45, 0, .45, 1); }
+  84% { transform: rotate(0deg); }
+}
+.pp-eyes { animation: pp-eyes calc(9s * var(--deco-slow, 1)) infinite; }
+@keyframes pp-eyes {
+  0%, 100% { transform: translateX(0); animation-timing-function: cubic-bezier(.3, 0, .2, 1); }
+  12% { transform: translateX(-1.3px); animation-timing-function: linear; }
+  32% { transform: translateX(-1.3px); animation-timing-function: cubic-bezier(.3, 0, .2, 1); }
+  47% { transform: translateX(1.2px); animation-timing-function: linear; }
+  67% { transform: translateX(1.2px); animation-timing-function: cubic-bezier(.45, 0, .45, 1); }
+  82% { transform: translateX(0); }
+}
+
+.pp-hem { animation: pp-hem calc(1.9s * var(--deco-slow, 1)) cubic-bezier(.37, 0, .63, 1) infinite alternate; }
+@keyframes pp-hem { from { transform: translate(-1.6px, .3px); } to { transform: translate(1.6px, -.3px); } }
+
+.pp-fade { opacity: .9; animation: pp-fade calc(6.2s * var(--deco-slow, 1)) ease-in-out infinite alternate; }
+@keyframes pp-fade { from { opacity: .8; } to { opacity: .96; } }
+
+.pp-aura { opacity: .8; animation: pp-aura calc(3.1s * var(--deco-slow, 1)) ease-in-out infinite alternate; }
+@keyframes pp-aura { from { opacity: .62; } to { opacity: 1; } }
+.pp-aura-hover { opacity: 0; transition: opacity calc(450ms * var(--deco-slow, 1)) ease; }
+.deco-pocket-phantom[data-hover="true"] .pp-aura-hover { opacity: .8; }

@@ -1,0 +1,18 @@
+/* Koi Current. See koiCurrent.tsx. Still pose: the Kohaku coming round the
+   near right, the Showa tucked behind the far left. */
+
+.kc-swim { transform: rotate(32deg); animation: kc-swim calc(13s * var(--deco-slow, 1)) linear infinite; }
+@keyframes kc-swim { from { transform: rotate(32deg); } to { transform: rotate(392deg); } }
+.kc-flow { animation: kc-flow calc(8s * var(--deco-slow, 1)) linear infinite; }
+@keyframes kc-flow { to { transform: rotate(360deg); } }
+
+/* Tail and body flex on one 1.52s stroke (0.76s each way), opposite sides. */
+.kc-tail { animation: kc-tail calc(.76s * var(--deco-slow, 1)) cubic-bezier(.37, 0, .63, 1) calc(var(--kd) * var(--deco-slow, 1)) infinite alternate; }
+@keyframes kc-tail { from { transform: rotate(-15deg); } to { transform: rotate(15deg); } }
+.kc-body { animation: kc-body calc(.76s * var(--deco-slow, 1)) cubic-bezier(.37, 0, .63, 1) calc(var(--kd) * var(--deco-slow, 1)) infinite alternate; }
+@keyframes kc-body { from { transform: skewX(4deg); } to { transform: skewX(-4deg); } }
+.kc-fin { animation: kc-fin calc(.9s * var(--deco-slow, 1)) cubic-bezier(.37, 0, .63, 1) calc(var(--fd) * var(--deco-slow, 1)) infinite alternate; }
+@keyframes kc-fin { from { transform: rotate(-14deg) scaleX(.85); } to { transform: rotate(10deg) scaleX(1); } }
+
+.kc-water { opacity: .2; transition: opacity calc(450ms * var(--deco-slow, 1)) ease; }
+.deco-koi-current[data-hover="true"] .kc-water { opacity: .4; }

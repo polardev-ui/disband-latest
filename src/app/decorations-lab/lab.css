@@ -44,3 +44,10 @@
 .lab-member:hover { background: rgb(0 0 0 / .08); }
 .lab-focus { display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 60px); }
 .lab [hidden] { display: none !important; }
+
+/* ?export=<id>: one decoration's still on a transparent 512 × 512 page, for
+   the mobile apps. The part of the back layer inside the photo's circle is
+   cut away, as the photo hides it in the app. */
+.lab-export { position: fixed; inset: 0; display: grid; place-items: center; background: transparent; }
+.lab-export .deco-back { -webkit-mask-image: radial-gradient(circle closest-side at 50% 50%, transparent 50%, #000 50.5%); mask-image: radial-gradient(circle closest-side at 50% 50%, transparent 50%, #000 50.5%); }
+html:has(.lab-export) nextjs-portal { display: none !important; }

@@ -1,0 +1,44 @@
+/* Astral Archive. See astralArchive.tsx. */
+
+.aa-space {
+  position: absolute; inset: 0; display: block;
+  background:
+    radial-gradient(70% 42% at 88% 6%, rgba(107, 92, 168, .3), rgba(107, 92, 168, 0) 70%),
+    radial-gradient(60% 36% at 8% 96%, rgba(74, 63, 122, .28), rgba(74, 63, 122, 0) 70%),
+    linear-gradient(180deg, #0a102c 0%, #0d1437 55%, #0b112f 100%);
+}
+
+.aa-star { position: absolute; display: block; transform: translate(-50%, -50%); animation: aa-twinkle var(--tw) ease-in-out var(--td) infinite alternate; }
+.aa-star > svg { display: block; width: 100%; height: auto; }
+@keyframes aa-twinkle { from { opacity: .25; } to { opacity: .95; } }
+
+/* The ring hangs off the top right corner, centred at (88cqw, 8cqw). Each
+   ring is its own <svg>, turned whole, so the turn runs on the compositor. */
+.aa-orrery { position: absolute; left: 88cqw; top: 8cqw; width: 0; height: 0; display: block; }
+.aa-ring, .aa-armillary { position: absolute; display: block; transform: translate(-50%, -50%); }
+.aa-ring { width: 58cqw; height: 58cqw; }
+.aa-ring-outer { animation: aa-turn-cw 160s linear infinite; }
+.aa-ring-inner { animation: aa-turn-ccw 110s linear infinite; }
+@keyframes aa-turn-cw { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes aa-turn-ccw { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(-360deg); } }
+.aa-armillary { width: 20cqw; height: 20cqw; animation: aa-bob 7s cubic-bezier(.37, 0, .63, 1) infinite alternate; }
+@keyframes aa-bob { from { transform: translate(-50%, -52%); } to { transform: translate(-50%, -48%); } }
+
+/* A meridian seen turning about the axis: its width runs 1 → −1 → 1 on a
+   sine ease, which is a ring going round. The second is a quarter turn on. */
+.aa-meridian { animation: aa-meridian 5s cubic-bezier(.37, 0, .63, 1) infinite alternate; }
+.aa-meridian-b { animation-delay: -2.5s; }
+@keyframes aa-meridian { from { transform: scaleX(1); } to { transform: scaleX(-1); } }
+
+/* Books turn between two angles as they drift. */
+.aa-turn { display: block; transform: rotate(var(--r0)); animation: aa-book var(--rt) cubic-bezier(.37, 0, .63, 1) infinite alternate; }
+.aa-turn > svg { display: block; width: 100%; height: auto; }
+@keyframes aa-book { from { transform: rotate(var(--r0)); } to { transform: rotate(var(--r1)); } }
+
+.aa-shelf { animation: aa-float 8s cubic-bezier(.37, 0, .63, 1) infinite alternate; }
+.aa-astrolabe { animation: aa-float 9.5s cubic-bezier(.37, 0, .63, 1) -3s infinite alternate; }
+@keyframes aa-float { from { transform: translateY(-.5cqw) rotate(-.6deg); } to { transform: translateY(.5cqw) rotate(.6deg); } }
+.aa-rete { animation: aa-spin 48s linear infinite; }
+.aa-rule { transform: rotate(40deg); animation: aa-rule 72s linear infinite; }
+@keyframes aa-spin { to { transform: rotate(360deg); } }
+@keyframes aa-rule { from { transform: rotate(40deg); } to { transform: rotate(-320deg); } }
