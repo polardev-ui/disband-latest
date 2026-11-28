@@ -7,6 +7,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,6 +56,8 @@ fun GroupChatScreen(
         fetch = { before -> Database.groupMessages(group.id, before = before).map { it.toRow(uid) } },
         onIncoming = { row -> row.authorId?.let { typing.clear(it) }; if (row.authorId != uid) runCatching { Database.markGroupRead(group.id) } },
     )
+    // A group chat is not a space: no space roles anywhere in it (bugs 1984bf74 / ad0498d5).
+    LaunchedEffect(group.id) { ChatMarkdown.setRoles(emptyList()) }
     val rows = timeline.rows
 
     var sendError by remember(group.id) { mutableStateOf<String?>(null) }
@@ -155,6 +158,7 @@ fun GroupChatScreen(
     }
 
     ChatScaffold(
+        chatContext = com.wsgpolar.disband.data.ChatContext(com.wsgpolar.disband.data.ChatKind.Group, group.id),
         mentionSource = MentionSource.Local(group.members.orEmpty().filter { it.id != uid }),
         title = groupName,
         subtitle = if (group.members.isNullOrEmpty()) "Group chat" else "${group.members!!.size} members",
@@ -310,6 +314,7 @@ fun GroupChatScreen(
     actionRow?.let { row ->
         val isOwn = row.authorId == uid || row.author?.id == uid
         MessageActionSheet(
+            chatContext = com.wsgpolar.disband.data.ChatContext(com.wsgpolar.disband.data.ChatKind.Group, group.id),
             row = row,
             isOwn = isOwn,
             onDismiss = { actionRow = null },
@@ -359,7 +364,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         key = "channel:${channel.id}", table = "messages", filter = "channel_id=eq.${channel.id}",
         serializer = Message.serializer(), toRow = { it.toRow(uid) },
         fetch = { before -> Database.messages(channel.id, before = before).map { it.toRow(uid) } },
-        onIncoming = { row -> row.authorId?.let { typing.clear(it) }; if (row.authorId != uid) com.wsgpolar.disband.data.ChannelUnreads.sawMessage(channel.id) },
+        onIncoming = { row -> row.authorId?.let { typing.clear(it) }; if (row.authorId != uid) com.wsgpolar.disband.data.ChannelUnreads.sawMessage(channel.id, row.pingsYou) },
     )
     val rows = timeline.rows
 
@@ -407,16 +412,25 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
     // channels. This locked it for everyone, so a space's own owner was told
     // only moderators could post. my_server_permissions reports everything
     // as allowed for the owner.
-    // The space's roles, so role pings show in their colour.
-    LaunchedEffect(channel.serverId) {
-        runCatching { com.wsgpolar.disband.data.ServerAdmin.roles(channel.serverId) }
-            .onSuccess { list -> ChatMarkdown.setRoles(list.map { it.name to it.color }) }
+    // The space's roles: role pings in their colour, and authors in their
+    // top role's colour (the web's getMemberColor). A cached roster paints
+    // at once; the reload lands behind it.
+    val rosters by com.wsgpolar.disband.data.ServerRoster.rosters.collectAsState()
+    val roster = rosters[channel.serverId]
+    LaunchedEffect(roster) {
+        roster?.let { r -> ChatMarkdown.setRoles(r.roles.map { it.name to it.color }) }
     }
-    val permissions by androidx.compose.runtime.produceState<Map<String, Boolean>?>(null, channel.serverId) {
+    LaunchedEffect(channel.serverId) { com.wsgpolar.disband.data.ServerRoster.load(channel.serverId) }
+    val permissions by androidx.compose.runtime.produceState(ChannelPermissionCache.get(channel.serverId), channel.serverId) {
         value = com.wsgpolar.disband.data.ServerAdmin.permissions(channel.serverId)
+            .also { ChannelPermissionCache.put(channel.serverId, it) }
     }
     val readOnly = channel.readOnly == true && permissions?.get("manage_channels") != true
+    androidx.compose.runtime.CompositionLocalProvider(
+        com.wsgpolar.disband.ui.components.LocalAuthorRole provides { id -> id?.let { roster?.topRole(it) } },
+    ) {
     ChatScaffold(
+        chatContext = com.wsgpolar.disband.data.ChatContext(com.wsgpolar.disband.data.ChatKind.Channel, channel.id, channel.serverId),
         mentionSource = MentionSource.Space(channel.serverId),
         title = "#" + channel.name,
         subtitle = serverName,
@@ -509,7 +523,9 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
         onOpenAttachment = { openAttachment(it.url) },
         onMessageLongPress = { actionRow = it },
         onBack = onBack,
+        serverId = channel.serverId,
     )
+    }
 
     var forwardRow by remember { mutableStateOf<ChatRow?>(null) }
     forwardRow?.let { row ->
@@ -521,6 +537,7 @@ fun ChannelChatScreen(app: AppState, channel: Channel, serverName: String, onBac
     actionRow?.let { row ->
         val isOwn = row.authorId == uid || row.author?.id == uid
         MessageActionSheet(
+            chatContext = com.wsgpolar.disband.data.ChatContext(com.wsgpolar.disband.data.ChatKind.Channel, channel.id, channel.serverId),
             row = row,
             isOwn = isOwn,
             onDismiss = { actionRow = null },
@@ -604,3 +621,10 @@ private fun GroupMessage.toRow(me: String? = null): ChatRow = ChatRow(
     ),
     createdAt = createdAt,
 )
+
+/** The last permissions read per space, so reopening a channel doesn't wait on it. */
+internal object ChannelPermissionCache {
+    private val map = java.util.concurrent.ConcurrentHashMap<String, Map<String, Boolean>>()
+    fun get(serverId: String): Map<String, Boolean>? = map[serverId]
+    fun put(serverId: String, value: Map<String, Boolean>) { if (value.isNotEmpty()) map[serverId] = value }
+}

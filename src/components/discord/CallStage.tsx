@@ -9,7 +9,7 @@ import { IconMaximize, IconMicOff, IconSpeaker, IconSpeakerOff } from "@/compone
 import type { Profile } from "@/lib/supabase/types";
 import { streamHasLiveVideo } from "@/lib/webrtc";
 import { applyAudioOutputToElement, getPreferredAudioOutputId } from "@/lib/audio-settings";
-import { getParticipantControls, setParticipantControl, applyParticipantAudioControls, type ParticipantControls } from "@/lib/call-participant-settings";
+import { getParticipantControls, setParticipantControl, applyParticipantAudioControls, setElementPlaybackLevel, type ParticipantControls } from "@/lib/call-participant-settings";
 import { playScreenShareJingle } from "@/lib/ringtone";
 import { useLiveVideoStream } from "@/hooks/useLiveVideoStream";
 import { CallGrid } from "./CallTile";
@@ -430,7 +430,7 @@ function ScreenTile({
   const [streamVolume, setStreamVolume] = useState(() => {
     try {
       const saved = Number(localStorage.getItem(volumeKey));
-      return Number.isFinite(saved) && saved > 0 && saved <= 100 ? saved : 100;
+      return Number.isFinite(saved) && saved > 0 && saved <= 200 ? saved : 100;
     } catch {
       return 100;
     }
@@ -462,7 +462,9 @@ function ScreenTile({
       void applyAudioOutputToElement(el, getPreferredAudioOutputId());
     }
     el.muted = !watching || soundOff || deafened;
-    el.volume = Math.max(0, Math.min(1, streamVolume / 100));
+    // Past 100% the stream is boosted through Web Audio (the element's own
+    // volume stops at 100%).
+    setElementPlaybackLevel(el, streamVolume / 100);
     if (!el.muted) void el.play().catch(() => {});
   }, [screen.audio, watching, soundOff, deafened, streamVolume]);
 
@@ -523,7 +525,7 @@ function ScreenTile({
               <input
                 type="range"
                 min={0}
-                max={100}
+                max={200}
                 value={soundOff ? 0 : streamVolume}
                 onChange={(e) => {
                   const v = Number(e.target.value);

@@ -12,6 +12,7 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
@@ -86,7 +87,7 @@ object Database {
             all += rows
             if (rows.size < pageSize) break
         }
-        return all.distinctBy { it.userId }
+        return all.distinctBy { it.userId }.also { list -> ProfileStore.putAll(list.mapNotNull { it.profile }) }
     }
 
     /** 10,000 members: past that, search (search_server_members) is the way in. */
@@ -307,31 +308,37 @@ object Database {
 
     // MARK: - Direct messages
 
-    suspend fun myDmThreads(currentUserId: String): List<DmThread> {
-        val a = client.from("dm_threads")
-            .select(columns("user_a,user_b,id,created_at,last_message_at,last_message_preview,requested_by,accepted_at,request_ignored_at")) {
+    suspend fun myDmThreads(currentUserId: String): List<DmThread> = coroutineScope {
+        // Both sides at once: these were two serial round trips before the
+        // profile read, three in all before the inbox could draw.
+        val cols = columns("user_a,user_b,id,created_at,last_message_at,last_message_preview,requested_by,accepted_at,request_ignored_at")
+        val a = async {
+            client.from("dm_threads").select(cols) {
                 filter { eq("user_a", currentUserId) }
                 order("created_at", Order.ASCENDING)
-            }
-            .decodeList<DmThread>()
-        val b = client.from("dm_threads")
-            .select(columns("user_a,user_b,id,created_at,last_message_at,last_message_preview,requested_by,accepted_at,request_ignored_at")) {
+            }.decodeList<DmThread>()
+        }
+        val b = async {
+            client.from("dm_threads").select(cols) {
                 filter { eq("user_b", currentUserId) }
                 order("created_at", Order.ASCENDING)
-            }
-            .decodeList<DmThread>()
-        val threads = (a + b).distinctBy { it.id }
+            }.decodeList<DmThread>()
+        }
+        val threads = (a.await() + b.await()).distinctBy { it.id }
 
         val friendIds = threads.map {
             if (it.userA == currentUserId) it.userB else it.userA
         }
-        val profiles: Map<String, Profile> = profiles(ids = friendIds)
+        // Reuse profiles already held (members, messages); fetch only the rest.
+        val known = friendIds.mapNotNull { ProfileStore.get(it) }.associateBy { it.id }
+        val missing = friendIds.filter { it !in known }
+        val profiles: Map<String, Profile> = known + if (missing.isEmpty()) emptyMap() else profiles(ids = missing)
 
         // The newest message per thread is kept on dm_threads by a trigger.
         // Fetching it by listing every thread id in one URL passed the 8,000
         // character limit for accounts with ~200 DMs, and the whole inbox
         // failed to load with "Couldn't refresh conversations".
-        return threads.map { thread ->
+        threads.map { thread ->
             val friendId = if (thread.userA == currentUserId) thread.userB else thread.userA
             thread.copy(friend = profiles[friendId])
         }
@@ -392,12 +399,35 @@ object Database {
         return postgrest.rpc("get_group_unread").decodeList()
     }
 
-    suspend fun markDmRead(threadId: String) {
+    /**
+     * Opening a DM marks it read and, as the web now does, its mention
+     * notifications (`dm:<thread_id>`), which otherwise stayed unread in the
+     * inbox on every device.
+     */
+    suspend fun markDmRead(threadId: String) = coroutineScope {
+        launch { runCatching { markMentionNotificationsRead(listOf("dm:$threadId")) } }
         postgrest.rpc("mark_dm_read", buildJsonObject { put("p_thread_id", threadId) })
+        Unit
     }
 
-    suspend fun markGroupRead(groupId: String) {
+    /** As [markDmRead], for group chats (`/group/<id>`, also `group:<id>`). */
+    suspend fun markGroupRead(groupId: String) = coroutineScope {
+        launch { runCatching { markMentionNotificationsRead(listOf("/group/$groupId", "group:$groupId")) } }
         postgrest.rpc("mark_group_read", buildJsonObject { put("p_group_id", groupId) })
+        Unit
+    }
+
+    /** Your unread mention notifications with one of these links, marked read. */
+    suspend fun markMentionNotificationsRead(links: List<String>) {
+        val uid = client.auth.currentUserOrNull()?.id ?: return
+        client.from("notifications").update({ set("read", true) }) {
+            filter {
+                eq("user_id", uid)
+                eq("type", "mention")
+                eq("read", false)
+                isIn("link", links)
+            }
+        }
     }
 
     suspend fun dmMessages(threadId: String, limit: Int = 50, before: String? = null): List<DmMessage> {
@@ -439,23 +469,31 @@ object Database {
             .decodeList<GroupIdRow>()
             .map { it.groupId }
         if (ids.isEmpty()) return emptyList()
-        val groups: List<GroupChat> = client.from("group_chats")
-            .select(Columns.ALL) {
-                filter { isIn("id", ids) }
-                order("created_at", Order.ASCENDING)
+        // The groups and their members are independent reads: run together.
+        val (groups, members) = coroutineScope {
+            val g = async {
+                client.from("group_chats")
+                    .select(Columns.ALL) {
+                        filter { isIn("id", ids) }
+                        order("created_at", Order.ASCENDING)
+                    }
+                    .decodeList<GroupChat>()
             }
-            .decodeList()
-
-        // `group_chats` has no members column, so `members` was always nil:
-        // every group read "0 members" (and the group-call roster was empty).
-        // One embedded-profile query for every group, same as iOS.
-        val members = runCatching {
-            client.from("group_chat_members")
-                .select(columns("group_id, profile:profiles(*)")) {
-                    filter { isIn("group_id", ids) }
-                }
-                .decodeList<GroupMemberRow>()
-        }.getOrDefault(emptyList())
+            // `group_chats` has no members column, so `members` was always nil:
+            // every group read "0 members" (and the group-call roster was empty).
+            // One embedded-profile query for every group, same as iOS.
+            val m = async {
+                runCatching {
+                    client.from("group_chat_members")
+                        .select(columns("group_id, profile:profiles(*)")) {
+                            filter { isIn("group_id", ids) }
+                        }
+                        .decodeList<GroupMemberRow>()
+                }.getOrDefault(emptyList())
+            }
+            g.await() to m.await()
+        }
+        ProfileStore.putAll(members.mapNotNull { it.profile })
         val byGroup = members
             .mapNotNull { row -> row.profile?.let { row.groupId to it } }
             .groupBy({ it.first }, { it.second })
@@ -543,6 +581,7 @@ object Database {
             // and takes its first element, which threw on every read. Loading
             // your own profile has never worked.
             .decodeAs<Profile>()
+            .also { ProfileStore.put(it) }
     }
 
     // Profiles are fetched in batches: every id lands in one `in(...)` filter,
@@ -559,10 +598,11 @@ object Database {
                     val rows: List<Profile> = client.from("profiles")
                         .select(Columns.ALL) { filter { isIn("id", chunk) } }
                         .decodeList()
-                    for (row in rows) out[row.id] = row
+                    rows
                 }
-            }.forEach { it.await() }
+            }.forEach { job -> for (row in job.await()) out[row.id] = row }
         }
+        ProfileStore.putAll(out.values)
         return out
     }
 
@@ -605,6 +645,30 @@ object Database {
             .select(columns(embed)) { filter { eq("addressee_id", currentUserId) } }
             .decodeList<Friendship>()
         return (asRequester + asAddressee).distinctBy { it.id }
+    }
+
+    @Serializable
+    data class FriendshipLink(
+        val id: String,
+        @SerialName("requester_id") val requesterId: String,
+        @SerialName("addressee_id") val addresseeId: String,
+        val status: FriendshipStatus,
+    )
+
+    /** The one friendship row between you and [otherUserId], if any. Both directions read together. */
+    suspend fun friendshipWith(currentUserId: String, otherUserId: String): FriendshipLink? = coroutineScope {
+        val cols = columns("id, requester_id, addressee_id, status")
+        val mine = async {
+            client.from("friendships").select(cols) {
+                filter { eq("requester_id", currentUserId); eq("addressee_id", otherUserId) }
+            }.decodeList<FriendshipLink>()
+        }
+        val theirs = async {
+            client.from("friendships").select(cols) {
+                filter { eq("requester_id", otherUserId); eq("addressee_id", currentUserId) }
+            }.decodeList<FriendshipLink>()
+        }
+        (mine.await() + theirs.await()).firstOrNull()
     }
 
     suspend fun sendFriendRequest(requesterId: String, addresseeId: String) {
@@ -708,15 +772,22 @@ object Database {
         client.from("profiles").update({ set("theme", theme) }) { filter { eq("id", userId) } }
     }
 
+    /**
+     * Change your username exactly as the web does (`updateProfile`): a plain
+     * `profiles` update, with the database's username rules and change-limit
+     * trigger deciding. The old path went through `complete_signup_profile`,
+     * whose `resolve_username` could quietly store a different name than the
+     * one typed (bug 1083bd33).
+     */
     suspend fun updateUsername(username: String) {
-        postgrest.rpc(
-            "complete_signup_profile",
-            buildJsonObject {
-                put("p_username", username)
-                put("p_display_name", null as String?)
-            },
-        )
+        val uid = client.auth.currentUserOrNull()?.id ?: error("Not signed in")
+        client.from("profiles").update({ set("username", sanitiseUsername(username)) }) {
+            filter { eq("id", uid) }
+        }
     }
+
+    /** Web's rule: lower case, only a–z, 0–9 and underscore. */
+    fun sanitiseUsername(raw: String): String = raw.trim().lowercase().replace(Regex("[^a-z0-9_]"), "")
 
     /** Remove this device's push token from the signed-in account. RLS scopes the delete to that user. */
     suspend fun unregisterDeviceToken(token: String, platform: String = "android") {
@@ -866,6 +937,16 @@ object Database {
             filter {
                 eq("id", id)
                 eq("user_id", currentUserId)
+            }
+        }
+    }
+
+    /** The bell's "new" marker: everything unseen is now seen (web NotificationBell). */
+    suspend fun markNotificationsSeen(currentUserId: String) {
+        client.from("notifications").update({ set("seen_at", java.time.OffsetDateTime.now().toString()) }) {
+            filter {
+                eq("user_id", currentUserId)
+                exact("seen_at", null)
             }
         }
     }

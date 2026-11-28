@@ -2,17 +2,16 @@ import SwiftUI
 
 // MARK: - Members
 
-/// Everyone in a space, split into Online and Offline from live presence the
-/// way Discord lists a server, owner and staff first within each.
+/// Everyone in a space, as the web's member list (`MemberList.tsx`): online
+/// people grouped under their top role (every role hoists), the owner and
+/// admins first, then roles by position; then everyone offline. Names take
+/// their top role's colour (or gradient) unless they picked their own.
 struct ServerMembersView: View {
     let server: Server
     @Environment(AppState.self) private var app
     @Environment(PresenceService.self) private var presence
-    /// Already in display order (role, then name). Sorted when the list
-    /// changes, not on every render: a big space has thousands of members
-    /// and presence updates re-render this screen constantly, so sorting
-    /// here each time froze the whole screen.
     @State private var members: [ServerMember] = []
+    @State private var roles: SpaceRoles?
     @State private var loading = true
     /// More pages are still coming in behind the first.
     @State private var loadingMore = false
@@ -20,6 +19,12 @@ struct ServerMembersView: View {
     @State private var query = ""
 
     private var isOwner: Bool { server.ownerId == app.currentUserId }
+
+    private struct Group: Identifiable {
+        let label: String
+        var members: [ServerMember]
+        var id: String { label }
+    }
 
     /// Live status, not the stale `profiles.status` column. The signed-in
     /// member falls back to their profile while the presence channel is still
@@ -32,61 +37,74 @@ struct ServerMembersView: View {
         return live
     }
 
-    private func roleRank(_ role: MemberRole) -> Int {
-        switch role {
-        case .owner: return 4
-        case .admin: return 3
-        case .moderator: return 2
-        case .member: return 1
-        }
+    /// `servers.owner_id` decides, over a stale `server_members.role`.
+    private func role(of member: ServerMember) -> MemberRole {
+        if member.userId == server.ownerId { return .owner }
+        return member.role == .owner ? .member : member.role
     }
 
-    /// Highest base role first; inside a role, name order. User id is the
-    /// final tiebreaker so equal names cannot swap places between refreshes.
-    private func ordered(_ list: [ServerMember]) -> [ServerMember] {
-        list.sorted { a, b in
-            if roleRank(a.role) != roleRank(b.role) {
-                return roleRank(a.role) > roleRank(b.role)
-            }
-            let an = a.profile?.name ?? ""
-            let bn = b.profile?.name ?? ""
-            let comparison = an.localizedCaseInsensitiveCompare(bn)
-            if comparison != .orderedSame { return comparison == .orderedAscending }
-            return a.userId < b.userId
-        }
+    private func topRole(_ member: ServerMember) -> ServerAdmin.Role? {
+        roles?.topRole(of: member.userId, legacyRoleId: member.roleId)
+    }
+
+    private func label(for member: ServerMember) -> String {
+        if role(of: member) == .owner { return "Owner" }
+        if let top = topRole(member) { return top.name }
+        return role(of: member) == .admin ? "Admin" : "Online"
+    }
+
+    private func name(_ member: ServerMember) -> String {
+        ProfileLive.shared.fresh(member.profile)?.name ?? ""
+    }
+
+    private func byName(_ a: ServerMember, _ b: ServerMember) -> Bool {
+        let comparison = name(a).localizedCompare(name(b))
+        if comparison != .orderedSame { return comparison == .orderedAscending }
+        return a.userId < b.userId
     }
 
     private var filtered: [ServerMember] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         guard !q.isEmpty else { return members }
         return members.filter {
-            ($0.profile?.name.lowercased().contains(q) ?? false)
+            name($0).lowercased().contains(q)
                 || ($0.profile?.username?.lowercased().contains(q) ?? false)
         }
     }
 
-    private var onlineMembers: [ServerMember] {
-        filtered.filter { liveStatus(for: $0) != .offline }
-    }
-
-    private var offlineMembers: [ServerMember] {
-        filtered.filter { liveStatus(for: $0) == .offline }
+    private var groups: [Group] {
+        var grouped: [String: [ServerMember]] = [:]
+        var offline: [ServerMember] = []
+        for member in filtered {
+            if liveStatus(for: member) == .offline {
+                offline.append(member)
+            } else {
+                grouped[label(for: member), default: []].append(member)
+            }
+        }
+        func priority(_ label: String) -> Int {
+            if label == "Owner" { return .max }
+            if label == "Admin" { return .max - 1 }
+            return grouped[label]?.reduce(-1) { max($0, topRole($1)?.position ?? -1) } ?? -1
+        }
+        var out = grouped.keys
+            .sorted { priority($0) != priority($1) ? priority($0) > priority($1) : $0 < $1 }
+            .map { Group(label: $0, members: grouped[$0]!.sorted(by: byName)) }
+        if !offline.isEmpty { out.append(Group(label: "Offline", members: offline.sorted(by: byName))) }
+        return out
     }
 
     var body: some View {
-        Group {
+        SwiftUI.Group {
             if loading {
                 StateView(kind: .loading)
             } else {
                 List {
-                    if !onlineMembers.isEmpty {
-                        Section("Online — \(onlineMembers.count)") {
-                            ForEach(onlineMembers) { memberRow($0) }
-                        }
-                    }
-                    if !offlineMembers.isEmpty {
-                        Section("Offline — \(offlineMembers.count)") {
-                            ForEach(offlineMembers) { memberRow($0).opacity(0.6) }
+                    ForEach(groups) { group in
+                        Section("\(group.label) — \(group.members.count)") {
+                            ForEach(group.members) { member in
+                                memberRow(member).opacity(group.label == "Offline" ? 0.6 : 1)
+                            }
                         }
                     }
                     if loadingMore {
@@ -102,25 +120,25 @@ struct ServerMembersView: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
                 .searchable(text: $query, prompt: "Search members")
-                .refreshable { await load() }
+                .refreshable { await load(force: true) }
             }
         }
         .background(Brand.background)
         .navigationTitle("Members")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $openProfile) {
-            ProfileDetailView(profile: $0, viewerId: app.currentUserId, presence: presence)
+            ProfileDetailView(profile: $0, viewerId: app.currentUserId, presence: presence,
+                              serverId: server.id)
         }
         .task { await load() }
     }
 
     @ViewBuilder private func memberRow(_ member: ServerMember) -> some View {
-        Button { openProfile = member.profile } label: {
-            HStack {
-                FriendRow(profile: member.profile, status: liveStatus(for: member))
-                Spacer()
-                roleBadge(member.role)
-            }
+        Button { openProfile = ProfileLive.shared.fresh(member.profile) } label: {
+            MemberRow(profile: member.profile, status: liveStatus(for: member),
+                      topRole: topRole(member),
+                      iconRole: roles?.iconRole(of: member.userId, legacyRoleId: member.roleId),
+                      baseRole: role(of: member))
         }
         .listRowBackground(Brand.surface)
         .swipeActions {
@@ -132,22 +150,11 @@ struct ServerMembersView: View {
         }
     }
 
-    @ViewBuilder private func roleBadge(_ role: MemberRole) -> some View {
-        if role != .member {
-            Text(role.rawValue.capitalized)
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(role == .owner ? Brand.idle.opacity(0.2) : Brand.accent.opacity(0.2),
-                            in: .capsule)
-                .foregroundStyle(role == .owner ? Brand.idle : Brand.accent)
-        }
-    }
-
     /// The first page shows as soon as it arrives; the rest load behind it.
-    /// Big spaces used to wait for every page (thirty round trips for the
-    /// Disband space) behind a spinner that looked frozen.
-    private func load() async {
+    /// Roles load alongside the first page rather than after it.
+    private func load(force: Bool = false) async {
         if members.isEmpty { loading = true }
+        async let rolesLoad = SpaceRoles.load(serverId: server.id, force: force)
         let pageSize = 500
         var all: [ServerMember] = []
         var seen = Set<String>()
@@ -155,20 +162,78 @@ struct ServerMembersView: View {
         while page <= 30, !Task.isCancelled {
             guard let rows = try? await DatabaseService.membersPage(serverId: server.id, page: page, pageSize: pageSize) else { break }
             for row in rows where seen.insert(row.userId).inserted { all.append(row) }
-            members = ordered(all)
+            members = all
             if page == 1 {
+                roles = await rolesLoad
                 loading = false
                 loadingMore = rows.count >= pageSize
+                // Live custom statuses and names for the people on screen:
+                // everyone online, then the first of the rest.
+                let online = all.filter { presence.status(for: $0.userId) != .offline }.map(\.userId)
+                ProfileLive.shared.watch(online + all.prefix(150).map(\.userId))
             }
             if rows.count < pageSize { break }
             page += 1
         }
+        if roles == nil { roles = await rolesLoad }
         loading = false
         loadingMore = false
     }
 
     private func kick(_ userId: String) {
         Task { try? await ServerAdmin.kick(serverId: server.id, userId: userId); await load() }
+    }
+}
+
+/// One person in a space's member list: name in their top role's colour (a
+/// personal Aero colour wins), the role icon, a crown for the owner and a
+/// shield for admins, and their custom status underneath.
+struct MemberRow: View {
+    let profile: Profile?
+    let status: UserStatus
+    var topRole: ServerAdmin.Role?
+    var iconRole: ServerAdmin.Role?
+    var baseRole: MemberRole = .member
+
+    private var shown: Profile? { ProfileLive.shared.fresh(profile) }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            AvatarView(url: shown?.avatarUrl, name: shown?.name ?? "?", size: 40, status: status,
+                       decoration: shown?.equippedRingEffect)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    if let shown {
+                        StyledName(shown, size: UIFont.preferredFont(forTextStyle: .body).pointSize,
+                                   fallbackColor: topRole?.swiftColor,
+                                   fallbackGradient: topRole?.nameGradient)
+                            .lineLimit(1)
+                    } else {
+                        Text("Unknown").font(.body.weight(.semibold)).foregroundStyle(Brand.textPrimary)
+                    }
+                    if shown?.isBot == true { AppTag() }
+                    if let icon = iconRole?.icon, !icon.isEmpty { RoleIconView(icon: icon, size: 15) }
+                    if baseRole == .owner {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color(red: 0xF0 / 255, green: 0xB2 / 255, blue: 0x32 / 255))
+                            .accessibilityLabel("Owner")
+                    } else if baseRole == .admin {
+                        Image(systemName: "shield.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Brand.textMuted)
+                            .accessibilityLabel("Admin")
+                    }
+                }
+                if let note = shown?.activeStatusNote {
+                    Text(note)
+                        .font(.subheadline)
+                        .foregroundStyle(Brand.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
     }
 }
 

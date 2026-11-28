@@ -17,6 +17,12 @@ final class ChannelUnreadStore {
 
     private(set) var unreadChannels: Set<String> = []
     private(set) var unreadServers: Set<String> = []
+    /// Unread mentions per channel and per space: the red counts. From
+    /// `get_channel_mention_unread()` (the web's `refreshMentionUnread`),
+    /// counted from your unread mention notifications, so reading them on
+    /// any device clears them everywhere.
+    private(set) var mentionCounts: [String: Int] = [:]
+    private(set) var serverMentionCounts: [String: Int] = [:]
     /// The channel on screen, which never counts as unread.
     private(set) var activeChannelId: String?
 
@@ -25,6 +31,17 @@ final class ChannelUnreadStore {
     private var listenTasks: [Task<Void, Never>] = []
     private var channels: [RealtimeChannelV2] = []
     private var observers: [NSObjectProtocol] = []
+
+    private struct MentionRow: Decodable, Sendable {
+        let channelId: String
+        let serverId: String?
+        let mentionCount: Int
+        enum CodingKeys: String, CodingKey {
+            case channelId = "channel_id"
+            case serverId = "server_id"
+            case mentionCount = "mention_count"
+        }
+    }
 
     private struct Row: Decodable, Sendable {
         let channelId: String
@@ -40,6 +57,15 @@ final class ChannelUnreadStore {
     }
 
     func hasUnread(serverId: String) -> Bool { unreadServers.contains(serverId) }
+
+    func mentions(channelId: String) -> Int {
+        channelId == activeChannelId ? 0 : mentionCounts[channelId] ?? 0
+    }
+
+    func mentions(serverId: String) -> Int { serverMentionCounts[serverId] ?? 0 }
+
+    /// Posted whenever the mention counts change, so the app icon can follow.
+    static let mentionsChanged = Notification.Name("ChannelUnreadStore.mentionsChanged")
 
     /// Begin listening. Safe to call repeatedly.
     func start() {
@@ -64,6 +90,8 @@ final class ChannelUnreadStore {
     func reset() {
         unreadChannels = []
         unreadServers = []
+        mentionCounts = [:]
+        serverMentionCounts = [:]
         activeChannelId = nil
         refreshTask?.cancel()
         Task { await unsubscribe() }
@@ -78,6 +106,29 @@ final class ChannelUnreadStore {
         activeChannelId = channelId
         clearLocally(channelId)
         markRead(channelId)
+        markMentionsRead(channelId)
+    }
+
+    /// "Mark as read" on a space: every channel's cursor and every mention
+    /// in it, on the server (`mark_server_read`), as the web's menu does.
+    func markServerRead(_ serverId: String) {
+        unreadServers.remove(serverId)
+        let channels = mentionChannels(in: serverId)
+        for id in channels { mentionCounts[id] = nil }
+        serverMentionCounts[serverId] = nil
+        NotificationCenter.default.post(name: Self.mentionsChanged, object: nil)
+        Task {
+            _ = try? await SupabaseManager.client
+                .rpc("mark_server_read", params: ["p_server_id": serverId])
+                .execute()
+            scheduleRefresh(after: 0.3)
+        }
+    }
+
+    private var channelServer: [String: String] = [:]
+
+    private func mentionChannels(in serverId: String) -> [String] {
+        channelServer.filter { $0.value == serverId }.map(\.key)
     }
 
     func close(channelId: String) {
@@ -88,9 +139,35 @@ final class ChannelUnreadStore {
     }
 
     /// A message arrived in the open channel: keep the server's cursor level.
-    func sawMessage(in channelId: String) {
+    func sawMessage(in channelId: String, mentionsMe: Bool = false) {
         guard activeChannelId == channelId else { return }
         markRead(channelId)
+        // A ping in the channel you're reading is read, not a red badge
+        // (the web marks it at once too).
+        if mentionsMe { markMentionsRead(channelId, after: 1.5) }
+    }
+
+    /// `mark_channel_mentions_read`: the red count here, and the mention in
+    /// the web's inbox, both clear.
+    private func markMentionsRead(_ channelId: String, after delay: Double = 0) {
+        if mentionCounts.removeValue(forKey: channelId) != nil, let server = channelServer[channelId] {
+            recountServer(server)
+            NotificationCenter.default.post(name: Self.mentionsChanged, object: nil)
+        }
+        Task {
+            // The notification row is written by a trigger just after the
+            // message; asking too early would leave it behind.
+            if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+            _ = try? await SupabaseManager.client
+                .rpc("mark_channel_mentions_read", params: ["p_channel_id": channelId])
+                .execute()
+            NotificationCenter.default.post(name: Self.mentionsChanged, object: nil)
+        }
+    }
+
+    private func recountServer(_ serverId: String) {
+        let total = mentionChannels(in: serverId).reduce(0) { $0 + (mentionCounts[$1] ?? 0) }
+        serverMentionCounts[serverId] = total > 0 ? total : nil
     }
 
     private func markRead(_ channelId: String) {
@@ -108,6 +185,9 @@ final class ChannelUnreadStore {
         scheduleRefresh(after: 0.4)
     }
 
+    /// Re-read dots and pings shortly (after a space's mute changed, say).
+    func refreshSoon() { scheduleRefresh(after: 0.3) }
+
     private func scheduleRefresh(after seconds: Double) {
         refreshTask?.cancel()
         refreshTask = Task { [weak self] in
@@ -118,14 +198,42 @@ final class ChannelUnreadStore {
     }
 
     private func refresh() async {
-        guard let rows: [Row] = try? await SupabaseManager.client
+        // Both at once: neither depends on the other.
+        async let unreadCall: [Row]? = try? SupabaseManager.client
             .rpc("my_channel_unreads")
             .execute()
-            .value else { return }
+            .value
+        async let mentionCall: [MentionRow]? = try? SupabaseManager.client
+            .rpc("get_channel_mention_unread")
+            .execute()
+            .value
+        let (rows, mentionRows) = await (unreadCall, mentionCall)
         let active = activeChannelId
-        let visible = rows.filter { $0.channelId != active }
-        unreadChannels = Set(visible.map(\.channelId))
-        unreadServers = Set(visible.map(\.serverId))
+        if let rows {
+            let visible = rows.filter { $0.channelId != active }
+            unreadChannels = Set(visible.map(\.channelId))
+            unreadServers = Set(visible.map(\.serverId))
+            for row in rows { channelServer[row.channelId] = row.serverId }
+        }
+        if let mentionRows {
+            var channels: [String: Int] = [:]
+            var servers: [String: Int] = [:]
+            var activeHasMentions = false
+            for row in mentionRows where row.mentionCount > 0 {
+                if let server = row.serverId { channelServer[row.channelId] = server }
+                if row.channelId == active {
+                    activeHasMentions = true
+                    continue
+                }
+                channels[row.channelId] = row.mentionCount
+                if let server = row.serverId { servers[server, default: 0] += row.mentionCount }
+            }
+            let changed = channels != mentionCounts || servers != serverMentionCounts
+            mentionCounts = channels
+            serverMentionCounts = servers
+            if let active, activeHasMentions { markMentionsRead(active) }
+            if changed { NotificationCenter.default.post(name: Self.mentionsChanged, object: nil) }
+        }
     }
 
     private func subscribe() async {
@@ -134,8 +242,14 @@ final class ChannelUnreadStore {
         // debounced so a busy channel costs one call a second at most.
         let (msgCh, msgs) = await RealtimeService.observeChanges(table: "messages")
         let (readCh, reads) = await RealtimeService.observeChanges(table: "channel_reads")
-        channels = [msgCh, readCh]
+        // Your notifications (RLS delivers only your own rows): a new ping,
+        // or one read on another device, moves the red counts.
+        let (noteCh, notes) = await RealtimeService.observeChanges(table: "notifications")
+        channels = [msgCh, readCh, noteCh]
         listenTasks = [
+            Task { [weak self] in
+                for await _ in notes { await self?.scheduleRefresh(after: 0.5) }
+            },
             Task { [weak self] in
                 for await _ in msgs { await self?.scheduleRefresh(after: 1) }
             },

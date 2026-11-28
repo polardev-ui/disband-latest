@@ -17,6 +17,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
+import androidx.compose.material.icons.filled.Cameraswitch
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -80,6 +84,9 @@ fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
     val deafened by app.calls.deafened.collectAsStateValue()
     val speakerOn by app.calls.speakerOn.collectAsStateValue()
     val connectedAt by app.calls.connectedAt.collectAsStateValue()
+    val localVideo by app.calls.localVideo.collectAsStateValue()
+    val remoteVideo by app.calls.remoteVideo.collectAsStateValue()
+    val toggleCamera = rememberPermissionTrigger(android.Manifest.permission.CAMERA) { app.calls.toggleCamera() }
 
     val palette = LocalPalette.current
     val scope = rememberCoroutineScope()
@@ -131,7 +138,19 @@ fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
 
     Box(
         Modifier.fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f))
+            .background(Color.Black.copy(alpha = if (remoteVideo != null) 1f else 0.85f)),
+    ) {
+        // Their camera fills the screen; yours is a small picture in the corner.
+        remoteVideo?.let { VideoTrackView(it, Modifier.fillMaxSize()) }
+        localVideo?.let {
+            Box(
+                Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp)
+                    .size(width = 108.dp, height = 152.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp)),
+            ) { VideoTrackView(it, Modifier.fillMaxSize(), mirrored = true) }
+        }
+    Box(
+        Modifier.fillMaxSize()
             .statusBarsPadding(),
     ) {
         if (phase == CallPhase.Active && shellChrome != null) {
@@ -154,8 +173,10 @@ fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(Modifier.size(60.dp))
-            AvatarImage(url = avatarUrl, name = avatarName, size = 120.dp)
-            Spacer(Modifier.size(28.dp))
+            if (remoteVideo == null) {
+                AvatarImage(url = avatarUrl, name = avatarName, size = 120.dp)
+                Spacer(Modifier.size(28.dp))
+            }
             Text(name, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.size(10.dp))
             Text(
@@ -237,6 +258,24 @@ fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
                                 },
                                 onClick = { app.calls.toggleSpeaker() })
                         }
+                        if (phase == CallPhase.Active) {
+                            Spacer(Modifier.size(16.dp))
+                            Row {
+                                RoundControl(label = if (localVideo != null) "Camera on" else "Camera",
+                                    color = if (localVideo != null) palette.accent else Color.White.copy(alpha = 0.2f),
+                                    icon = {
+                                        Icon(if (localVideo != null) Icons.Filled.Videocam else Icons.Filled.VideocamOff,
+                                            contentDescription = null, tint = Color.White)
+                                    },
+                                    onClick = { toggleCamera() })
+                                if (localVideo != null) {
+                                    Spacer(Modifier.width(20.dp))
+                                    RoundControl(label = "Flip", color = Color.White.copy(alpha = 0.2f),
+                                        icon = { Icon(Icons.Filled.Cameraswitch, contentDescription = null, tint = Color.White) },
+                                        onClick = { app.calls.switchCamera() })
+                                }
+                            }
+                        }
                         Spacer(Modifier.size(28.dp))
                         RoundControl(label = "End", color = Brand.danger, big = true,
                             icon = { Icon(Icons.Filled.CallEnd, contentDescription = null, tint = Color.White) },
@@ -248,6 +287,7 @@ fun CallOverlay(app: AppState, shellChrome: ShellChromeState? = null) {
             }
             Spacer(Modifier.size(36.dp))
         }
+    }
     }
 }
 

@@ -6,6 +6,14 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.alpha
+import com.wsgpolar.disband.core.color
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.collectAsState
+import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -136,7 +144,11 @@ fun InviteSheet(server: Server, onDismiss: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MembersSheet(server: Server, onDismiss: () -> Unit) {
+fun MembersSheet(
+    server: Server,
+    presence: kotlinx.coroutines.flow.StateFlow<Map<String, com.wsgpolar.disband.data.UserStatus>>? = null,
+    onDismiss: () -> Unit,
+) {
     val palette = LocalPalette.current
     val scope = rememberCoroutineScopeCompat()
     val context = LocalContext.current
@@ -164,9 +176,23 @@ fun MembersSheet(server: Server, onDismiss: () -> Unit) {
     }
 
     LaunchedEffect(server.id) {
+        launch { com.wsgpolar.disband.data.ServerRoster.load(server.id) }
+        launch { permissions = ServerAdmin.permissions(server.id) }
         load()
-        permissions = ServerAdmin.permissions(server.id)
     }
+    val rosters by com.wsgpolar.disband.data.ServerRoster.rosters.collectAsState()
+    val roster = rosters[server.id]
+    val statuses by (presence ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyMap()) }).collectAsState()
+    val liveProfiles by com.wsgpolar.disband.data.ProfileStore.profiles.collectAsState()
+    // Everyone listed here gets their profile edits (status, name) live.
+    LaunchedEffect(members) {
+        com.wsgpolar.disband.data.ProfileStore.watch("members:${server.id}", members.map { it.userId })
+    }
+    androidx.compose.runtime.DisposableEffect(server.id) {
+        onDispose { com.wsgpolar.disband.data.ProfileStore.unwatch("members:${server.id}") }
+    }
+    var profileFor by remember { mutableStateOf<com.wsgpolar.disband.data.Profile?>(null) }
+    profileFor?.let { com.wsgpolar.disband.ui.chat.UserProfileSheet(initial = it, serverId = server.id, onDismiss = { profileFor = null }) }
 
     val selfRole = members.firstOrNull { it.userId == selfId }?.role
     // Custom roles can grant kick without the legacy moderator role. Keep the
@@ -175,10 +201,21 @@ fun MembersSheet(server: Server, onDismiss: () -> Unit) {
     val canModerate = permissions["kick"] == true ||
         selfRole == MemberRole.Owner || selfRole == MemberRole.Admin || selfRole == MemberRole.Moderator
     val needle = query.trim().lowercase()
-    val visible = if (needle.isBlank()) members else members.filter {
+    // servers.owner_id decides the owner over a stale role column (web `withOwner`).
+    val resolved = members.map { m ->
+        val p = m.profile?.let { liveProfiles[it.id] ?: it } ?: liveProfiles[m.userId]
+        val role = when {
+            m.userId == server.ownerId -> MemberRole.Owner
+            m.role == MemberRole.Owner -> MemberRole.Member
+            else -> m.role
+        }
+        m.copy(profile = p, role = role)
+    }
+    val visible = if (needle.isBlank()) resolved else resolved.filter {
         (it.profile?.name ?: "").lowercase().contains(needle) ||
             (it.profile?.username ?: "").lowercase().contains(needle)
     }
+    val groups = remember(visible, roster, statuses) { hoistMembers(visible, roster, statuses) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -221,43 +258,63 @@ fun MembersSheet(server: Server, onDismiss: () -> Unit) {
                     )
                 }
                 else -> LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
-                    items(visible, key = { it.id }) { member ->
+                    for (group in groups) {
+                        item(key = "h:${group.label}") {
+                            Text(
+                                "${group.label.uppercase()} — ${group.members.size}",
+                                color = palette.textMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+                            )
+                        }
+                    items(group.members, key = { it.id }) { member ->
+                        val offline = group.offline
+                        val status = statuses[member.userId] ?: com.wsgpolar.disband.data.UserStatus.Offline
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 8.dp),
+                                .clickable { member.profile?.let { profileFor = it } ?: run { profileFor = com.wsgpolar.disband.data.Profile(id = member.userId) } }
+                                .padding(horizontal = 20.dp, vertical = 8.dp)
+                                .then(if (offline) Modifier.alpha(0.45f) else Modifier),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             AvatarImage(
                                 url = member.profile?.avatarUrl,
                                 name = member.profile?.name ?: "?",
                                 size = 38.dp,
+                                presence = if (offline) null else status.color(palette),
+                                ring = palette.surface,
                             )
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(
-                                    member.profile?.name ?: "Unknown",
-                                    color = palette.textPrimary, fontSize = 15.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                )
-                                member.profile?.username?.let {
-                                    Text("@$it", color = palette.textMuted, fontSize = 12.sp,
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // Top role colour (and gradient), unless their
+                                    // own Aero name colour wins, as on the web.
+                                    com.wsgpolar.disband.ui.components.DisplayNameText(
+                                        member.profile,
+                                        fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                                        role = roster?.topRole(member.userId, member.roleId),
+                                        roleGradient = true,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
+                                    roster?.iconRole(member.userId, member.roleId)?.let {
+                                        Spacer(Modifier.width(4.dp))
+                                        com.wsgpolar.disband.ui.components.RoleIcon(it.icon, 15)
+                                    }
+                                    if (member.role == MemberRole.Owner) {
+                                        Spacer(Modifier.width(4.dp))
+                                        Icon(Icons.Filled.WorkspacePremium, contentDescription = "Space owner",
+                                            tint = Color(0xFFF0B232), modifier = Modifier.size(14.dp))
+                                    } else if (member.role == MemberRole.Admin) {
+                                        Spacer(Modifier.width(4.dp))
+                                        Icon(Icons.Filled.Shield, contentDescription = "Admin",
+                                            tint = palette.textMuted, modifier = Modifier.size(14.dp))
+                                    }
+                                }
+                                val sub = member.profile?.activeStatusNote ?: member.profile?.username?.let { "@$it" }
+                                sub?.let {
+                                    Text(it, color = palette.textMuted, fontSize = 12.sp,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
-                            }
-                            // Owner and admin are worth seeing at a glance;
-                            // "member" on every row is noise.
-                            if (member.role != MemberRole.Member) {
-                                Text(
-                                    member.role.name.lowercase(),
-                                    color = palette.accent, fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(50))
-                                        .background(palette.accent.copy(alpha = 0.15f))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                                )
                             }
                             if (canModerate && member.userId != selfId && member.role != MemberRole.Owner) {
                                 androidx.compose.material3.IconButton(
@@ -276,6 +333,7 @@ fun MembersSheet(server: Server, onDismiss: () -> Unit) {
                                 }
                             }
                         }
+                    }
                     }
                 }
             }
@@ -342,6 +400,8 @@ fun ServerOverflowSheet(
     var leaving by remember { mutableStateOf(false) }
     var leaveError by remember { mutableStateOf<String?>(null) }
     var confirmLeave by remember { mutableStateOf(false) }
+    var showNotify by remember { mutableStateOf(false) }
+    if (showNotify) SpaceNotificationsSheet(server) { showNotify = false; onDismiss() }
     val uid = app.currentUserId
     val isOwner = server.ownerId == uid
     var permissions by remember(server.id) { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
@@ -366,6 +426,16 @@ fun ServerOverflowSheet(
                     onDismiss()
                     onOpenSettings()
                 }
+            }
+
+            OverflowRow("Notification settings", Icons.Filled.Notifications, palette) {
+                showNotify = true
+            }
+
+            // The web's "Mark as read": every channel and every ping in the space.
+            OverflowRow("Mark as read", Icons.Filled.DoneAll, palette) {
+                com.wsgpolar.disband.data.ChannelUnreads.markServerRead(server.id)
+                onDismiss()
             }
 
             server.inviteUrl?.let { link ->
@@ -498,3 +568,44 @@ private fun copyToClipboard(context: Context, text: String) {
 /** Local alias so the import list stays readable. */
 @Composable
 private fun rememberCoroutineScopeCompat() = androidx.compose.runtime.rememberCoroutineScope()
+
+/** One heading in the member list and who sits under it. */
+internal data class MemberGroup(val label: String, val members: List<ServerMember>, val offline: Boolean = false)
+
+/**
+ * The web's member list grouping (`MemberList.tsx`): online members by their
+ * top role (every role hoists; Owner and Admin are built in), groups ordered
+ * Owner, Admin, then by the group's highest role position, then A to Z; names
+ * A to Z inside a group; everyone offline in one group at the end.
+ */
+internal fun hoistMembers(
+    members: List<ServerMember>,
+    roster: com.wsgpolar.disband.data.ServerRoster.Roster?,
+    statuses: Map<String, com.wsgpolar.disband.data.UserStatus>,
+): List<MemberGroup> {
+    fun online(m: ServerMember): Boolean {
+        val s = statuses[m.userId] ?: com.wsgpolar.disband.data.UserStatus.Offline
+        return s != com.wsgpolar.disband.data.UserStatus.Offline
+    }
+    // Close to JavaScript's localeCompare, which the web sorts with.
+    val collator = java.text.Collator.getInstance()
+    val byName = Comparator<ServerMember> { a, b ->
+        collator.compare(a.profile?.name ?: "", b.profile?.name ?: "").takeIf { it != 0 } ?: a.userId.compareTo(b.userId)
+    }
+    val (on, off) = members.partition(::online)
+    fun label(m: ServerMember): String = when {
+        m.role == MemberRole.Owner -> "Owner"
+        else -> roster?.topRole(m.userId, m.roleId)?.name ?: if (m.role == MemberRole.Admin) "Admin" else "Online"
+    }
+    val grouped = on.groupBy(::label)
+    fun priority(label: String): Int = when (label) {
+        "Owner" -> Int.MAX_VALUE
+        "Admin" -> Int.MAX_VALUE - 1
+        else -> grouped[label].orEmpty().maxOfOrNull { roster?.topRole(it.userId, it.roleId)?.position ?: -1 } ?: -1
+    }
+    val out = grouped.keys.sortedWith(compareByDescending<String> { priority(it) }.thenBy { it })
+        .map { MemberGroup(it, grouped.getValue(it).sortedWith(byName)) }
+        .toMutableList()
+    if (off.isNotEmpty()) out += MemberGroup("Offline", off.sortedWith(byName), offline = true)
+    return out
+}

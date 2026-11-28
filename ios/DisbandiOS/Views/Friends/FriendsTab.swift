@@ -328,6 +328,7 @@ struct FriendsTab: View {
     private func load() async {
         friendships = (try? await DatabaseService.friendships(currentUserId: uid)) ?? []
         loading = false
+        ProfileLive.shared.watch(friendships.compactMap { counterparty($0)?.id })
         // Keeps the dock's Friends badge exact as requests are answered.
         withAnimation(Motion.pop) { chrome?.friendRequests = incoming.count }
     }
@@ -348,9 +349,17 @@ enum FriendFilter: String, CaseIterable, Identifiable {
 /// A person in a list: avatar with presence, name and pronouns, and their
 /// custom status when they have one (their handle otherwise).
 struct FriendRow: View {
-    let profile: Profile?
+    private let given: Profile?
     /// Live presence, resolved by the caller.
     var status: UserStatus?
+
+    init(profile: Profile?, status: UserStatus? = nil) {
+        self.given = profile
+        self.status = status
+    }
+
+    /// The newest copy, so a changed custom status shows without a reload.
+    private var profile: Profile? { ProfileLive.shared.fresh(given) }
 
     var body: some View {
         HStack(spacing: 12) {

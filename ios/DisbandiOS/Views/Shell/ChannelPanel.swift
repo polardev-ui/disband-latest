@@ -62,6 +62,8 @@ struct ChannelPanel: View {
     @State private var collapsed: Set<String> = []
     @State private var lobby: Channel?
     @State private var showInvite = false
+    @State private var showNotifications = false
+    @State private var reportingSpace = false
     @State private var showSettings = false
     @State private var showCatalysts = false
     @State private var catalystCount = 0
@@ -144,6 +146,10 @@ struct ChannelPanel: View {
             CatalystSheet(serverId: server.id, serverName: server.name)
         }
         .sheet(isPresented: $showInvite) { InviteSheet(server: server) }
+        .sheet(isPresented: $showNotifications) { SpaceNotificationsSheet(server: server) }
+        .sheet(isPresented: $reportingSpace) {
+            ReportSheet(target: .server(id: server.id, name: server.name))
+        }
         .sheet(isPresented: $showSettings) {
             SpaceSettingsView(server: server, onChanged: { await onChanged(); await load() }, onDeleted: onLeft)
         }
@@ -242,11 +248,20 @@ struct ChannelPanel: View {
             // Open to every member, not just owners: anyone can Catalyst a
             // space they are in, which is the whole point of the feature.
             Button { showCatalysts = true } label: { Label("Catalysts", systemImage: "bolt.fill") }
+            Button { showNotifications = true } label: {
+                Label("Notification Settings", systemImage: "bell.badge")
+            }
+            Button { ChannelUnreadStore.shared.markServerRead(server.id) } label: {
+                Label("Mark as Read", systemImage: "checkmark.message")
+            }
             if canOpenSettings {
                 Button { showSettings = true } label: { Label("Space Settings", systemImage: "gearshape") }
             }
             if !isOwner {
                 Divider()
+                Button(role: .destructive) { reportingSpace = true } label: {
+                    Label("Report Space", systemImage: "exclamationmark.shield")
+                }
                 Button(role: .destructive) { confirmLeave = true } label: {
                     Label("Leave Space", systemImage: "rectangle.portrait.and.arrow.right")
                 }
@@ -360,6 +375,7 @@ struct ChannelPanel: View {
     private func textRow(_ channel: Channel) -> some View {
         let locked = lockedReason(for: channel)
         let unread = ChannelUnreadStore.shared.isUnread(channelId: channel.id)
+        let pings = ChannelUnreadStore.shared.mentions(channelId: channel.id)
         return RouteLink(value: SpacesRoute.chat(.channel(id: channel.id, name: channel.name),
                                                       callPeer: nil, canModerate: canModerate,
                                                       lockedReason: locked)) {
@@ -373,6 +389,15 @@ struct ChannelPanel: View {
                     .foregroundStyle(unread ? Brand.textPrimary : Brand.textSecondary)
                     .lineLimit(1)
                 Spacer()
+                if pings > 0 {
+                    Text(pings > 99 ? "99+" : "\(pings)")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(Brand.dnd, in: Capsule())
+                        .accessibilityLabel("\(pings) mention\(pings == 1 ? "" : "s")")
+                }
                 if locked != nil {
                     Image(systemName: "lock.fill")
                         .font(.caption)

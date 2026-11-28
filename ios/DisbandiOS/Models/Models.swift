@@ -134,35 +134,19 @@ struct Profile: Codable, Identifiable, Hashable {
         case listening, activity
     }
 
-    /// Display name, else username. A name made only of invisible
-    /// characters (a lone U+200E is common) counts as no name — it rendered
-    /// as a blank row instead of falling back to the username.
-    var name: String { Profile.visible(displayName) ?? Profile.visible(username) ?? "Unknown" }
+    /// The web's `displayName()` exactly: `display_name || username || "Unknown"`.
+    ///
+    /// JavaScript's `||` only skips null and the empty string. It does not
+    /// trim, and a name of Hangul fillers or a lone U+200E is shown as it is
+    /// (blank) on the web. iOS used to treat such names as missing and show
+    /// the username instead, so one person read as "spam" (their username, in
+    /// their Matcha name font) on the phone and as blank on the desktop.
+    var name: String { Profile.resolvedName(displayName, username) }
 
-    static func visible(_ value: String?) -> String? {
-        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines.union(.controlCharacters)),
-              !trimmed.isEmpty else { return nil }
-        // Something in it has to actually draw. Names made of Hangul fillers,
-        // the blank Braille cell, a combining mark with no letter under it or
-        // code points nothing is assigned to are all "blank name" tricks, and
-        // each left an empty row in every list.
-        guard trimmed.unicodeScalars.contains(where: Profile.draws) else { return nil }
-        return trimmed
-    }
-
-    /// False for scalars that put no ink on screen by themselves.
-    private static func draws(_ scalar: Unicode.Scalar) -> Bool {
-        let properties = scalar.properties
-        if properties.isWhitespace || properties.isDefaultIgnorableCodePoint { return false }
-        if scalar.value == 0x2800 { return false }   // Braille pattern blank
-        switch properties.generalCategory {
-        case .control, .format, .unassigned, .surrogate,
-             .nonspacingMark, .enclosingMark,
-             .spaceSeparator, .lineSeparator, .paragraphSeparator:
-            return false
-        default:
-            return true
-        }
+    static func resolvedName(_ displayName: String?, _ username: String?, fallback: String = "Unknown") -> String {
+        if let displayName, !displayName.isEmpty { return displayName }
+        if let username, !username.isEmpty { return username }
+        return fallback
     }
 
     /// The custom status, or nil once it has expired — the port of the web's
@@ -176,10 +160,12 @@ struct Profile: Codable, Identifiable, Hashable {
         return note
     }
     var handle: String { username ?? "user" }
-    var initials: String {
-        let base = name.trimmingCharacters(in: .whitespaces)
-        guard let first = base.first else { return "?" }
-        return String(first).uppercased()
+    /// The web's `initials()`: the first two characters of the name, upper-cased.
+    var initials: String { Profile.initials(of: name) }
+
+    static func initials(of name: String) -> String {
+        let two = String(name.prefix(2)).uppercased()
+        return two.isEmpty ? "?" : two
     }
 }
 
@@ -285,6 +271,8 @@ struct ServerMember: Codable, Identifiable, Hashable {
     let userId: String
     var role: MemberRole
     var profile: Profile?
+    /// The legacy single role, used when they hold no `member_roles`.
+    var roleId: String? = nil
 
     var id: String { "\(serverId):\(userId)" }
 
@@ -292,6 +280,7 @@ struct ServerMember: Codable, Identifiable, Hashable {
         case role, profile
         case serverId = "server_id"
         case userId = "user_id"
+        case roleId = "role_id"
     }
 }
 

@@ -9,6 +9,7 @@ import WebRTC
 struct VoiceStageView: View {
     @Environment(AppState.self) private var app
     @Environment(VoiceSession.self) private var voice
+    @State private var showSoundboard = false
 
     var body: some View {
         VStack(spacing: 14) {
@@ -28,6 +29,9 @@ struct VoiceStageView: View {
         // are wider than the phone, and as a sibling they set the stack's
         // width — every control was laid out for 520pt and ran off screen.
         .background { AuroraBackground(seed: voice.room?.id ?? "voice").ignoresSafeArea() }
+        .sheet(isPresented: $showSoundboard) {
+            SoundboardSheet().environment(app).environment(voice)
+        }
         .gesture(
             DragGesture(minimumDistance: 30).onEnded { value in
                 if value.translation.height > 120 { voice.minimized = true }
@@ -252,6 +256,12 @@ struct VoiceStageView: View {
             controlButton(voice.deafened ? "headphones.slash" : "headphones",
                           label: voice.deafened ? "Undeafen" : "Deafen",
                           active: !voice.deafened, alert: voice.deafened) { voice.toggleDeafen() }
+            // Voice channels carry soundboard clips; group calls don't (web too).
+            if voice.soundboardServerId != nil {
+                controlButton("speaker.wave.2.bubble.fill", label: "Soundboard", active: false) {
+                    showSoundboard = true
+                }
+            }
             leaveButton
         }
         .padding(8)

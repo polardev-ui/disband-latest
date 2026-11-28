@@ -65,10 +65,8 @@ struct AvatarView: View {
             )
     }
 
-    private var initials: String {
-        guard let first = name.trimmingCharacters(in: .whitespaces).first else { return "?" }
-        return String(first).uppercased()
-    }
+    /// Two characters, as the web draws them (`initials()` in `utils.ts`).
+    private var initials: String { Profile.initials(of: name) }
 }
 
 /// Generic loading / empty / error placeholder.

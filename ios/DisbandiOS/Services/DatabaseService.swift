@@ -854,15 +854,38 @@ enum DatabaseService {
     /// directly: that function normalises the value, enforces the blocked-word
     /// and format policy, and checks availability. A raw UPDATE would skip all
     /// of that and surface the CHECK-constraint failure as an opaque error.
+    ///
+    /// Changed to the web's path (`updateProfile` in `AppContext.tsx`): the
+    /// name is trimmed and lower-cased, checked against the web's
+    /// `usernameFormatError`, and written straight to `profiles.username`,
+    /// where the database's own rules (uniqueness, change limits) apply.
+    /// `complete_signup_profile` is a sign-up helper: given a name that
+    /// didn't fit its pattern it quietly invented a different one from the
+    /// display name, so a rename could "succeed" to a username you never
+    /// typed (report 1083bd33).
     static func updateUsername(_ username: String, displayName: String? = nil) async throws {
-        struct Params: Encodable {
-            let p_username: String
-            let p_display_name: String?
+        let norm = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let problem = usernameFormatError(norm) {
+            throw NSError(domain: "Username", code: 1, userInfo: [NSLocalizedDescriptionKey: problem])
         }
-        try await client
-            .rpc("complete_signup_profile",
-                 params: Params(p_username: username, p_display_name: displayName))
-            .execute()
+        if let reason = await usernameUnavailableReason(norm) {
+            throw NSError(domain: "Username", code: 2, userInfo: [NSLocalizedDescriptionKey: reason])
+        }
+        guard let uid = client.auth.currentUser?.id.uuidString.lowercased() else { return }
+        var patch: [String: String] = ["username": norm]
+        if let displayName, !displayName.isEmpty { patch["display_name"] = displayName }
+        try await client.from("profiles").update(patch).eq("id", value: uid).execute()
+    }
+
+    /// The web's `usernameFormatError` (`lib/username-policy.ts`), format part.
+    /// Blocked words are answered by `check_username_available`.
+    static func usernameFormatError(_ username: String) -> String? {
+        let norm = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if norm.isEmpty { return "Enter a username" }
+        if norm.range(of: "^[a-z0-9_]{2,25}$", options: .regularExpression) == nil {
+            return "Use 2–25 letters, numbers, or underscores"
+        }
+        return nil
     }
 
     /// Live availability check for a candidate username.
@@ -964,6 +987,21 @@ enum DatabaseService {
             .eq("read", value: false)
             .execute()
         return response.count ?? 0
+    }
+
+    /// Mark the unread mention notifications behind these links read: the
+    /// web's `markDmReadNow` / `markGroupReadNow` (`dm:<thread>`,
+    /// `/group/<group>` and `group:<group>`), so a ping seen on the phone
+    /// stops showing as unread in the desktop inbox.
+    static func markMentionNotificationsRead(links: [String], currentUserId: String) async {
+        guard !links.isEmpty else { return }
+        _ = try? await client.from("notifications")
+            .update(["read": true])
+            .eq("user_id", value: currentUserId)
+            .eq("type", value: "mention")
+            .eq("read", value: false)
+            .in("link", values: links)
+            .execute()
     }
 
     /// Mark one notification read.

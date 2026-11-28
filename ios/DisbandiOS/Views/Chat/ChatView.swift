@@ -38,6 +38,26 @@ struct ChatView: View {
     @State private var botCommands: [BotCommand] = []
     @State private var runningCommand: BotCommand?
     @State private var onlineCount: Int?
+    /// The space's roles and holders, for author name colours.
+    @State private var spaceRoles: SpaceRoles?
+    /// The message being forwarded (the sheet is open while set).
+    @State private var forwarding: DisplayMessage?
+    @State private var showPins = false
+    /// Ids of this conversation's pinned messages, for Pin / Unpin.
+    @State private var pinnedIds: Set<String> = []
+    /// Pin messages here: anyone in a DM, `pin_messages` in a space.
+    @State private var canPin = false
+    /// A pinned message to scroll to once the sheet has closed.
+    @State private var pendingJumpId: String?
+    /// A short confirmation ("Forwarded to Sam").
+    @State private var notice: String?
+    @State private var showSearch = false
+    @State private var reportingMessage: DisplayMessage?
+    /// A search result in another channel of the space, opened on top.
+    @State private var openedElsewhere: ChatSource?
+    @State private var saved = SavedMessages.shared
+    /// The composer's text is kept per conversation, as the web does.
+    @State private var draftLoaded = false
     @State private var draft = ""
     @State private var stickToBottom = true
     /// When the reader last had a finger on the list. Only their own
@@ -137,6 +157,15 @@ struct ChatView: View {
                                value: model.typers.map(\.userId))
                 }
             if let error = model.sendError { sendErrorBanner(error) }
+            if let notice {
+                Label(notice, systemImage: "checkmark.circle.fill")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(Brand.textSecondary)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(Brand.surface, in: Capsule())
+                    .padding(.bottom, 6)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             if case .dm(let threadId, _) = model.source {
                 MessageRequestBar(threadId: threadId, peer: callPeer)
             }
@@ -210,6 +239,21 @@ struct ChatView: View {
         .solidNavigationBar()
         .toolbar {
             ToolbarItem(placement: .principal) { headerTitle }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showSearch = true } label: {
+                    Image(systemName: "magnifyingglass").foregroundStyle(Brand.textSecondary)
+                }
+                .accessibilityLabel("Search messages")
+            }
+            if showsPinsButton {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showPins = true } label: {
+                        Image(systemName: "pin")
+                            .foregroundStyle(Brand.textSecondary)
+                    }
+                    .accessibilityLabel("Pinned messages")
+                }
+            }
             if case .group(let groupId, let name) = model.source {
                 ToolbarItem(placement: .topBarTrailing) {
                     groupCallButton(groupId: groupId, name: name)
@@ -248,6 +292,41 @@ struct ChatView: View {
                 }
                 Button { UIPasteboard.general.string = target.content } label: {
                     Label("Copy Text", systemImage: "doc.on.doc")
+                }
+                if !target.pending, app.currentUserId != nil {
+                    Button { forwarding = target } label: {
+                        Label("Forward", systemImage: "arrowshape.turn.up.right")
+                    }
+                }
+                if !target.pending, !target.id.hasPrefix("optimistic-") {
+                    let savedRow = saved.saved(target.id, context: model.source.contextType)
+                    Button {
+                        Task {
+                            if let savedRow {
+                                if let problem = await saved.unsave(savedRow) { model.sendError = problem }
+                                else { showNotice("Removed from saved") }
+                            } else if let problem = await saved.save(target, in: model.source) {
+                                model.sendError = problem
+                            } else {
+                                showNotice("Message saved")
+                            }
+                        }
+                    } label: {
+                        Label(savedRow == nil ? "Save Message" : "Remove from Saved",
+                              systemImage: savedRow == nil ? "bookmark" : "bookmark.slash")
+                    }
+                }
+                if canPin, !target.pending, !target.id.hasPrefix("optimistic-") {
+                    let pinned = pinnedIds.contains(target.id)
+                    Button { Task { await togglePin(target, pinned: pinned) } } label: {
+                        Label(pinned ? "Unpin Message" : "Pin Message",
+                              systemImage: pinned ? "pin.slash" : "pin")
+                    }
+                }
+                if target.authorId != app.currentUserId, !target.pending, target.webhook == nil {
+                    Button(role: .destructive) { reportingMessage = target } label: {
+                        Label("Report Message", systemImage: "exclamationmark.shield")
+                    }
                 }
                 if target.authorId == app.currentUserId || canModerate {
                     Button(role: .destructive) {
@@ -300,6 +379,45 @@ struct ChatView: View {
             model.stop()
         }
         .sheet(isPresented: $showGifPicker) { GifPickerView { sendGif($0) } }
+        .sheet(item: $forwarding) { message in
+            if let uid = app.currentUserId {
+                ForwardSheet(message: message, currentUserId: uid) { done in
+                    showNotice(done)
+                }
+            }
+        }
+        .sheet(isPresented: $showPins) {
+            PinnedMessagesSheet(source: model.source, canUnpin: canPin,
+                                onJump: { pendingJumpId = $0 },
+                                onChanged: { Task { await loadPins() } })
+        }
+        .task(id: model.source) { await loadPinPermissionAndPins() }
+        .task(id: app.currentUserId) {
+            if !saved.loaded { await saved.load(userId: app.currentUserId) }
+        }
+        .sheet(isPresented: $showSearch) {
+            MessageSearchView(source: model.source, serverId: channelServerId) { hit, channelName in
+                openSearchResult(hit, channelName: channelName)
+            }
+        }
+        .sheet(item: $reportingMessage) { message in
+            ReportSheet(target: .message(id: message.id, surface: model.source.contextType,
+                                         preview: ExpressionStore.shared.decode(message.content)))
+        }
+        .navigationDestination(item: $openedElsewhere) { source in
+            ChatView(source: source, canModerate: canModerate)
+        }
+        .onAppear {
+            restoreDraft()
+            // Coming back to this chat from one pushed over it: the shared
+            // role table belongs to whichever chat is on screen.
+            if isChannel, let spaceRoles {
+                ChatMarkdown.setRoles(spaceRoles.roles.map { (name: $0.name, color: $0.color) })
+            } else if !isChannel {
+                ChatMarkdown.setRoles([])
+            }
+        }
+        .onChange(of: draft) { _, value in storeDraft(value) }
         .sheet(isPresented: $showExpressions) {
             ExpressionPickerSheet(
                 onSticker: { sendSticker($0) },
@@ -323,7 +441,9 @@ struct ChatView: View {
             // needs all of these. The profile itself takes its viewer values
             // directly for the same reason.
             ProfileDetailView(profile: $0, viewerId: app.currentUserId, presence: presence,
-                              onCall: call.phase == .idle ? { peer in Task { await call.startCall(peer: peer) } } : nil)
+                              onCall: call.phase == .idle ? { peer in Task { await call.startCall(peer: peer) } } : nil,
+                              // Roles belong to a space: never in a DM or group.
+                              serverId: isChannel ? channelServerId : nil)
                 .environment(app)
                 .environment(call)
                 .environment(unreadStore)
@@ -353,11 +473,19 @@ struct ChatView: View {
         .task(id: onlinePresenceKey) { await refreshOnlineCount() }
         // The space's roles, so role pings show in their colour.
         .task(id: model.source) {
-            guard case .channel(let id, _) = model.source else { return }
+            guard case .channel(let id, _) = model.source else {
+                // Role chips are drawn from one shared table; a DM or group
+                // must not keep the last space's roles (reports 1984bf74,
+                // ad0498d5).
+                ChatMarkdown.setRoles([])
+                spaceRoles = nil
+                return
+            }
             if channelServerId == nil { channelServerId = await ServerOnlineCount.serverId(forChannel: id) }
             guard let serverId = channelServerId,
-                  let roles = try? await ServerAdmin.roles(serverId: serverId) else { return }
-            ChatMarkdown.setRoles(roles.map { (name: $0.name, color: $0.color) })
+                  let space = await SpaceRoles.load(serverId: serverId) else { return }
+            ChatMarkdown.setRoles(space.roles.map { (name: $0.name, color: $0.color) })
+            spaceRoles = space
         }
         // Runs on appear as well as when loading changes. A conversation
         // painted from the cache never shows a loading state, so watching
@@ -531,6 +659,93 @@ struct ChatView: View {
         guard !theirs.isEmpty else { return }
         let first = theirs[max(0, theirs.count - unreadAtOpen)]
         withAnimation(Motion.quick) { unreadAnchorId = first.id }
+    }
+
+    private var draftKey: String? {
+        app.currentUserId.map { "draft:\($0):\(model.source.cacheKey)" }
+    }
+
+    private func restoreDraft() {
+        guard !draftLoaded else { return }
+        draftLoaded = true
+        guard let key = draftKey, draft.isEmpty,
+              let saved = UserDefaults.standard.string(forKey: key), !saved.isEmpty else { return }
+        draft = saved
+    }
+
+    /// An edit borrows the composer, so it is never saved as the draft.
+    private func storeDraft(_ value: String) {
+        guard draftLoaded, editingMessage == nil, let key = draftKey else { return }
+        if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            UserDefaults.standard.removeObject(forKey: key)
+        } else {
+            UserDefaults.standard.set(value, forKey: key)
+        }
+    }
+
+    private func openSearchResult(_ hit: MessageSearchView.Hit, channelName: String?) {
+        if hit.containerId == model.source.notificationSourceId {
+            pendingJumpId = hit.messageId
+        } else if hit.sourceKind == "channel" {
+            openedElsewhere = .channel(id: hit.containerId, name: channelName ?? "channel")
+        }
+    }
+
+    private var isChannel: Bool {
+        if case .channel = model.source { return true }
+        return false
+    }
+
+    /// Pins exist in DMs and channels (the web has none in group chats).
+    private var showsPinsButton: Bool {
+        if case .group = model.source { return false }
+        return true
+    }
+
+    private func showNotice(_ text: String) {
+        withAnimation(Motion.quick) { notice = text }
+        Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            withAnimation(Motion.quick) { if notice == text { notice = nil } }
+        }
+    }
+
+    private func loadPinPermissionAndPins() async {
+        switch model.source {
+        case .dm:
+            canPin = true
+        case .group:
+            // The web offers pins in DMs and spaces only.
+            canPin = false
+            return
+        case .channel(let id, _):
+            if channelServerId == nil { channelServerId = await ServerOnlineCount.serverId(forChannel: id) }
+            if let serverId = channelServerId {
+                canPin = await ServerAdmin.permissions(serverId: serverId)["pin_messages"] == true
+            }
+        }
+        await loadPins()
+    }
+
+    private func loadPins() async {
+        guard let pins = try? await PinService.pins(source: model.source) else { return }
+        pinnedIds = Set(pins.map(\.messageId))
+    }
+
+    private func togglePin(_ message: DisplayMessage, pinned: Bool) async {
+        do {
+            if pinned {
+                try await PinService.unpin(messageId: message.id, in: model.source)
+                pinnedIds.remove(message.id)
+                showNotice("Message unpinned")
+            } else {
+                try await PinService.pin(message, in: model.source)
+                pinnedIds.insert(message.id)
+                showNotice("Message pinned")
+            }
+        } catch {
+            model.sendError = pinned ? "Couldn't unpin that message." : "Couldn't pin that message."
+        }
     }
 
     /// Scrolls to a message (the one a reply points at) and lights it briefly.
@@ -714,7 +929,8 @@ struct ChatView: View {
                                     },
                                     onHoldReactStarted: { frame in holdReactStarted(frame, message: message) },
                                     highlighted: message.id == highlightedId,
-                                    onTapReply: { id in jump(to: id, using: proxy) }
+                                    onTapReply: { id in jump(to: id, using: proxy) },
+                                    authorRoleColor: spaceRoles?.topRole(of: message.authorId)?.swiftColor
                                 )
                               }
                               .id(message.id)
@@ -848,6 +1064,15 @@ struct ChatView: View {
                 }
                 .onChange(of: stickToBottom) { _, following in
                     if following { missedCount = 0 }
+                }
+                .onChange(of: pendingJumpId) { _, id in
+                    guard let id else { return }
+                    pendingJumpId = nil
+                    if model.messages.contains(where: { $0.id == id }) {
+                        jump(to: id, using: proxy)
+                    } else {
+                        showNotice("That message is further back than what's loaded.")
+                    }
                 }
                 .onChange(of: model.messages.count) {
                     if stickToBottom, model.messages.last != nil {

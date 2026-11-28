@@ -80,8 +80,13 @@ fun ServerRail(
     unreadForServer: (String) -> Int = { 0 },
     onAddServer: () -> Unit = {},
     onExplore: () -> Unit = {},
+    /** Unread DMs and group messages, the red count on the Messages tile. */
+    inboxBadge: Int = 0,
 ) {
     val palette = LocalPalette.current
+    // Red ping counts per space (get_channel_mention_unread), as on the web.
+    val serverMentions by com.wsgpolar.disband.data.ChannelUnreads.serverMentions.collectAsState()
+    val badgeFor: (String) -> Int = { id -> (serverMentions[id] ?: 0) + unreadForServer(id) }
 
     Column(
         modifier = modifier
@@ -95,7 +100,8 @@ fun ServerRail(
     ) {
         RailButton(
             selected = selectedServerId == null,
-            label = "Messages",
+            label = if (inboxBadge > 0) "Messages, $inboxBadge unread" else "Messages",
+            badge = inboxBadge,
             onClick = onInboxSelected,
         ) {
             Box(
@@ -152,7 +158,7 @@ fun ServerRail(
             RailButton(
                 selected = server.id == selectedServerId,
                 label = if (server.id in unreadServers) "${server.name}, unread messages" else server.name,
-                badge = unreadForServer(server.id),
+                badge = badgeFor(server.id),
                 unread = server.id in unreadServers,
                 onClick = { onServerSelected(server) },
             ) {
@@ -175,7 +181,7 @@ fun ServerRail(
                 RailButton(
                     selected = !open && members.any { it.id == selectedServerId },
                     label = if (open) "Close ${folder.name}" else "Open ${folder.name}",
-                    badge = if (open) 0 else members.sumOf { unreadForServer(it.id) },
+                    badge = if (open) 0 else members.sumOf { badgeFor(it.id) },
                     unread = !open && members.any { it.id in unreadServers },
                     onClick = { expanded = if (open) expanded - folder.id else expanded + folder.id },
                 ) {

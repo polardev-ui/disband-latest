@@ -95,6 +95,9 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit, onRequestC
         onIncoming = { row -> row.authorId?.let { typing.clear(it) }; if (row.authorId != uid) runCatching { Database.markDmRead(thread.id) } },
     )
     val rows = timeline.rows
+    // No space here: no space roles (bug 1984bf74 / ad0498d5). Role pings
+    // coloured from the last space visited must not carry into a DM.
+    LaunchedEffect(thread.id) { ChatMarkdown.setRoles(emptyList()) }
 
     // Keyed by thread: switching conversations used to leak the previous
     // thread's reactions, staged images and typing state into the new one.
@@ -141,6 +144,7 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit, onRequestC
     }
 
     ChatScaffold(
+        chatContext = com.wsgpolar.disband.data.ChatContext(com.wsgpolar.disband.data.ChatKind.Dm, thread.id),
         mentionSource = MentionSource.Local(listOfNotNull(friend)),
         title = friend?.name ?: "DM",
         subtitle = friend?.let { "@" + it.handle } ?: "",
@@ -253,6 +257,7 @@ fun DmChatScreen(app: AppState, thread: DmThread, onBack: () -> Unit, onRequestC
     actionRow?.let { row ->
         val isOwn = row.authorId == uid || row.author?.id == uid
         MessageActionSheet(
+            chatContext = com.wsgpolar.disband.data.ChatContext(com.wsgpolar.disband.data.ChatKind.Dm, thread.id),
             row = row,
             isOwn = isOwn,
             onDismiss = { actionRow = null },

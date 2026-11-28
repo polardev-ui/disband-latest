@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -337,6 +338,8 @@ private fun ChannelRow(
     val pressed by interaction.collectIsPressedAsState()
     val unreadChannels by com.wsgpolar.disband.data.ChannelUnreads.channels.collectAsState()
     val unread = !isSelected && channel.type != ChannelType.Voice && channel.id in unreadChannels
+    val mentionCounts by com.wsgpolar.disband.data.ChannelUnreads.mentions.collectAsState()
+    val mentions = if (isSelected) 0 else mentionCounts[channel.id] ?: 0
 
     // Voice takes the speaker, read-only announcement channels the lock, the
     // rest the hash — the same three iOS uses. The glyph carries the "#", so
@@ -405,6 +408,26 @@ private fun ChannelRow(
         if (channel.type == ChannelType.Voice && occupants.isNotEmpty()) {
             VoiceOccupants(occupants)
         }
+        // The web's red mention count on the channel row.
+        if (mentions > 0) MentionBadge(mentions)
+    }
+}
+
+/** A red pill with a count, as the web's channel and DM ping badges. */
+@Composable
+fun MentionBadge(count: Int, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .background(Brand.dnd)
+            .padding(horizontal = 6.dp, vertical = 1.dp)
+            .defaultMinSize(minWidth = 18.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            if (count > 99) "99+" else "$count",
+            color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+        )
     }
 }
 

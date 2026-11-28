@@ -51,6 +51,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Gif
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Close
@@ -125,7 +126,8 @@ import com.wsgpolar.disband.data.Server
 import com.wsgpolar.disband.ui.AvatarImage
 import com.wsgpolar.disband.ui.main.ShellChromeState
 
-/** Display row for any message kind (DM / channel / group). */
+/** Display row for any message kind (DM / channel / group). Serializable for [com.wsgpolar.disband.data.ChatCache]. */
+@kotlinx.serialization.Serializable
 data class ChatRow(
     val id: String,
     val author: Profile?,
@@ -161,6 +163,7 @@ data class ChatRow(
 }
 
 /** One emoji on a message, with how many people used it. */
+@kotlinx.serialization.Serializable
 data class ReactionSummaryRow(
     val emoji: String,
     val count: Int,
@@ -231,11 +234,15 @@ fun ChatScaffold(
     commandBar: (@Composable (draft: String, clear: () -> Unit) -> Unit)? = null,
     /** Who an "@" can suggest. Null turns suggestions off. */
     mentionSource: MentionSource? = null,
+    /** The space a channel belongs to, so profiles show the person's roles there. */
+    serverId: String? = null,
+    /** Enables the pinned / search / saved menu in the bar. */
+    chatContext: com.wsgpolar.disband.data.ChatContext? = null,
 ) {
     val palette = LocalPalette.current
     val listState = rememberLazyListState()
     var profileFor by remember { mutableStateOf<Profile?>(null) }
-    profileFor?.let { UserProfileSheet(initial = it, onDismiss = { profileFor = null }) }
+    profileFor?.let { UserProfileSheet(initial = it, serverId = serverId, onDismiss = { profileFor = null }) }
 
     val scope = rememberCoroutineScope()
     BackHandler(onBack = onBack)
@@ -294,6 +301,7 @@ fun ChatScaffold(
             avatarName = avatarName,
             callAction = callAction,
             onBack = onBack,
+            chatContext = chatContext,
         )
         if (replyTo != null) {
             ReplyBanner(row = replyTo, onDismiss = onReplyDismiss ?: {})
@@ -412,6 +420,7 @@ private fun ChatTopBar(
     avatarName: String,
     callAction: (@Composable () -> Unit)?,
     onBack: () -> Unit,
+    chatContext: com.wsgpolar.disband.data.ChatContext? = null,
 ) {
     val palette = LocalPalette.current
     Row(
@@ -453,7 +462,11 @@ private fun ChatTopBar(
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        if (callAction != null) callAction() else Spacer(Modifier.size(48.dp))
+        if (chatContext != null) {
+            ConversationToolsButton(chatContext)
+            if (callAction != null) Spacer(Modifier.size(6.dp))
+        }
+        if (callAction != null) callAction() else if (chatContext == null) Spacer(Modifier.size(48.dp))
     }
 }
 
@@ -621,6 +634,8 @@ fun MessageActionSheet(
     onDelete: () -> Unit,
     onReact: (String) -> Unit,
     onForward: (() -> Unit)? = null,
+    /** The conversation, for Pin and Save. */
+    chatContext: com.wsgpolar.disband.data.ChatContext? = null,
 ) {
     val palette = LocalPalette.current
     androidx.compose.material3.ModalBottomSheet(
@@ -656,6 +671,11 @@ fun MessageActionSheet(
             SheetAction("Copy text", Icons.Filled.ContentCopy, palette) { onCopy(); onDismiss() }
             if (onForward != null) {
                 SheetAction("Forward", Icons.AutoMirrored.Filled.Forward, palette) { onForward(); onDismiss() }
+            }
+            if (chatContext != null && !row.pending) {
+                MessageToolActions(chatContext, row, onDismiss) { label, icon, click ->
+                    SheetAction(label, icon, palette) { click() }
+                }
             }
             if (isOwn && row.content.isNotBlank()) {
                 SheetAction("Edit", Icons.Filled.Edit, palette) { onEdit(); onDismiss() }
@@ -786,6 +806,7 @@ private fun Composer(
     var unexpectedError by remember { mutableStateOf<String?>(null) }
     var attachMenu by remember { mutableStateOf(false) }
     var showPoll by remember { mutableStateOf(false) }
+    var showGift by remember { mutableStateOf(false) }
     var showGifs by remember { mutableStateOf(false) }
     var showExpressions by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -808,6 +829,14 @@ private fun Composer(
         GifPickerSheet(onDismiss = { showGifs = false }) { gif ->
             val uid = runCatching { com.wsgpolar.disband.core.DisbandSupabase.auth.currentUserOrNull()?.id }.getOrNull()
             if (uid != null) scope.launch { attachments.sendGif(uid, gif) }
+        }
+    }
+    if (showGift) {
+        GiftPickerSheet(onDismiss = { showGift = false }) { link ->
+            // Into the box, as iOS: the person can add a note before sending.
+            val current = fieldState.text.toString()
+            val lead = if (current.isNotEmpty() && !current.last().isWhitespace()) " " else ""
+            fieldState.edit { append("$lead$link ") }
         }
     }
     if (showPoll && attachments != null) {
@@ -880,6 +909,14 @@ private fun Composer(
                         onClick = {
                             attachMenu = false
                             showPoll = true
+                        },
+                    )
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Gift") },
+                        leadingIcon = { Icon(Icons.Filled.CardGiftcard, contentDescription = null) },
+                        onClick = {
+                            attachMenu = false
+                            showGift = true
                         },
                     )
                 }

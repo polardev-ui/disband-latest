@@ -58,6 +58,11 @@ struct ProfileTab: View {
                                              title: "Status", detail: profile?.activeStatusNote ?? ownStatus?.label)
                         }
                         SettingsDivider()
+                        NavigationLink { SavedMessagesView().hidesDock().solidNavigationBar() } label: {
+                            SettingsRowLabel(symbol: "bookmark.fill", tint: Color(hex: 0xE67E22),
+                                             title: "Saved messages", detail: nil)
+                        }
+                        SettingsDivider()
                         NavigationLink { GuildTagPickerView().hidesDock().solidNavigationBar() } label: {
                             SettingsRowLabel(symbol: "tag.fill", tint: Color(hex: 0x9B59B6),
                                              title: "Guild tag", detail: nil)
@@ -699,7 +704,11 @@ struct EditProfileSheet: View {
                 guard usernameChanged else { usernameProblem = nil; return }
                 try? await Task.sleep(nanoseconds: 400_000_000)
                 guard !Task.isCancelled else { return }
-                let candidate = username.trimmingCharacters(in: .whitespaces)
+                let candidate = username.trimmingCharacters(in: .whitespaces).lowercased()
+                if let format = DatabaseService.usernameFormatError(candidate) {
+                    usernameProblem = format
+                    return
+                }
                 usernameProblem = await DatabaseService.usernameUnavailableReason(candidate)
             }
             .alert("Couldn't save", isPresented: .constant(saveError != nil)) {
@@ -893,7 +902,10 @@ struct EditProfileSheet: View {
     /// The database raises these as P0001 with a readable message; strip the
     /// PostgREST wrapper so the user sees the sentence, not the envelope.
     private func friendlyRenameError(_ error: Error) -> String {
-        let text = error.localizedDescription
+        let text = (error as? PostgrestError)?.message ?? error.localizedDescription
+        if (error as? PostgrestError)?.code == "23505" || text.localizedCaseInsensitiveContains("duplicate key") {
+            return "That username is already taken."
+        }
         if text.localizedCaseInsensitiveContains("already taken") {
             return "That username is already taken."
         }

@@ -385,6 +385,7 @@ final class AppState {
         await PushManager.shared.unregisterCurrentDevice()
         await VoipPushService.shared.unregisterCurrentDevice()
         InboxCache.clear()
+        ChatCache.shared.clearAll()
         try? await client.auth.signOut()
     }
 

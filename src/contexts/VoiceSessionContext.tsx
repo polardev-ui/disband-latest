@@ -100,7 +100,12 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
 
   useEffect(() => {
-    audioRefs.current.forEach((el) => { el.muted = deafened; });
+    // Undeafening puts back each person's own mute rather than unmuting
+    // everyone (someone muted locally stayed audible after a deafen).
+    audioRefs.current.forEach((el, uid) => {
+      applyParticipantAudioControls(el, uid);
+      if (deafened) el.muted = true;
+    });
   }, [deafened]);
 
   const deafenedRef = useRef(deafened);

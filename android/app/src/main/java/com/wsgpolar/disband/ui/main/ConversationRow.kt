@@ -54,6 +54,8 @@ fun ConversationRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     ringColor: Color = LocalPalette.current.surface,
+    /** A person's conversation: their name is drawn by the web's rules (font, colour). */
+    profile: com.wsgpolar.disband.data.Profile? = null,
 ) {
     val palette = LocalPalette.current
     val isUnread = unread > 0
@@ -87,13 +89,11 @@ fun ConversationRow(
 
         Column(Modifier.weight(1f)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    name,
-                    color = palette.textPrimary,
+                com.wsgpolar.disband.ui.components.DisplayNameText(
+                    profile,
+                    text = if (profile == null) name else null,
                     fontSize = 16.sp,
                     fontWeight = if (isUnread) FontWeight.Bold else FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
                 GuildTagView(userId = userId, size = GuildTagBadgeSize.Small)

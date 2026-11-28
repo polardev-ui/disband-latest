@@ -21,11 +21,18 @@ enum ServerAdmin {
         var permissions: [String: Bool]
         var isDefault: Bool?
         var icon: String?
+        /// A two-colour role: the member list draws the name as a gradient.
+        var gradientTo: String? = nil
+        var gradientAnimated: Bool? = nil
+        var selfAssignable: Bool? = nil
 
         enum CodingKeys: String, CodingKey {
             case id, name, color, position, permissions, icon
             case serverId = "server_id"
             case isDefault = "is_default"
+            case gradientTo = "gradient_to"
+            case gradientAnimated = "gradient_animated"
+            case selfAssignable = "self_assignable"
         }
     }
 

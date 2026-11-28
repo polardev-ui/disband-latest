@@ -62,7 +62,14 @@ struct DisbandiOSApp: App {
                     music.start(userId: scenePhase == .active ? appState.currentUserId : nil,
                                 presence: presence)
                 }
+                .task(id: appState.currentUserId) {
+                    ProfileLive.shared.start(userId: appState.currentUserId)
+                    ProfileLive.shared.put(appState.profile)
+                }
                 .onChange(of: appState.profile) { _, profile in
+                    // Your own copy everywhere it is drawn (member list,
+                    // profile sheet, chat), the moment it is saved.
+                    ProfileLive.shared.put(profile)
                     PushManager.shared.doNotDisturb =
                         profile?.status == .dnd || profile?.preferredStatus == .dnd
                     // Presence starts as soon as the account is known, often
@@ -107,6 +114,12 @@ struct DisbandiOSApp: App {
                         return
                     }
                     await refreshMentionBadge(uid)
+                }
+                // A ping read here, on another device, or a new one: the
+                // icon follows (debounced inside the store's own refresh).
+                .onReceive(NotificationCenter.default.publisher(for: ChannelUnreadStore.mentionsChanged)) { _ in
+                    guard let uid = appState.currentUserId else { return }
+                    Task { await refreshMentionBadge(uid) }
                 }
                 .onChange(of: scenePhase) { _, phase in
                     // iOS suspends the app in the background anyway; stopping

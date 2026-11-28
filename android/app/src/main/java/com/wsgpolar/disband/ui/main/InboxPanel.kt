@@ -40,6 +40,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.wsgpolar.disband.ui.components.CapsuleSearchField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -285,6 +286,7 @@ fun InboxPanel(
                     modifier = Modifier.animateItem(),
                     iconUrl = thread.friend?.avatarUrl,
                     name = thread.friend?.name ?: "Unknown",
+                    profile = thread.friend?.let { com.wsgpolar.disband.data.ProfileStore.resolve(it) },
                     userId = thread.friend?.id,
                     status = thread.friend?.let { statusOf(it.id) },
                     preview = thread.lastMessagePreview,
@@ -306,8 +308,10 @@ fun InboxPanel(
         items(items, key = { it.key }, contentType = { "conversation" }) { item ->
             when (item) {
                 is InboxItem.Dm -> {
-                    val friend = item.thread.friend
+                    val stored by com.wsgpolar.disband.data.ProfileStore.profiles.collectAsState()
+                    val friend = item.thread.friend?.let { stored[it.id] ?: it }
                     ConversationRow(
+                        profile = friend,
                         modifier = Modifier.animateItem(),
                         iconUrl = friend?.avatarUrl,
                         name = friend?.name ?: "Unknown",

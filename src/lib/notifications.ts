@@ -39,6 +39,11 @@ export function parseNotificationLink(link: string | null): NotificationTarget |
   if (link.startsWith("channel:")) return { kind: "channel", channelId: link.slice(8) };
   if (link.startsWith("dm:")) return { kind: "dm", threadId: link.slice(3) };
   if (link.startsWith("group:")) return { kind: "group", groupId: link.slice(6) };
+  // Group mentions are written by the database as `/group/<id>`
+  // (migrations 0012 and 0030). Without this, clicking one in the inbox
+  // said the conversation couldn't be opened.
+  if (link.startsWith("/group/")) return { kind: "group", groupId: link.slice(7) };
+  if (link.startsWith("group/")) return { kind: "group", groupId: link.slice(6) };
   return null;
 }
 

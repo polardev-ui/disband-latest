@@ -12,7 +12,7 @@ import Foundation
 /// Optional fields are omitted from the JSON when nil, which is what the web
 /// expects — it tests `payload.to` for presence, not for null.
 struct MeshSignal: Codable, Sendable {
-    /// "offer" | "answer" | "ice" | "leave" | "screen" | "ring"
+    /// "offer" | "answer" | "ice" | "leave" | "screen" | "hello" | "soundboard" | "ring"
     var type: String
     var from: String
     var to: String?
@@ -20,6 +20,8 @@ struct MeshSignal: Codable, Sendable {
     var candidate: CallIceCandidate?
     /// Only on "screen": whether `from` started or stopped sharing.
     var sharing: Bool?
+    /// Only on "soundboard": the clip everyone plays for themselves.
+    var url: String?
     /// Marks messages from the native iOS app. The web ignores unknown keys;
     /// two iPhones use it to break an offer collision deterministically
     /// (see `VoiceSession.handleOffer`).

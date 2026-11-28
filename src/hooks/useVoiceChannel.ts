@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { buildScreenConstraints, clearActiveScreenShare, setActiveScreenShare, tuneActiveScreenShare } from "@/lib/stream-quality";
+import { buildScreenConstraints, shareAudioTrack, clearActiveScreenShare, setActiveScreenShare, tuneActiveScreenShare } from "@/lib/stream-quality";
 import type { SubscriptionPlan } from "@/lib/subscription";
 import {
   attachRemoteTrack, ensureLanes, laneOfTransceiver, openLanesForSending, setLaneTrack, tuneOpus,
-  LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO, receivingVideo,
+  LANE_AUDIO, LANE_CAMERA, LANE_SCREEN, LANE_SCREEN_AUDIO, decodedVideoFrames,
 } from "@/lib/webrtc";
 import { getDisbandUserMedia } from "@/lib/media";
 import { VoiceMixer, setActiveVoiceMixer } from "@/lib/voice-mixer";
@@ -133,6 +133,59 @@ export function useVoiceChannel(
   // on older apps ("mesh" transport) still get a direct connection.
   const sfuRef = useRef<SfuSeat | null>(null);
   const transportsRef = useRef<Map<string, "sfu" | "mesh">>(new Map());
+  // Per direct peer: restart the check for their screen lane (see watchScreenLane).
+  const screenChecksRef = useRef<Map<string, () => void>>(new Map());
+  const screenRunRef = useRef<Map<string, number>>(new Map());
+
+  /*
+   A direct peer's screen lane exists from the moment the call connects, so
+   its track is there long before anyone shares. Chrome's bandwidth probes
+   unmute that empty track, so "unmuted" can't mean "sharing", and the old
+   check looked for decoded frames once, for 4 seconds, when the track
+   unmuted. A probe unmuted it, the check found nothing and gave up, and
+   when the person really started sharing later there was no new unmute
+   event: nobody saw their screen until they left and rejoined.
+
+   Now the lane is watched for as long as its track is live and unmuted and
+   not yet on screen, and the picture shows once the decoded-frame count
+   rises (a rise, not "above zero": a share that already stopped keeps its
+   old count). It restarts on unmute and on the sharer's "screen" signal.
+  */
+  const watchScreenLane = useCallback(
+    (remoteId: string, pc: RTCPeerConnection, receiver: RTCRtpReceiver, track: MediaStreamTrack) => {
+      const run = (screenRunRef.current.get(remoteId) ?? 0) + 1;
+      screenRunRef.current.set(remoteId, run);
+      const current = () =>
+        screenRunRef.current.get(remoteId) === run &&
+        peersRef.current.get(remoteId) === pc &&
+        track.readyState === "live" &&
+        !track.muted;
+      const startedAt = Date.now();
+      void (async () => {
+        let baseline: number | null = null;
+        while (current()) {
+          const frames = await decodedVideoFrames(receiver);
+          if (!current()) return;
+          if (frames !== null) {
+            if (baseline === null) {
+              baseline = frames;
+            } else if (frames > baseline) {
+              setRemoteScreens((prev) =>
+                prev.get(remoteId)?.getVideoTracks()[0] === track
+                  ? prev
+                  : new Map(prev).set(remoteId, new MediaStream([track])),
+              );
+              return;
+            }
+          }
+          // Quick at first (a share that's already running shows at once),
+          // then a light poll while the lane sits idle.
+          await new Promise((r) => window.setTimeout(r, Date.now() - startedAt < 8_000 ? 400 : 1_500));
+        }
+      })();
+    },
+    [],
+  );
 
   useEffect(() => {
     localStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = !micMuted; });
@@ -257,6 +310,9 @@ export function useVoiceChannel(
     peerGenerationRef.current.set(remoteId, (peerGenerationRef.current.get(remoteId) ?? 0) + 1);
 
     pendingIceRef.current.delete(remoteId);
+    // Ends a screen-lane watch still running for the old connection.
+    screenChecksRef.current.delete(remoteId);
+    screenRunRef.current.set(remoteId, (screenRunRef.current.get(remoteId) ?? 0) + 1);
     const offerTimer = offerRetryTimersRef.current.get(remoteId);
     if (offerTimer) window.clearTimeout(offerTimer);
     offerRetryTimersRef.current.delete(remoteId);
@@ -371,14 +427,13 @@ export function useVoiceChannel(
                 next.delete(remoteId);
                 return next;
               });
+              const check = () => watchScreenLane(remoteId, pc, ev.receiver, track);
+              screenChecksRef.current.set(remoteId, check);
               if (track.readyState !== "live" || track.muted) {
                 hide();
                 return;
               }
-              void receivingVideo(ev.receiver).then((real) => {
-                if (!real || track.readyState !== "live" || track.muted) return;
-                setRemoteScreens((prev) => new Map(prev).set(remoteId, new MediaStream([track])));
-              });
+              check();
               return;
             }
             // `replaceTrack` adds no MSID to the SDP, so `ev.streams` is empty
@@ -522,7 +577,7 @@ export function useVoiceChannel(
       peerPromisesRef.current.set(remoteId, promise);
       return promise;
     },
-    [channelId, userId, dropPeer],
+    [channelId, userId, dropPeer, watchScreenLane],
   );
 
   const handleSignal = useCallback(
@@ -563,6 +618,16 @@ export function useVoiceChannel(
         };
         setRemoteScreens(drop);
         setRemoteScreenAudio(drop);
+      }
+      // A direct peer's screen lane may never unmute again (probes already
+      // did), so their signal is what restarts the check: it shows a share
+      // that just started, and after a stop it waits for the next one.
+      // After a stop, wait for the last in-flight frames to decode first, or
+      // they would count as a new share and bring back a frozen picture.
+      if (payload.type === "screen" && !viaSfu(payload.from)) {
+        const from = payload.from;
+        if (payload.sharing) screenChecksRef.current.get(from)?.();
+        else window.setTimeout(() => screenChecksRef.current.get(from)?.(), 1_500);
       }
 
       if ((payload.type === "offer" || payload.type === "answer" || payload.type === "ice") && viaSfu(payload.from)) return;
@@ -1033,7 +1098,7 @@ export function useVoiceChannel(
       const track = display.getVideoTracks()[0];
       track.addEventListener("ended", () => { void toggleScreenShare(); });
       screenTrackRef.current = track;
-      screenAudioTrackRef.current = display.getAudioTracks()[0] ?? null;
+      screenAudioTrackRef.current = shareAudioTrack(display);
       for (const pc of peersRef.current.values()) {
         await setLaneTrack(pc, LANE_SCREEN, track);
         await setLaneTrack(pc, LANE_SCREEN_AUDIO, screenAudioTrackRef.current);

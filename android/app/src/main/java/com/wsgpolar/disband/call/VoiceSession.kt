@@ -43,6 +43,17 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.webrtc.AudioTrack
+import org.webrtc.Camera2Enumerator
+import org.webrtc.CameraVideoCapturer
+import org.webrtc.DefaultVideoDecoderFactory
+import org.webrtc.DefaultVideoEncoderFactory
+import org.webrtc.EglBase
+import org.webrtc.MediaStreamTrack
+import org.webrtc.SurfaceTextureHelper
+import org.webrtc.VideoFrame
+import org.webrtc.VideoSink
+import org.webrtc.VideoSource
+import org.webrtc.VideoTrack
 import org.webrtc.IceCandidate
 import org.webrtc.MediaConstraints
 import org.webrtc.PeerConnection
@@ -76,6 +87,8 @@ data class GroupRing(
     val groupName: String,
     val callerName: String,
     val fromId: String,
+    /** The group's picture, looked up once the ring arrives. */
+    val iconUrl: String? = null,
 )
 
 /** Someone in a voice channel, as `voice_presence_live` reports them. */
@@ -124,6 +137,10 @@ data class MeshSignal(
     val groupId: String? = null,
     val groupName: String? = null,
     val callerName: String? = null,
+    /** "screen" only: whether the sender is now sharing. */
+    val sharing: Boolean? = null,
+    /** "soundboard" only: the clip, from the space-sounds bucket. */
+    val url: String? = null,
 ) {
     companion object {
         /** Shared with iOS so the two break an offer collision the same way. */
@@ -148,6 +165,13 @@ private data class PresenceWrite(
     @SerialName("user_id") val userId: String,
     val muted: Boolean,
     val deafened: Boolean,
+    /**
+     * Always mesh: the web only opens a direct connection to people marked
+     * "mesh". Written every time, or a row left by your own web session
+     * ("sfu") would make browsers skip this phone entirely.
+     */
+    val transport: String,
+    @SerialName("sfu_tracks") val sfuTracks: List<String>,
 )
 
 @Serializable
@@ -216,6 +240,39 @@ class VoiceSession(
     val connectedAt: StateFlow<Long?> = _connectedAt.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _liveCameras = MutableStateFlow<Set<String>>(emptySet())
+    /** Remote people whose camera is delivering frames right now. */
+    val liveCameras: StateFlow<Set<String>> = _liveCameras.asStateFlow()
+    private val _liveScreens = MutableStateFlow<Set<String>>(emptySet())
+    /**
+     * Remote people whose screen share is delivering frames right now. Frames,
+     * not signals, decide: a share started after we connected arrives on the
+     * already-negotiated screen lane (the web uses `replaceTrack`), so there is
+     * no new track or renegotiation to wait for, only frames.
+     */
+    val liveScreens: StateFlow<Set<String>> = _liveScreens.asStateFlow()
+    private val _localCamera = MutableStateFlow<VideoTrack?>(null)
+    /** This device's own camera while it is on. */
+    val localCamera: StateFlow<VideoTrack?> = _localCamera.asStateFlow()
+
+    private val cameraTracks = mutableMapOf<String, VideoTrack>()
+    private val screenTracks = mutableMapOf<String, VideoTrack>()
+    private val screenAudio = mutableMapOf<String, AudioTrack>()
+    private val frameWatchers = mutableMapOf<String, FrameWatcher>()
+    private val _sharingScreen = MutableStateFlow(false)
+    /** This phone is sharing its screen. */
+    val sharingScreen: StateFlow<Boolean> = _sharingScreen.asStateFlow()
+    private var screenCapturer: org.webrtc.ScreenCapturerAndroid? = null
+    private var screenSource: VideoSource? = null
+    private var screenHelper: SurfaceTextureHelper? = null
+    private var screenTrackLocal: VideoTrack? = null
+    private var cameraCapturer: CameraVideoCapturer? = null
+    private var cameraSource: VideoSource? = null
+    private var cameraHelper: SurfaceTextureHelper? = null
+
+    fun cameraTrack(remoteId: String): VideoTrack? = cameraTracks[remoteId]
+    fun screenTrack(remoteId: String): VideoTrack? = screenTracks[remoteId]
 
     private val _incomingRing = MutableStateFlow<GroupRing?>(null)
     /** A group call someone just started, shown as a banner until answered or dismissed. */
@@ -315,9 +372,7 @@ class VoiceSession(
         _room.value = room
         _phase.value = VoicePhase.Connecting
         _connectedPeers.value = emptySet()
-        if (room.isGroup && _incomingRing.value?.groupId == room.channelId) {
-            _incomingRing.value = null
-        }
+        if (_incomingRing.value != null) clearRing()
 
         // A stage puts everyone in the audience, muted, until they're brought
         // up. Known before the mic exists so it never opens. Group calls have none.
@@ -340,7 +395,7 @@ class VoiceSession(
                 client.from("group_call_presence").upsert(GroupPresenceRow(room.channelId, uid))
             } else {
                 client.from("voice_presence").upsert(
-                    PresenceWrite(room.channelId, uid, _micMuted.value, _deafened.value),
+                    PresenceWrite(room.channelId, uid, _micMuted.value, _deafened.value, transport = "mesh", sfuTracks = emptyList()),
                 )
             }
         } catch (e: Exception) {
@@ -405,13 +460,37 @@ class VoiceSession(
         if (signal.type != "ring" || signal.from == userId || isIn(groupId)) return
         val ring = GroupRing(groupId, signal.groupName ?: "Group call", signal.callerName ?: "Someone", signal.from)
         _incomingRing.value = ring
+        // Rings like a call (tone and vibration), unless one is already going.
+        if (!isActive && !isDirectCallActive()) {
+            CallTones.startRingtone()
+            CallHaptics.startRingVibration(appContext, scope)
+        }
+        scope.launch {
+            val icon = runCatching {
+                client.from("group_chats").select(io.github.jan.supabase.postgrest.query.Columns.raw("icon_url")) {
+                    filter { eq("id", groupId) }
+                    limit(1)
+                }.decodeList<JsonObject>().firstOrNull()?.get("icon_url")
+                    ?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { p -> p.isString }?.content }
+            }.getOrNull()
+            if (icon != null && _incomingRing.value?.groupId == groupId) {
+                _incomingRing.value = _incomingRing.value?.copy(iconUrl = icon)
+            }
+        }
         scope.launch {
             delay(30_000)
-            if (_incomingRing.value == ring) _incomingRing.value = null
+            if (_incomingRing.value?.groupId == groupId && _incomingRing.value?.fromId == ring.fromId) clearRing()
         }
     }
 
-    fun declineRing() { _incomingRing.value = null }
+    fun declineRing() = clearRing()
+
+    private fun clearRing() {
+        if (_incomingRing.value == null) return
+        _incomingRing.value = null
+        if (!isDirectCallActive()) CallTones.stop()
+        CallHaptics.stopVibration()
+    }
 
     private suspend fun sendRing(ring: MeshSignal, memberId: String) {
         runCatching {
@@ -455,9 +534,18 @@ class VoiceSession(
 
         // The call ends here, on this phone, straight away; the network
         // clean-up afterwards can't hold it up.
+        stopCamera()
+        stopScreenShare(restoreService = false)
+        for (id in peers.keys.toList()) detachVideo(id)
         peers.values.forEach { it.close() }
         peers.clear()
         remoteAudio.clear()
+        screenAudio.clear()
+        frameWatchers.clear()
+        cameraTracks.clear()
+        screenTracks.clear()
+        _liveCameras.value = emptySet()
+        _liveScreens.value = emptySet()
         earlyCandidates.clear()
         signalChannel = null
         presenceChannel = null
@@ -548,10 +636,19 @@ class VoiceSession(
             .setUseHardwareNoiseSuppressor(true)
             .createAudioDeviceModule()
         audioModule = module
-        factory = PeerConnectionFactory.builder().setAudioDeviceModule(module).createPeerConnectionFactory()
+        // Video codecs too: without them the camera and screen lanes are
+        // negotiated with nothing to decode, and shares never show.
+        val egl = VideoEgl.base.eglBaseContext
+        factory = PeerConnectionFactory.builder()
+            .setAudioDeviceModule(module)
+            .setVideoEncoderFactory(DefaultVideoEncoderFactory(egl, true, true))
+            .setVideoDecoderFactory(DefaultVideoDecoderFactory(egl))
+            .createPeerConnectionFactory()
         val am = appContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         if (am != null && savedAudioMode == null) {
-            savedAudioMode = am.mode
+            // A 1:1 call may already have switched to communication mode;
+            // "restoring" that on leave would leave the phone stuck in it.
+            savedAudioMode = am.mode.takeIf { it != AudioManager.MODE_IN_COMMUNICATION } ?: AudioManager.MODE_NORMAL
             runCatching { am.mode = AudioManager.MODE_IN_COMMUNICATION }
         }
         if (am != null) requestAudioFocus(am)
@@ -589,6 +686,7 @@ class VoiceSession(
 
     private fun applyRemoteAudio() {
         for ((remoteId, track) in remoteAudio) runCatching { track.setEnabled(!_deafened.value && heard(remoteId)) }
+        for ((remoteId, track) in screenAudio) runCatching { track.setEnabled(!_deafened.value && heard(remoteId)) }
     }
 
     // MARK: - Signalling
@@ -643,6 +741,12 @@ class VoiceSession(
                 if (peer != null) peer.addCandidate(candidate)
                 else earlyCandidates.getOrPut(signal.from) { mutableListOf() }.add(candidate)
             }
+            "soundboard" -> receiveSound(signal.from, signal.url)
+            "screen" -> if (signal.sharing == false) {
+                // Hide at once rather than waiting for the frames to stop.
+                frameWatchers["${signal.from}:screen"]?.reset()
+                _liveScreens.value -= signal.from
+            }
             "leave" -> {
                 dropPeer(signal.from)
                 _members.value = _members.value.filterNot { it.userId == signal.from }
@@ -667,7 +771,8 @@ class VoiceSession(
             if (runCatching { peer.rollback() }.isFailure) return
         }
         try {
-            val answer = peer.answer(SessionDescription(SessionDescription.Type.OFFER, sdp.sdp), audio)
+            val answer = peer.answer(SessionDescription(SessionDescription.Type.OFFER, sdp.sdp), audio, _localCamera.value)
+            screenTrackLocal?.let { peer.setTrack(it, MeshLane.Screen) }
             broadcast(MeshSignal(type = "answer", from = uid, to = remoteId,
                 sdp = CallSdp("answer", answer.description), client = MeshSignal.NATIVE))
         } catch (_: Exception) {
@@ -681,7 +786,9 @@ class VoiceSession(
         if (peers.containsKey(remoteId)) return
         val peer = makePeer(remoteId) ?: return
         try {
-            val offer = peer.makeOffer(audio)
+            peer.prepareLanes(audio)
+            screenTrackLocal?.let { peer.setTrack(it, MeshLane.Screen) }
+            val offer = peer.makeOffer(audio, _localCamera.value)
             broadcast(MeshSignal(type = "offer", from = uid, to = remoteId,
                 sdp = CallSdp("offer", offer.description), client = MeshSignal.NATIVE))
         } catch (_: Exception) {
@@ -702,11 +809,8 @@ class VoiceSession(
                     client = MeshSignal.NATIVE))
             }
         }
-        peer.onAudioTrack = { track ->
-            if (peers[remoteId] === peer) {
-                track.setEnabled(!_deafened.value && heard(remoteId))
-                remoteAudio[remoteId] = track
-            }
+        peer.onTrack = { lane, track ->
+            if (peers[remoteId] === peer) attach(remoteId, lane, track)
         }
         peer.onStateChange = { state ->
             if (peers[remoteId] === peer) {
@@ -728,10 +832,228 @@ class VoiceSession(
     }
 
     private fun dropPeer(remoteId: String) {
+        detachVideo(remoteId)
         peers.remove(remoteId)?.close()
         remoteAudio.remove(remoteId)
+        screenAudio.remove(remoteId)
         _connectedPeers.value -= remoteId
         _speaking.value -= remoteId
+    }
+
+    private fun attach(remoteId: String, lane: MeshLane, track: MediaStreamTrack) {
+        when (lane) {
+            MeshLane.Audio -> (track as? AudioTrack)?.let {
+                it.setEnabled(!_deafened.value && heard(remoteId))
+                remoteAudio[remoteId] = it
+            }
+            // The screen share's own sound, played like their voice.
+            MeshLane.ScreenAudio -> (track as? AudioTrack)?.let {
+                it.setEnabled(!_deafened.value && heard(remoteId))
+                screenAudio[remoteId] = it
+            }
+            MeshLane.Camera, MeshLane.Screen -> {
+                val video = track as? VideoTrack ?: return
+                val tracks = if (lane == MeshLane.Camera) cameraTracks else screenTracks
+                val key = "$remoteId:${if (lane == MeshLane.Camera) "camera" else "screen"}"
+                frameWatchers.remove(key)?.let { old -> runCatching { tracks[remoteId]?.removeSink(old) } }
+                val watcher = FrameWatcher()
+                runCatching { video.addSink(watcher) }
+                frameWatchers[key] = watcher
+                tracks[remoteId] = video
+            }
+        }
+    }
+
+    private fun detachVideo(remoteId: String) {
+        for ((suffix, tracks) in listOf("camera" to cameraTracks, "screen" to screenTracks)) {
+            val watcher = frameWatchers.remove("$remoteId:$suffix")
+            val track = tracks.remove(remoteId)
+            if (watcher != null) runCatching { track?.removeSink(watcher) }
+        }
+        _liveCameras.value -= remoteId
+        _liveScreens.value -= remoteId
+    }
+
+    private fun sampleVideo() {
+        val cameras = mutableSetOf<String>()
+        val screens = mutableSetOf<String>()
+        for ((key, watcher) in frameWatchers) {
+            if (!watcher.isLive) continue
+            val id = key.substringBeforeLast(':')
+            if (key.endsWith(":camera")) cameras += id else screens += id
+        }
+        if (cameras != _liveCameras.value) _liveCameras.value = cameras
+        if (screens != _liveScreens.value) _liveScreens.value = screens
+    }
+
+    // MARK: - Soundboard
+
+    private val recentClips = mutableMapOf<String, MutableList<Long>>()
+
+    /** Only clips from the space soundboard bucket are ever played (web `isSoundboardUrl`). */
+    private fun isSoundboardUrl(url: String?): Boolean {
+        val base = AppConfig.SUPABASE_URL.trimEnd('/') + "/storage/v1/object/public/server-sounds/"
+        return url != null && url.length <= 2048 && url.startsWith(base) && ".." !in url
+    }
+
+    private fun receiveSound(from: String, url: String?) {
+        if (_deafened.value || !isSoundboardUrl(url)) return
+        // At most 4 clips per person in 3 seconds, however fast they are sent.
+        val now = System.currentTimeMillis()
+        val times = recentClips.getOrPut(from) { mutableListOf() }.apply { removeAll { now - it >= 3_000 } }
+        if (times.size >= 4) return
+        times += now
+        playClip(url!!)
+    }
+
+    /** Play a space sound for everyone in the call, and here. */
+    fun playSound(url: String) {
+        val uid = userId ?: return
+        if (!isActive || !isSoundboardUrl(url)) return
+        broadcast(MeshSignal(type = "soundboard", from = uid, url = url, client = MeshSignal.NATIVE))
+        playClip(url)
+    }
+
+    private fun playClip(url: String) {
+        runCatching {
+            android.media.MediaPlayer().apply {
+                setAudioAttributes(android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                setDataSource(url)
+                setOnPreparedListener { it.start() }
+                setOnCompletionListener { it.release() }
+                setOnErrorListener { mp, _, _ -> mp.release(); true }
+                prepareAsync()
+            }
+        }
+    }
+
+    // MARK: - Camera
+
+    /** Turn this device's camera on or off. Needs the CAMERA permission first. */
+    fun toggleCamera() {
+        if (_localCamera.value != null) stopCamera() else startCamera()
+    }
+
+    private fun startCamera() {
+        val factory = factory ?: return
+        if (_stage.value != null && !canSpeak) return
+        val enumerator = Camera2Enumerator(appContext)
+        val name = enumerator.deviceNames.firstOrNull { enumerator.isFrontFacing(it) }
+            ?: enumerator.deviceNames.firstOrNull()
+        if (name == null) {
+            _error.value = "No camera is available."
+            return
+        }
+        try {
+            val capturer = enumerator.createCapturer(name, null) ?: error("no capturer")
+            val helper = SurfaceTextureHelper.create("camera", VideoEgl.base.eglBaseContext)
+            val source = factory.createVideoSource(false)
+            capturer.initialize(helper, appContext, source.capturerObserver)
+            capturer.startCapture(640, 480, 24)
+            val track = factory.createVideoTrack("camera-${userId?.take(8) ?: "android"}", source)
+            cameraCapturer = capturer
+            cameraHelper = helper
+            cameraSource = source
+            _localCamera.value = track
+            for (peer in peers.values) peer.setTrack(track, MeshLane.Camera)
+        } catch (_: Exception) {
+            stopCamera()
+            _error.value = "Couldn't start your camera."
+        }
+    }
+
+    private fun stopCamera() {
+        for (peer in peers.values) peer.setTrack(null, MeshLane.Camera)
+        val track = _localCamera.value
+        _localCamera.value = null
+        runCatching { cameraCapturer?.stopCapture() }
+        runCatching { cameraCapturer?.dispose() }
+        cameraCapturer = null
+        runCatching { track?.dispose() }
+        runCatching { cameraSource?.dispose() }
+        cameraSource = null
+        runCatching { cameraHelper?.dispose() }
+        cameraHelper = null
+    }
+
+    // MARK: - Screen sharing
+
+    /**
+     * Share this phone's screen on the screen lane, with the person's
+     * MediaProjection consent ([consent] is the result Intent). The call
+     * notification is promoted to the media-projection type first, which
+     * Android 14+ requires before the projection can be created.
+     */
+    fun startScreenShare(consent: android.content.Intent) {
+        val factory = factory ?: return
+        val roomName = _room.value?.name ?: return
+        if (_sharingScreen.value) return
+        scope.launch {
+            CallForegroundService.startProjection(appContext, roomName, on = true)
+            // Wait (briefly) for the service to be promoted.
+            val promoted = withTimeoutOrNull(3_000) {
+                while (!CallForegroundService.projecting) delay(50)
+                true
+            } ?: (android.os.Build.VERSION.SDK_INT < 29)
+            if (!promoted) {
+                _error.value = "Couldn't start screen sharing."
+                return@launch
+            }
+            try {
+                val capturer = org.webrtc.ScreenCapturerAndroid(consent, object : android.media.projection.MediaProjection.Callback() {
+                    override fun onStop() { scope.launch { stopScreenShare() } }
+                })
+                val helper = SurfaceTextureHelper.create("screen", VideoEgl.base.eglBaseContext)
+                val source = factory.createVideoSource(true)
+                capturer.initialize(helper, appContext, source.capturerObserver)
+                val metrics = appContext.resources.displayMetrics
+                // Half resolution keeps text readable without flooding a mesh.
+                capturer.startCapture(metrics.widthPixels / 2, metrics.heightPixels / 2, 15)
+                val track = factory.createVideoTrack("screen-${userId?.take(8) ?: "android"}", source)
+                screenCapturer = capturer
+                screenHelper = helper
+                screenSource = source
+                screenTrackLocal = track
+                for (peer in peers.values) peer.setTrack(track, MeshLane.Screen)
+                _sharingScreen.value = true
+                announceSharing(true)
+            } catch (_: Exception) {
+                stopScreenShare()
+                _error.value = "Couldn't start screen sharing."
+            }
+        }
+    }
+
+    fun stopScreenShare(restoreService: Boolean = true) {
+        val was = _sharingScreen.value
+        for (peer in peers.values) peer.setTrack(null, MeshLane.Screen)
+        runCatching { screenCapturer?.stopCapture() }
+        runCatching { screenCapturer?.dispose() }
+        screenCapturer = null
+        runCatching { screenTrackLocal?.dispose() }
+        screenTrackLocal = null
+        runCatching { screenSource?.dispose() }
+        screenSource = null
+        runCatching { screenHelper?.dispose() }
+        screenHelper = null
+        _sharingScreen.value = false
+        if (restoreService && CallForegroundService.projecting) {
+            CallForegroundService.startProjection(appContext, _room.value?.name ?: "Voice connected", on = false)
+        }
+        if (was) announceSharing(false)
+    }
+
+    /** The web restarts its frame check on this (web-stream section 1). */
+    private fun announceSharing(sharing: Boolean) {
+        val uid = userId ?: return
+        broadcast(MeshSignal(type = "screen", from = uid, sharing = sharing, client = MeshSignal.NATIVE))
+    }
+
+    /** Flip between the front and back camera. */
+    fun switchCamera() {
+        runCatching { cameraCapturer?.switchCamera(null) }
     }
 
     // MARK: - Presence
@@ -838,11 +1160,12 @@ class VoiceSession(
                 delay(30_000)
             }
         }
-        // Speaking indicators.
+        // Speaking indicators, and whose camera or screen is live.
         loops += scope.launch {
             while (isActive) {
                 delay(400)
                 sampleLevels()
+                sampleVideo()
             }
         }
         // Heal: offer to anyone present with no connection. The grace period
@@ -982,4 +1305,21 @@ class VoiceSession(
             return StageInfo(row.topic, row.startedAt, row.requestsEnabled ?: true, isModerator)
         }
     }
+}
+
+/** One EGL context shared by the codecs, the camera and every video view. */
+object VideoEgl {
+    val base: EglBase by lazy { EglBase.create() }
+}
+
+/**
+ * Notices whether a video track is delivering frames. The web switches a
+ * camera or share off by replacing the track with nothing, so the receiving
+ * track never ends; it just goes quiet. Frames are the only reliable signal.
+ */
+class FrameWatcher : VideoSink {
+    @Volatile private var lastFrame = 0L
+    val isLive: Boolean get() = System.currentTimeMillis() - lastFrame < 1_500
+    fun reset() { lastFrame = 0L }
+    override fun onFrame(frame: VideoFrame) { lastFrame = System.currentTimeMillis() }
 }

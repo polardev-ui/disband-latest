@@ -370,3 +370,21 @@ export async function receivingVideo(receiver: RTCRtpReceiver, waitMs = 4_000): 
     await new Promise((r) => setTimeout(r, 400));
   }
 }
+
+/**
+ * How many video frames a receiver has decoded so far (0 before any), or
+ * null when its stats can't be read. Compare two readings to tell a share
+ * that is running now from one that stopped: the count never goes back down.
+ */
+export async function decodedVideoFrames(receiver: RTCRtpReceiver): Promise<number | null> {
+  try {
+    const stats = await receiver.getStats();
+    let frames = 0;
+    stats.forEach((s: { type?: string; framesDecoded?: number; frameWidth?: number }) => {
+      if (s.type === "inbound-rtp" && (s.frameWidth ?? 0) > 0) frames = Math.max(frames, s.framesDecoded ?? 0);
+    });
+    return frames;
+  } catch {
+    return null;
+  }
+}

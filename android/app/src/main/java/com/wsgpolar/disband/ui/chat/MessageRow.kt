@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -142,13 +143,19 @@ fun MessageRow(
             Column(Modifier.weight(1f)) {
                 if (!grouped) {
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            row.webhook?.name ?: row.author?.name ?: "Unknown",
+                        // The web's name rules: display name as typed, name font,
+                        // Aero colour, else the top role's colour.
+                        val profiles by com.wsgpolar.disband.data.ProfileStore.profiles.collectAsState()
+                        val author = row.author?.let { profiles[it.id] ?: it }
+                            ?: row.authorId?.let { profiles[it] }
+                        val authorRole = com.wsgpolar.disband.ui.components.LocalAuthorRole.current
+                        com.wsgpolar.disband.ui.components.DisplayNameText(
+                            profile = if (row.webhook != null) null else author,
+                            text = row.webhook?.name,
                             color = palette.textPrimary,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            role = if (row.webhook != null) null else authorRole(row.authorId ?: author?.id),
                             modifier = Modifier.weight(1f, fill = false)
                                 .clickable(role = Role.Button, onClickLabel = "View profile", onClick = onAuthorClick),
                         )
@@ -173,6 +180,8 @@ fun MessageRow(
 
                 if (row.content.isNotBlank()) {
                     MarkdownBody(row.content, palette)
+                    // Space invites and gifts as cards, as on iOS and the web.
+                    MessageLinkCards(row.content)
                 }
 
                 Attachments(attachments, palette, onOpenAttachment)
@@ -368,7 +377,7 @@ private fun MarkdownBody(content: String, palette: Palette) {
                     val (body, inline) = remember(block.content, jumbo) {
                         withCustomEmoji(block.content, if (jumbo) 48.sp else 20.sp)
                     }
-                    Text(body, color = palette.textPrimary, fontSize = 15.sp,
+                    Text(body, color = palette.textPrimary, fontSize = if (jumbo) 40.sp else 15.sp,
                         lineHeight = if (jumbo) 52.sp else 20.sp, inlineContent = inline)
                 }
 

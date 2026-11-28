@@ -93,11 +93,17 @@ final class ChatViewModel {
     func start(currentUserId: String?, profile: Profile?) async {
         self.currentUserId = currentUserId
         self.currentUserProfile = profile
+        markMentionsRead()
 
-        // Instant paint from cache, then refresh in the background.
+        // Instant paint from cache (memory, else the copy saved on disk),
+        // then refresh behind it.
+        if let currentUserId { ChatCache.shared.userId = currentUserId }
         if let cached = ChatCache.shared.messages(source.cacheKey) {
             messages = cached
             reactions = ChatCache.shared.reactions(source.cacheKey) ?? [:]
+            loading = false
+        } else if let saved = await ChatCache.shared.loadFromDisk(source.cacheKey), messages.isEmpty {
+            messages = saved
             loading = false
         }
         // Subscribe while the first page loads. The five realtime channels
@@ -163,6 +169,10 @@ final class ChatViewModel {
         if !typers.contains(where: { $0.userId == event.userId }) {
             typers.append(event)
         }
+        if typingProfiles[event.userId] == nil,
+           let known = profileCache[event.userId] ?? ProfileLive.shared.latest[event.userId] {
+            typingProfiles[event.userId] = known
+        }
         if typingProfiles[event.userId] == nil {
             if let profiles = try? await DatabaseService.profiles(ids: [event.userId]) {
                 typingProfiles[event.userId] = profiles[event.userId]
@@ -211,8 +221,12 @@ final class ChatViewModel {
         broadcastChannel = nil
         Task {
             await ch?.unsubscribe(); await dc?.unsubscribe(); await rc?.unsubscribe()
-            await rdc?.unsubscribe(); await tc?.unsubscribe(); await bc?.unsubscribe()
+            await rdc?.unsubscribe()
         }
+        // These two reuse a topic per conversation, so reopening the chat
+        // (or coming back to the foreground) must wait for them to go.
+        RealtimeTopics.release(tc)
+        RealtimeTopics.release(bc)
     }
 
     // MARK: - Loading
@@ -310,6 +324,8 @@ final class ChatViewModel {
                 loaded = try await fetchMessages()
             }
             for m in loaded { if let a = m.author { profileCache[a.id] = a } }
+            ProfileLive.shared.watch(Set(loaded.map(\.authorId)))
+            ProfileLive.shared.refresh(loaded.compactMap(\.author))
             // Keep any optimistic rows the server hasn't echoed back yet.
             let stillPending = messages.filter { opt in
                 opt.pending && !loaded.contains { matches(opt, $0) }
@@ -329,9 +345,20 @@ final class ChatViewModel {
                 // not that the cache should keep showing deleted history.
                 olderPages = []
             }
-            // Bring the newest pictures in before painting, so the page
-            // arrives at its final height instead of growing under the reader.
-            await MediaSize.prefetch(Self.imageUrls(in: loaded.suffix(30)))
+            /*
+             Bring in the newest pictures whose shape isn't known yet, so the
+             page arrives at its final height. Only when nothing is on screen
+             (a cached copy is already showing otherwise), only pictures never
+             measured, and for a short while: this used to download up to 40
+             full images and hold the first paint for 1.5 seconds on every
+             open of a conversation with photos.
+             */
+            let unmeasured = Self.imageUrls(in: loaded.suffix(30)).filter { MediaSize.shared.aspect(for: $0) == nil }
+            if messages.isEmpty, !unmeasured.isEmpty {
+                await MediaSize.prefetch(unmeasured, timeout: .milliseconds(350))
+            } else if !unmeasured.isEmpty {
+                Task { await MediaSize.prefetch(unmeasured) }
+            }
             /*
              Messages that arrived after this page was read. A reload that
              starts just before your send is saved and finishes just after
@@ -364,6 +391,23 @@ final class ChatViewModel {
                 : error.localizedDescription
         }
         loading = false
+    }
+
+    /// The mention notifications behind this DM or group, read: what the
+    /// web does on opening one, so the desktop inbox agrees with the phone.
+    func markMentionsRead(after delay: Double = 0) {
+        guard let me = currentUserId else { return }
+        let links: [String]
+        switch source {
+        case .dm(let threadId, _): links = ["dm:\(threadId)"]
+        case .group(let groupId, _): links = ["/group/\(groupId)", "group:\(groupId)", "group/\(groupId)"]
+        case .channel: return
+        }
+        Task {
+            if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+            await DatabaseService.markMentionNotificationsRead(links: links, currentUserId: me)
+            NotificationCenter.default.post(name: ChannelUnreadStore.mentionsChanged, object: nil)
+        }
     }
 
     private func matches(_ a: DisplayMessage, _ b: DisplayMessage) -> Bool {
@@ -889,7 +933,7 @@ final class ChatViewModel {
     }
 
     private func subscribeBroadcast() async {
-        let ch = SupabaseManager.client.channel(broadcastTopic) {
+        let ch = await RealtimeTopics.channel(broadcastTopic) {
             $0.isPrivate = true
             $0.broadcast.receiveOwnBroadcasts = false
         }
@@ -945,7 +989,9 @@ final class ChatViewModel {
                 continue
             }
             if m.authorId != currentUserId, case .channel(let channelId, _) = source {
-                ChannelUnreadStore.shared.sawMessage(in: channelId)
+                let mentionsMe = currentUserId.map { m.mentions?.contains($0) == true } == true
+                    || m.mentionEveryone
+                ChannelUnreadStore.shared.sawMessage(in: channelId, mentionsMe: mentionsMe)
             }
             messages.append(m)
         }
@@ -981,16 +1027,20 @@ final class ChatViewModel {
         // recomputed from those cursors, so the badge came back for the very
         // thread you were looking at.
         if row.authorId != currentUserId {
+            let mentionsMe = currentUserId.map { row.mentions?.contains($0) == true } == true
+                || row.mentionEveryone == true
             switch source {
             case .dm(let threadId, _):
                 Task { try? await DatabaseService.markDmRead(threadId: threadId) }
+                if mentionsMe { markMentionsRead(after: 1.5) }
             case .group(let groupId, _):
                 // Group cursors advanced only when the chat opened too, so a
                 // message read in place still came back as unread after the
                 // next foreground reload.
                 Task { try? await DatabaseService.markGroupRead(groupId: groupId) }
+                if mentionsMe { markMentionsRead(after: 1.5) }
             case .channel(let channelId, _):
-                ChannelUnreadStore.shared.sawMessage(in: channelId)
+                ChannelUnreadStore.shared.sawMessage(in: channelId, mentionsMe: mentionsMe)
             }
         }
 
@@ -1055,6 +1105,11 @@ final class ChatViewModel {
 
     private func resolveProfile(_ id: String) async -> Profile? {
         if let cached = profileCache[id] { return cached }
+        // Anyone already seen elsewhere in the app: no round trip.
+        if let known = ProfileLive.shared.latest[id] {
+            profileCache[id] = known
+            return known
+        }
         if let fetched = try? await DatabaseService.profile(id: id) {
             profileCache[id] = fetched
             return fetched

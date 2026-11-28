@@ -101,11 +101,48 @@ fun withCustomEmoji(text: AnnotatedString, size: TextUnit = 20.sp): Pair<Annotat
     return out to inline
 }
 
-/** A message that is nothing but custom emoji (up to three) shows them large. */
+/**
+ * A message that is nothing but emoji (up to three, custom or Unicode) shows
+ * them large, as on iOS (`EmojiText`) and the web.
+ */
 fun isJumboCustomEmoji(content: String): Boolean {
     val trimmed = content.trim()
-    val count = ExpressionStore.TOKEN.findAll(trimmed).count()
-    return count in 1..3 && ExpressionStore.TOKEN.replace(trimmed, "").isBlank()
+    val custom = ExpressionStore.TOKEN.findAll(trimmed).count()
+    val rest = ExpressionStore.TOKEN.replace(trimmed, "")
+    val unicode = unicodeEmojiCount(rest) ?: return false
+    return custom + unicode in 1..3
+}
+
+/** Emoji in [text] if it is only emoji (whitespace ignored), else null. */
+fun unicodeEmojiCount(text: String): Int? {
+    val iterator = java.text.BreakIterator.getCharacterInstance()
+    iterator.setText(text)
+    var count = 0
+    var start = iterator.first()
+    var end = iterator.next()
+    while (end != java.text.BreakIterator.DONE) {
+        val cluster = text.substring(start, end)
+        if (cluster.isNotBlank()) {
+            if (!isEmojiCluster(cluster)) return null
+            count++
+            if (count > 3) return count
+        }
+        start = end
+        end = iterator.next()
+    }
+    return count
+}
+
+private fun isEmojiCluster(cluster: String): Boolean {
+    val points = cluster.codePoints().toArray()
+    if (points.isEmpty()) return false
+    // Keycaps (1️⃣) and anything asking for emoji presentation.
+    if (points.any { it == 0x20E3 } || (points.size > 1 && points.any { it == 0xFE0F })) return true
+    return points.any { cp ->
+        cp in 0x1F000..0x1FAFF || cp in 0x2600..0x27BF || cp in 0x2B00..0x2BFF ||
+            cp in 0x1F1E6..0x1F1FF || cp == 0x00A9 || cp == 0x00AE || cp in 0x2190..0x21FF ||
+            cp in 0x2300..0x23FF || cp == 0x3030 || cp == 0x303D
+    } && points.none { it < 0x80 && it != 0x23 && it != 0x2A && (it < 0x30 || it > 0x39) }
 }
 
 @Composable

@@ -28,8 +28,13 @@ export interface EarnRule {
 export const AD_REWARD = 40;
 export const AD_DAILY_CAP = 400;
 
+/** Chat pays CHAT_REWARD every CHAT_MESSAGES_PER_REWARD messages, up to CHAT_DAILY_CAP a day (midnight to midnight UTC). Mirrors wallet_on_message. */
+export const CHAT_REWARD = 10;
+export const CHAT_MESSAGES_PER_REWARD = 18;
+export const CHAT_DAILY_CAP = 400;
+
 export const EARN_RULES: EarnRule[] = [
-  { id: "chat", label: "Chat: every 18 messages", amount: 10, limit: "Up to 400 a day" },
+  { id: "chat", label: `Chat: every ${CHAT_MESSAGES_PER_REWARD} messages`, amount: CHAT_REWARD, limit: `Up to ${CHAT_DAILY_CAP} a day` },
   { id: "create_server", label: "Create a space", amount: 85, limit: "Twice a day" },
   { id: "join_server", label: "Join a space", amount: 15, limit: "Once per space, up to 5 a day" },
   { id: "join_official", label: "Join the Disband Official space", amount: 30, limit: "Once" },

@@ -123,14 +123,17 @@ struct StyledName: View {
     var weight: Font.Weight = .semibold
     /// The colour when they haven't picked one (the primary text colour if nil).
     var fallbackColor: Color? = nil
+    /// A role gradient, used like `fallbackColor` (a personal style wins).
+    var fallbackGradient: LinearGradient? = nil
 
     init(_ profile: Profile, size: CGFloat = 15, weight: Font.Weight = .semibold,
-         fallbackColor: Color? = nil) {
+         fallbackColor: Color? = nil, fallbackGradient: LinearGradient? = nil) {
         self.text = profile.name
         self.style = NameStyle(profile)
         self.size = size
         self.weight = weight
         self.fallbackColor = fallbackColor
+        self.fallbackGradient = fallbackGradient
     }
 
     init(text: String, style: NameStyle, size: CGFloat = 15, weight: Font.Weight = .semibold,
@@ -148,6 +151,8 @@ struct StyledName: View {
             label.foregroundStyle(gradient)
         } else if let color = style.startColor {
             label.foregroundStyle(color)
+        } else if let fallbackGradient {
+            label.foregroundStyle(fallbackGradient)
         } else {
             label.foregroundStyle(fallbackColor ?? Brand.textPrimary)
         }

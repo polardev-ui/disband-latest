@@ -78,6 +78,51 @@ class CallManager(
     private val _speakerOn = MutableStateFlow(false)
     val speakerOn: StateFlow<Boolean> = _speakerOn.asStateFlow()
 
+    private val _localVideo = MutableStateFlow<org.webrtc.VideoTrack?>(null)
+    /** Your camera in a 1:1 call, while on. */
+    val localVideo: StateFlow<org.webrtc.VideoTrack?> = _localVideo.asStateFlow()
+    private val _remoteVideo = MutableStateFlow<org.webrtc.VideoTrack?>(null)
+    /** The other person's camera, only while frames are arriving. */
+    val remoteVideo: StateFlow<org.webrtc.VideoTrack?> = _remoteVideo.asStateFlow()
+    private var videoJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Turn the camera on or off mid-call (iOS FaceTimeCallView): the track is
+     * added or removed and this side renegotiates with a fresh offer.
+     */
+    fun toggleCamera() {
+        val engine = engine ?: return
+        val uid = userId ?: return
+        val on = _localVideo.value == null
+        if (!engine.setCameraEnabled(on)) {
+            _error.value = "Couldn't start your camera."
+            return
+        }
+        _localVideo.value = engine.localVideo
+        if (on && !_speakerOn.value) toggleSpeaker()
+        scope.launch {
+            runCatching {
+                val offer = engine.makeOffer()
+                sendOnSignalChannel(CallSignal(type = "offer", from = uid, to = activePeerId, callId = activeCallId,
+                    sdp = CallSdp(type = offer.type.wire(), sdp = offer.description)))
+            }
+        }
+    }
+
+    fun switchCamera() { engine?.switchCamera() }
+
+    private fun watchVideo() {
+        videoJob?.cancel()
+        videoJob = scope.launch {
+            while (true) {
+                val e = engine
+                val live = e?.takeIf { it.remoteVideoLive }?.remoteVideo
+                if (_remoteVideo.value !== live) _remoteVideo.value = live
+                delay(500)
+            }
+        }
+    }
+
     private val _callNotice = MutableStateFlow<String?>(null)
     val callNotice: StateFlow<String?> = _callNotice.asStateFlow()
 
@@ -459,6 +504,7 @@ class CallManager(
             return
         }
         this.engine = engine
+        watchVideo()
         engine.setSpeaker(_speakerOn.value)
         engine.setMicEnabled(!(_micMuted.value || _deafened.value))
 
@@ -568,6 +614,10 @@ class CallManager(
         ringWatchdog = null
         stopAudioAlerts()
         cancelOngoingNotification()
+        videoJob?.cancel()
+        videoJob = null
+        _localVideo.value = null
+        _remoteVideo.value = null
         runCatching { engine?.dispose() }
         engine = null
         signalJob?.cancel()

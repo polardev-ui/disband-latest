@@ -29,7 +29,11 @@ internal fun mergeChatRows(current: List<ChatRow>, incoming: List<ChatRow>): Lis
 }
 
 /** A screen-scoped timeline. No user data survives signing out. */
-class ChatTimeline(private val fetch: suspend (String?) -> List<ChatRow>) {
+class ChatTimeline(
+    private val fetch: suspend (String?) -> List<ChatRow>,
+    /** Where this conversation's last messages are cached, or null for none. */
+    private val cacheKey: String? = null,
+) {
     var rows by mutableStateOf<List<ChatRow>>(emptyList())
         private set
     var loading by mutableStateOf(true)
@@ -45,9 +49,25 @@ class ChatTimeline(private val fetch: suspend (String?) -> List<ChatRow>) {
     private var revision = 0L
     private val changed = mutableMapOf<String, Long>()
 
+    /**
+     * Cached messages from the last visit, shown until the network answers.
+     * Ignored once a real page has loaded.
+     */
+    fun seed(cached: List<ChatRow>?) {
+        if (cached.isNullOrEmpty() || loadedInitialPage || rows.isNotEmpty()) return
+        rows = cached
+        hasOlder = cached.size >= 50
+        loading = false
+    }
+
+    private fun remember() {
+        cacheKey?.let { ChatCache.store(it, rows) }
+    }
+
     fun upsert(row: ChatRow) {
         changed[row.id] = ++revision
         rows = mergeChatRows(rows, listOf(row))
+        remember()
     }
 
     fun resolveAuthor(profile: Profile) {
@@ -57,6 +77,7 @@ class ChatTimeline(private val fetch: suspend (String?) -> List<ChatRow>) {
     fun remove(id: String) {
         changed[id] = ++revision
         rows = rows.filterNot { it.id == id }
+        remember()
     }
 
     suspend fun refresh() = refreshMutex.withLock {
@@ -78,6 +99,7 @@ class ChatTimeline(private val fetch: suspend (String?) -> List<ChatRow>) {
             loadedInitialPage = true
             changed.entries.removeAll { it.value <= started }
             error = null
+            remember()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -119,7 +141,14 @@ fun <T> rememberChatTimeline(
     fetch: suspend (String?) -> List<ChatRow>,
     onIncoming: suspend (ChatRow) -> Unit = {},
 ): ChatTimeline {
-    val state = remember(key) { ChatTimeline(fetch) }
+    // Cached per account: the last messages draw on the first frame (memory)
+    // or a moment later (disk), and the refresh below lands behind them.
+    val cacheKey = remember(key) {
+        com.wsgpolar.disband.core.DisbandSupabase.auth.currentUserOrNull()?.id?.let { "$it|$key" }
+    }
+    val state = remember(key) {
+        ChatTimeline(fetch, cacheKey).also { t -> cacheKey?.let { t.seed(ChatCache.memory(it)) } }
+    }
     val incoming by rememberUpdatedState(onIncoming)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(key, lifecycle) {
@@ -127,6 +156,7 @@ fun <T> rememberChatTimeline(
             coroutineScope {
                 val resolvingAuthors = mutableSetOf<String>()
                 // First paint never waits for the socket handshake.
+                if (state.rows.isEmpty() && cacheKey != null) launch { state.seed(ChatCache.disk(cacheKey)) }
                 launch { state.refresh() }
                 launch {
                     while (isActive) {
@@ -170,6 +200,15 @@ fun <T> rememberChatTimeline(
                             delay(3_000)
                             state.refresh()
                         }
+                    }
+                }
+                // Everyone with a message on screen: name and avatar edits arrive live.
+                launch {
+                    try {
+                        snapshotFlow { state.rows.mapNotNullTo(sortedSetOf()) { it.authorId ?: it.author?.id } }
+                            .collect { ids -> com.wsgpolar.disband.data.ProfileStore.watch("chat:$key", ids) }
+                    } finally {
+                        com.wsgpolar.disband.data.ProfileStore.unwatch("chat:$key")
                     }
                 }
                 // Also repairs reconnect gaps when the underlying socket reconnects silently.

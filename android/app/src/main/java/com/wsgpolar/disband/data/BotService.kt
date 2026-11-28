@@ -57,8 +57,10 @@ data class ForumPost(
 )
 
 /** Who ran the command a bot's message answers. */
+@kotlinx.serialization.Serializable
 data class BotInteraction(val name: String, val who: String)
 
+@kotlinx.serialization.Serializable
 data class BotButton(
     val style: String,
     val label: String,

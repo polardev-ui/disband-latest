@@ -80,6 +80,11 @@ struct SpacesView: View {
                     .ignoresSafeArea(edges: .bottom)
             }
             .background(Brand.background)
+            // While a conversation is pushed, the channel list under it takes
+            // no touches at all. A tap that reached it (during a half-made back
+            // swipe, or while the keyboard animated in after Reply) opened
+            // whichever channel sat under the text box (report 2b8fdd2f).
+            .allowsHitTesting(path.isEmpty)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: SpacesRoute.self, destination: destination)
         }
@@ -142,6 +147,7 @@ struct SpacesView: View {
             unreadConversations: unreadConversations,
             voiceServerId: voiceServerId,
             unreadServerIds: ChannelUnreadStore.shared.unreadServers,
+            serverMentions: ChannelUnreadStore.shared.serverMentionCounts,
             onJoin: { showJoin = true },
             onCreate: { showCreate = true },
             onDiscover: { showDiscover = true }

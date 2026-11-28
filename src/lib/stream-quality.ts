@@ -90,6 +90,19 @@ function videoConstraints(q: StreamQuality): MediaTrackConstraints {
   };
 }
 
+/**
+ * The sound to send with a share, ready for the encoder. Only the capture's
+ * own audio track is ever sent (never a mix with the call): marked as music
+ * so it isn't processed like speech.
+ */
+export function shareAudioTrack(display: MediaStream): MediaStreamTrack | null {
+  const track = display.getAudioTracks()[0] ?? null;
+  if (track) {
+    try { track.contentHint = "music"; } catch { }
+  }
+  return track;
+}
+
 export function buildScreenConstraints(plan: SubscriptionPlan): MediaStreamConstraints {
   const q = getStreamQuality(plan);
   return {
@@ -102,11 +115,29 @@ export function buildScreenConstraints(plan: SubscriptionPlan): MediaStreamConst
     // which included the call itself, so everyone heard themselves (and each
     // other twice) through the stream.
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, restrictOwnAudio: true } as MediaTrackConstraints,
-    // Chromium extensions to the spec: offer "share system audio" in the
-    // picker, keep the sharer hearing their own tab, and where the browser
-    // can (newer Chrome and Edge on Windows), take only the shared window's
-    // sound rather than the whole computer's.
-    ...({ systemAudio: "include", suppressLocalAudioPlayback: false, windowAudio: "window" } as object),
+    // Chromium extensions to the spec:
+    // - systemAudio "include": offer "share system audio" for a whole
+    //   screen (a game or app has no other way to send sound). Only a whole
+    //   screen or, where windowAudio isn't supported, a window takes the
+    //   computer's sound; a tab only ever sends that tab's sound.
+    // - windowAudio "window": where the browser can (newer Chrome and Edge on
+    //   Windows), a shared window sends only its own sound.
+    // - selfBrowserSurface "exclude": Disband's own tab isn't offered. Sharing
+    //   it captured the call's audio (and an endless mirror of the stream).
+    // - surfaceSwitching "include": "Share this tab instead" moves the share,
+    //   and its sound, to the tab now in front, instead of carrying on with
+    //   the first tab's audio.
+    // - preferCurrentTab false: the picker opens on the full list, not on
+    //   this tab.
+    // - suppressLocalAudioPlayback false: the sharer keeps hearing the tab.
+    ...({
+      systemAudio: "include",
+      windowAudio: "window",
+      selfBrowserSurface: "exclude",
+      surfaceSwitching: "include",
+      preferCurrentTab: false,
+      suppressLocalAudioPlayback: false,
+    } as object),
   };
 }
 

@@ -7,7 +7,7 @@ import { useApp } from "@/contexts/AppContext";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api";
 import { announcePlanChanged } from "@/hooks/useSubscription";
-import { CURRENCY, EARN_RULES, LEDGER_LABELS, REWARDS, AD_DAILY_CAP, AD_REWARD, formatCurrency } from "@/lib/currency";
+import { CURRENCY, EARN_RULES, LEDGER_LABELS, REWARDS, AD_DAILY_CAP, AD_REWARD, CHAT_DAILY_CAP, formatCurrency } from "@/lib/currency";
 import { decorationItems } from "@/lib/shop";
 import { isTauri } from "@/lib/platform";
 import { PUBLIC_ENV } from "@/lib/public-env";
@@ -41,15 +41,23 @@ export function CurrencyPanel() {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [adsReady, setAdsReady] = useState<boolean | null>(null);
+  const [chatToday, setChatToday] = useState(0);
 
   const load = useCallback(async () => {
     if (!user) return;
     const supabase = getSupabaseClient();
-    const [w, l, o] = await Promise.all([
+    // Chat pays up to CHAT_DAILY_CAP a day, counted from midnight UTC like
+    // the database (wallet_apply). Without this, the progress bar kept
+    // counting down to a reward that the cap would never pay.
+    const now = new Date();
+    const todayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+    const [w, l, o, c] = await Promise.all([
       supabase.from("wallets").select("balance, lifetime, message_count").eq("user_id", user.id).maybeSingle(),
       supabase.from("wallet_ledger").select("id, amount, reason, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(25),
       supabase.from("user_shop_items").select("item_id").eq("user_id", user.id),
+      supabase.from("wallet_ledger").select("amount").eq("user_id", user.id).eq("reason", "chat").gte("created_at", todayUtc),
     ]);
+    setChatToday(((c.data ?? []) as { amount: number }[]).reduce((sum, r) => sum + (r.amount ?? 0), 0));
     setWallet((w.data as Wallet | null) ?? { balance: 0, lifetime: 0, message_count: 0 });
     setLedger((l.data as LedgerRow[] | null) ?? []);
     setOwned(new Set(((o.data ?? []) as { item_id: string }[]).map((r) => r.item_id)));
@@ -67,6 +75,7 @@ export function CurrencyPanel() {
   const decorations = useMemo(() => decorationItems().filter((d) => !d.unreleased && (giftTo !== "" || !owned.has(d.id))), [owned, giftTo]);
   const balance = wallet?.balance ?? 0;
   const toNextChat = 18 - ((wallet?.message_count ?? 0) % 18);
+  const chatCapped = chatToday >= CHAT_DAILY_CAP;
 
   async function redeem(rewardId: "aero_week" | "decoration") {
     const reward = REWARDS.find((r) => r.id === rewardId)!;
@@ -109,11 +118,15 @@ export function CurrencyPanel() {
         <p className="mt-2 text-[13px] text-white/80">{(wallet?.lifetime ?? 0).toLocaleString("en-GB")} earned in total</p>
         <div className="mt-4 max-w-sm">
           <div className="flex justify-between text-[12px] text-white/80">
-            <span>{t("Next chat reward")}</span><span>{toNextChat} message{toNextChat === 1 ? "" : "s"} to go</span>
+            <span>{chatCapped ? t("Daily chat limit reached") : t("Next chat reward")}</span>
+            <span>{chatCapped ? t("Resets at midnight UTC") : `${toNextChat} message${toNextChat === 1 ? "" : "s"} to go`}</span>
           </div>
           <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/25">
-            <div className="h-full rounded-full bg-white transition-[width] duration-500" style={{ width: `${((18 - toNextChat) / 18) * 100}%` }} />
+            <div className="h-full rounded-full bg-white transition-[width] duration-500" style={{ width: `${chatCapped ? 100 : ((18 - toNextChat) / 18) * 100}%` }} />
           </div>
+          <p className="mt-1 text-[12px] text-white/80 tabular-nums">
+            {t("{earned} of {cap} from chat today", { earned: Math.min(chatToday, CHAT_DAILY_CAP).toLocaleString("en-GB"), cap: CHAT_DAILY_CAP.toLocaleString("en-GB") })}
+          </p>
         </div>
       </div>
 

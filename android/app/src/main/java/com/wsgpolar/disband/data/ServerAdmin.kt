@@ -35,6 +35,8 @@ object ServerAdmin {
         val permissions: Map<String, Boolean> = emptyMap(),
         @SerialName("is_default") val isDefault: Boolean? = null,
         val icon: String? = null,
+        @SerialName("gradient_to") val gradientTo: String? = null,
+        @SerialName("gradient_animated") val gradientAnimated: Boolean? = null,
     )
 
     @Serializable

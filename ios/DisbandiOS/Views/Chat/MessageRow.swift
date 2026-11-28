@@ -27,6 +27,9 @@ struct MessageRow: View {
     var highlighted: Bool = false
     /// Tapping the reply line jumps to the message it answers.
     var onTapReply: ((String) -> Void)? = nil
+    /// In a space: the colour of the author's top role, as the web colours
+    /// chat names (`getMemberColor`). A personal name colour still wins.
+    var authorRoleColor: Color? = nil
 
     @State private var dragOffset: CGFloat = 0
     /// Whether the drag in progress is a reply swipe (nil until it has moved).
@@ -50,15 +53,19 @@ struct MessageRow: View {
 
     /// A webhook message shows the webhook's name and picture (or the
     /// per-message override), not the identity behind it.
-    private var authorName: String { message.webhook?.name ?? message.author?.name ?? "Unknown" }
-    private var authorAvatar: String? { message.webhook?.avatarUrl ?? message.author?.avatarUrl }
+    /// The newest copy of the author (a changed name or avatar shows at
+    /// once, not on the next reload of the conversation).
+    private var author: Profile? { ProfileLive.shared.fresh(message.author) }
+
+    private var authorName: String { message.webhook?.name ?? author?.name ?? "Unknown" }
+    private var authorAvatar: String? { message.webhook?.avatarUrl ?? author?.avatarUrl }
     /// Webhooks and bots get Discord's APP tag.
-    private var isApp: Bool { message.webhook != nil || message.author?.isBot == true }
+    private var isApp: Bool { message.webhook != nil || author?.isBot == true }
 
     /// Opens the author's profile, except for webhooks, which have none
     /// worth showing.
     private func tapAuthor() {
-        guard message.webhook == nil, let a = message.author else { return }
+        guard message.webhook == nil, let a = author else { return }
         onTapAuthor(a)
     }
 
@@ -175,7 +182,7 @@ struct MessageRow: View {
                 // gesture swallowed Button taps, so the avatar never opened
                 // the profile.
                 AvatarView(url: authorAvatar, name: authorName, size: 40,
-                           decoration: message.webhook == nil ? message.author?.equippedRingEffect : nil)
+                           decoration: message.webhook == nil ? author?.equippedRingEffect : nil)
                     .contentShape(Circle())
                     .onTapGesture { tapAuthor() }
                     .accessibilityAddTraits(.isButton)
@@ -192,8 +199,8 @@ struct MessageRow: View {
                     HStack(spacing: 6) {
                         Group {
                             // Webhooks post under their own name, with no style.
-                            if message.webhook == nil, let author = message.author {
-                                StyledName(author, size: 16, fallbackColor: Brand.textPrimary)
+                            if message.webhook == nil, let author {
+                                StyledName(author, size: 16, fallbackColor: authorRoleColor ?? Brand.textPrimary)
                             } else {
                                 Text(authorName)
                                     .font(.system(size: 16, weight: .semibold))

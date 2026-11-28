@@ -76,6 +76,11 @@ fun SpacesView(
             onInboxSelected = { state.navigateTo(Destination.Home) },
             selfStatus = selfStatus,
             unreadForServer = unreadForServer,
+            inboxBadge = run {
+                val dms by app.dmUnread.unread.collectAsStateValue()
+                val groups by app.dmUnread.groupUnread.collectAsStateValue()
+                dms.values.sum() + groups.values.sum()
+            },
             onAddServer = onAddServer,
             onExplore = onExplore,
         )

@@ -2,7 +2,7 @@ import Foundation
 
 /// A backend-agnostic message used by the shared chat UI. Channel, DM, and group
 /// messages are all projected into this shape.
-struct DisplayMessage: Identifiable, Hashable {
+struct DisplayMessage: Identifiable, Hashable, Codable {
     /// Mutable so an optimistic row can take on the real row id the insert
     /// returns, instead of waiting to be matched by its text.
     var id: String
@@ -204,11 +204,21 @@ enum ChatSource: Hashable {
 
 /// Process-wide cache so re-opening a conversation shows messages instantly
 /// while a fresh copy loads in the background.
+///
+/// The newest 50 messages of each conversation are also kept on disk, per
+/// account, so the first open after a launch paints at once instead of
+/// waiting on the network. That first open was the slow one: the memory cache
+/// is empty after every launch.
 @MainActor
 final class ChatCache {
     static let shared = ChatCache()
     private var messageStore: [String: [DisplayMessage]] = [:]
     private var reactionStore: [String: [String: [ReactionSummary]]] = [:]
+    private var pendingWrites: [String: Task<Void, Never>] = [:]
+    /// The account whose files are read and written. Set by the chat when it opens.
+    var userId: String?
+
+    static let diskCount = 50
 
     func messages(_ key: String) -> [DisplayMessage]? { messageStore[key] }
     func reactions(_ key: String) -> [String: [ReactionSummary]]? { reactionStore[key] }
@@ -221,5 +231,60 @@ final class ChatCache {
         messageStore[key] = Array(cached)
         let ids = Set(cached.map(\.id))
         reactionStore[key] = reactions.filter { ids.contains($0.key) }
+        scheduleDiskWrite(key, Array(cached.suffix(Self.diskCount)))
+    }
+
+    // MARK: Disk
+
+    private static func directory(for userId: String) -> URL? {
+        guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
+        return base.appendingPathComponent("chat-cache", isDirectory: true)
+            .appendingPathComponent(userId, isDirectory: true)
+    }
+
+    private static func file(for key: String, userId: String) -> URL? {
+        let safe = key.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) ? String($0) : "_" }.joined()
+        return directory(for: userId)?.appendingPathComponent("\(safe).json")
+    }
+
+    /// The saved copy, read off the main thread. Nil when there is none.
+    func loadFromDisk(_ key: String) async -> [DisplayMessage]? {
+        guard let userId, let url = Self.file(for: key, userId: userId) else { return nil }
+        let rows: [DisplayMessage]? = await Task.detached(priority: .userInitiated) {
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            return try? JSONDecoder().decode([DisplayMessage].self, from: data)
+        }.value
+        guard let rows, !rows.isEmpty else { return nil }
+        if messageStore[key] == nil { messageStore[key] = rows }
+        return rows
+    }
+
+    /// Coalesced: a busy channel stores on every message, the disk once a second.
+    private func scheduleDiskWrite(_ key: String, _ rows: [DisplayMessage]) {
+        guard let userId, let url = Self.file(for: key, userId: userId) else { return }
+        pendingWrites[key]?.cancel()
+        pendingWrites[key] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            self?.pendingWrites[key] = nil
+            await Task.detached(priority: .utility) {
+                guard let data = try? JSONEncoder().encode(rows) else { return }
+                try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                         withIntermediateDirectories: true)
+                try? data.write(to: url, options: .atomic)
+            }.value
+        }
+    }
+
+    /// Signing out: nothing of the old account stays readable.
+    func clearAll() {
+        messageStore = [:]
+        reactionStore = [:]
+        pendingWrites.values.forEach { $0.cancel() }
+        pendingWrites = [:]
+        if let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            try? FileManager.default.removeItem(at: base.appendingPathComponent("chat-cache", isDirectory: true))
+        }
+        userId = nil
     }
 }

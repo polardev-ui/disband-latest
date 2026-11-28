@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { PresenceMap } from "@/lib/presence";
+import { onProfilePatch } from "@/lib/profile-store";
 import type { Profile, ServerMember } from "@/lib/supabase/types";
 
 export type WindowMember = ServerMember & { profile: Profile };
@@ -153,6 +154,35 @@ export function useMemberWindow(
   useEffect(() => () => {
     if (onlineRetryTimer.current) clearTimeout(onlineRetryTimer.current);
   }, []);
+
+  // Profile edits (yours at once, others' through Realtime) land in the rows
+  // this list already holds. Without this a changed custom status, name or
+  // avatar stayed old here, and in the card opened from the row, until the
+  // space was reopened.
+  useEffect(() => onProfilePatch((patch) => {
+    const merge = (m: WindowMember): WindowMember => ({ ...m, profile: { ...m.profile, ...patch } });
+    for (const entry of spaceCache.values()) {
+      const m = entry.onlineById.get(patch.id);
+      if (m) entry.onlineById.set(patch.id, merge(m));
+    }
+    setOnlineById((prev) => {
+      const m = prev.get(patch.id);
+      if (!m) return prev;
+      const next = new Map(prev);
+      next.set(patch.id, merge(m));
+      return next;
+    });
+    setPages((prev) => {
+      let changed = false;
+      const next = new Map(prev);
+      for (const [key, rows] of prev) {
+        if (!rows.some((m) => m.user_id === patch.id)) continue;
+        changed = true;
+        next.set(key, rows.map((m) => (m.user_id === patch.id ? merge(m) : m)));
+      }
+      return changed ? next : prev;
+    });
+  }), []);
 
   // New space: start over, from the cache when this space was seen before.
   useEffect(() => {

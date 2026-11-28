@@ -34,6 +34,20 @@ class WebRTCEngine(
 
     private var remoteAudio: AudioTrack? = null
 
+    /** The other person's camera, and whether frames are arriving (it goes quiet, not away). */
+    var remoteVideo: org.webrtc.VideoTrack? = null
+        private set
+    private val remoteWatcher = FrameWatcher()
+    val remoteVideoLive: Boolean get() = remoteVideo != null && remoteWatcher.isLive
+
+    /** Our own camera while it is on. */
+    var localVideo: org.webrtc.VideoTrack? = null
+        private set
+    private var videoSender: org.webrtc.RtpSender? = null
+    private var capturer: org.webrtc.CameraVideoCapturer? = null
+    private var videoSource: org.webrtc.VideoSource? = null
+    private var textureHelper: org.webrtc.SurfaceTextureHelper? = null
+
     // Candidates that arrive before the remote description exist cannot be
     // added — buffer them and flush once setRemoteDescription succeeds.
     private val pendingCandidates = mutableListOf<IceCandidate>()
@@ -94,8 +108,15 @@ class WebRTCEngine(
         override fun onTrack(transceiver: RtpTransceiver) {
             val track = transceiver.receiver.track()
             if (track is AudioTrack) {
-                remoteAudio = track
-                onRemoteAudioTrack(track)
+                // The first audio lane is the voice; a later one is screen sound.
+                if (remoteAudio == null) {
+                    remoteAudio = track
+                    onRemoteAudioTrack(track)
+                }
+            } else if (track is org.webrtc.VideoTrack && remoteVideo == null) {
+                // The first video lane is the camera (web lane 1, iOS's only video track).
+                remoteVideo = track
+                runCatching { track.addSink(remoteWatcher) }
             }
         }
     }
@@ -111,8 +132,11 @@ class WebRTCEngine(
             .setUseHardwareNoiseSuppressor(true)
             .createAudioDeviceModule()
 
+        val egl = VideoEgl.base.eglBaseContext
         factory = PeerConnectionFactory.builder()
             .setAudioDeviceModule(audioModule)
+            .setVideoEncoderFactory(org.webrtc.DefaultVideoEncoderFactory(egl, true, true))
+            .setVideoDecoderFactory(org.webrtc.DefaultVideoDecoderFactory(egl))
             .createPeerConnectionFactory()
 
         val config = PeerConnection.RTCConfiguration(iceServers)
@@ -146,8 +170,8 @@ class WebRTCEngine(
             "rollback" -> SessionDescription.Type.ROLLBACK
             else -> SessionDescription.Type.ANSWER
         }
-        suspendCancellableCoroutine { cont ->
-            pc.setRemoteDescription(sdpObserver(cont), SessionDescription(type, sdp.sdp))
+        suspendCancellableCoroutine<Unit> { cont ->
+            pc.setRemoteDescription(setObserver(cont), SessionDescription(type, sdp.sdp))
         }
         hasRemoteDescription = true
         flushPendingCandidates()
@@ -160,6 +184,52 @@ class WebRTCEngine(
             return
         }
         add(ice)
+    }
+
+    /**
+     * Camera on or off mid-call, as iOS: add or remove a video track; the
+     * caller renegotiates with a fresh offer. Returns false if it couldn't start.
+     */
+    fun setCameraEnabled(enabled: Boolean): Boolean {
+        if (!enabled) {
+            runCatching { capturer?.stopCapture() }
+            runCatching { capturer?.dispose() }
+            capturer = null
+            videoSender?.let { runCatching { pc.removeTrack(it) } }
+            videoSender = null
+            runCatching { localVideo?.dispose() }
+            localVideo = null
+            runCatching { videoSource?.dispose() }
+            videoSource = null
+            runCatching { textureHelper?.dispose() }
+            textureHelper = null
+            return true
+        }
+        if (localVideo != null) return true
+        return try {
+            val enumerator = org.webrtc.Camera2Enumerator(appContext)
+            val name = enumerator.deviceNames.firstOrNull { enumerator.isFrontFacing(it) } ?: enumerator.deviceNames.firstOrNull()
+                ?: return false
+            val cam = enumerator.createCapturer(name, null) ?: return false
+            val helper = org.webrtc.SurfaceTextureHelper.create("call-camera", VideoEgl.base.eglBaseContext)
+            val source = factory.createVideoSource(false)
+            cam.initialize(helper, appContext, source.capturerObserver)
+            cam.startCapture(640, 480, 24)
+            val track = factory.createVideoTrack("video0", source)
+            capturer = cam
+            textureHelper = helper
+            videoSource = source
+            localVideo = track
+            videoSender = pc.addTrack(track, listOf("stream0"))
+            true
+        } catch (_: Exception) {
+            setCameraEnabled(false)
+            false
+        }
+    }
+
+    fun switchCamera() {
+        runCatching { capturer?.switchCamera(null) }
     }
 
     fun setMicEnabled(enabled: Boolean) {
@@ -180,7 +250,11 @@ class WebRTCEngine(
             val am = appContext.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
             // Earpiece/speaker routing only applies in communication mode.
             if (previousAudioMode == null) {
-                previousAudioMode = am.mode
+                // A voice channel may already have switched to communication
+                // mode. Saving that as "previous" left the phone stuck in it
+                // after the call ended.
+                previousAudioMode = am.mode.takeIf { it != android.media.AudioManager.MODE_IN_COMMUNICATION }
+                    ?: android.media.AudioManager.MODE_NORMAL
                 am.mode = android.media.AudioManager.MODE_IN_COMMUNICATION
             }
             am.isSpeakerphoneOn = on
@@ -188,6 +262,9 @@ class WebRTCEngine(
     }
 
     fun dispose() {
+        setCameraEnabled(false)
+        remoteVideo?.let { runCatching { it.removeSink(remoteWatcher) } }
+        remoteVideo = null
         previousAudioMode?.let { mode ->
             runCatching {
                 val am = appContext.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
@@ -204,8 +281,8 @@ class WebRTCEngine(
     }
 
     private suspend fun setLocalDescription(description: SessionDescription) {
-        suspendCancellableCoroutine { cont ->
-            pc.setLocalDescription(sdpObserver(cont), description)
+        suspendCancellableCoroutine<Unit> { cont ->
+            pc.setLocalDescription(setObserver(cont), description)
         }
     }
 
@@ -231,6 +308,23 @@ class WebRTCEngine(
 
             override fun onSetSuccess() {}
 
+            override fun onSetFailure(error: String) {
+                if (cont.isActive) cont.resumeWithException(RuntimeException(error))
+            }
+        }
+
+    /**
+     * For setLocal/setRemoteDescription. These used to share the create
+     * observer, whose onSetSuccess did nothing, so the coroutine never
+     * resumed: the caller never sent its offer and the callee never answered.
+     */
+    private fun setObserver(cont: CancellableContinuation<Unit>): SdpObserver =
+        object : SdpObserver {
+            override fun onCreateSuccess(description: SessionDescription) {}
+            override fun onCreateFailure(error: String) {}
+            override fun onSetSuccess() {
+                if (cont.isActive) cont.resume(Unit)
+            }
             override fun onSetFailure(error: String) {
                 if (cont.isActive) cont.resumeWithException(RuntimeException(error))
             }

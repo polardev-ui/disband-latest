@@ -34,6 +34,8 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
@@ -127,6 +129,8 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
     var showAccount by remember { mutableStateOf(false) }
     var showStatus by remember { mutableStateOf(false) }
     var showReferrals by remember { mutableStateOf(false) }
+    var showSaved by remember { mutableStateOf(false) }
+    var showMyAccount by remember { mutableStateOf(false) }
     var showGuildTag by remember { mutableStateOf(false) }
     var showBadges by remember { mutableStateOf(false) }
     var showAppearance by remember { mutableStateOf(false) }
@@ -212,12 +216,19 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
                 Spacer(Modifier.height(12.dp))
                 PlanCard(app, palette)
                 Spacer(Modifier.height(12.dp))
+                DailyStreakCard()
+                Spacer(Modifier.height(12.dp))
             }
 
             // Account group — mirrors iOS: Edit profile / Status / Referrals.
             SectionCaption("Account", modifier = Modifier.padding(start = 8.dp))
             SettingsGroupCard(
                 rows = listOf(
+                    SettingsRow(
+                        Icons.Filled.ManageAccounts, "My account",
+                        detail = profile?.username?.let { "@$it" },
+                        tint = Color(0xFF5865F2), palette = palette,
+                    ) { showMyAccount = true },
                     SettingsRow(
                         Icons.Filled.AccountCircle, "Edit profile",
                         detail = profile?.pronouns,
@@ -238,6 +249,11 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
                         detail = "Show or hide",
                         tint = Color(0xFFF1C40F), palette = palette,
                     ) { showBadges = true },
+                    SettingsRow(
+                        Icons.Filled.Bookmark, "Saved messages",
+                        detail = null,
+                        tint = Color(0xFF3BA55C), palette = palette,
+                    ) { showSaved = true },
                     SettingsRow(
                         Icons.Filled.CardGiftcard, "Referrals",
                         detail = "Win $100",
@@ -362,8 +378,10 @@ fun YouScreen(app: AppState, onOpenNotification: (String) -> Unit = {}) {
     }
 
     if (showAccount) AccountSheet(app) { showAccount = false }
+    if (showMyAccount) MyAccountSheet(app, onEditProfile = { showAccount = true }) { showMyAccount = false }
     if (showStatus) StatusSheet(app) { showStatus = false }
     if (showReferrals) ReferralsSheet(app) { showReferrals = false }
+    if (showSaved) com.wsgpolar.disband.ui.chat.SavedMessagesSheet { showSaved = false }
     if (showGuildTag) GuildTagPickerScreen(app) { showGuildTag = false }
     if (showBadges) BadgeSettingsScreen(app) { showBadges = false }
     if (showAppearance) AppearanceSheet(app) { showAppearance = false }
@@ -502,13 +520,10 @@ private fun ProfileHeroCard(
                         )
                     }
                 }
-                Text(
-                    profile.name,
-                    color = palette.textPrimary,
+                com.wsgpolar.disband.ui.components.DisplayNameText(
+                    profile,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.offset(y = (-28).dp),
                 )
                 Row(

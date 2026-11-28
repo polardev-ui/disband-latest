@@ -17,6 +17,10 @@ struct InboxPanel: View {
     @State private var showIconPicker = false
     @State private var iconItem: PhotosPickerItem?
     @State private var iconError: String?
+    @State private var showCreateGroup = false
+    @State private var addingTo: GroupChat?
+    @State private var renaming: GroupChat?
+    @State private var renameText = ""
     @State private var filter: Filter = .all
     /// Typed into the search box: narrows the list to matching names.
     @State private var query = ""
@@ -77,7 +81,38 @@ struct InboxPanel: View {
                 iconError = await vm.setGroupIcon(group.id, imageData: jpeg)
             }
         }
-        .alert("Group picture", isPresented: Binding(get: { iconError != nil }, set: { if !$0 { iconError = nil } })) {
+        .sheet(isPresented: $showCreateGroup) {
+            if let uid = app.currentUserId {
+                CreateGroupSheet(currentUserId: uid) { _, _ in
+                    Task { await vm.start(currentUserId: app.currentUserId, unread: unreadStore, closed: closedDms) }
+                }
+            }
+        }
+        .sheet(item: $addingTo) { group in
+            if let uid = app.currentUserId {
+                AddGroupMembersSheet(currentUserId: uid, group: group) {
+                    Task { await vm.start(currentUserId: app.currentUserId, unread: unreadStore, closed: closedDms) }
+                }
+            }
+        }
+        .alert("Rename Group", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Group name", text: $renameText)
+            Button("Save") {
+                guard let group = renaming else { return }
+                let name = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty, name != group.name else { return }
+                Task {
+                    do {
+                        try await GroupChatService.rename(groupId: group.id, name: String(name.prefix(100)))
+                        await vm.start(currentUserId: app.currentUserId, unread: unreadStore, closed: closedDms)
+                    } catch {
+                        iconError = GroupChatService.message(for: error, fallback: "Couldn't rename the group.")
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert("Group chat", isPresented: Binding(get: { iconError != nil }, set: { if !$0 { iconError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(iconError ?? "") }
     }
@@ -88,6 +123,14 @@ struct InboxPanel: View {
                 .font(.title2.weight(.bold))
                 .foregroundStyle(Brand.textPrimary)
             Spacer()
+            Button { showCreateGroup = true } label: {
+                Image(systemName: "person.3.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Brand.textPrimary)
+                    .frame(width: 36, height: 36)
+                    .background(Brand.elevated, in: Circle())
+            }
+            .accessibilityLabel("New group")
             Button {
                 chrome.destination = .friends
             } label: {
@@ -349,6 +392,17 @@ struct InboxPanel: View {
                         Task { iconError = await vm.setGroupIcon(group.id, imageData: nil) }
                     } label: {
                         Label("Remove Icon", systemImage: "photo.badge.minus")
+                    }
+                }
+                Button { addingTo = group } label: {
+                    Label("Add Friends", systemImage: "person.badge.plus")
+                }
+                if group.ownerId == app.currentUserId {
+                    Button {
+                        renameText = group.name
+                        renaming = group
+                    } label: {
+                        Label("Rename", systemImage: "pencil")
                     }
                 }
                 Button(role: .destructive) {

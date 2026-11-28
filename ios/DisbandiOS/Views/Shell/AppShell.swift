@@ -143,8 +143,10 @@ struct AppShell: View {
         withAnimation(Motion.pop) { chrome.friendRequests = count }
     }
 
+    /// DMs and groups, plus pings in spaces (the rail's red counts).
     private var inboxUnread: Int {
         vm.threads.reduce(0) { $0 + unreadStore.count(for: $1.id) }
             + vm.groups.reduce(0) { $0 + unreadStore.countGroup(for: $1.id) }
+            + ChannelUnreadStore.shared.serverMentionCounts.values.reduce(0, +)
     }
 }

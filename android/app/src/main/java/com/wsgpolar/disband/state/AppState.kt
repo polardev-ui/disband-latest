@@ -239,6 +239,8 @@ class AppState(
         }
 
         loadProfile()
+        startProfileWatch()
+        com.wsgpolar.disband.data.StreakService.recordVisit(context)
         _phase.value = AuthPhase.SignedIn
         presence.start(currentUserId, chosenStatus())
         music.setUser(currentUserId)
@@ -260,6 +262,7 @@ class AppState(
     fun onAppForeground() {
         if (_phase.value != AuthPhase.SignedIn) return
         com.wsgpolar.disband.data.ChannelUnreads.start()
+        com.wsgpolar.disband.data.StreakService.recordVisit(context)
         scope.launch {
             loadProfile()
             presence.start(currentUserId, chosenStatus())
@@ -285,6 +288,8 @@ class AppState(
 
     private suspend fun completeSignedIn() {
         loadProfile()
+        startProfileWatch()
+        com.wsgpolar.disband.data.StreakService.recordVisit(context)
         _phase.value = AuthPhase.SignedIn
         presence.start(currentUserId, chosenStatus())
         music.setUser(currentUserId)
@@ -293,6 +298,21 @@ class AppState(
         startCallListeners()
         subscriptions.start(currentUserId)
         loadServers()
+    }
+
+    /**
+     * Your own row, live: a status or name changed on the web or another
+     * phone shows here without a restart (the web's `profile:<id>` channel).
+     */
+    private fun startProfileWatch() {
+        val uid = currentUserId ?: return
+        com.wsgpolar.disband.data.ProfileStore.onChange = { row ->
+            if (row.id == currentUserId) {
+                val old = _profile.value
+                _profile.value = row.copy(listening = row.listening ?: old?.listening, activity = row.activity ?: old?.activity)
+            }
+        }
+        com.wsgpolar.disband.data.ProfileStore.start(uid)
     }
 
     private fun startCallListeners() {
@@ -342,6 +362,7 @@ class AppState(
             runCatching { client.postgrest.rpc("ensure_user_profile") }
             val profile = Database.profile(uid)
             _profile.value = profile
+            com.wsgpolar.disband.data.ProfileStore.put(profile)
             _profileError.value = null
         } catch (e: Exception) {
             if (e.message?.contains("PGRST116") == true && !recovering) {
@@ -476,6 +497,9 @@ class AppState(
         // the next account is skipped because the FCM token has not changed.
         PushRegistrar.unregisterCurrentDevice(context)
         com.wsgpolar.disband.data.ChannelUnreads.reset()
+        com.wsgpolar.disband.data.ProfileStore.reset()
+        com.wsgpolar.disband.data.MessageTools.reset()
+        com.wsgpolar.disband.ui.chat.ChatCache.clear(context)
         runCatching { client.auth.signOut() }
     }
 
@@ -497,6 +521,46 @@ class AppState(
         val uid = currentUserId ?: return "Not signed in"
         return try {
             Database.updateProfile(uid, patch)
+            // Show the change everywhere at once (your profile, the member
+            // list, your messages), then confirm it with a fresh read.
+            applyOwnPatch(uid, patch)
+            loadProfile()
+            null
+        } catch (e: Exception) {
+            e.message ?: e.toString()
+        }
+    }
+
+    /** "" clears a column, null leaves it, exactly as [Database.updateProfile] writes it. */
+    private fun applyOwnPatch(uid: String, patch: ProfilePatch) {
+        fun String?.applied(old: String?): String? = when (this) {
+            null -> old
+            "" -> null
+            else -> this
+        }
+        val change = { p: Profile ->
+            p.copy(
+                displayName = patch.displayName.applied(p.displayName),
+                bio = patch.bio ?: p.bio,
+                pronouns = patch.pronouns.applied(p.pronouns),
+                statusNote = patch.statusNote.applied(p.statusNote),
+                statusExpiresAt = patch.statusExpiresAt.applied(p.statusExpiresAt),
+                avatarUrl = patch.avatarUrl ?: p.avatarUrl,
+                bannerUrl = patch.bannerUrl ?: p.bannerUrl,
+                accentColor = patch.accentColor ?: p.accentColor,
+                accentColor2 = patch.accentColor2 ?: p.accentColor2,
+            )
+        }
+        _profile.value?.takeIf { it.id == uid }?.let { _profile.value = change(it) }
+        com.wsgpolar.disband.data.ProfileStore.put(_profile.value)
+    }
+
+    /** Your status was cleared: same immediate update as [saveProfile]. */
+    suspend fun clearStatus(): String? {
+        val uid = currentUserId ?: return "Not signed in"
+        return try {
+            Database.clearStatus(uid)
+            applyOwnPatch(uid, ProfilePatch(statusNote = "", statusExpiresAt = ""))
             loadProfile()
             null
         } catch (e: Exception) {

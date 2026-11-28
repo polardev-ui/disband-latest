@@ -121,6 +121,9 @@ import { CatalystModal } from "./CatalystModal";
 import { CallIndicator } from "./CallIndicator";
 import { QuickSwitcher } from "./QuickSwitcher";
 import { UserProfilePopout } from "./UserProfilePopout";
+import { onProfilePatch, publishProfilePatch } from "@/lib/profile-store";
+import { fetchProfilesByIds } from "@/lib/fetch-profiles";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 export function DiscordApp() {
   const app = useApp();
@@ -660,12 +663,36 @@ export function DiscordApp() {
     [app],
   );
 
+  const ownProfile = app.profile;
   const openProfile = useCallback((profile: Profile) => {
     const recent = lastPointer.current && Date.now() - lastPointer.current.at < 1500 ? lastPointer.current.rect : null;
     setProfileAnchor(recent);
     setProfileFull(!recent);
-    setProfileTarget(profile);
-  }, []);
+    // Your own card always shows your profile as it is now: the row that was
+    // clicked (a member list entry, an old message) can predate your last edit.
+    setProfileTarget(ownProfile && profile.id === ownProfile.id ? { ...profile, ...ownProfile } : profile);
+  }, [ownProfile]);
+
+  // Keep the open card current: edits arriving while it's open merge in, and
+  // someone else's card re-reads their row once on open, since the clicked
+  // copy (a member row, a message author) can be minutes old. The fresh row
+  // is published so the member list row it came from updates too.
+  useEffect(() => onProfilePatch((patch) => {
+    setProfileTarget((prev) => (prev && prev.id === patch.id ? { ...prev, ...patch } : prev));
+  }), []);
+  const profileTargetId = profileTarget?.id ?? null;
+  const profileTargetIsSelf = !!profileTargetId && profileTargetId === app.user?.id;
+  useEffect(() => {
+    if (!profileTargetId || profileTargetIsSelf || !app.user?.id) return;
+    let live = true;
+    void fetchProfilesByIds(getSupabaseClient(), [profileTargetId]).then((found) => {
+      const fresh = found.get(profileTargetId);
+      if (live && fresh) publishProfilePatch(fresh);
+    });
+    return () => {
+      live = false;
+    };
+  }, [profileTargetId, profileTargetIsSelf, app.user?.id]);
 
   // The call stage's right-click menu (CallStage.tsx) asks for these.
   const openDmWithFriend = app.openDmWithFriend;
@@ -1062,26 +1089,47 @@ export function DiscordApp() {
         ? `[Forwarded from ${displayName(msg.author as any)}]\n`
         : "[Forwarded]\n";
       const content = prefix + (msg.content || "(attachment)");
+      // Send through the state as it is once the conversation is open: `app`
+      // here still points at wherever the message was forwarded from. A fixed
+      // 200 ms wait sometimes ran before the group was the open one, and the
+      // forward was dropped without a word; now it waits (up to 5 s) until
+      // the destination is really open, and says so if sending fails.
+      const sendWhenOpen = (isOpen: () => boolean, send: () => Promise<string | null | undefined | void>) => {
+        const started = Date.now();
+        const attempt = () => {
+          if (!isOpen()) {
+            if (Date.now() - started < 5_000) window.setTimeout(attempt, 100);
+            else void alertDialog(t("Couldn't forward the message. Please try again."));
+            return;
+          }
+          void send().then((err) => {
+            if (typeof err === "string" && err) void alertDialog(err);
+          });
+        };
+        attempt();
+      };
       if (dest.kind === "dm") {
-        // Send through the state as it is once the conversation is open:
-        // `app` here still points at wherever the message was forwarded
-        // from, which is why forwards to a group chat never arrived.
         void app.openDmWithFriend(dest.id).then(() => {
-          setTimeout(() => {
-            void latestAppRef.current.sendDmMessage(content);
-          }, 200);
+          sendWhenOpen(
+            () => {
+              const latest = latestAppRef.current;
+              return latest.viewMode === "dm" && !!latest.activeDmThreadId
+                && latest.dmThreads.some((d) => d.id === latest.activeDmThreadId && d.friend?.id === dest.id);
+            },
+            () => latestAppRef.current.sendDmMessage(content),
+          );
         });
       } else if (dest.kind === "group") {
         void app.selectGroupChat(dest.id).then(() => {
-          setTimeout(() => {
-            const latest = latestAppRef.current;
-            if (latest.activeGroupChatId === dest.id) void latest.sendGroupMessage(content);
-          }, 200);
+          sendWhenOpen(
+            () => latestAppRef.current.viewMode === "group" && latestAppRef.current.activeGroupChatId === dest.id,
+            () => latestAppRef.current.sendGroupMessage(content),
+          );
         });
       }
       setForwardMessage(null);
     },
-    [forwardMessage, app],
+    [forwardMessage, app, t],
   );
 
   const handleNoteContext = useCallback(

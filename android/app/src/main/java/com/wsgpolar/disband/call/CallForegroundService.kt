@@ -53,6 +53,8 @@ class CallForegroundService : Service() {
         const val ACTION_START = "com.wsgpolar.disband.CALL_START"
         const val ACTION_HANGUP = "com.wsgpolar.disband.CALL_HANGUP"
         const val ACTION_DECLINE = "com.wsgpolar.disband.CALL_DECLINE"
+        const val ACTION_PROJECT = "com.wsgpolar.disband.CALL_PROJECT"
+        const val ACTION_UNPROJECT = "com.wsgpolar.disband.CALL_UNPROJECT"
 
         /** Put on the activity intent that the Answer action opens. */
         const val EXTRA_CALL_ACTION = "call_action"
@@ -98,6 +100,28 @@ class CallForegroundService : Service() {
             }
             runCatching { ContextCompat.startForegroundService(app, intent) }
                 .onFailure { post(app, buildNotification(app, title, caller, incoming = false)) }
+        }
+
+        /** True while the service holds the media-projection type (screen sharing). */
+        @Volatile
+        var projecting = false
+            private set
+
+        /**
+         * Screen sharing: Android 14+ only hands out a MediaProjection to a
+         * foreground service of that type, promoted after the person agreed.
+         * Called with the consent already given; returns at once, and
+         * [projecting] turns true when the service is promoted.
+         */
+        fun startProjection(context: Context, title: String, on: Boolean) {
+            val app = context.applicationContext
+            if (!on) projecting = false
+            val intent = Intent(app, CallForegroundService::class.java).apply {
+                action = if (on) ACTION_PROJECT else ACTION_UNPROJECT
+                putExtra(EXTRA_TITLE, title)
+                putExtra(EXTRA_CALLER, "Sharing your screen")
+            }
+            runCatching { ContextCompat.startForegroundService(app, intent) }
         }
 
         fun stop(context: Context) {
@@ -218,6 +242,18 @@ class CallForegroundService : Service() {
         val caller = intent?.getStringExtra(EXTRA_CALLER) ?: "Disband"
         val notification = buildNotification(this, title, caller, incoming = false)
 
+        if (intent?.action == ACTION_PROJECT || intent?.action == ACTION_UNPROJECT) {
+            val project = intent.action == ACTION_PROJECT
+            val ok = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) runCatching {
+                val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+                    (if (project) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION else 0)
+                startForeground(NOTIFICATION_ID, notification, type)
+            }.isSuccess else runCatching { startForeground(NOTIFICATION_ID, notification) }.isSuccess
+            inForeground = inForeground || ok
+            projecting = project && ok
+            return START_NOT_STICKY
+        }
+
         if (enterForeground(notification)) {
             inForeground = true
             return START_NOT_STICKY
@@ -260,6 +296,7 @@ class CallForegroundService : Service() {
 
     override fun onDestroy() {
         inForeground = false
+        projecting = false
         super.onDestroy()
     }
 

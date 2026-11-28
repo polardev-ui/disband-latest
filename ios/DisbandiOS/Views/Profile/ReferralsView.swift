@@ -20,7 +20,7 @@ struct ReferralsView: View {
         let username: String?
         let verifiedCount: Int
         var id: String { userId }
-        var name: String { Profile.visible(displayName) ?? Profile.visible(username) ?? "Someone" }
+        var name: String { Profile.resolvedName(displayName, username, fallback: "Someone") }
 
         enum CodingKeys: String, CodingKey {
             case standing, username

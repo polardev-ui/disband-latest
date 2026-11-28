@@ -52,19 +52,14 @@ enum BotInviteAPI {
         return code?.isEmpty == false ? code : nil
     }
 
-    /// Your spaces, owners' and admins' first (they're the ones who can add apps).
+    /// The spaces you may add an app to: only those `my_bot_install_spaces()`
+    /// returns (you own it or have Manage Space, migration 0282), as the web's
+    /// picker does. It used to list every space you were in, so most picks
+    /// were refused by the server after the fact. The server checks again.
     static func spaces(userId: String) async -> [BotSpace] {
-        struct Membership: Decodable { let server_id: String; let role: String? }
-        let rows: [Membership] = (try? await SupabaseManager.client.from("server_members")
-            .select("server_id, role").eq("user_id", value: userId).limit(500).execute().value) ?? []
-        guard !rows.isEmpty else { return [] }
-        let roles = Dictionary(rows.map { ($0.server_id, $0.role ?? "") }, uniquingKeysWith: { a, _ in a })
-        let servers: [BotSpace] = (try? await SupabaseManager.client.from("servers")
-            .select("id, name, icon_url, owner_id").in("id", values: Array(roles.keys)).execute().value) ?? []
-        func canAdd(_ s: BotSpace) -> Bool { s.ownerId == userId || roles[s.id] == "admin" }
-        return servers.sorted {
-            canAdd($0) != canAdd($1) ? canAdd($0) : $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-        }
+        let servers: [BotSpace] = (try? await SupabaseManager.client
+            .rpc("my_bot_install_spaces").execute().value) ?? []
+        return servers.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     static let scopeLabels: [String: (label: String, detail: String)] = [
@@ -251,7 +246,7 @@ struct BotAuthorizeSheet: View {
                 spaceRow(fixedSpace, chevron: false)
             } else if let spaces {
                 if spaces.isEmpty {
-                    Text("You aren't in any spaces yet.")
+                    Text("You need to own a space, or have Manage Space in one, to add apps.")
                         .font(.system(size: 14)).foregroundStyle(Brand.textMuted)
                 } else {
                     Menu {

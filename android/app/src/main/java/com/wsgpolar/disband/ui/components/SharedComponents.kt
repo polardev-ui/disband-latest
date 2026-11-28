@@ -25,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -303,6 +304,9 @@ fun FriendRow(
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val palette = LocalPalette.current
+    // The newest copy, so a changed status or name shows without a reload.
+    val stored by com.wsgpolar.disband.data.ProfileStore.profiles.collectAsState()
+    val profile = profile?.let { stored[it.id] ?: it }
     Row(
         modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -317,13 +321,10 @@ fun FriendRow(
         )
         Column(Modifier.padding(start = 12.dp).weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    profile?.name ?: "Unknown",
-                    color = palette.textPrimary,
+                DisplayNameText(
+                    profile,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 GuildTagView(userId = profile?.id, size = GuildTagBadgeSize.Small)

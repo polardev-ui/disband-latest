@@ -136,13 +136,13 @@ fun AccountSheet(app: AppState, onDismiss: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
 
     val originalUsername = profile?.username.orEmpty()
-    val usernameChanged = username.trim().lowercase() != originalUsername.lowercase()
+    val usernameChanged = Database.sanitiseUsername(username) != originalUsername.lowercase()
 
     // Debounced availability check while typing, like iOS and the web.
     LaunchedEffect(username, profile?.id) {
         usernameProblem = null
         if (!usernameChanged) return@LaunchedEffect
-        val candidate = username.trim().lowercase()
+        val candidate = Database.sanitiseUsername(username)
         if (candidate.length !in 2..25) return@LaunchedEffect
         delay(450)
         usernameProblem = Database.usernameUnavailableReason(candidate)
@@ -265,8 +265,9 @@ fun AccountSheet(app: AppState, onDismiss: () -> Unit) {
             OutlinedTextField(
                 value = username,
                 onValueChange = { raw ->
+                    // The web's characters only: a–z, 0–9 and underscore.
                     username = raw.lowercase()
-                        .filter { it.isLetterOrDigit() || it == '_' }
+                        .filter { it in 'a'..'z' || it in '0'..'9' || it == '_' }
                         .take(25)
                 },
                 label = { Text("Username") },
@@ -314,7 +315,7 @@ fun AccountSheet(app: AppState, onDismiss: () -> Unit) {
                     saving = true
                     error = null
                     scope.launch {
-                        val nextUsername = username.trim().lowercase()
+                        val nextUsername = Database.sanitiseUsername(username)
                         val changed = nextUsername != originalUsername.lowercase()
                         if (changed) {
                             if (nextUsername.length !in 2..25) {
@@ -475,9 +476,7 @@ fun StatusSheet(app: AppState, onDismiss: () -> Unit) {
                         onClick = {
                             saving = true
                             scope.launch {
-                                val uid = app.currentUserId
-                                error = if (uid == null) "Not signed in"
-                                else runCatching { Database.clearStatus(uid); app.loadProfile(); null }.getOrElse { e -> e.message }
+                                error = app.clearStatus()
                                 saving = false
                                 if (error == null) onDismiss()
                             }
@@ -718,12 +717,17 @@ fun NotificationInboxSheet(
         }
         items = runCatching { Database.notifications(uid) }.getOrDefault(emptyList())
         loading = false
+        // Opening the inbox clears the bell's "new" count everywhere (seen_at).
+        runCatching { Database.markNotificationsSeen(uid) }
     }
 
     fun markRead(item: AppNotification) {
         if (item.read || uid == null) return
         items = items.map { if (it.id == item.id) it.copy(read = true) else it }
-        scope.launch { runCatching { Database.markNotificationRead(item.id, uid) } }
+        scope.launch {
+            runCatching { Database.markNotificationRead(item.id, uid) }
+            com.wsgpolar.disband.data.ChannelUnreads.refreshMentionsSoon(0)
+        }
     }
 
     ModalBottomSheet(
@@ -756,6 +760,8 @@ fun NotificationInboxSheet(
                             scope.launch {
                                 if (uid != null) {
                                     runCatching { Database.markAllNotificationsRead(uid) }
+                                    // Every red channel and space count goes with them, as on the web.
+                                    com.wsgpolar.disband.data.ChannelUnreads.refreshMentionsSoon(0)
                                 }
                                 clearing = false
                             }

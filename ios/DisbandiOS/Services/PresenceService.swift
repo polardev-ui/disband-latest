@@ -71,17 +71,27 @@ final class PresenceService {
     private var ownUserId: String?
     private(set) var ownStatus: UserStatus?
     private var ownListening: Listening?
+    private var generation = 0
 
     /// Join the shared channel and publish our own status. Call on sign-in with the
     /// current user id and their existing (or default) status.
     func start(userId: String?, status: UserStatus) async {
         stop()
+        // Launch runs this twice (sign-in and the first `.active`), and every
+        // foreground runs it again. Only the newest call may go on (`stop`
+        // moves the generation on).
+        let mine = generation
         guard let userId else { return }
         ownUserId = userId
         ownStatus = status
         statuses[userId] = status
 
-        let channel = client.channel("presence:global")
+        // Waits for the channel `stop()` just let go of. Asking for the topic
+        // while that was still leaving returned the same, already-subscribed
+        // channel: the presence listener below was refused and the old
+        // teardown then unsubscribed it, so the app saw nobody online but you.
+        let channel = await RealtimeTopics.channel("presence:global")
+        guard mine == generation else { return }
         self.channel = channel
 
         let changes = channel.presenceChange()
@@ -92,6 +102,7 @@ final class PresenceService {
         }
 
         await channel.subscribe()
+        guard mine == generation else { return }
         try? await channel.track(PresencePayload(userId: userId, status: status, listening: ownListening))
     }
 
@@ -169,13 +180,14 @@ final class PresenceService {
     }
 
     func stop() {
+        generation += 1
         listenTask?.cancel()
         listenTask = nil
         let channel = self.channel
         self.channel = nil
-        Task {
-            await channel?.untrack()
-            await channel?.unsubscribe()
+        if let channel {
+            Task { await channel.untrack() }
+            RealtimeTopics.release(channel)
         }
         presenceRefs = [:]
         ownStatus = nil

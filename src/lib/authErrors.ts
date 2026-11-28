@@ -28,7 +28,10 @@ export function mapAuthError(message: string | undefined | null): string {
   }
 
   if (lower.includes("database error saving new user") || lower.includes("unexpected_failure")) {
-    return "Account creation failed. Please try again later.";
+    // Almost always two sign-ups racing for one username: the database's
+    // unique username index refuses the second, and the whole account
+    // insert is rolled back with it, so nothing is left holding the email.
+    return "We couldn't create your account. That username may have just been taken. Choose another one and try again.";
   }
 
   if (

@@ -16,12 +16,14 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /**
- * The web's fixed transceiver layout (`src/lib/webrtc.ts`). Every peer
- * connection in a voice channel carries exactly these three m-lines, in this
- * order, and each side identifies a track by its transceiver's index. Android
- * only sends audio, but still negotiates all three so the indexes line up.
+ * The web's fixed transceiver layout (`src/lib/webrtc.ts`): mic, camera,
+ * screen and the screen share's own sound, in that order. A lane is the
+ * transceiver whose mid sits at that position in the session description
+ * (the web's `transceiverForLane`), not its index: a peer that rolled back
+ * its own offer holds extra, never-negotiated transceivers ahead of the real
+ * ones. iOS only knows the first three; the fourth negotiates as unused there.
  */
-enum class MeshLane { Audio, Camera, Screen }
+enum class MeshLane { Audio, Camera, Screen, ScreenAudio }
 
 /**
  * One `PeerConnection` to one other participant in a voice channel; the
@@ -42,7 +44,8 @@ class MeshPeer(
     val createdAt = System.currentTimeMillis()
 
     var onIceCandidate: (IceCandidate) -> Unit = {}
-    var onAudioTrack: (AudioTrack) -> Unit = {}
+    /** A remote track arrived on a lane. Fires once per lane per negotiation. */
+    var onTrack: (MeshLane, MediaStreamTrack) -> Unit = { _, _ -> }
     var onStateChange: (PeerConnection.PeerConnectionState) -> Unit = {}
 
     private val pendingCandidates = mutableListOf<IceCandidate>()
@@ -56,12 +59,14 @@ class MeshPeer(
             post { this@MeshPeer.onStateChange(state) }
         }
         override fun onTrack(transceiver: RtpTransceiver) {
-            val track = transceiver.receiver.track() as? AudioTrack ?: return
+            val track = transceiver.receiver.track() ?: return
             val receiverId = transceiver.receiver.id()
             post {
-                // Only lane 0 is a microphone; the others are camera and screen.
-                val lane: Int = runCatching { pc.transceivers.indexOfFirst { it.receiver.id() == receiverId } }.getOrDefault(-1)
-                if (lane == MeshLane.Audio.ordinal) this@MeshPeer.onAudioTrack(track)
+                val lane = runCatching { laneOf(receiverId) }.getOrNull() ?: return@post
+                // A screen lane must carry video, the mic and screen sound audio.
+                val wantsVideo = lane == MeshLane.Camera || lane == MeshLane.Screen
+                if ((track.kind() == MediaStreamTrack.VIDEO_TRACK_KIND) != wantsVideo) return@post
+                this@MeshPeer.onTrack(lane, track)
             }
         }
         override fun onSignalingChange(state: PeerConnection.SignalingState) {}
@@ -89,8 +94,56 @@ class MeshPeer(
         runCatching { pc.dispose() }
     }
 
-    /** Offer the three lanes, in the web's order. Mirrors `ensureLanes`. */
-    suspend fun makeOffer(audio: AudioTrack): SessionDescription {
+    // MARK: - Lanes
+
+    /** The `a=mid:` values in m-line order, from whichever description exists. */
+    private fun negotiatedMids(): List<String> {
+        val sdp = pc.localDescription?.description ?: pc.remoteDescription?.description ?: return emptyList()
+        return MID_LINE.findAll(sdp).map { it.groupValues[1] }.toList()
+    }
+
+    /** The transceiver carrying [lane], or null before it exists. */
+    private fun transceiverFor(lane: MeshLane): RtpTransceiver? {
+        val transceivers = pc.transceivers
+        val mids = negotiatedMids()
+        if (mids.size > lane.ordinal) {
+            transceivers.firstOrNull { it.mid == mids[lane.ordinal] }?.let { return it }
+        }
+        return transceivers.getOrNull(lane.ordinal)
+    }
+
+    private fun laneOf(receiverId: String): MeshLane? {
+        val transceivers = pc.transceivers
+        val transceiver = transceivers.firstOrNull { it.receiver.id() == receiverId } ?: return null
+        val mid = transceiver.mid
+        if (mid != null) {
+            val index = negotiatedMids().indexOf(mid)
+            if (index >= 0) return MeshLane.entries.getOrNull(index)
+        }
+        return MeshLane.entries.getOrNull(transceivers.indexOf(transceiver))
+    }
+
+    /**
+     * Put [track] on a lane without renegotiating (the web's `setLaneTrack`).
+     * Works mid-call because every lane is negotiated send-and-receive.
+     */
+    fun setTrack(track: MediaStreamTrack?, lane: MeshLane) {
+        runCatching { transceiverFor(lane)?.sender?.setTrack(track, false) }
+    }
+
+    /** Make every lane able to send, labelled with our stream id. */
+    private fun openLanes() {
+        for (lane in MeshLane.entries) {
+            val transceiver = transceiverFor(lane) ?: continue
+            if (transceiver.direction != RtpTransceiver.RtpTransceiverDirection.SEND_RECV) {
+                runCatching { transceiver.setDirection(RtpTransceiver.RtpTransceiverDirection.SEND_RECV) }
+            }
+            runCatching { transceiver.sender.setStreams(listOf(streamId)) }
+        }
+    }
+
+    /** Create the four lanes, in the web's order, if they don't exist yet. Mirrors `ensureLanes`. */
+    fun prepareLanes(audio: AudioTrack) {
         if (pc.transceivers.isEmpty()) {
             val send = RtpTransceiver.RtpTransceiverDirection.SEND_RECV
             pc.addTransceiver(audio, RtpTransceiver.RtpTransceiverInit(send, listOf(streamId)))
@@ -98,22 +151,26 @@ class MeshPeer(
                 pc.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO,
                     RtpTransceiver.RtpTransceiverInit(send, listOf(streamId)))
             }
+            pc.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO,
+                RtpTransceiver.RtpTransceiverInit(send, listOf(streamId)))
         }
+    }
+
+    /** Offer the four lanes. */
+    suspend fun makeOffer(audio: AudioTrack, camera: MediaStreamTrack? = null): SessionDescription {
+        prepareLanes(audio)
+        setTrack(camera, MeshLane.Camera)
         val offer = create(offer = true)
         setLocal(offer)
         return offer
     }
 
     /** Answer an offer, including a renegotiation on an established connection. */
-    suspend fun answer(offer: SessionDescription, audio: AudioTrack): SessionDescription {
+    suspend fun answer(offer: SessionDescription, audio: AudioTrack, camera: MediaStreamTrack? = null): SessionDescription {
         setRemote(offer)
-        pc.transceivers.take(MeshLane.entries.size).forEachIndexed { index, transceiver ->
-            if (transceiver.direction != RtpTransceiver.RtpTransceiverDirection.SEND_RECV) {
-                transceiver.setDirection(RtpTransceiver.RtpTransceiverDirection.SEND_RECV)
-            }
-            transceiver.sender.setStreams(listOf(streamId))
-            if (index == MeshLane.Audio.ordinal) transceiver.sender.setTrack(audio, false)
-        }
+        openLanes()
+        setTrack(audio, MeshLane.Audio)
+        setTrack(camera, MeshLane.Camera)
         val answer = create(offer = false)
         setLocal(answer)
         return answer
@@ -166,6 +223,10 @@ class MeshPeer(
         pendingCandidates.clear()
         // One stale candidate must not discard the rest.
         queued.forEach { runCatching { pc.addIceCandidate(it) } }
+    }
+
+    private companion object {
+        val MID_LINE = Regex("""^a=mid:(\S+)\s*$""", RegexOption.MULTILINE)
     }
 
     private fun <T> sdpObserver(cont: kotlinx.coroutines.CancellableContinuation<T>): SdpObserver =

@@ -147,6 +147,7 @@ final class DirectMessagesViewModel {
         do {
             let (loadedThreads, loadedGroups, dmUnread, grpUnread) = try await (t, g, dmU, grpU)
             threads = sortByRecency(loadedThreads)
+            ProfileLive.shared.watch(loadedThreads.compactMap(\.friend?.id))
             groups = loadedGroups
             InboxCache.save(threads: threads, groups: groups, for: uid)
             // Reconcile from server so messages received while the app was

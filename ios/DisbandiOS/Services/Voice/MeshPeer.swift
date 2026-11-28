@@ -10,6 +10,9 @@ enum MeshLane: Int, CaseIterable {
     case audio = 0
     case camera = 1
     case screen = 2
+    /// The screen share's own sound (`LANE_SCREEN_AUDIO`). Appended last on
+    /// the web, so a peer that only knows three lanes leaves it unused.
+    case screenAudio = 3
 }
 
 /// One `RTCPeerConnection` to one other participant.
@@ -67,23 +70,65 @@ final class MeshPeer: NSObject, RTCPeerConnectionDelegate {
 
     // MARK: - Lanes
 
+    /// The mids in m-line order, from whichever description is applied.
+    private var negotiatedMids: [String] {
+        let sdp = pc.remoteDescription?.sdp ?? pc.localDescription?.sdp ?? ""
+        return sdp.components(separatedBy: "\n").compactMap { line in
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.hasPrefix("a=mid:") ? String(trimmed.dropFirst(6)) : nil
+        }
+    }
+
+    /**
+     The transceiver carrying `lane`: the one whose mid sits at that m-line
+     position (the web's `transceiverForLane`).
+
+     A plain index into `transceivers` was wrong as soon as an offer had been
+     rolled back: the abandoned offer's transceivers stay in the list, never
+     negotiated, and the real lanes sit after them. Tracks then landed on no
+     lane at all — a share started after the connection was made was never
+     shown until someone left and rejoined, which builds a fresh connection.
+     */
+    private func transceiver(for lane: MeshLane) -> RTCRtpTransceiver? {
+        let mids = negotiatedMids
+        if !mids.isEmpty {
+            guard mids.indices.contains(lane.rawValue) else { return nil }
+            let mid = mids[lane.rawValue]
+            return pc.transceivers.first { $0.mid == mid }
+        }
+        // Nothing applied yet (building our first offer): creation order.
+        return pc.transceivers.indices.contains(lane.rawValue) ? pc.transceivers[lane.rawValue] : nil
+    }
+
     private func lane(of receiverId: String) -> MeshLane? {
-        guard let index = pc.transceivers.firstIndex(where: { $0.receiver.receiverId == receiverId }) else {
+        guard let transceiver = pc.transceivers.first(where: { $0.receiver.receiverId == receiverId }) else {
             return nil
         }
-        return MeshLane(rawValue: index)
+        if !transceiver.mid.isEmpty, let index = negotiatedMids.firstIndex(of: transceiver.mid) {
+            return MeshLane(rawValue: index)
+        }
+        return pc.transceivers.firstIndex(where: { $0 === transceiver }).flatMap(MeshLane.init(rawValue:))
+    }
+
+    /// Every lane's incoming track right now. Lets the session pick up a
+    /// track it was never told about (see `VoiceSession.rescan`).
+    func receivedTracks() -> [(MeshLane, RTCMediaStreamTrack)] {
+        MeshLane.allCases.compactMap { lane in
+            guard let track = transceiver(for: lane)?.receiver.track else { return nil }
+            return (lane, track)
+        }
     }
 
     /// Put `track` on a lane without renegotiating — the web's `setLaneTrack`.
     /// Works mid-call because every lane is negotiated `sendrecv` up front.
     func setTrack(_ track: RTCMediaStreamTrack?, on lane: MeshLane) {
-        guard pc.transceivers.indices.contains(lane.rawValue) else { return }
-        pc.transceivers[lane.rawValue].sender.track = track
+        transceiver(for: lane)?.sender.track = track
     }
 
     /// Make every lane able to send, and label it with our stream id.
     private func openLanes() {
-        for transceiver in pc.transceivers.prefix(MeshLane.allCases.count) {
+        for lane in MeshLane.allCases {
+            guard let transceiver = transceiver(for: lane) else { continue }
             var error: NSError?
             if transceiver.direction != .sendRecv {
                 transceiver.setDirection(.sendRecv, error: &error)
@@ -108,6 +153,12 @@ final class MeshPeer: NSObject, RTCPeerConnectionDelegate {
                 videoInit.streamIds = [streamId]
                 pc.addTransceiver(of: .video, init: videoInit)
             }
+            // The screen share's sound, so a web sharer's audio reaches us
+            // when this phone is the one offering too.
+            let screenAudioInit = RTCRtpTransceiverInit()
+            screenAudioInit.direction = .sendRecv
+            screenAudioInit.streamIds = [streamId]
+            pc.addTransceiver(of: .audio, init: screenAudioInit)
         }
         setTrack(camera, on: .camera)
 

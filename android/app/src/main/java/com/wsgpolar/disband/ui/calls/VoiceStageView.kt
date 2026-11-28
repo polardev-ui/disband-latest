@@ -5,6 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +42,11 @@ import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
+import androidx.compose.material.icons.filled.Cameraswitch
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.ScreenShare
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -199,6 +205,21 @@ fun InCall(app: AppState, voice: VoiceSession, title: String, onMinimize: () -> 
     val speakerOn by voice.speakerOn.collectAsStateValue()
     val stage by voice.stage.collectAsStateValue()
     val connectedAt by voice.connectedAt.collectAsStateValue()
+    val liveScreens by voice.liveScreens.collectAsStateValue()
+    val liveCameras by voice.liveCameras.collectAsStateValue()
+    val localCamera by voice.localCamera.collectAsStateValue()
+    var focused by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    var soundboard by remember { mutableStateOf(false) }
+    val sharingScreen by voice.sharingScreen.collectAsStateValue()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val projection = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val data = result.data
+        if (result.resultCode == android.app.Activity.RESULT_OK && data != null) voice.startScreenShare(data)
+    }
+    val room by voice.room.collectAsStateValue()
+    val toggleCamera = rememberPermissionTrigger(android.Manifest.permission.CAMERA) { voice.toggleCamera() }
     val me = app.currentUserId
     // Recomposed with members, so `canSpeak` stays current.
     val canSpeak = stage == null || members.firstOrNull { it.userId == me }?.stageSpeaker == true
@@ -237,6 +258,21 @@ fun InCall(app: AppState, voice: VoiceSession, title: String, onMinimize: () -> 
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    // Screen shares first, then cameras, as on the web's stage.
+                    val nameOf = { id: String -> members.firstOrNull { it.userId == id }?.name ?: "Someone" }
+                    items(liveScreens.sorted(), key = { "screen:$it" }) { id ->
+                        voice.screenTrack(id)?.let { track ->
+                            VideoTile(track, "${nameOf(id)}'s screen", screen = true) { focused = id to true }
+                        }
+                    }
+                    items(liveCameras.sorted(), key = { "camera:$it" }) { id ->
+                        voice.cameraTrack(id)?.let { track ->
+                            VideoTile(track, nameOf(id), screen = false) { focused = id to false }
+                        }
+                    }
+                    localCamera?.let { track ->
+                        item(key = "camera:me") { VideoTile(track, "You", screen = false, mirrored = true) }
+                    }
                     items(members, key = { it.userId }) { member ->
                         val isMe = member.userId == me
                         MemberRow(
@@ -251,10 +287,12 @@ fun InCall(app: AppState, voice: VoiceSession, title: String, onMinimize: () -> 
             }
         }
 
+        // Scrolls sideways when camera, share and sounds don't all fit.
         Row(
             Modifier.fillMaxWidth().background(palette.surface).navigationBarsPadding()
+                .horizontalScroll(androidx.compose.foundation.rememberScrollState())
                 .padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
+            horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val currentStage = stage
@@ -277,9 +315,43 @@ fun InCall(app: AppState, voice: VoiceSession, title: String, onMinimize: () -> 
                     }
                 }
             }
+            if (currentStage == null) {
+                ControlButton(if (localCamera != null) Icons.Filled.Videocam else Icons.Filled.VideocamOff,
+                    if (localCamera != null) "Camera on" else "Camera", highlight = localCamera != null) { toggleCamera() }
+                if (localCamera != null) {
+                    ControlButton(Icons.Filled.Cameraswitch, "Flip") { voice.switchCamera() }
+                }
+                ControlButton(Icons.Filled.ScreenShare, if (sharingScreen) "Stop share" else "Share",
+                    highlight = sharingScreen) {
+                    if (sharingScreen) voice.stopScreenShare()
+                    else {
+                        val manager = context.getSystemService(android.content.Context.MEDIA_PROJECTION_SERVICE)
+                            as android.media.projection.MediaProjectionManager
+                        runCatching { projection.launch(manager.createScreenCaptureIntent()) }
+                    }
+                }
+                if (room?.isGroup == false && !deafened) {
+                    ControlButton(Icons.Filled.MusicNote, "Sounds") { soundboard = true }
+                }
+            }
             ControlButton(if (deafened) Icons.Filled.HeadsetOff else Icons.Filled.Headset,
                 if (deafened) "Undeafen" else "Deafen", alert = deafened) { voice.toggleDeafen() }
             ControlButton(Icons.Filled.CallEnd, "Leave", alert = true, big = true) { voice.leave() }
+        }
+    }
+
+    if (soundboard) room?.serverId?.takeIf { it.isNotEmpty() }?.let { serverId ->
+        SoundboardSheet(serverId, onPlay = { voice.playSound(it) }) { soundboard = false }
+    }
+
+    focused?.let { (id, screen) ->
+        val live = if (screen) id in liveScreens else id in liveCameras
+        val track = if (screen) voice.screenTrack(id) else voice.cameraTrack(id)
+        val name = members.firstOrNull { it.userId == id }?.name ?: "Someone"
+        if (track != null && live) {
+            FullScreenVideo(track, if (screen) "$name's screen" else name, screen) { focused = null }
+        } else {
+            LaunchedEffect(id, screen) { focused = null }
         }
     }
 }

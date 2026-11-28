@@ -26,13 +26,20 @@ declare global {
   }
 }
 
+/*
+ AppLixir answers "no ad available" both when it has nothing to show in
+ that region and when an ad blocker or strict tracking protection stops its
+ player. Failed tries no longer use up the day's ads (api/rewards/ad/start).
+*/
+const NO_FILL = "No ad is available right now. If you use an ad blocker or strict tracking protection, allow ads on this page and try again. Otherwise, try again later.";
+
 function loadSdk(): Promise<void> {
   if (window.initializeAndOpenPlayer) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const s = document.createElement("script");
     s.src = SDK;
     s.onload = () => resolve();
-    s.onerror = () => reject(new Error("The ad player could not load (an ad blocker?)."));
+    s.onerror = () => reject(new Error("The ad player couldn't load. If you use an ad blocker or strict tracking protection, allow ads on this page and try again."));
     document.head.appendChild(s);
   });
 }
@@ -56,7 +63,7 @@ export default function RewardedAdPage() {
       window.setTimeout(() => {
         setState((s) => {
           if (s !== "loading") return s;
-          setMessage("No ad is available right now. Try again later.");
+          setMessage(NO_FILL);
           return "error";
         });
       }, 20_000);
@@ -75,14 +82,14 @@ export default function RewardedAdPage() {
             setMessage("The ad was closed early, so it doesn't count.");
           } else if (status.type === "allAdsCompleted") {
             setState((s) => {
-              if (s === "loading") setMessage("No ad is available right now. Try again later.");
+              if (s === "loading") setMessage(NO_FILL);
               return s === "loading" ? "error" : s;
             });
           }
         },
         adErrorCallbackFn: () => {
           setState("error");
-          setMessage("The ad didn't load. Try again in a minute.");
+          setMessage(NO_FILL);
         },
       });
     } catch (err) {

@@ -96,3 +96,70 @@ enum RealtimeService {
         return (channel, stream)
     }
 }
+
+/**
+ Channels that are rejoined under the same topic.
+
+ `client.channel(topic)` hands back whatever channel is still registered for
+ that topic, and a channel stays registered until the server confirms it has
+ left. Every "stop, then start again" path (presence on foreground, a voice
+ room left and rejoined, a chat closed and reopened) let go of the old channel
+ in a background task and asked for the topic straight away, so it got the
+ old channel back: already subscribed, so the new listeners were refused, and
+ then unsubscribed underneath it by the old teardown. Presence came back with
+ nobody in it but you ("1 Online" in a space where the desktop shows eleven),
+ and a rejoined voice room heard no signals.
+
+ `release` queues the teardown per topic; `channel` waits for any queued
+ teardown of the same topic before creating the new one.
+ */
+@MainActor
+enum RealtimeTopics {
+    private static var teardowns: [String: Task<Void, Never>] = [:]
+
+    private static func key(_ topic: String) -> String {
+        topic.hasPrefix("realtime:") ? topic : "realtime:\(topic)"
+    }
+
+    /// Unsubscribe and remove `channel`, queued behind any earlier teardown of its topic.
+    static func release(_ channel: RealtimeChannelV2?) {
+        guard let channel else { return }
+        let topic = key(channel.topic)
+        let previous = teardowns[topic]
+        let task = Task { @MainActor in
+            await previous?.value
+            await channel.unsubscribe()
+            await SupabaseManager.client.removeChannel(channel)
+        }
+        teardowns[topic] = task
+        Task { @MainActor in
+            await task.value
+            if teardowns[topic] == task { teardowns[topic] = nil }
+        }
+    }
+
+    /// A channel for `topic` that no earlier teardown can take down.
+    static func channel(
+        _ topic: String,
+        options: @escaping @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
+    ) async -> RealtimeChannelV2 {
+        if let pending = teardowns[key(topic)] {
+            // Bounded: a teardown whose reply never comes must not stop the
+            // new channel from ever being made.
+            _ = await withTaskGroup(of: Void.self) { group in
+                group.addTask { await pending.value }
+                group.addTask { try? await Task.sleep(for: .seconds(3)) }
+                await group.next()
+                group.cancelAll()
+            }
+        }
+        let client = SupabaseManager.client
+        let channel = client.channel(topic, options: options)
+        // Still the old one (its teardown timed out): drop it and start clean.
+        if channel.status != .unsubscribed {
+            await client.removeChannel(channel)
+            return client.channel(topic, options: options)
+        }
+        return channel
+    }
+}

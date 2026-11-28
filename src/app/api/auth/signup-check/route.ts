@@ -142,12 +142,26 @@ export async function POST(request: Request) {
     }
   }
 
+  // An address can be held by a sign-up that never finished: the account was
+  // made, the confirmation mail never arrived (or was never opened), and
+  // nobody ever signed in. Left alone, that half-made account answers
+  // "an account already exists" to every retry for ever, and once its
+  // username is released to someone else (release_stale_username) it can't
+  // even be finished. A retry frees it instead (see releaseUnfinishedSignup).
+  let resendToUnfinished = false;
+  if (email && !forSupport) {
+    const outcome = await releaseUnfinishedSignup(service, email, sanitized);
+    if (outcome === "resend") resendToUnfinished = true;
+  }
+
   if (email) {
 
     const { data: emailCheck } = await service.rpc("check_email_allowed", {
       p_email: email,
     });
-    if (emailCheck && emailCheck.allowed === false) {
+    // A fresh, unfinished sign-up for this address retrying with the same
+    // username: let it through, and Supabase sends the confirmation again.
+    if (emailCheck && emailCheck.allowed === false && !(resendToUnfinished && emailCheck.reason === "duplicate")) {
       return NextResponse.json({
         allowed: false,
         error: (emailCheck.error as string | undefined) ?? "That email cannot be used.",
@@ -270,4 +284,69 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ allowed: true });
+}
+
+/** How long an unfinished sign-up keeps its username and address to itself (matches release_stale_username). */
+const UNFINISHED_SIGNUP_GRACE_MS = 10 * 60_000;
+
+/**
+ * Looks at the account already holding `email`, if any. When it is a sign-up
+ * that never finished (never confirmed, never signed in, not made by the
+ * server, not anonymous, not banned):
+ * - "resend": it is under ten minutes old and still holds the username being
+ *   asked for, so this is the same person retrying. Supabase's sign-up sends
+ *   a fresh confirmation mail for an unconfirmed address.
+ * - "released": it was older, its username had already gone to someone else,
+ *   or the retry asks for a different username. The half-made account is
+ *   deleted (its profile, referral code and account_emails row go with it)
+ *   so this sign-up can create the account cleanly.
+ * Anything else, including any lookup failure, is "kept" and the normal
+ * duplicate-email answer applies.
+ */
+async function releaseUnfinishedSignup(
+  service: NonNullable<ReturnType<typeof getServiceSupabase>>,
+  email: string,
+  username: string,
+): Promise<"kept" | "resend" | "released"> {
+  try {
+    const { data: acct } = await service
+      .from("account_emails")
+      .select("user_id")
+      .eq("canonical", email)
+      .maybeSingle();
+    const userId = (acct as { user_id?: string } | null)?.user_id;
+    if (!userId) return "kept";
+
+    const { data: found, error } = await service.auth.admin.getUserById(userId);
+    const user = found?.user;
+    if (error || !user) return "kept";
+    if ((user.email ?? "").trim().toLowerCase() !== email) return "kept";
+    if (user.email_confirmed_at || user.confirmed_at || user.last_sign_in_at) return "kept";
+    if (user.is_anonymous) return "kept";
+    if ((user.app_metadata as { created_by?: string } | undefined)?.created_by === "server") return "kept";
+
+    const { data: banned } = await service
+      .from("platform_bans").select("user_id").eq("user_id", userId).maybeSingle();
+    if (banned) return "kept";
+
+    const { data: profile } = await service
+      .from("profiles").select("username").eq("id", userId).maybeSingle();
+    const held = ((profile as { username?: string | null } | null)?.username ?? "").toLowerCase();
+    const ageMs = Date.now() - new Date(user.created_at).getTime();
+    const stillHoldsName = Boolean(held) && !held.startsWith("pending_");
+
+    if (ageMs < UNFINISHED_SIGNUP_GRACE_MS && stillHoldsName && (!username || held === username)) {
+      return "resend";
+    }
+
+    const { error: deleteError } = await service.auth.admin.deleteUser(userId);
+    if (deleteError && !/not found/i.test(deleteError.message)) {
+      console.error("[signup-check] Could not release an unfinished sign-up:", deleteError.message);
+      return "kept";
+    }
+    return "released";
+  } catch (err) {
+    console.error("[signup-check] Unfinished sign-up lookup failed:", err);
+    return "kept";
+  }
 }

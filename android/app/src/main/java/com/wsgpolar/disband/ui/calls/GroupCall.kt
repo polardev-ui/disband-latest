@@ -78,7 +78,7 @@ fun GroupRingBanner(app: AppState, modifier: Modifier = Modifier) {
     val current = ring ?: return
     val palette = LocalPalette.current
     val join = rememberAudioPermissionTrigger {
-        app.voice.join(com.wsgpolar.disband.call.VoiceRoom.group(current.groupId, current.groupName, null))
+        app.voice.join(com.wsgpolar.disband.call.VoiceRoom.group(current.groupId, current.groupName, current.iconUrl))
     }
 
     Row(
@@ -91,7 +91,7 @@ fun GroupRingBanner(app: AppState, modifier: Modifier = Modifier) {
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AvatarImage(url = null, name = current.groupName, size = 46.dp)
+        AvatarImage(url = current.iconUrl, name = current.groupName, size = 46.dp)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             Text(current.groupName, color = palette.textPrimary, fontSize = 16.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)

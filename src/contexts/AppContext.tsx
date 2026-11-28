@@ -91,6 +91,7 @@ import type { SubscriptionPlan } from "@/lib/subscription";
 import { askTether, fetchTetherInfo, mentionsTether, type TetherSurface } from "@/lib/tether-client";
 import { clearAppBadge, setAppBadge } from "@/lib/app-badge";
 import { fetchProfilesByIds } from "@/lib/fetch-profiles";
+import { publishProfilePatch } from "@/lib/profile-store";
 import { flattenPresenceActivity, type Activity, type ActivityMap } from "@/lib/activity";
 import type {
   AppNotification,
@@ -1157,16 +1158,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id]);
 
-  const markDmReadNow = useCallback(async (threadId: string) => {
-    const { error } = await getSupabaseClient().rpc("mark_dm_read", { p_thread_id: threadId });
-    if (error) console.error("mark_dm_read failed", error.message);
+  /**
+   * Mentions in a DM or group are inbox rows linked `dm:<id>` or
+   * `/group/<id>`. Unlike channels (mark_channel_mentions_read), opening the
+   * conversation never marked them read, so they sat unread in the inbox on
+   * every device. `always` is for opening the conversation; the per-message
+   * calls only write when an unread one is actually loaded here.
+   */
+  const notificationsRef = useRef<AppNotification[]>([]);
+  useEffect(() => {
+    notificationsRef.current = notifications;
+  }, [notifications]);
+  const markConversationMentionsRead = useCallback((links: string[], always: boolean) => {
+    const uid = sessionRef.current?.user?.id;
+    if (!uid) return;
+    const wanted = new Set(links);
+    const isMatch = (n: AppNotification) => !n.read && n.type === "mention" && !!n.link && wanted.has(n.link);
+    const hasLocal = notificationsRef.current.some(isMatch);
+    if (hasLocal) {
+      setNotifications((prev) => prev.map((n) => (isMatch(n) ? { ...n, read: true } : n)));
+    }
+    if (!always && !hasLocal) return;
+    void getSupabaseClient()
+      .from("notifications")
+      .update({ read: true })
+      .eq("user_id", uid)
+      .eq("type", "mention")
+      .eq("read", false)
+      .in("link", links)
+      .then(({ error }) => {
+        if (error) console.error("marking conversation mentions read failed", error.message);
+      });
   }, []);
 
-  const markGroupReadNow = useCallback(async (groupId: string) => {
+  const markDmReadNow = useCallback(async (threadId: string, opened = false) => {
+    markConversationMentionsRead([`dm:${threadId}`], opened);
+    const { error } = await getSupabaseClient().rpc("mark_dm_read", { p_thread_id: threadId });
+    if (error) console.error("mark_dm_read failed", error.message);
+  }, [markConversationMentionsRead]);
+
+  const markGroupReadNow = useCallback(async (groupId: string, opened = false) => {
+    markConversationMentionsRead([`/group/${groupId}`, `group:${groupId}`], opened);
     // PostgREST builders are lazy: a bare `void rpc(...)` never sends a request.
     const { error } = await getSupabaseClient().rpc("mark_group_read", { p_group_id: groupId });
     if (error) console.error("mark_group_read failed", error.message);
-  }, []);
+  }, [markConversationMentionsRead]);
 
   const clearDmUnread = useCallback((threadId: string) => {
     setDmUnreadMap((prev) => {
@@ -1404,6 +1440,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const patchProfileInState = useCallback((updated: Profile) => {
+    // Lists outside this state (the windowed member list, an open profile
+    // card) keep their own copies; let them merge the change too.
+    publishProfilePatch(updated);
     setProfile((prev) => (prev?.id === updated.id ? { ...prev, ...updated } : prev));
     setDmThreads((prev) =>
       prev.map((t) => (t.friend.id === updated.id ? { ...t, friend: { ...t.friend, ...updated } } : t)),
@@ -3659,8 +3698,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .channel(`notif:${userId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, (payload) => {
         const n = payload.new as AppNotification;
-        setNotifications((prev) => [n, ...prev]);
         const target = parseNotificationLink(n.link);
+        // A mention in the DM or group on screen is read already, as the
+        // channel one is (refreshMentionUnread).
+        const onScreen =
+          n.type === "mention" &&
+          typeof document !== "undefined" &&
+          document.visibilityState === "visible" &&
+          ((target?.kind === "dm" && viewModeRef.current === "dm" && activeDmRef.current === target.threadId) ||
+            (target?.kind === "group" && viewModeRef.current === "group" && activeGroupRef.current === target.groupId));
+        setNotifications((prev) => [onScreen ? { ...n, read: true } : n, ...prev]);
+        if (onScreen) {
+          void supabase
+            .from("notifications")
+            .update({ read: true })
+            .eq("id", n.id)
+            .eq("user_id", userId)
+            .then(({ error }) => {
+              if (error) console.error("marking mention read failed", error.message);
+            });
+        }
         if (target?.kind === "channel") {
           const channel = channelsRef.current.find((c) => c.id === target.channelId);
           if (channel) {
@@ -5005,6 +5062,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const optimistic = { ...profile, ...payload, updated_at: new Date().toISOString() };
     patchProfileInState(optimistic);
+    // loadProfile below paints the cached row before the fresh one; keep that
+    // cache on the new values, or the old status flashes back for a moment.
+    setCache(`profile:${userId}`, optimistic);
     if (typeof payload.status === "string") {
       void trackPresence(payload.status);
     }
@@ -5327,7 +5387,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     clearDmUnread(threadId);
 
-    void markDmReadNow(threadId);
+    void markDmReadNow(threadId, true);
     await loadDmMessages(threadId);
   }, [loadDmMessages, clearDmUnread, markDmReadNow, persistActiveServerChannel, markActivity, unhideDmFriend]);
 
@@ -5346,7 +5406,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setGroupHasMore(false);
     setGroupLoading(true);
     clearGroupUnread(groupId);
-    await Promise.all([markGroupReadNow(groupId), loadGroupMessages(groupId)]);
+    await Promise.all([markGroupReadNow(groupId, true), loadGroupMessages(groupId)]);
   }, [loadGroupMessages, clearGroupUnread, markGroupReadNow, persistActiveServerChannel, markActivity]);
 
   const routeToNotification = useCallback(async (link: string | null, at?: string | null) => {

@@ -151,6 +151,9 @@ fun FriendsScreen(
         loadError = null
         try {
             friendships = Database.friendships(uid)
+            val people = friendships.flatMap { listOfNotNull(it.requester, it.addressee) }
+            com.wsgpolar.disband.data.ProfileStore.putAll(people)
+            com.wsgpolar.disband.data.ProfileStore.watch("friends", people.map { it.id })
         } catch (e: Exception) {
             loadError = e.message ?: e.toString()
         }

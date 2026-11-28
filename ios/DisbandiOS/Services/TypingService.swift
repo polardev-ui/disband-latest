@@ -20,8 +20,9 @@ enum TypingService {
         "typing:\(kind):\(id)"
     }
 
+    @MainActor
     static func watch(topic: String) async -> (channel: RealtimeChannelV2, stream: AsyncStream<Event>) {
-        let channel = SupabaseManager.client.channel(topic)
+        let channel = await RealtimeTopics.channel(topic)
         let raw = channel.broadcastStream(event: "typing")
         await channel.subscribe()
         let stream = AsyncStream<Event> { continuation in

@@ -106,6 +106,7 @@ final class CallManager {
     /// subscribed but with no callback attached, so every inbound signal — ring,
     /// accept, leave — was silently discarded while everything looked healthy.
     private var listenSubscription: RealtimeSubscription?
+    private var groupRingSubscription: RealtimeSubscription?
     private var signalSubscription: RealtimeSubscription?
 
     private var client: SupabaseClient { SupabaseManager.client }
@@ -256,9 +257,17 @@ final class CallManager {
         }
     }
 
+    /// Group-call rings share this personal topic. `VoiceSession` sets the
+    /// handler; it is registered here, before the channel subscribes, because
+    /// a handler added to an already-subscribed channel is refused.
+    static var onGroupRing: ((JSONObject) -> Void)?
+
     private func startListening(for uid: String) {
         let channel = client.channel("call-user:\(uid)")
         listenChannel = channel
+        groupRingSubscription = channel.onBroadcast(event: "group-call") { json in
+            Task { @MainActor in CallManager.onGroupRing?(json) }
+        }
         listenSubscription = channel.onBroadcast(event: "call") { [weak self] json in
             guard let payload = json["payload"],
                   let signal = try? payload.decode(as: CallSignal.self) else { return }
@@ -296,6 +305,7 @@ final class CallManager {
         listenTask?.cancel()
         listenTask = nil
         listenSubscription = nil
+        groupRingSubscription = nil
         listenSubscribed = false
         if let listenChannel {
             Task { await listenChannel.unsubscribe() }

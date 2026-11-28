@@ -154,10 +154,25 @@ data class Profile(
     var listening: Listening? = null,
     /** The game they're in, published by the desktop app. */
     var activity: ProfileActivity? = null,
+    /** Name font id (`src/lib/nameFonts.ts`); null or unknown is the default font. */
+    @SerialName("name_font") var nameFont: String? = null,
+    /** Aero name colour, and the second stop of a gradient. */
+    @SerialName("name_color") var nameColor: String? = null,
+    @SerialName("name_color_2") var nameColor2: String? = null,
+    @SerialName("name_gradient_dir") var nameGradientDir: String? = null,
+    @SerialName("equipped_name_effect") var equippedNameEffect: String? = null,
+    @SerialName("is_bot") var isBot: Boolean? = null,
 ) {
-    val name: String get() = displayName ?: username ?: "Unknown"
+    /**
+     * The web's `displayName()` exactly: `display_name || username || "Unknown"`.
+     * JavaScript `||` only skips null and the empty string, so a name made of
+     * invisible characters (Hangul fillers, zero-width marks) is shown as is,
+     * blank-looking, exactly as the browser shows it. Never trim or isBlank here.
+     */
+    val name: String get() = displayName?.takeIf { it.isNotEmpty() } ?: username?.takeIf { it.isNotEmpty() } ?: "Unknown"
     val handle: String get() = username ?: "user"
-    val initials: String get() = name.trim().takeIf { it.isNotEmpty() }?.first()?.uppercase() ?: "?"
+    /** `displayName(p).slice(0, 2).toUpperCase()`, as the web's avatar fallback. */
+    val initials: String get() = name.take(2).uppercase().ifEmpty { "?" }
     /** Custom status line, or null once expired — mirrors iOS activeStatusNote / web activeStatusNote. */
     val activeStatusNote: String?
         get() {
@@ -247,6 +262,8 @@ data class ServerMember(
     @SerialName("user_id") val userId: String,
     var role: MemberRole = MemberRole.Member,
     var profile: Profile? = null,
+    /** Legacy single role, used when member_roles has none. */
+    @SerialName("role_id") val roleId: String? = null,
 ) {
     val id: String get() = "$serverId:$userId"
 }

@@ -26,6 +26,8 @@ struct ProfileDetailView: View {
     var onStartDM: ((Profile) -> Void)? = nil
     /// Starts a call with them. Nil where calling isn't offered.
     var onCall: ((Profile) -> Void)? = nil
+    /// The space it was opened from, so their roles there can be shown.
+    var serverId: String? = nil
 
     @Environment(\.dismiss) private var dismiss
 
@@ -50,8 +52,15 @@ struct ProfileDetailView: View {
     @State private var showMutualSpaces = false
     @State private var viewingAvatar = false
     @FocusState private var messageFocused: Bool
+    /// Their roles in `serverId`, highest first. Nil while loading or when
+    /// they aren't a member.
+    @State private var spaceRoles: [ServerAdmin.Role]?
+    @State private var rolesLoading = false
+    @State private var reporting = false
 
-    private var shown: Profile { full ?? profile }
+    /// The newest copy: a live update (your own status saved a moment ago
+    /// included) beats the copy fetched when the sheet opened.
+    private var shown: Profile { ProfileLive.shared.latest[profile.id] ?? full ?? profile }
     private var isSelf: Bool { profile.id == viewerId }
     private var isBot: Bool { shown.isBot == true }
 
@@ -102,7 +111,12 @@ struct ProfileDetailView: View {
         .presentationCornerRadius(24)
         .presentationBackground(Brand.surface)
         .task { await loadRelation() }
+        .onAppear { ProfileLive.shared.watch([profile.id]) }
         .task(id: profile.id) { await loadMutuals() }
+        .task(id: profile.id) { await loadRoles() }
+        .sheet(isPresented: $reporting) {
+            ReportSheet(target: .profile(id: profile.id, name: shown.name))
+        }
         .fullScreenCover(isPresented: $viewingAvatar) {
             if let link = shown.avatarUrl, let url = URL(string: link) {
                 MediaViewer(url: url, kind: .image)
@@ -110,7 +124,10 @@ struct ProfileDetailView: View {
         }
         .task(id: profile.id) {
             while !Task.isCancelled {
-                if let fresh = try? await DatabaseService.profile(id: profile.id) { full = fresh }
+                if let fresh = try? await DatabaseService.profile(id: profile.id) {
+                    full = fresh
+                    ProfileLive.shared.put(fresh)
+                }
                 try? await Task.sleep(nanoseconds: 20_000_000_000)
             }
         }
@@ -173,6 +190,9 @@ struct ProfileDetailView: View {
                     Button(role: .destructive) { Task { await block() } } label: {
                         Label("Block", systemImage: "hand.raised.fill")
                     }
+                }
+                Button(role: .destructive) { reporting = true } label: {
+                    Label("Report Profile", systemImage: "exclamationmark.shield")
                 }
             } label: {
                 roundIcon("ellipsis")
@@ -281,6 +301,7 @@ struct ProfileDetailView: View {
                         }
                     }
                 }
+                if serverId != nil { rolesSection }
                 if let activity = shown.activity, activity.isLive() {
                     GameActivityCard(activity: activity)
                 }
@@ -308,6 +329,45 @@ struct ProfileDetailView: View {
         .animation(Motion.quick, value: error)
         .animation(Motion.quick, value: notice)
         .animation(Motion.settle, value: mutualFriends.count + mutualSpaces.count)
+    }
+
+    // MARK: - Roles
+
+    /// The web popout's Roles section: a pill per role, highest first, with a
+    /// dot in the role's colour. "Role" for one. Placeholders while loading.
+    @ViewBuilder private var rolesSection: some View {
+        if rolesLoading && spaceRoles == nil {
+            section("Roles") {
+                HStack(spacing: 6) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 6).fill(Brand.elevated)
+                            .frame(width: 64, height: 24)
+                    }
+                }
+                .redacted(reason: .placeholder)
+            }
+        } else if let roles = spaceRoles, !roles.isEmpty {
+            section(roles.count == 1 ? "Role" : "Roles") {
+                FlowLayout(spacing: 6) {
+                    ForEach(roles) { RolePill(role: $0) }
+                }
+            }
+        }
+    }
+
+    private func loadRoles() async {
+        guard let serverId else { return }
+        rolesLoading = true
+        defer { rolesLoading = false }
+        async let space = SpaceRoles.load(serverId: serverId)
+        async let detail = ServerAdmin.memberDetail(serverId: serverId, userId: profile.id)
+        guard let space = await space else { return }
+        guard let member = await detail else {
+            spaceRoles = nil
+            return
+        }
+        space.learn(userId: profile.id, roleIds: member.roleIds)
+        spaceRoles = space.roles(of: profile.id)
     }
 
     // MARK: - Mutuals
@@ -587,7 +647,7 @@ struct MutualPerson: Decodable, Identifiable, Hashable {
         case avatarUrl = "avatar_url"
     }
 
-    var name: String { Profile.visible(displayName) ?? Profile.visible(username) ?? "Unknown" }
+    var name: String { Profile.resolvedName(displayName, username, fallback: "Unknown") }
 }
 
 /// A space both people are in.

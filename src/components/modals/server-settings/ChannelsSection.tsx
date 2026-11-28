@@ -63,7 +63,9 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
   const groups: { id: string | null; name: string; items: ChannelLite[] }[] = [
     ...categories.map((c) => ({ id: c.id, name: c.name, items: channels.filter((ch) => ch.category_id === c.id) })),
     { id: null, name: "No category", items: channels.filter((ch) => !ch.category_id) },
-  ].filter((g) => g.items.length > 0);
+    // A category is listed even while empty: hiding empty ones meant a new
+    // category didn't appear here until a channel was put in it.
+  ].filter((g) => g.id !== null || g.items.length > 0);
 
   let row = 0;
 
@@ -162,6 +164,9 @@ export function ChannelsSection({ onEditChannel }: SectionProps & {
           <section key={group.id ?? "none"} className="mb-6 last:mb-0">
             <h3 className="mb-2 px-1 text-[12px] font-semibold uppercase tracking-[0.02em] text-text-muted">{group.name}</h3>
             <ul className="overflow-hidden rounded-lg bg-bg-secondary">
+              {group.items.length === 0 && (
+                <li className="flex h-[52px] items-center px-4 text-[13px] text-text-muted">{t("No channels in this category yet.")}</li>
+              )}
               {group.items.map((c) => {
                 const index = row++;
                 const Icon = c.is_stage ? IconStage : c.type === "forum" ? IconForum : c.type === "voice" ? IconSpeaker : c.read_only ? IconMegaphone : IconHash;

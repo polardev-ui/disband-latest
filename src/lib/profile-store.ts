@@ -69,3 +69,30 @@ export function useProfiles(ids: readonly string[]): Map<string, Profile> {
   void version;
   return out;
 }
+
+/*
+ Live profile edits for lists that keep their own copies of profiles (the
+ windowed member list, an open profile card). AppContext publishes every
+ profile row it learns about (your own edits at once, everyone else's
+ through Realtime), and those lists merge it in, so a changed custom status,
+ name or avatar shows without reopening the space.
+*/
+type ProfilePatch = Partial<Profile> & { id: string };
+const patchListeners = new Set<(patch: ProfilePatch) => void>();
+
+export function publishProfilePatch(patch: ProfilePatch) {
+  if (!patch?.id) return;
+  const cached = cache.get(patch.id);
+  if (cached) {
+    cache.set(patch.id, { ...cached, ...patch });
+    notify(patch.id);
+  }
+  for (const fn of patchListeners) fn(patch);
+}
+
+export function onProfilePatch(fn: (patch: ProfilePatch) => void): () => void {
+  patchListeners.add(fn);
+  return () => {
+    patchListeners.delete(fn);
+  };
+}

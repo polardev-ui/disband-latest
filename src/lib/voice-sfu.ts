@@ -72,6 +72,7 @@ export class SfuSeat {
   private closed = false;
   private retryTimer: number | null = null;
   private lastRemotes: SfuRemote[] = [];
+  private retryDelay = 1_500;
 
   constructor(private channelId: string, private cb: Callbacks) {}
 
@@ -171,8 +172,31 @@ export class SfuSeat {
       if (gone.length) await this.closeNow(gone);
 
       const fresh = [...want.values()].filter((p) => !this.pulled.has(key(p)));
-      if (fresh.length) await this.pullNow(fresh);
+      if (fresh.length) {
+        try {
+          await this.pullNow(fresh);
+        } catch (e) {
+          // A failed pull used to wait for the next presence change (up to
+          // the 20-second poll), and one that failed half way stayed marked
+          // as pulled with nothing arriving: a share someone started after
+          // you joined never showed. Forget it and try again shortly.
+          this.forget(fresh);
+          this.retrySoon();
+          throw e;
+        }
+      }
     });
+  }
+
+  /** Drop the record of pulls that never finished, so the next sync asks again. */
+  private forget(tracks: Omit<Pulled, "mid">[]) {
+    for (const t of tracks) {
+      const p = this.pulled.get(key(t));
+      if (!p) continue;
+      this.pulled.delete(key(t));
+      this.byMid.delete(p.mid);
+      this.cb.onTrackGone(p.userId, p.name);
+    }
   }
 
   private async pullNow(fresh: Omit<Pulled, "mid">[]) {
@@ -198,6 +222,7 @@ export class SfuSeat {
       await this.api("renegotiate", { answer: { type: "answer", sdp: pc.localDescription?.sdp } });
     }
     if (failed) this.retrySoon();
+    else this.retryDelay = 1_500;
   }
 
   private async closeNow(gone: Pulled[]) {
@@ -221,10 +246,14 @@ export class SfuSeat {
 
   private retrySoon() {
     if (this.retryTimer !== null || this.closed) return;
+    // Backs off while it keeps failing, so a pull that can't succeed (they
+    // left a moment ago) doesn't hammer the voice server.
+    const delay = this.retryDelay;
+    this.retryDelay = Math.min(delay * 2, 20_000);
     this.retryTimer = window.setTimeout(() => {
       this.retryTimer = null;
-      void this.sync(this.lastRemotes);
-    }, 1_500);
+      void this.sync(this.lastRemotes).catch(() => {});
+    }, delay);
   }
 
   close() {

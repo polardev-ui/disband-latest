@@ -1,4 +1,5 @@
 import StoreKit
+import Supabase
 import SwiftUI
 import UIKit
 
@@ -15,6 +16,16 @@ struct SettingsView: View {
     @State private var linkPreviews = true
     @State private var messageRequests = true
     @State private var showDeleteConfirm = false
+    @State private var showEditProfile = false
+    @State private var showPassword = false
+    @State private var email: String?
+
+    /// a•••@example.com, as the web masks it until revealed.
+    private var maskedEmail: String? {
+        guard let email, let at = email.firstIndex(of: "@") else { return email }
+        let name = email[..<at]
+        return "\(name.prefix(1))\(String(repeating: "•", count: max(1, name.count - 1)))\(email[at...])"
+    }
     @State private var deleting = false
     @State private var error: String?
     @State private var loaded = false
@@ -231,6 +242,27 @@ struct SettingsView: View {
                     .padding(.top, 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
+                // The web's My Account basics (report 1083bd33): who you are
+                // signed in as, your username (edited in Edit profile, the
+                // same rules as the web), and your password.
+                SectionCaption("Account")
+                SettingsGroup {
+                    SettingsRowLabel(symbol: "envelope.fill", tint: Brand.accent,
+                                     title: "Email", detail: maskedEmail, showsChevron: false)
+                    SettingsDivider()
+                    Button { showEditProfile = true } label: {
+                        SettingsRowLabel(symbol: "at", tint: Color(hex: 0x3BA55C),
+                                         title: "Username", detail: app.profile?.username.map { "@\($0)" })
+                    }
+                    .buttonStyle(.plain)
+                    SettingsDivider()
+                    Button { showPassword = true } label: {
+                        SettingsRowLabel(symbol: "key.fill", tint: Color(hex: 0xF1C40F),
+                                         title: "Change password")
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 SectionCaption("Danger zone")
                 SettingsGroup {
                     Button { showDeleteConfirm = true } label: {
@@ -302,6 +334,9 @@ struct SettingsView: View {
         } message: {
             Text("This removes it from every device. You can connect it again any time.")
         }
+        .sheet(isPresented: $showEditProfile) { EditProfileSheet() }
+        .sheet(isPresented: $showPassword) { ChangePasswordSheet() }
+        .task { email = try? await SupabaseManager.client.auth.session.user.email }
         .alert("Delete Account?", isPresented: $showDeleteConfirm) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
@@ -406,5 +441,63 @@ struct SettingsView: View {
 
     private func save(_ patch: DatabaseService.ProfilePatch) {
         Task { error = await app.saveProfile(patch) }
+    }
+}
+
+
+/// Change your password, as the web's `PasswordModal`: at least 6
+/// characters, typed twice, saved with `auth.updateUser`.
+struct ChangePasswordSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var password = ""
+    @State private var confirm = ""
+    @State private var saving = false
+    @State private var error: String?
+    @State private var done = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    SecureField("New password", text: $password).textContentType(.newPassword)
+                    SecureField("Confirm new password", text: $confirm).textContentType(.newPassword)
+                } footer: {
+                    Text(done ? "Password changed." : "At least 6 characters.")
+                }
+                if let error {
+                    Text(error).font(.footnote).foregroundStyle(Brand.dnd)
+                }
+            }
+            .navigationTitle("Change Password")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    if saving { ProgressView() } else {
+                        Button("Save") { Task { await save() } }.disabled(password.isEmpty || confirm.isEmpty)
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private func save() async {
+        error = nil
+        guard password.count >= 6 else { error = "Password must be at least 6 characters."; return }
+        guard password == confirm else { error = "Passwords do not match."; return }
+        saving = true
+        defer { saving = false }
+        do {
+            try await SupabaseManager.client.auth.update(user: UserAttributes(password: password))
+            done = true
+            try? await Task.sleep(for: .seconds(1))
+            dismiss()
+        } catch {
+            let text = error.localizedDescription
+            self.error = text.localizedCaseInsensitiveContains("different from the old")
+                ? "Choose a password you haven't used before."
+                : (text.count < 140 ? text : "Couldn't change your password. Try again.")
+        }
     }
 }

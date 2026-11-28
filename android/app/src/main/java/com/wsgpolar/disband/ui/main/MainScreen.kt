@@ -97,6 +97,10 @@ fun MainScreen(
     var showAddSpace by remember { mutableStateOf(false) }
     var showDiscover by remember { mutableStateOf(false) }
     var inviteToJoin by remember { mutableStateOf<String?>(null) }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        com.wsgpolar.disband.ui.chat.InviteRouter.open = { code -> inviteToJoin = code }
+        onDispose { com.wsgpolar.disband.ui.chat.InviteRouter.open = {} }
+    }
     AskForNotificationsOnce()
     val shellChrome = rememberShellChrome()
     val currentUserId = app.currentUserId
@@ -138,6 +142,11 @@ fun MainScreen(
                 val groupCounts = async { runCatching { Database.unreadGroupCounts() }.getOrNull() }
                 dmThreads = threads.await()
                 groupChats = groups.await()
+                // DM partners and group members: their profile edits arrive live.
+                com.wsgpolar.disband.data.ProfileStore.watch(
+                    "inbox",
+                    dmThreads.mapNotNull { it.friend?.id } + groupChats.flatMap { g -> g.members.orEmpty().map { it.id } },
+                )
                 dmCounts.await()?.let { rows ->
                     app.dmUnread.seedUnread(rows.associate { it.threadId to it.unreadCount })
                 }
@@ -233,6 +242,13 @@ fun MainScreen(
     val selectedChannelId = shellChrome.selectedChannelId
     val selectedServerId = shellChrome.selectedServerId
     val hasChatOpen = selectedChannelId != null
+    // When the conversation last closed. A tap aimed at the chat (its text
+    // box, the reply bar) that lands just after it closes, say because Back
+    // dismissed the keyboard and the chat with it, must not open whichever
+    // channel row sits under the finger (bug 2b8fdd2f).
+    var chatClosedAt by remember { mutableStateOf(0L) }
+    LaunchedEffect(hasChatOpen) { if (!hasChatOpen) chatClosedAt = android.os.SystemClock.uptimeMillis() }
+    val shellTapsBlocked = { android.os.SystemClock.uptimeMillis() - chatClosedAt < 600 }
 
     // The dock hides for an open conversation AND while the keyboard is up
     // (filters, note editors, ...), matching iOS.
@@ -379,6 +395,17 @@ fun MainScreen(
                 Layout(
                     modifier = Modifier.fillMaxSize()
                         .then(if (!isActive || hasChatOpen) Modifier.clearAndSetSemantics {} else Modifier)
+                        // While a chat covers the shell (or has only just closed),
+                        // nothing underneath may take a tap: consumed before any
+                        // channel row or rail button sees it.
+                        .pointerInput(hasChatOpen) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                    if (hasChatOpen || shellTapsBlocked()) event.changes.forEach { it.consume() }
+                                }
+                            }
+                        }
                         .graphicsLayer { alpha = opacity },
                     content = {
                     when (destination) {
@@ -466,7 +493,10 @@ fun MainScreen(
                 androidx.compose.foundation.layout.Box(
                     Modifier
                         .fillMaxSize()
-                        .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
+                        // Consumed, so nothing behind the chat can treat it as a tap.
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } }
+                        },
                 ) {
                 chatStates.SaveableStateProvider(destination.id) {
                     val close = { shellChrome.selectedChannelId = null }
@@ -591,7 +621,7 @@ fun MainScreen(
         InviteSheet(server = server, onDismiss = { inviteFor = null })
     }
     membersFor?.let { server ->
-        MembersSheet(server = server, onDismiss = { membersFor = null })
+        MembersSheet(server = server, presence = app.presence.statuses, onDismiss = { membersFor = null })
     }
     overflowFor?.let { server ->
         ServerOverflowSheet(

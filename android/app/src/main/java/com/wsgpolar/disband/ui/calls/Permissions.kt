@@ -28,3 +28,17 @@ fun rememberAudioPermissionTrigger(onDenied: () -> Unit = {}, onGranted: () -> U
         if (granted) onGranted() else launcher.launch(Manifest.permission.RECORD_AUDIO)
     }
 }
+/** Like [rememberAudioPermissionTrigger], for any runtime permission. */
+@Composable
+fun rememberPermissionTrigger(permission: String, onDenied: () -> Unit = {}, onGranted: () -> Unit): () -> Unit {
+    val context = LocalContext.current.applicationContext
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) onGranted() else onDenied()
+    }
+    return {
+        val granted = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        if (granted) onGranted() else launcher.launch(permission)
+    }
+}

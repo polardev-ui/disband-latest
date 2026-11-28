@@ -178,6 +178,10 @@ final class VoiceSession {
 
     @ObservationIgnored private var peers: [String: MeshPeer] = [:]
     @ObservationIgnored private var remoteAudio: [String: RTCAudioTrack] = [:]
+    /// Each sharer's screen sound (the web's fourth lane), apart from their mic.
+    @ObservationIgnored private var remoteScreenAudio: [String: RTCAudioTrack] = [:]
+    /// Peers we have asked to heal a share that never showed (see `screenStarted`).
+    @ObservationIgnored private var screenHeals: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var frameWatchers: [String: FrameWatcher] = [:]
     /// Candidates that arrived before the offer that creates their peer.
     @ObservationIgnored private var earlyCandidates: [String: [RTCIceCandidate]] = [:]
@@ -200,16 +204,19 @@ final class VoiceSession {
         ringSubscription = nil
         self.userId = userId
         self.myName = displayName ?? "Someone"
-        guard let userId else {
+        guard userId != nil else {
             Task { await leave() }
             return
         }
-        let channel = client.channel("call-user:\(userId)")
-        ringSubscription = channel.onBroadcast(event: "group-call") { [weak self] json in
+        // `CallManager` owns that channel and registers the "group-call"
+        // handler before it subscribes. Adding one here only worked when this
+        // ran first; once the channel had subscribed, the handler was refused
+        // and group rings never arrived.
+        CallManager.onGroupRing = { [weak self] json in
             guard let payload = json["payload"],
                   let signal = try? payload.decode(as: MeshSignal.self),
                   signal.type == "ring" else { return }
-            Task { @MainActor [weak self] in self?.receiveRing(signal) }
+            self?.receiveRing(signal)
         }
     }
 
@@ -271,6 +278,10 @@ final class VoiceSession {
             await leave()
             return
         }
+
+        // Announce ourselves: the web re-reads the room on "hello" instead
+        // of waiting for its change feed, so negotiation starts at once.
+        broadcast(MeshSignal(type: "hello", from: userId, client: MeshSignal.nativeClient))
 
         phase = .connected
         connectedAt = Date()
@@ -336,6 +347,9 @@ final class VoiceSession {
         for peer in peers.values { peer.close() }
         peers = [:]
         remoteAudio = [:]
+        remoteScreenAudio = [:]
+        screenHeals.values.forEach { $0.cancel() }
+        screenHeals = [:]
         earlyCandidates = [:]
         cameraTracks = [:]
         screenTracks = [:]
@@ -369,8 +383,10 @@ final class VoiceSession {
             _ = await withDeadline(seconds: 4) { [self] in try? await self.removePresence(for: leavingRoom) }
         }
         let client = self.client
+        // The signal topic is the room's, so a quick rejoin waits for this
+        // one to be gone (see `RealtimeTopics`).
+        RealtimeTopics.release(leavingSignal)
         Task {
-            if let leavingSignal { await client.removeChannel(leavingSignal) }
             if let leavingPresence { await client.removeChannel(leavingPresence) }
         }
     }
@@ -427,7 +443,7 @@ final class VoiceSession {
     // MARK: - Signaling
 
     private func subscribeSignals(for room: VoiceRoom) async throws {
-        let channel = client.channel(room.signalTopic)
+        let channel = await RealtimeTopics.channel(room.signalTopic)
         signalSubscription = channel.onBroadcast(event: room.signalEvent) { [weak self] json in
             guard let payload = json["payload"],
                   let signal = try? payload.decode(as: MeshSignal.self) else { return }
@@ -456,6 +472,7 @@ final class VoiceSession {
             guard let sdp = signal.sdp, let peer = peers[signal.from],
                   peer.signalingState == .haveLocalOffer else { return }
             try? await peer.acceptAnswer(RTCSessionDescription(type: .answer, sdp: sdp.sdp))
+            rescan(signal.from)
         case "ice":
             guard let c = signal.candidate else { return }
             let candidate = RTCIceCandidate(sdp: c.candidate, sdpMLineIndex: c.sdpMLineIndex, sdpMid: c.sdpMid)
@@ -471,7 +488,20 @@ final class VoiceSession {
             // The web ends a group call once nobody else is connected.
             if room?.isGroup == true, peers.isEmpty, ringingIds.isEmpty { await leave() }
         case "screen":
-            break // Frames, not flags, decide what is shown; see `sampleVideo`.
+            // Frames decide what is shown (see `sampleVideo`); the flag only
+            // hides a stopped share at once and checks a started one arrives.
+            if signal.sharing == true {
+                screenStarted(by: signal.from)
+            } else {
+                screenHeals.removeValue(forKey: signal.from)?.cancel()
+                liveScreens.remove(signal.from)
+            }
+        case "soundboard":
+            if let url = signal.url { receiveSoundboard(from: signal.from, url: url) }
+        case "hello":
+            // A joiner announcing itself: read the room now rather than on
+            // the change feed, so negotiation starts straight away.
+            if !members.contains(where: { $0.userId == signal.from }) { await reloadMembers() }
         default:
             break
         }
@@ -535,6 +565,7 @@ final class VoiceSession {
             switch state {
             case .connected:
                 self.connectedPeerIds.insert(remoteId)
+                self.rescan(remoteId)
             case .disconnected, .failed, .closed:
                 self.connectedPeerIds.remove(remoteId)
             default:
@@ -556,6 +587,7 @@ final class VoiceSession {
         peers.removeValue(forKey: remoteId)?.close()
         connectedPeerIds.remove(remoteId)
         remoteAudio[remoteId] = nil
+        remoteScreenAudio[remoteId] = nil
         cameraTracks[remoteId] = nil
         screenTracks[remoteId] = nil
         frameWatchers["\(remoteId):camera"] = nil
@@ -571,9 +603,16 @@ final class VoiceSession {
             guard let audio = track as? RTCAudioTrack else { return }
             audio.isEnabled = !deafened && heard(remoteId)
             remoteAudio[remoteId] = audio
+        case .screenAudio:
+            guard let audio = track as? RTCAudioTrack else { return }
+            audio.isEnabled = !deafened && heard(remoteId)
+            remoteScreenAudio[remoteId] = audio
         case .camera, .screen:
             guard let video = track as? RTCVideoTrack else { return }
+            let current = lane == .camera ? cameraTracks[remoteId] : screenTracks[remoteId]
             let key = "\(remoteId):\(lane == .camera ? "camera" : "screen")"
+            // Rescans hand over the same track again; keep its watcher.
+            if current === video, frameWatchers[key] != nil { return }
             if let old = frameWatchers[key] {
                 (lane == .camera ? cameraTracks[remoteId] : screenTracks[remoteId])?.remove(old)
             }
@@ -592,6 +631,60 @@ final class VoiceSession {
 
     private func applyRemoteAudio() {
         for (remoteId, track) in remoteAudio { track.isEnabled = !deafened && heard(remoteId) }
+        for (remoteId, track) in remoteScreenAudio { track.isEnabled = !deafened && heard(remoteId) }
+    }
+
+    /// Attach whatever a peer is receiving that we haven't been told about.
+    /// WebRTC reports a receiver once, when it is created; a track that only
+    /// became usable later (after a renegotiation, or on a lane that was
+    /// mapped wrongly before) was never picked up.
+    private func rescan(_ remoteId: String) {
+        guard let peer = peers[remoteId] else { return }
+        for (lane, track) in peer.receivedTracks() { attach(track, lane: lane, from: remoteId) }
+    }
+
+    /**
+     Someone said they started sharing. Usually the frames are already on
+     their way; if they don't turn up, pick the track up again, then
+     renegotiate the connection, and as a last resort rebuild it. That last
+     step is what leaving and rejoining used to do by hand.
+     */
+    private func screenStarted(by remoteId: String) {
+        rescan(remoteId)
+        screenHeals[remoteId]?.cancel()
+        screenHeals[remoteId] = Task { [weak self] in
+            for step in 0..<3 {
+                try? await Task.sleep(for: .seconds(step == 0 ? 2.5 : 4))
+                guard let self, !Task.isCancelled, self.isActive else { return }
+                self.sampleVideo()
+                if self.liveScreens.contains(remoteId) { break }
+                switch step {
+                case 0:
+                    self.rescan(remoteId)
+                case 1:
+                    await self.renegotiate(with: remoteId)
+                default:
+                    self.dropPeer(remoteId)
+                    await self.offer(to: remoteId)
+                }
+            }
+            self?.screenHeals[remoteId] = nil
+        }
+    }
+
+    /// A fresh offer on an existing connection, so both ends agree on every
+    /// lane again without dropping the call's audio.
+    private func renegotiate(with remoteId: String) async {
+        guard let peer = peers[remoteId], let audioTrack, let userId,
+              peer.signalingState == .stable else { return }
+        do {
+            let offer = try await peer.makeOffer(audio: audioTrack, camera: localCameraTrack)
+            broadcast(MeshSignal(type: "offer", from: userId, to: remoteId,
+                                 sdp: CallSdp(type: offer.type.wireType, sdp: offer.sdp),
+                                 client: MeshSignal.nativeClient))
+        } catch {
+            rescan(remoteId)
+        }
     }
 
     // MARK: - Presence
@@ -606,6 +699,12 @@ final class VoiceSession {
         var stage_speaker: Bool? = nil
         var stage_invited: Bool? = nil
         var stage_hand_raised_at: String? = nil
+        /// Always "mesh" from this app (Cloudflare SFU is web-only). Sent
+        /// explicitly: the row is upserted, so a seat last used from the web
+        /// kept "sfu" and the web then tried to reach this phone through the
+        /// SFU, where it never is.
+        var transport: String? = nil
+        var sfu_tracks: [String]? = nil
 
         func member(_ profile: Profile?) -> VoiceMember {
             VoiceMember(userId: user_id, profile: profile,
@@ -643,7 +742,8 @@ final class VoiceSession {
             if joining {
                 try await client.from("voice_presence")
                     .upsert(VoicePresenceRow(channel_id: id, user_id: userId,
-                                             muted: micMuted, deafened: deafened))
+                                             muted: micMuted, deafened: deafened,
+                                             transport: "mesh", sfu_tracks: []))
                     .execute()
             } else {
                 try await client.from("voice_presence").delete()
@@ -916,7 +1016,12 @@ final class VoiceSession {
             if let peer = peers[member.userId] {
                 let stuck = peer.connectionState != .connected
                     && Date().timeIntervalSince(peer.createdAt) > 20
-                if stuck { dropPeer(member.userId) } else { continue }
+                if stuck {
+                    dropPeer(member.userId)
+                } else {
+                    if peer.connectionState == .connected { rescan(member.userId) }
+                    continue
+                }
             }
             await offer(to: member.userId)
         }
@@ -951,6 +1056,56 @@ final class VoiceSession {
         }
         if cameras != liveCameras { liveCameras = cameras }
         if screens != liveScreens { liveScreens = screens }
+    }
+
+    // MARK: - Soundboard
+
+    /// The space a voice room belongs to (soundboards are per space).
+    var soundboardServerId: String? {
+        if case .channel(_, _, let serverId, _, _) = room { return serverId }
+        return nil
+    }
+
+    @ObservationIgnored private var clipPlayers: [AVPlayer] = []
+    @ObservationIgnored private var recentClips: [String: [Date]] = [:]
+
+    /// Only clips from the space soundboard bucket are ever played (the
+    /// web's `isSoundboardUrl`).
+    static func isSoundboardURL(_ url: String) -> Bool {
+        let base = AppConfig.supabaseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            + "/storage/v1/object/public/server-sounds/"
+        return url.count <= 2048 && url.hasPrefix(base) && !url.contains("..")
+    }
+
+    /**
+     Play a clip to the room. As on the web, a clip is an event, not part of
+     the microphone: everyone in the channel plays it themselves (and can
+     skip it by deafening), so this announces it and plays it here.
+     */
+    func playSoundboard(_ url: String) {
+        guard let userId, isActive, Self.isSoundboardURL(url) else { return }
+        broadcast(MeshSignal(type: "soundboard", from: userId, url: url, client: MeshSignal.nativeClient))
+        playClip(url)
+    }
+
+    private func receiveSoundboard(from remoteId: String, url: String) {
+        guard !deafened, Self.isSoundboardURL(url) else { return }
+        // At most 4 clips per person in 3 seconds, however fast they are sent.
+        let now = Date()
+        var times = (recentClips[remoteId] ?? []).filter { now.timeIntervalSince($0) < 3 }
+        guard times.count < 4 else { return }
+        times.append(now)
+        recentClips[remoteId] = times
+        playClip(url)
+    }
+
+    private func playClip(_ link: String) {
+        guard let url = URL(string: link) else { return }
+        let player = AVPlayer(url: url)
+        clipPlayers.removeAll { $0.timeControlStatus == .paused && $0.currentItem?.currentTime() != .zero }
+        clipPlayers.append(player)
+        if clipPlayers.count > 8 { clipPlayers.removeFirst() }
+        player.play()
     }
 
     // MARK: - Rings
